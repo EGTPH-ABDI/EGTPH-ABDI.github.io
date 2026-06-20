@@ -78,6 +78,13 @@ main{max-width:680px;margin:0 auto;padding:14px 12px 0;}
 .ratein{display:flex;align-items:center;justify-content:center;gap:9px;}
 .ratein input{width:92px;padding:9px;border:1.5px solid var(--gold);border-radius:10px;text-align:center;font-size:17px;font-weight:800;font-family:inherit;background:#fff;color:var(--ink);-webkit-text-fill-color:var(--ink);}
 .ratein .u{font-size:12px;color:var(--muted);font-weight:700;}
+.lockbadge{margin-top:10px;padding:10px 12px;border:1.5px solid var(--gold);border-radius:12px;background:linear-gradient(180deg,#fffdf6,#fbf5e6);text-align:center;}
+.lockbadge .lk-top{display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;font-weight:800;color:var(--gold-dk);letter-spacing:.2px;}
+.lockbadge .lk-val{font-size:22px;font-weight:900;color:var(--ink);margin:2px 0 1px;}
+.lockbadge .lk-val small{font-size:12px;font-weight:700;color:var(--muted);}
+.lockbadge .lk-date{font-size:12px;font-weight:800;color:var(--gold-dk);}
+.lockbadge .lk-sub{font-size:10.5px;color:var(--muted);margin-top:4px;}
+.lk-mini{font-size:11px;font-weight:700;color:var(--gold-dk);text-align:start;padding-inline-start:2px;}
 .og-sec{margin-bottom:10px;border:1px solid var(--line);border-radius:10px;overflow:hidden;}
 .og-h{background:rgba(15,61,62,.07);color:var(--ink);font-weight:800;font-size:12.5px;padding:7px 10px;}
 .og-b{padding:8px 10px;font-size:12px;line-height:1.9;color:var(--ink);}
@@ -667,6 +674,8 @@ function renderOilGuide(){
 function infoFor(mc){return mc.type==='truck'?TRUCK_INFO:mc.type==='loader'?loadInfo(mc.info||{}):mc.type==='jcb'?jcbInfo(mc.info||{}):excInfo(mc.info||{});}
 function unit(mc){return mc.type==='truck'?'km':'h';}
 function todayISO(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+// تاريخ + ساعة الإدخال (للقفل «آخر إدخال»)
+function nowStamp(){const d=new Date();return todayISO()+' · '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 
 // ── تواريخ مساعدة (تُستعمل في محرّك التنبيهات التلقائي) ──
 function _parseISO(s){if(!s)return null;const p=String(s).split('-');if(p.length!==3)return null;const d=new Date(+p[0],+p[1]-1,+p[2]);return isNaN(d)?null:d;}
@@ -720,8 +729,9 @@ const alertDaysThreshold=()=>{try{const v=DB.settings&&DB.settings.alertDays;ret
 function globalRateOf(type){const s=DB.settings||{};return type==='truck'?(s.rateTruck!=null?+s.rateTruck:150):(s.rateMachine!=null?+s.rateMachine:8);}
 // معدّل خاص بآلة واحدة فقط (إن ضبطه المستخدم) — يتجاوز العام لهذه الآلة وحدها
 function customRateOf(mc){return (mc.dailyRate!=null&&mc.dailyRate!=='')?+mc.dailyRate:null;}
-// الأولوية: خاص بالآلة > مُستنتَج فعلياً من سجلّها > عام افتراضي
-function effectiveRate(mc){const c=customRateOf(mc);if(c!=null)return c;const d=deriveRate(mc);if(d)return d;return globalRateOf(mc.type);}
+// المعدّل المعتمد = دائماً المعدّل الذي أدخله المستخدم (الخاص بالآلة إن وُجد، وإلّا العام).
+// لا استنتاج تلقائي من القراءات إطلاقاً — تُطبَّق هذه القاعدة على كل العتاد القديم والجديد.
+function effectiveRate(mc){const c=customRateOf(mc);if(c!=null)return c;return globalRateOf(mc.type);}
 // العدّاد التقريبي اليوم = آخر قراءة فعلية + (أيام العمل منذ تاريخها × المعدّل اليومي) — الجمعة مستثناة
 function estReadingToday(mc){
   const base=mc.reading||0;
@@ -760,16 +770,18 @@ function setGlobalRate(kind,v){
   const val=Math.max(0,parseFloat(v)||0);
   if(!val){flash('أدخل رقماً صالحاً');return;}
   if(!DB.settings)DB.settings={};
-  if(kind==='truck'){DB.settings.rateTruck=val;DB.settings.rateTruckSetAt=todayISO();}
-  else{DB.settings.rateMachine=val;DB.settings.rateMachineSetAt=todayISO();}
+  // إدخال معدّل جديد = ينسى القديم ويبدأ الحساب من اليوم على القيمة الجديدة
+  if(kind==='truck'){DB.settings.rateTruck=val;DB.settings.rateTruckSetAt=nowStamp();}
+  else{DB.settings.rateMachine=val;DB.settings.rateMachineSetAt=nowStamp();}
   save();flash('✓ طُبِّق على كل '+(kind==='truck'?'الشاحنات':'الآلات'));
   const mc=getActive();if(mc)renderRateTab(mc);
+  if(document.getElementById('dashRatePanel'))renderDashRatePanel();
 }
 function setCustomRate(v){
   const mc=getActive();if(!mc)return;
   const val=Math.max(0,parseFloat(v)||0);
   if(!val){flash('أدخل رقماً صالحاً');return;}
-  mc.dailyRate=val;mc.rateSetAt=todayISO();
+  mc.dailyRate=val;mc.rateSetAt=nowStamp();
   save();flash('✓ معدّل خاص بهذه الآلة فقط');
   renderRateTab(mc);
 }
@@ -792,15 +804,19 @@ function renderRateTab(mc){
     +'<div style="padding:11px;text-align:center">'
       +'<div class="ratein"><input type="number" id="gRateInput" min="0" value="'+gVal+'"><span class="u">'+u+'/يوم</span></div>'
       +'<button class="est-btn" style="margin-top:8px" onclick="setGlobalRate(\''+gKind+'\',document.getElementById(\'gRateInput\').value)">✓ تأكيد وتطبيق على الكل</button>'
-      +'<div class="note" style="margin-top:7px">'+(gDate?('آخر تحديث: '+esc(gDate)):'افتراضي — لم يُعدَّل بعد')+'</div>'
+      +'<div class="lockbadge"><div class="lk-top"><span>🔒</span><span>آخر إدخال مُثبَّت</span></div>'
+        +'<div class="lk-val">'+gVal+' <small>'+u+'/يوم</small></div>'
+        +'<div class="lk-date">📅 '+(gDate?('ثُبِّت يوم '+esc(gDate)):'لم يُثبَّت بعد — أدخل معدّلاً واضغط تأكيد')+'</div>'
+        +'<div class="lk-sub">يُحسب دائماً من هذه القيمة — بلا استنتاج تلقائي.</div>'
+      +'</div>'
     +'</div></div>'
     +'<div class="card"><div class="card-h"><span class="ic">⚙️</span><div><h2>معدّل خاص بهذه الآلة فقط</h2><div class="fr">اختياري — يتجاوز العام لهذا العتاد وحده</div></div></div>'
     +'<div style="padding:11px;text-align:center">'
       +'<div class="ratein"><input type="number" id="cRateInput" min="0" value="'+(cVal!=null?cVal:'')+'" placeholder="بلا تخصيص"><span class="u">'+u+'/يوم</span></div>'
       +'<button class="est-btn" style="margin-top:8px" onclick="setCustomRate(document.getElementById(\'cRateInput\').value)">✓ تأكيد لهذه الآلة فقط</button>'
-      +(cVal!=null?('<button class="est-btn ghost" style="margin-top:7px" onclick="clearCustomRate()">↺ إرجاع لمتابعة العام</button><div class="note" style="margin-top:7px">آخر تحديث: '+esc(mc.rateSetAt||'')+'</div>'):'<div class="note" style="margin-top:7px">هذه الآلة تتبع المعدّل العام حالياً.</div>')
+      +(cVal!=null?('<button class="est-btn ghost" style="margin-top:7px" onclick="clearCustomRate()">↺ إرجاع لمتابعة العام</button><div class="lk-mini" style="text-align:center;margin-top:7px">🔒 آخر إدخال: '+esc(mc.rateSetAt||'—')+'</div>'):'<div class="note" style="margin-top:7px">هذه الآلة تتبع المعدّل العام حالياً.</div>')
     +'</div></div>'
-    +'<div class="note" style="text-align:center;padding:0 14px">📌 هذا المعدّل مستقل تماماً عن العدّاد الفعلي — لا يُعدّله ولا يتأثر بتغييره. يُستعمل فقط لتقدير تاريخ التنبيهات.</div>';
+    +'<div class="note" style="text-align:center;padding:0 14px">📌 المعدّل اليومي مستقل تماماً عن العدّاد الفعلي — لا يُعدّله ولا يتأثر بتغييره.<br>🔒 البرنامج يحسب <b>دائماً من القيمة التي تُدخلها أنت</b> (التنبيهات والعدّاد التقريبي معاً) ولا يستنتج معدّلاً من القراءات أبداً. أيّ معدّل جديد تُدخله يُلغي القديم ويبدأ الحساب من يومه على كل العتاد.</div>';
   }catch(e){box.innerHTML='<div class="note" style="padding:14px">تعذّر عرض المعدّل. أعد فتح الآلة.</div>';}
 }
 function machineStat(mc){let late=0,soon=0;itemsFor(mc).forEach(it=>{const s=statusOf(mc,it);if(s.cls==='st-late')late++;else if(s.cls==='st-soon')soon++;});return{late,soon};}
@@ -833,19 +849,23 @@ function alertWhenTxt(s){
 function setAlertDays(v){if(!DB.settings)DB.settings={};DB.settings.alertDays=Math.max(1,parseInt(v,10)||10);save();renderGarage();}
 function renderDashRatePanel(){
   const box=document.getElementById('dashRatePanel');if(!box)return;
+  const s=DB.settings||{};
   const t=globalRateOf('truck'),m=globalRateOf('machine');
+  const dt=s.rateTruckSetAt,dm=s.rateMachineSetAt;
   box.innerHTML=
-    '<div class="ratein" style="margin-bottom:7px"><span class="grate-l" style="min-width:96px;text-align:start">🚛 كل الشاحنات</span><input type="number" id="dashRateTruck" min="0" value="'+t+'"><span class="u">km/يوم</span></div>'
-    +'<div class="ratein"><span class="grate-l" style="min-width:96px;text-align:start">🏗️ كل الآلات</span><input type="number" id="dashRateMachine" min="0" value="'+m+'"><span class="u">h/يوم</span></div>'
+    '<div class="ratein" style="margin-bottom:3px"><span class="grate-l" style="min-width:96px;text-align:start">🚛 كل الشاحنات</span><input type="number" id="dashRateTruck" min="0" value="'+t+'"><span class="u">km/يوم</span></div>'
+    +'<div class="lk-mini">🔒 آخر إدخال: '+(dt?esc(dt):'لم يُثبَّت بعد')+'</div>'
+    +'<div class="ratein" style="margin:9px 0 3px"><span class="grate-l" style="min-width:96px;text-align:start">🏗️ كل الآلات</span><input type="number" id="dashRateMachine" min="0" value="'+m+'"><span class="u">h/يوم</span></div>'
+    +'<div class="lk-mini">🔒 آخر إدخال: '+(dm?esc(dm):'لم يُثبَّت بعد')+'</div>'
     +'<button class="est-btn" style="margin-top:10px" onclick="saveDashRates()">✓ حفظ وتطبيق على الكل</button>'
-    +'<div class="note" style="text-align:center;margin-top:7px">يُطبَّق على كل عتاد لم تُخصّص له معدّلاً. لتخصيص آلة واحدة: ادخل إليها → تبويب 📅 المعدّل.</div>';
+    +'<div class="note" style="text-align:center;margin-top:7px">يُحسب دائماً من هذه القيم — بلا استنتاج تلقائي. لتخصيص آلة واحدة: ادخل إليها → تبويب 📅 المعدّل.</div>';
 }
 function saveDashRates(){
   const t=Math.max(0,parseFloat(document.getElementById('dashRateTruck').value)||0);
   const m=Math.max(0,parseFloat(document.getElementById('dashRateMachine').value)||0);
   if(!DB.settings)DB.settings={};
-  DB.settings.rateTruck=t;DB.settings.rateTruckSetAt=todayISO();
-  DB.settings.rateMachine=m;DB.settings.rateMachineSetAt=todayISO();
+  DB.settings.rateTruck=t;DB.settings.rateTruckSetAt=nowStamp();
+  DB.settings.rateMachine=m;DB.settings.rateMachineSetAt=nowStamp();
   save();flash('✓ طُبِّق المعدّل العام على كل العتاد');renderGarage();
 }
 function renderAlertsCard(){
