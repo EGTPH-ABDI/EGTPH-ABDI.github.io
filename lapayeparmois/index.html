@@ -9191,10 +9191,24 @@ function markSaved(){
     setTimeout(()=>{if(ind)ind.textContent='';},2500);}
 }
 
+// ── تثبيت الخانة النشطة تلقائياً قبل الإغلاق/التصغير حتى لا تبقى القيمة أمام العين فقط ──
+function _commitActiveField(){
+  try{
+    const el=document.activeElement;
+    if(el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'||el.isContentEditable)){ el.blur(); }
+  }catch(e){}
+}
 window.addEventListener('beforeunload',function(e){
+  _commitActiveField();
   if(!_unsavedChanges)return;
   const msg='⚠️ توجد تغييرات لم تُحفظ بعد. هل تريد الخروج؟';
   e.preventDefault();e.returnValue=msg;return msg;
+});
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='hidden'){
+    _commitActiveField();
+    try{ if(DB.settings.cloudAuto&&_cloudCfg()&&_cloudDirty){ cloudSync(false); } }catch(e){}
+  }
 });
 
 // ── تشغيل مضمون حتى في بيئات مقيّدة (iframe / Claude) ──
