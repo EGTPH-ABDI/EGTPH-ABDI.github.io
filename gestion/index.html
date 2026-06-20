@@ -1228,6 +1228,7 @@ const dbP = (s,o) => {
       if (o._mod == null) o._mod = _deriveMod(o);
     } else {
       o._mod = Date.now(); // طابع التعديل: الأحدث يغلب عند الدمج (تعديل حقيقي فقط)
+      o._uedit = Date.now(); // طابع تعديل مقاوم للتسميم — يُكتب فقط عند تعديل المستخدم الحقيقي (بدقّة الميلي-ثانية)
     }
     const n = tombstones.filter(x => !(x.s===s && x.id===o.id));
     if (n.length !== tombstones.length) { tombstones = n; _tombSave(); }
@@ -2484,10 +2485,28 @@ function scheduleAutoSaveFile() {
   _unsavedCount++;
   _updateSaveIndicator();
 }
+// ── تثبيت الخانة النشطة تلقائياً: لو كنت تكتب في خانة ولم تخرج منها بعد،
+//    نُطلق حفظها (blur) قبل الإغلاق/الانتقال — حتى لا تبقى القيمة «أمام عينيك فقط» ──
+function _commitActiveField() {
+  try {
+    const el = document.activeElement;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) {
+      el.blur(); // يُطلق onchange فيُحفظ ويُجدول الرفع للسحابة
+    }
+  } catch(e) {}
+}
 window.addEventListener('beforeunload', function(e) {
+  _commitActiveField();
   if (_hasUnsavedChanges) {
     const msg = 'لديك '+(_unsavedCount||'')+' تغييرات لم تُحفظ! اضغط «💾 حفظ» أولاً حتى لا تفقدها عند تغيير المتصفح.';
     e.preventDefault(); e.returnValue = msg; return msg;
+  }
+});
+// على الهاتف: تصغير التطبيق/تبديل التبويب = إخفاء الصفحة → ثبّت الخانة وارفع فوراً
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'hidden') {
+    _commitActiveField();
+    try { if (fbAuto() && navigator.onLine && _fbDirty && !_fbBusy) fbPush(true); } catch(e) {}
   }
 });
 
@@ -5279,7 +5298,18 @@ async function mergeBK(data) {
   }
   const tombOf = (store,id) => tombstones.find(x => x.s===store && x.id===id);
   const _NOWMAX = Date.now() + 120000;
-  const _modOf = x => { let v = x._mod || (x._saved ? Date.parse(x._saved) : 0); return (v > _NOWMAX) ? 0 : v; }; // طابع موحَّد + حارس المستقبل
+  // ── المقارنة بدقّة الميلي-ثانية (ساعة/دقيقة/ثانية/جزء من الثانية): الأحدث زمنياً يغلب ──
+  //    نعتمد على أوقات لا تتسمّم: createdAt/_saved/lockedAt + _uedit (طابع التعديل الحقيقي
+  //    الذي يُكتب فقط عند تعديل المستخدم ولا يُلمَس عند التحميل/الدمج). نتجاهل _mod القديم
+  //    المسموم. وبذلك: أي إدخال/تعديل جديد يغلب بالدقّة الكاملة، والقديم المسموم لا يعود.
+  const _modOf = x => {
+    let v = 0;
+    if (x.createdAt) { const t = Date.parse(x.createdAt); if (t) v = Math.max(v, t); }
+    if (x._saved)    { const t = Date.parse(x._saved);    if (t) v = Math.max(v, t); }
+    if (x.lockedAt)  { const t = Date.parse(x.lockedAt);  if (t) v = Math.max(v, t); }
+    if (x._uedit && x._uedit <= _NOWMAX) v = Math.max(v, x._uedit); // تعديل حقيقي بدقّة الميلي-ثانية
+    return v;
+  };
   const _tombT = tb => tb && tb.t ? Date.parse(tb.t) : 0;
   const pairs = [
     ['clients','clients'], ['records','records'], ['entries','entries'],
