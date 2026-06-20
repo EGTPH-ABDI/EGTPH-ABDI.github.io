@@ -1621,8 +1621,21 @@ async function fbStartupCheck(){
 window.addEventListener('online', ()=>{ fbStatus('ok','عاد الاتصال'); _fbDirty=true; });
 window.addEventListener('offline',()=>fbStatus('off','غير متصل'));
 // تحذير قبل الخروج إذا كان هناك تغيير لم يُرفع للسحابة (الذاكرة معطّلة → السحابة هي المرجع)
+function _commitActiveField(){
+  try{
+    const el=document.activeElement;
+    if(el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'||el.isContentEditable)){ el.blur(); }
+  }catch(e){}
+}
 window.addEventListener('beforeunload',function(e){
+  _commitActiveField();
   if(_fbDirty){ e.preventDefault(); e.returnValue='يوجد تغيير لم يُرفع للسحابة بعد. تأكّد من المزامنة قبل الإغلاق.'; return e.returnValue; }
+});
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='hidden'){
+    _commitActiveField();
+    try{ if(fbAuto()&&navigator.onLine&&_fbDirty&&!_fbBusy) fbAutoTick(); }catch(e){}
+  }
 });
 
 load();renderGarage();
