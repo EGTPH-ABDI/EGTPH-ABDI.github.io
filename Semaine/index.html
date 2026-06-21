@@ -324,7 +324,7 @@ table tbody tr:last-child td{border-bottom:none}
   .sidebar{width:0;padding:0;overflow:hidden}
   .sidebar.open{width:260px;padding:18px 0}
   .main-content{margin-right:0;padding:14px;max-width:100vw}
-  .mobile-menu-btn{display:flex;position:fixed;top:14px;right:14px;z-index:200;background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;border:none;width:42px;height:42px;border-radius:50%;font-size:17px;cursor:pointer;box-shadow:0 4px 12px rgba(15,118,110,.3);align-items:center;justify-content:center}
+  .mobile-menu-btn{display:flex;position:fixed;top:calc(14px + env(safe-area-inset-top,0px));right:calc(20px + env(safe-area-inset-right,0px));z-index:500;background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;border:none;width:46px;height:46px;border-radius:50%;font-size:18px;cursor:pointer;box-shadow:0 4px 12px rgba(15,118,110,.3);align-items:center;justify-content:center;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transform:translateZ(0);-webkit-transform:translateZ(0);will-change:transform}
   .page-header h1{font-size:18px}
   .stats-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
   .stat-info .value{font-size:16px}
@@ -563,6 +563,7 @@ table tbody tr:last-child td{border-bottom:none}
       </div>
       <div class="week-banner-actions">
         <button class="btn primary-action" onclick="saveWeek()"><i class="fas fa-save"></i> حفظ وأرشفة</button>
+        <button class="btn" onclick="saveWeekAndStartNew()" title="حفظ الأسبوع الحالي وفتح أسبوع جديد فوراً لنفس المشروع"><i class="fas fa-forward"></i> أسبوع جديد</button>
         <button class="btn" onclick="printWeek()"><i class="fas fa-print"></i> طباعة</button>
         <button class="btn" onclick="openAssignProjectModal()"><i class="fas fa-folder-tree"></i> تحويل لمشروع</button>
         <button class="btn" onclick="cancelCurrentWeek()" style="background:rgba(212,32,32,0.25);border-color:rgba(212,32,32,0.5)" title="إلغاء وفتح أسبوع جديد فارغ"><i class="fas fa-times-circle"></i> إلغاء / جديد</button>
@@ -1147,7 +1148,33 @@ function applyTheme(){
   if(DB.settings.darkMode){ document.body.classList.add('dark'); document.getElementById('themeIcon').className='fas fa-sun'; document.getElementById('themeText').textContent='الوضع الفاتح'; }
   else{ document.body.classList.remove('dark'); document.getElementById('themeIcon').className='fas fa-moon'; document.getElementById('themeText').textContent='الوضع المظلم'; }
 }
-function toggleSidebar(){ document.getElementById('sidebar').classList.toggle('open'); }
+let _sidebarToggleLock=false;
+function toggleSidebar(){
+  if(_sidebarToggleLock)return;                 // يمنع ازدواج التبديل (نقرة + لمسة معاً)
+  _sidebarToggleLock=true;
+  document.getElementById('sidebar').classList.toggle('open');
+  setTimeout(()=>{_sidebarToggleLock=false;},250);
+}
+/* ربط موثوق لزر القائمة على آيفون.
+   السبب الحقيقي لعدم الاستجابة أحياناً: عندما تكون لوحة المفاتيح مفتوحة (المستخدم يكتب في خانة)،
+   أول لمسة خارج الخانة يستهلكها Safari لإغلاق الكيبورد فقط، فلا يصل أي click/touchend للزر —
+   تحتاج لمسة ثانية لتفعيله فعلاً. كما أن touchend قد يُسقَط أحياناً إذا اعتبره iOS إيقافاً لتمرير.
+   الحل: التفعيل من touchstart مباشرة (أبكر حدث يصل بثبات) مع إغلاق فوري لأي خانة مُركَّز عليها
+   في نفس اللمسة، فلا تُستهلك اللمسة الأولى بلا فائدة. */
+function _wireMobileMenuBtn(){
+  const btn=document.querySelector('.mobile-menu-btn');
+  if(!btn||btn._wired)return; btn._wired=true;
+  let _firedAt=0;
+  function fire(){
+    const t=Date.now(); if(t-_firedAt<300)return; _firedAt=t;     // يمنع الازدواج بين الأحداث المختلفة
+    const ae=document.activeElement;
+    if(ae && ae!==btn && typeof ae.blur==='function') ae.blur();   // أغلق الكيبورد ضمن نفس اللمسة
+    toggleSidebar();
+  }
+  btn.addEventListener('touchstart',function(e){ e.preventDefault(); fire(); },{passive:false});
+  btn.addEventListener('pointerup',fire);
+  btn.addEventListener('click',fire);
+}
 function showToast(m,t='success'){
   const toast=document.getElementById('toast');
   const ic=t==='error'?'fa-circle-exclamation':t==='warning'?'fa-triangle-exclamation':'fa-circle-check';
@@ -1920,6 +1947,23 @@ function saveWeek(){
   loadWeekEditor();
 }
 
+/* ---- حفظ وأرشفة الأسبوع الحالي ثم فتح أسبوع جديد فوراً لنفس المشروع ---- */
+function saveWeekAndStartNew(){
+  const cw=DB.currentWeek;
+  if(cw.status!=='open' && !editingWeekId){ showToast('لا يوجد أسبوع مفتوح','error'); return; }
+  const sameProjectId=cw.projectId||null;
+  const hadData=(cw.entries||[]).some(e=>e.workerId)||(cw.expenses||[]).length>0;
+  if(hadData){
+    saveWeek();                       // يحفظ ويؤرشف ويُعيد currentWeek إلى idle
+    startNewWeek(sameProjectId);      // يفتح أسبوعاً جديداً فوراً لنفس المشروع
+    showToast('✅ تم حفظ الأسبوع وفتح أسبوع جديد');
+  } else {
+    // لا توجد بيانات بعد لحفظها — فقط أعد ضبط تواريخ الأسبوع الحالي
+    startNewWeek(sameProjectId);
+    showToast('✅ أسبوع جديد جاهز');
+  }
+}
+
 /* ====================================================
    الديون والأقساط
    ==================================================== */
@@ -2555,7 +2599,7 @@ const _CLOUD_URL='https://egtph-semaine-default-rtdb.europe-west1.firebasedataba
 const _CLOUD_KEY='EGTPH-semaine-v20-7xK9wQ3mRtYp';
 const WRITER_ID = Math.random().toString(36).slice(2)+'_'+Date.now().toString(36);
 let _cloudBusy=false,_cloudDirty=true,_cloudApplying=false,_cloudPendingRefresh=false;
-let _pushTimer=null,_cloudES=null,_pollTimer=null,_lastPushStamp=null;
+let _pushTimer=null,_cloudES=null,_pollTimer=null,_lastPushStamp=null,_cloudSynced=false;
 /* هل المستخدم يكتب الآن؟ (نتفادى إعادة بناء الواجهة أثناء الكتابة) */
 function isEditingNow(){
   const ae=document.activeElement;
@@ -2706,6 +2750,7 @@ function _cloudPayload(stamp){
 function applyRemote(remote){
   if(!remote||typeof remote!=='object'||!Array.isArray(remote.workers))return 0;
   if(remote.writerId===WRITER_ID)return 0;                       // تجاهل صدى كتابتنا
+  _cloudSynced=true;                                             // وصلنا نسخة سحابية صحيحة
   if(_lastPushStamp&&remote.syncedAt===_lastPushStamp)return 0;
   let n=0;
   _cloudApplying=true;
@@ -2724,7 +2769,7 @@ async function cloudPullOnly(){
   _cloudBusy=true;
   try{
     const res=await fetch(cfg.endpoint,{cache:'no-store'});
-    if(res.ok){const remote=await res.json();applyRemote(remote);}
+    if(res.ok){const remote=await res.json();_cloudSynced=true;applyRemote(remote);}
   }catch(e){}
   _cloudBusy=false;
 }
@@ -2745,10 +2790,23 @@ async function cloudSync(manual){
       }
     }catch(e){}
     _cloudStatus('⏳ جارٍ المزامنة...','#3af');
-    // اسحب وادمج أولاً (الأحدث يغلب)
-    const res=await fetch(cfg.endpoint,{cache:'no-store'});
-    if(res.ok){const remote=await res.json();if(remote&&Array.isArray(remote.workers))applyRemote(remote);}
-    // ثم ارفع حالتنا (مع طابع زمني وهوية الكاتب)
+    // ── القراءة إلزامية قبل أي رفع (حارس المسح الكارثي) ──
+    let remote;
+    try{
+      const res=await fetch(cfg.endpoint,{cache:'no-store'});
+      if(!res.ok) throw new Error('قراءة HTTP '+res.status);
+      remote=await res.json();                 // null مسموح (السحابة فارغة)
+    }catch(readErr){
+      // فشل القراءة ⇒ لا ترفع المحلي فوق السحابة إطلاقاً
+      _cloudStatus('🔴 تعذّرت قراءة السحابة — أُلغي الرفع حمايةً لبياناتك','#e05');
+      if(manual)showToast('❌ تعذّرت قراءة السحابة — لم يُرفع شيء حمايةً لبياناتك','error');
+      _cloudBusy=false;return;
+    }
+    if(remote&&typeof remote==='object'&&Array.isArray(remote.workers)) applyRemote(remote);
+    _cloudSynced=true;                          // قرأنا السحابة بنجاح هذه الجلسة
+    // ── الرفع فقط بعد قراءة ناجحة وعند تغيير محلي فعلي ──
+    if(!_cloudSynced){ _cloudBusy=false; return; }          // حارس مزدوج: لا رفع قبل القراءة
+    if(!_cloudDirty && !manual){ _cloudBusy=false; return; } // لا جديد فعلي ⇒ لا كتابة (تطابق المحتوى)
     const stamp=new Date().toISOString();
     const up=await fetch(cfg.endpoint,{method:'PUT',headers:{'Content-Type':'application/json'},body:_cloudPayload(stamp)});
     if(!up.ok)throw new Error('رفع HTTP '+up.status);
@@ -2810,6 +2868,7 @@ function cloudAutoSetup(){
 let _cloudTriggersWired=false;
 function _wireCloudTriggers(){
   if(_cloudTriggersWired)return;_cloudTriggersWired=true;
+  window.addEventListener('beforeunload',(e)=>{ if(_cloudDirty){ e.preventDefault(); e.returnValue=''; } });
   document.addEventListener('visibilitychange',()=>{if(!document.hidden){cloudPullOnly();schedulePush();}});
   window.addEventListener('focus',()=>{cloudPullOnly();});
   window.addEventListener('online',()=>{cloudPullOnly();schedulePush();cloudAutoSetup();});
@@ -3090,6 +3149,7 @@ function initApp(){
 /* أحداث عامة */
 document.addEventListener('DOMContentLoaded', async function(){
   await loadDB();
+  try{ _wireMobileMenuBtn(); }catch(e){}
   try{ seedFromEmbedded(); }catch(e){ console.warn('seed embedded:',e); }
   seedDefaultData();
   try{cloudInit();}catch(e){console.warn('cloud:',e);}
