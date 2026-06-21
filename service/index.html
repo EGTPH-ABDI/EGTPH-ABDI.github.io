@@ -78,13 +78,6 @@ main{max-width:680px;margin:0 auto;padding:14px 12px 0;}
 .ratein{display:flex;align-items:center;justify-content:center;gap:9px;}
 .ratein input{width:92px;padding:9px;border:1.5px solid var(--gold);border-radius:10px;text-align:center;font-size:17px;font-weight:800;font-family:inherit;background:#fff;color:var(--ink);-webkit-text-fill-color:var(--ink);}
 .ratein .u{font-size:12px;color:var(--muted);font-weight:700;}
-.lockbadge{margin-top:10px;padding:10px 12px;border:1.5px solid var(--gold);border-radius:12px;background:linear-gradient(180deg,#fffdf6,#fbf5e6);text-align:center;}
-.lockbadge .lk-top{display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;font-weight:800;color:var(--gold-dk);letter-spacing:.2px;}
-.lockbadge .lk-val{font-size:22px;font-weight:900;color:var(--ink);margin:2px 0 1px;}
-.lockbadge .lk-val small{font-size:12px;font-weight:700;color:var(--muted);}
-.lockbadge .lk-date{font-size:12px;font-weight:800;color:var(--gold-dk);}
-.lockbadge .lk-sub{font-size:10.5px;color:var(--muted);margin-top:4px;}
-.lk-mini{font-size:11px;font-weight:700;color:var(--gold-dk);text-align:start;padding-inline-start:2px;}
 .og-sec{margin-bottom:10px;border:1px solid var(--line);border-radius:10px;overflow:hidden;}
 .og-h{background:rgba(15,61,62,.07);color:var(--ink);font-weight:800;font-size:12.5px;padding:7px 10px;}
 .og-b{padding:8px 10px;font-size:12px;line-height:1.9;color:var(--ink);}
@@ -603,15 +596,15 @@ function migrate(){let ch=false;
   if(!DB.settings){DB.settings={};ch=true;}
   if(DB.settings.rateTruck==null){DB.settings.rateTruck=150;ch=true;}
   if(DB.settings.rateMachine==null){DB.settings.rateMachine=8;ch=true;}
+  if(DB.settings.rateLockTruck==null){DB.settings.rateLockTruck=true;ch=true;}
+  if(DB.settings.rateLockMachine==null){DB.settings.rateLockMachine=true;ch=true;}
   if(!DB.deletedIds){DB.deletedIds=[];ch=true;}
   // ملاحظة: أُزيلت الإضافة التلقائية للآلات بالاسم (FL936F / FL936H #2) — كانت تُعيد
   // إنشاءها بمعرّفات جديدة حتى بعد حذفها، متجاهلةً شواهد الحذف، فتسبّب التكرار/الرجوع.
   if(ch&&!MEM_ONLY){try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}}}
-// طابع زمني تصاعدي صارم — يمنع تساوي/تراجع _mod عند حفظ متتالٍ سريع
-// أو عند تطابق ساعة جهازين بالمللي ثانية (راجع منطق LWW في mergeCloud)
-let _modLast=0;
-function nextMod(){ let t=Date.now()+(performance.now()%1)/1000; if(t<=_modLast)t=_modLast+0.001; _modLast=t; return t; }
-
+// طابع زمني بدقّة الميلي-ثانية مع ضمان تصاعد صارم (الأحدث يغلب دائماً حتى لو نفس الميلي)
+let _lastMod=0;
+function nextMod(){ let t=Date.now(); try{t+=(performance.now()%1)/1000;}catch(e){} if(t<=_lastMod)t=_lastMod+0.001; _lastMod=t; return t; }
 let ft;function save(){
   try{
     DB._mod=nextMod();
@@ -679,8 +672,6 @@ function renderOilGuide(){
 function infoFor(mc){return mc.type==='truck'?TRUCK_INFO:mc.type==='loader'?loadInfo(mc.info||{}):mc.type==='jcb'?jcbInfo(mc.info||{}):excInfo(mc.info||{});}
 function unit(mc){return mc.type==='truck'?'km':'h';}
 function todayISO(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-// تاريخ + ساعة الإدخال (للقفل «آخر إدخال»)
-function nowStamp(){const d=new Date();return todayISO()+' · '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 
 // ── تواريخ مساعدة (تُستعمل في محرّك التنبيهات التلقائي) ──
 function _parseISO(s){if(!s)return null;const p=String(s).split('-');if(p.length!==3)return null;const d=new Date(+p[0],+p[1]-1,+p[2]);return isNaN(d)?null:d;}
@@ -734,9 +725,16 @@ const alertDaysThreshold=()=>{try{const v=DB.settings&&DB.settings.alertDays;ret
 function globalRateOf(type){const s=DB.settings||{};return type==='truck'?(s.rateTruck!=null?+s.rateTruck:150):(s.rateMachine!=null?+s.rateMachine:8);}
 // معدّل خاص بآلة واحدة فقط (إن ضبطه المستخدم) — يتجاوز العام لهذه الآلة وحدها
 function customRateOf(mc){return (mc.dailyRate!=null&&mc.dailyRate!=='')?+mc.dailyRate:null;}
-// المعدّل المعتمد = دائماً المعدّل الذي أدخله المستخدم (الخاص بالآلة إن وُجد، وإلّا العام).
-// لا استنتاج تلقائي من القراءات إطلاقاً — تُطبَّق هذه القاعدة على كل العتاد القديم والجديد.
-function effectiveRate(mc){const c=customRateOf(mc);if(c!=null)return c;return globalRateOf(mc.type);}
+// الأولوية: خاص بالآلة > (إن لم يكن مقفولاً) مُستنتَج من سجلّها > العام المُدخَل
+// ⚠️ القفل (الافتراضي مفعّل): يستعمل المعدّل المُدخَل فقط ولا يستنتج من التاريخ إطلاقاً —
+//    لأنّ الاستنتاج من قراءتين متقاربتين يعطي معدّلاً مستحيلاً (مثل 27سا/يوم) فيفسد التوقّع.
+function rateLocked(type){const s=DB.settings||{};const v=type==='truck'?s.rateLockTruck:s.rateLockMachine;return v!==false;} // الافتراضي: مقفول
+function effectiveRate(mc){
+  const c=customRateOf(mc);if(c!=null)return c;
+  if(rateLocked(mc.type))return globalRateOf(mc.type); // مقفول → المُدخَل وحده
+  const d=deriveRate(mc);if(d)return d;
+  return globalRateOf(mc.type);
+}
 // العدّاد التقريبي اليوم = آخر قراءة فعلية + (أيام العمل منذ تاريخها × المعدّل اليومي) — الجمعة مستثناة
 function estReadingToday(mc){
   const base=mc.reading||0;
@@ -770,23 +768,27 @@ function statusOf(mc,it){
   return{cls:'st-ok',label:'سليم',urgency:'ok',rem,due,est:cur,days,estDate};
 }
 
+function toggleRateLock(kind,on){
+  if(!DB.settings)DB.settings={};
+  if(kind==='truck')DB.settings.rateLockTruck=!!on; else DB.settings.rateLockMachine=!!on;
+  save();flash(on?'🔒 قُفل المعدّل':'🔓 فُكّ القفل');
+  const mc=getActive();if(mc)renderRateTab(mc);
+}
 // ── تبويب المعدّل اليومي: خانة إدخال + تأكيد + تاريخ فقط — لا علاقة له بالعدّاد الفعلي ──
 function setGlobalRate(kind,v){
   const val=Math.max(0,parseFloat(v)||0);
   if(!val){flash('أدخل رقماً صالحاً');return;}
   if(!DB.settings)DB.settings={};
-  // إدخال معدّل جديد = ينسى القديم ويبدأ الحساب من اليوم على القيمة الجديدة
-  if(kind==='truck'){DB.settings.rateTruck=val;DB.settings.rateTruckSetAt=nowStamp();}
-  else{DB.settings.rateMachine=val;DB.settings.rateMachineSetAt=nowStamp();}
+  if(kind==='truck'){DB.settings.rateTruck=val;DB.settings.rateTruckSetAt=todayISO();}
+  else{DB.settings.rateMachine=val;DB.settings.rateMachineSetAt=todayISO();}
   save();flash('✓ طُبِّق على كل '+(kind==='truck'?'الشاحنات':'الآلات'));
   const mc=getActive();if(mc)renderRateTab(mc);
-  if(document.getElementById('dashRatePanel'))renderDashRatePanel();
 }
 function setCustomRate(v){
   const mc=getActive();if(!mc)return;
   const val=Math.max(0,parseFloat(v)||0);
   if(!val){flash('أدخل رقماً صالحاً');return;}
-  mc.dailyRate=val;mc.rateSetAt=nowStamp();
+  mc.dailyRate=val;mc.rateSetAt=todayISO();
   save();flash('✓ معدّل خاص بهذه الآلة فقط');
   renderRateTab(mc);
 }
@@ -809,19 +811,22 @@ function renderRateTab(mc){
     +'<div style="padding:11px;text-align:center">'
       +'<div class="ratein"><input type="number" id="gRateInput" min="0" value="'+gVal+'"><span class="u">'+u+'/يوم</span></div>'
       +'<button class="est-btn" style="margin-top:8px" onclick="setGlobalRate(\''+gKind+'\',document.getElementById(\'gRateInput\').value)">✓ تأكيد وتطبيق على الكل</button>'
-      +'<div class="lockbadge"><div class="lk-top"><span>🔒</span><span>آخر إدخال مُثبَّت</span></div>'
-        +'<div class="lk-val">'+gVal+' <small>'+u+'/يوم</small></div>'
-        +'<div class="lk-date">📅 '+(gDate?('ثُبِّت يوم '+esc(gDate)):'لم يُثبَّت بعد — أدخل معدّلاً واضغط تأكيد')+'</div>'
-        +'<div class="lk-sub">يُحسب دائماً من هذه القيمة — بلا استنتاج تلقائي.</div>'
+      +'<div style="margin-top:9px;padding:8px;border:1px solid var(--line);border-radius:9px;background:'+(rateLocked(mc.type)?'rgba(26,122,71,.07)':'rgba(200,133,26,.08)')+'">'
+        +'<label style="display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;font-weight:700;cursor:pointer;color:'+(rateLocked(mc.type)?'var(--ok,#1a7a47)':'var(--soon)')+'">'
+          +'<input type="checkbox" '+(rateLocked(mc.type)?'checked':'')+' onchange="toggleRateLock(\''+gKind+'\',this.checked)" style="width:17px;height:17px;accent-color:var(--ok,#1a7a47)">'
+          +(rateLocked(mc.type)?'🔒 مقفول — يحسب بالمعدّل المُدخَل فقط':'🔓 غير مقفول — يستنتج تلقائياً (قد يخطئ)')
+        +'</label>'
+        +'<div class="note" style="margin-top:5px;font-size:10px">القفل يضمن الحساب بـ'+gVal+' '+u+'/يوم الذي أدخلته أنت، لا بمعدّل مُستنتَج من قراءات متقاربة.</div>'
       +'</div>'
+      +'<div class="note" style="margin-top:7px">'+(gDate?('آخر تحديث: '+esc(gDate)):'افتراضي — لم يُعدَّل بعد')+'</div>'
     +'</div></div>'
     +'<div class="card"><div class="card-h"><span class="ic">⚙️</span><div><h2>معدّل خاص بهذه الآلة فقط</h2><div class="fr">اختياري — يتجاوز العام لهذا العتاد وحده</div></div></div>'
     +'<div style="padding:11px;text-align:center">'
       +'<div class="ratein"><input type="number" id="cRateInput" min="0" value="'+(cVal!=null?cVal:'')+'" placeholder="بلا تخصيص"><span class="u">'+u+'/يوم</span></div>'
       +'<button class="est-btn" style="margin-top:8px" onclick="setCustomRate(document.getElementById(\'cRateInput\').value)">✓ تأكيد لهذه الآلة فقط</button>'
-      +(cVal!=null?('<button class="est-btn ghost" style="margin-top:7px" onclick="clearCustomRate()">↺ إرجاع لمتابعة العام</button><div class="lk-mini" style="text-align:center;margin-top:7px">🔒 آخر إدخال: '+esc(mc.rateSetAt||'—')+'</div>'):'<div class="note" style="margin-top:7px">هذه الآلة تتبع المعدّل العام حالياً.</div>')
+      +(cVal!=null?('<button class="est-btn ghost" style="margin-top:7px" onclick="clearCustomRate()">↺ إرجاع لمتابعة العام</button><div class="note" style="margin-top:7px">آخر تحديث: '+esc(mc.rateSetAt||'')+'</div>'):'<div class="note" style="margin-top:7px">هذه الآلة تتبع المعدّل العام حالياً.</div>')
     +'</div></div>'
-    +'<div class="note" style="text-align:center;padding:0 14px">📌 المعدّل اليومي مستقل تماماً عن العدّاد الفعلي — لا يُعدّله ولا يتأثر بتغييره.<br>🔒 البرنامج يحسب <b>دائماً من القيمة التي تُدخلها أنت</b> (التنبيهات والعدّاد التقريبي معاً) ولا يستنتج معدّلاً من القراءات أبداً. أيّ معدّل جديد تُدخله يُلغي القديم ويبدأ الحساب من يومه على كل العتاد.</div>';
+    +'<div class="note" style="text-align:center;padding:0 14px">📌 هذا المعدّل مستقل تماماً عن العدّاد الفعلي — لا يُعدّله ولا يتأثر بتغييره. يُستعمل فقط لتقدير تاريخ التنبيهات.</div>';
   }catch(e){box.innerHTML='<div class="note" style="padding:14px">تعذّر عرض المعدّل. أعد فتح الآلة.</div>';}
 }
 function machineStat(mc){let late=0,soon=0;itemsFor(mc).forEach(it=>{const s=statusOf(mc,it);if(s.cls==='st-late')late++;else if(s.cls==='st-soon')soon++;});return{late,soon};}
@@ -854,23 +859,19 @@ function alertWhenTxt(s){
 function setAlertDays(v){if(!DB.settings)DB.settings={};DB.settings.alertDays=Math.max(1,parseInt(v,10)||10);save();renderGarage();}
 function renderDashRatePanel(){
   const box=document.getElementById('dashRatePanel');if(!box)return;
-  const s=DB.settings||{};
   const t=globalRateOf('truck'),m=globalRateOf('machine');
-  const dt=s.rateTruckSetAt,dm=s.rateMachineSetAt;
   box.innerHTML=
-    '<div class="ratein" style="margin-bottom:3px"><span class="grate-l" style="min-width:96px;text-align:start">🚛 كل الشاحنات</span><input type="number" id="dashRateTruck" min="0" value="'+t+'"><span class="u">km/يوم</span></div>'
-    +'<div class="lk-mini">🔒 آخر إدخال: '+(dt?esc(dt):'لم يُثبَّت بعد')+'</div>'
-    +'<div class="ratein" style="margin:9px 0 3px"><span class="grate-l" style="min-width:96px;text-align:start">🏗️ كل الآلات</span><input type="number" id="dashRateMachine" min="0" value="'+m+'"><span class="u">h/يوم</span></div>'
-    +'<div class="lk-mini">🔒 آخر إدخال: '+(dm?esc(dm):'لم يُثبَّت بعد')+'</div>'
+    '<div class="ratein" style="margin-bottom:7px"><span class="grate-l" style="min-width:96px;text-align:start">🚛 كل الشاحنات</span><input type="number" id="dashRateTruck" min="0" value="'+t+'"><span class="u">km/يوم</span></div>'
+    +'<div class="ratein"><span class="grate-l" style="min-width:96px;text-align:start">🏗️ كل الآلات</span><input type="number" id="dashRateMachine" min="0" value="'+m+'"><span class="u">h/يوم</span></div>'
     +'<button class="est-btn" style="margin-top:10px" onclick="saveDashRates()">✓ حفظ وتطبيق على الكل</button>'
-    +'<div class="note" style="text-align:center;margin-top:7px">يُحسب دائماً من هذه القيم — بلا استنتاج تلقائي. لتخصيص آلة واحدة: ادخل إليها → تبويب 📅 المعدّل.</div>';
+    +'<div class="note" style="text-align:center;margin-top:7px">يُطبَّق على كل عتاد لم تُخصّص له معدّلاً. لتخصيص آلة واحدة: ادخل إليها → تبويب 📅 المعدّل.</div>';
 }
 function saveDashRates(){
   const t=Math.max(0,parseFloat(document.getElementById('dashRateTruck').value)||0);
   const m=Math.max(0,parseFloat(document.getElementById('dashRateMachine').value)||0);
   if(!DB.settings)DB.settings={};
-  DB.settings.rateTruck=t;DB.settings.rateTruckSetAt=nowStamp();
-  DB.settings.rateMachine=m;DB.settings.rateMachineSetAt=nowStamp();
+  DB.settings.rateTruck=t;DB.settings.rateTruckSetAt=todayISO();
+  DB.settings.rateMachine=m;DB.settings.rateMachineSetAt=todayISO();
   save();flash('✓ طُبِّق المعدّل العام على كل العتاد');renderGarage();
 }
 function renderAlertsCard(){
@@ -1405,21 +1406,22 @@ function importData(input){const f=input.files&&input.files[0];if(!f){return;}co
 // ══════════════════════════════════════════
 // FIREBASE CLOUD SYNC — المزامنة السحابية (نفس منطق GP)
 // ══════════════════════════════════════════
-const FB_URL    = 'https://egtph-abdi-youssouf-islam-default-rtdb.europe-west1.firebasedatabase.app';
-const FB_SECRET = 'EGTPH-Chlef-2026-x7Kq94RvTzM3pWd8';
+const FB_URL    = 'https://egtph-service-default-rtdb.europe-west1.firebasedatabase.app';
+const FB_SECRET = 'EGTPH-svc-2026-TqD5lhS0qmRQgtl0oH0I7SXX'; // مفتاح المزامنة السرّي الجديد
 // مسار مستقل تحت egtph/ — مغطّى أصلاً بقاعدة egtph/$key (لا تعديل في Firebase)
-const FB_BASE   = '/egtph/parc';
+const FB_BASE   = '/egtph/' + FB_SECRET; // البيانات في مسار سرّي — لا يصلها إلا من يملك المفتاح
 const FB_NODE   = FB_BASE + '.json';
-const FB_SYNC_INTERVAL = 5000; // حلقة احتياطية (SSE هو المسار الأساسي للتحديث الفوري)
+const FB_SYNC_INTERVAL = 4000; // فحص دوري كل 4ث (شبه لحظي لاستقبال تعديلات الأجهزة الأخرى)
+// قواعد قديمة يُرحَّل منها تلقائياً
+const _FB_OLD_URLS = ['https://egtph-abdi-youssouf-islam-default-rtdb.europe-west1.firebasedatabase.app'];
 
 let _fbBusy=false, _fbDirty=false, _fbLoop=null, _fbLastHash='';
 // ── حارس الجلسة: يُمنع أي رفع للسحابة قبل أن نقرأها بنجاح مرّة واحدة هذه الجلسة ──
-//    (يمنع كتابة قاعدة فارغة فوق السحابة وطمسها عند تعطيل الذاكرة + فشل قراءة أولي)
+//    (يمنع كتابة قاعدة فارغة فوق السحابة وطمسها عند فشل قراءة أولي = حارس المسح الكارثي)
 let _fbSynced=false;
-// ── وضع «ذاكرة حيّة فقط» — لا اعتماد على تخزين المتصفّح للبيانات ──
-//    المرجع الدائم = السحابة + الملف المضمّن + نسخة JSON. السبب: ذاكرة المتصفّح
-//    قابلة للمسح وكانت سبباً في توليد/رجوع آلات قديمة. (مفاتيح الإعدادات الصغيرة تبقى.)
-const MEM_ONLY=true;
+// ── التخزين المحلي مُفعَّل: يحفظ كل إدخال فوراً فلا تضيع البيانات عند الإغلاق ──
+//    (الكود أصبح آمناً: الطابع لا يتسمّم، ومولّدات الآلات متوقّفة، فلا رجوع للقديم.)
+const MEM_ONLY=false;
 
 const fbAuto   = () => { try { return localStorage.getItem('egtph_parc_fb_auto') !== '0'; } catch(e){ return true; } };
 const fbLastTS = () => { try { return localStorage.getItem('egtph_parc_fb_last') || ''; } catch(e){ return ''; } };
@@ -1445,12 +1447,89 @@ function fbBuildData(){
     machines:DB.machines||[], deletedIds:DB.deletedIds||[], settings:DB.settings||{}, _mod:DB._mod||Date.now() };
 }
 
+// ── فك ضغط gzip بـ JavaScript خالص (احتياطي لـ iOS القديم بدون DecompressionStream) ──
+function _tinyInflate(data){
+  // فك تجميع gzip: تخطّي ترويسة 10 بايت ثم DEFLATE خام
+  let p=10;
+  const flg=data[3];
+  if(flg&4){ p+=2+(data[p]|(data[p+1]<<8)); } // FEXTRA
+  if(flg&8){ while(data[p++]); }               // FNAME
+  if(flg&16){ while(data[p++]); }              // FCOMMENT
+  if(flg&2){ p+=2; }                           // FHCRC
+  return _inflateRaw(data.subarray(p));
+}
+function _inflateRaw(input){
+  let bitPos=0, bytePos=0; const out=[];
+  function getBit(){ const b=(input[bytePos]>>bitPos)&1; bitPos++; if(bitPos===8){bitPos=0;bytePos++;} return b; }
+  function getBits(n){ let v=0; for(let i=0;i<n;i++) v|=getBit()<<i; return v; }
+  function buildTree(lengths){
+    const max=Math.max.apply(null,lengths); const blCount=new Array(max+1).fill(0);
+    for(const l of lengths) if(l) blCount[l]++;
+    const nextCode=new Array(max+1).fill(0); let code=0;
+    for(let bits=1;bits<=max;bits++){ code=(code+blCount[bits-1])<<1; nextCode[bits]=code; }
+    const table={};
+    for(let i=0;i<lengths.length;i++){ const len=lengths[i]; if(len){ table[len+'_'+(nextCode[len]++)]=i; } }
+    return {table,max};
+  }
+  function decodeSym(tree){
+    let code=0,len=0;
+    while(true){ code=(code<<1)|getBit(); len++; const s=tree.table[len+'_'+code]; if(s!==undefined) return s; if(len>tree.max+1) throw new Error('inflate'); }
+  }
+  const LEXT=[0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0];
+  const LBASE=[3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258];
+  const DEXT=[0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13];
+  const DBASE=[1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577];
+  let final=0;
+  do{
+    final=getBit(); const type=getBits(2);
+    if(type===0){
+      bitPos=0; if(bitPos)bytePos++; const len=input[bytePos]|(input[bytePos+1]<<8); bytePos+=4;
+      for(let i=0;i<len;i++) out.push(input[bytePos++]);
+    } else {
+      let litTree,distTree;
+      if(type===1){
+        const ll=[]; for(let i=0;i<144;i++)ll.push(8); for(let i=144;i<256;i++)ll.push(9); for(let i=256;i<280;i++)ll.push(7); for(let i=280;i<288;i++)ll.push(8);
+        litTree=buildTree(ll); const dl=[]; for(let i=0;i<30;i++)dl.push(5); distTree=buildTree(dl);
+      } else {
+        const hlit=getBits(5)+257,hdist=getBits(5)+1,hclen=getBits(4)+4;
+        const ord=[16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15]; const clLen=new Array(19).fill(0);
+        for(let i=0;i<hclen;i++) clLen[ord[i]]=getBits(3);
+        const clTree=buildTree(clLen); const lens=[];
+        while(lens.length<hlit+hdist){
+          const s=decodeSym(clTree);
+          if(s<16) lens.push(s);
+          else if(s===16){ const r=getBits(2)+3,pv=lens[lens.length-1]; for(let i=0;i<r;i++)lens.push(pv); }
+          else if(s===17){ const r=getBits(3)+3; for(let i=0;i<r;i++)lens.push(0); }
+          else { const r=getBits(7)+11; for(let i=0;i<r;i++)lens.push(0); }
+        }
+        litTree=buildTree(lens.slice(0,hlit)); distTree=buildTree(lens.slice(hlit));
+      }
+      while(true){
+        const s=decodeSym(litTree);
+        if(s===256) break;
+        if(s<256) out.push(s);
+        else { const li=s-257; const len=LBASE[li]+getBits(LEXT[li]); const ds=decodeSym(distTree); const dist=DBASE[ds]+getBits(DEXT[ds]); const start=out.length-dist; for(let i=0;i<len;i++) out.push(out[start+i]); }
+      }
+    }
+  } while(!final);
+  return new Uint8Array(out);
+}
 async function fbFetchData(){
   const r=await fetch(FB_URL+FB_NODE);
   if(!r.ok) throw new Error('HTTP '+r.status);
   const raw=await r.json();
   if(!raw) return null;
-  if(raw.gz){ const d=JSON.parse(await _b64Gz(raw.gz)); d.savedAt=raw.savedAt||d.savedAt; return d; }
+  if(raw.gz){
+    let json;
+    if(typeof DecompressionStream!=='undefined'){
+      try{ json=await _b64Gz(raw.gz); }catch(e){ json=null; }
+    }
+    if(json==null){ // احتياطي JS خالص (iOS قديم)
+      const bin=atob(raw.gz); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+      json=new TextDecoder().decode(_tinyInflate(u));
+    }
+    const d=JSON.parse(json); d.savedAt=raw.savedAt||d.savedAt; return d;
+  }
   return raw;
 }
 
@@ -1515,32 +1594,20 @@ function fbStatus(state,title){
 async function fbPush(silent){
   if(_fbBusy) return false;
   if(!navigator.onLine){ if(!silent) flash('لا يوجد اتصال'); fbStatus('off','غير متصل'); return false; }
-  // حارس مضادّ للطمس (مُعزَّز): قبل كل رفع، نجلب أحدث نسخة من السحابة ونَدمجها محلياً —
-  // وليس فقط في أول مرة بالجلسة. هذا يمنع تاب/جهاز قديم في الذاكرة من كتابة بياناته
-  // القديمة فوق تعديل وصل من جهاز آخر بعد آخر قراءة محلية (سباق PUT بلا دمج طازج).
-  _fbBusy=true;
-  try{
-    const remoteData=await fbFetchData();
-    _fbSynced=true;
-    if(remoteData && remoteData.machines) mergeCloud(remoteData);
-  }catch(e){
-    _fbBusy=false;
-    if(!silent) flash('⏳ تعذّر التحقق من السحابة — جارٍ إعادة المحاولة'); 
-    try{ if(typeof fbSync==='function'){ return await fbSync(silent); } }catch(e2){}
-    return false;
-  }
+  // حارس مضادّ للطمس: لا ترفع قبل قراءة السحابة بنجاح هذه الجلسة
+  if(!_fbSynced){ if(!silent) flash('⏳ لم تُقرأ السحابة بعد — جارٍ المزامنة أولاً'); try{ if(typeof fbSync==='function'){ await fbSync(silent); } }catch(e){} return false; }
   const data=fbBuildData();
   const core=JSON.stringify({machines:data.machines,deletedIds:data.deletedIds});
   const h=fbHash(core);
-  if(silent && h===_fbLastHash){ _fbDirty=false; _fbBusy=false; return true; }
-  fbStatus('sync','جارٍ الرفع…');
+  if(silent && h===_fbLastHash){ _fbDirty=false; return true; }
+  _fbBusy=true; fbStatus('sync','جارٍ الرفع…');
   try{
     let body;
     if(_gzOK){ const gz=await _gzB64(JSON.stringify(data)); body=JSON.stringify({app:'parc',version:3,savedAt:data.savedAt,gz}); }
     else body=JSON.stringify(data);
     const r=await fetch(FB_URL+FB_NODE,{method:'PUT',headers:{'Content-Type':'application/json'},body});
     if(!r.ok) throw new Error('HTTP '+r.status);
-    _fbLastHash=h; _fbDirty=false; _fbSetTS(data.savedAt);
+    _fbLastHash=h; _fbDirty=false; _fbSetTS(data.savedAt); _lastPushedSavedAt=data.savedAt;
     fbStatus('ok','آخر مزامنة: '+new Date(data.savedAt).toLocaleString('fr-DZ'));
     if(!silent) flash('☁️ تم الرفع ('+Math.round(body.length/1024)+' KB)');
     const el=document.getElementById('fb-last-txt'); if(el) el.textContent='آخر مزامنة: '+new Date(data.savedAt).toLocaleString('fr-DZ');
@@ -1598,7 +1665,7 @@ function fbScheduleAutoPush(){
   _fbDirty=true;
   // مزامنة آمنة واحدة بعد ~1.5ث من آخر إدخال (بدل الانتظار للحلقة الدورية)
   if(_pushDebTimer)clearTimeout(_pushDebTimer);
-  _pushDebTimer=setTimeout(()=>{ _pushDebTimer=null; if(fbAuto()&&navigator.onLine&&!_fbBusy) fbAutoTick(); },1500);
+  _pushDebTimer=setTimeout(()=>{ _pushDebTimer=null; if(fbAuto()&&navigator.onLine&&!_fbBusy) fbAutoTick(); },800);
 }
 
 // ── حارس ضد فقدان الإدخال أثناء الكتابة / نافذة محلولة ──
@@ -1620,50 +1687,43 @@ document.addEventListener('focusout',()=>{ setTimeout(flushDeferredRender,200); 
 
 async function fbAutoTick(){
   if(!fbAuto()||!navigator.onLine||_fbBusy) return;
-  _fbBusy=true; // ← قفل ذرّي يغطي الفحص + القرار + التنفيذ كاملاً (لا نُحرّره في الوسط)
   let remoteNewer=false;
   try{
     const r=await fetch(FB_URL+FB_BASE+'/savedAt.json');
     if(r.ok){ const ts=await r.json(); _fbSynced=true; remoteNewer=!!(ts && ts>(fbLastTS()||'')); }
-  }catch(e){ _fbBusy=false; return; }
-  if(remoteNewer){ _fbBusy=false; await fbSync(true); return; }
-  if(_fbDirty){ _fbBusy=false; await fbPush(true); return; }
-  _fbBusy=false;
+  }catch(e){ return; }
+  if(remoteNewer){ await fbSync(true); return; }
+  if(_fbDirty) await fbPush(true);
 }
 
 function fbStartLoop(){ clearInterval(_fbLoop); _fbLoop=setInterval(fbAutoTick,FB_SYNC_INTERVAL); }
 
-// ── استماع لحظي عبر SSE (Server-Sent Events) ──
-// Firebase RTDB يدعم streaming عبر Accept: text/event-stream على نفس مسار .json
-// عند أي تعديل من جهاز آخر (put/patch) يصل الحدث فوراً بلا انتظار الحلقة الاحتياطية.
-let _fbSSE=null, _fbSSERetry=null;
-function fbStartSSE(){
-  if(!('EventSource' in window)) return; // متصفّح قديم → الاعتماد على الحلقة الاحتياطية فقط
-  if(_fbSSE){ try{ _fbSSE.close(); }catch(e){} _fbSSE=null; }
-  if(!navigator.onLine) return;
+// ── البثّ المباشر (SSE) — تحديث فوري لحظي بين الأجهزة بدل انتظار الفحص الدوري ──
+let _sse=null, _lastPushedSavedAt='', _sseOK=false;
+function fbStartStream(){
+  if(typeof EventSource==='undefined') return; // غير مدعوم → يبقى الفحص الدوري
+  try{ if(_sse) _sse.close(); }catch(e){}
   try{
-    _fbSSE = new EventSource(FB_URL+FB_BASE+'/savedAt.json');
-    _fbSSE.addEventListener('put', ()=>{ _fbSSEOnChange(); });
-    _fbSSE.addEventListener('patch', ()=>{ _fbSSEOnChange(); });
-    _fbSSE.onerror = ()=>{
-      // عند انقطاع الاتصال: نغلق ونعاود المحاولة بعد قليل (الحلقة الاحتياطية تبقى تعمل في الوسط)
-      try{ _fbSSE.close(); }catch(e){}
-      _fbSSE=null;
-      if(_fbSSERetry) clearTimeout(_fbSSERetry);
-      _fbSSERetry=setTimeout(fbStartSSE,8000);
-    };
-  }catch(e){ _fbSSE=null; }
+    _sse=new EventSource(FB_URL+FB_NODE);
+    _sse.addEventListener('put', onSseMsg);
+    _sse.addEventListener('patch', onSseMsg);
+    _sse.onopen=()=>{ _sseOK=true; };
+    _sse.onerror=()=>{ _sseOK=false; /* الفحص الدوري يغطّي الانقطاع */ };
+  }catch(e){ _sseOK=false; }
 }
-let _fbSSEDebounce=null;
-function _fbSSEOnChange(){
-  // تجميع أحداث متقاربة في نداء واحد (تفادي عدّة nداءات متتالية عند كتابة سريعة من الطرف الآخر)
-  if(_fbSSEDebounce) clearTimeout(_fbSSEDebounce);
-  _fbSSEDebounce=setTimeout(()=>{ if(fbAuto()&&navigator.onLine&&!_fbBusy) fbAutoTick(); },300);
+async function onSseMsg(ev){
+  try{
+    if(!fbAuto()||_fbBusy) return;
+    const payload=JSON.parse(ev.data||'{}');
+    const d=payload && payload.data; // قد يكون null (حذف) أو الكائن الكامل
+    // استخرج savedAt للتحقّق من الصدى (تجاهل تعديلاتنا نحن)
+    let sa=null;
+    if(d && typeof d==='object') sa = d.savedAt || (d.app?d.savedAt:null);
+    if(sa && sa===_lastPushedSavedAt) return; // صدى رفعنا نحن — تجاهله
+    // تغيير حقيقي من جهاز آخر → اجلب وادمج فوراً
+    fbAutoTick();
+  }catch(e){}
 }
-document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible'){ if(!_fbSSE) fbStartSSE(); if(fbAuto()&&navigator.onLine) fbAutoTick(); }
-});
-window.addEventListener('online',()=>{ fbStartSSE(); if(fbAuto()) fbAutoTick(); });
 
 function fbToggleAuto(chk){
   try{ localStorage.setItem('egtph_parc_fb_auto',chk.checked?'1':'0'); }catch(e){}
@@ -1673,10 +1733,21 @@ function fbToggleAuto(chk){
 
 async function fbStartupCheck(){
   if(!navigator.onLine){ fbStatus('off','غير متصل بالإنترنت'); return; }
-  // عند الفتح: نجلب مباشرة بلا فحص savedAt أولاً (طلب واحد بدل اثنين، أسرع)
-  fbStatus('sync','جارٍ المزامنة…');
-  try{ await fbSync(true); }
-  catch(e){ fbStatus('err','تعذّر الاتصال بالسحابة — تحقّق من الإنترنت'); }
+  fbStatus('sync','جارٍ فحص السحابة…');
+  try{
+    const r=await fetch(FB_URL+FB_BASE+'/savedAt.json');
+    if(!r.ok){
+      let hint='تحقّق من قواعد Firebase (HTTP '+r.status+')';
+      if(r.status===401||r.status===403) hint='⛔ مرفوض — أضِف قاعدة المسار egtph_parc_v3_ في Firebase';
+      fbStatus('err',hint); return;
+    }
+    const ts=await r.json(); const lt=fbLastTS(); _fbSynced=true;
+    if(ts && (!lt||ts>lt)){
+      if(fbAuto()){ fbStatus('new','يوجد جديد — جارٍ المزامنة…'); fbAutoTick(); }
+      else { fbStatus('new','🔔 يوجد جديد في السحابة — اضغط للمزامنة'); }
+    }
+    else fbStatus('ok', ts?null:'السحابة فارغة — اضغط للرفع الأول');
+  }catch(e){ fbStatus('err','تعذّر الاتصال بالسحابة — تحقّق من الإنترنت'); }
 }
 window.addEventListener('online', ()=>{ fbStatus('ok','عاد الاتصال'); _fbDirty=true; });
 window.addEventListener('offline',()=>fbStatus('off','غير متصل'));
@@ -1697,12 +1768,29 @@ document.addEventListener('visibilitychange',function(){
     try{ if(fbAuto()&&navigator.onLine&&_fbDirty&&!_fbBusy) fbAutoTick(); }catch(e){}
   }
 });
+// ── حفظ تلقائي فور الانتهاء من الكتابة في أي خانة (مغادرة الخانة) — شبكة أمان ──
+function _persistLocal(){ try{ if(!MEM_ONLY) localStorage.setItem(KEY,JSON.stringify(DB)); }catch(e){} }
+document.addEventListener('focusout',function(ev){
+  const el=ev.target;
+  if(el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT')){
+    _persistLocal();
+    try{ fbScheduleAutoPush(); }catch(e){}
+  }
+},true);
+
+// ── ترحيل لمرة واحدة للقاعدة الجديدة: امسح طابع المزامنة القديم حتى لا يُساء فهم «لا جديد» ──
+try{
+  const dbTag=localStorage.getItem('egtph_parc_dbtag');
+  if(dbTag!==FB_URL){ localStorage.removeItem('egtph_parc_fb_last'); localStorage.setItem('egtph_parc_dbtag',FB_URL); }
+}catch(e){}
 
 load();renderGarage();
 try{ if(!DB.deletedIds) DB.deletedIds=[]; }catch(e){}
-fbStartupCheck();
+setTimeout(fbStartupCheck,1000);
 fbStartLoop();
-fbStartSSE();
+setTimeout(fbStartStream,1500); // بثّ مباشر لحظي
+window.addEventListener('online', fbStartStream);
+document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible'){ fbStartStream(); try{ if(fbAuto()&&navigator.onLine&&!_fbBusy) fbAutoTick(); }catch(e){} } });
 try{ const c=document.getElementById('fb-auto-chk'); if(c) c.checked=fbAuto(); const lt=document.getElementById('fb-last-txt'); if(lt&&fbLastTS()) lt.textContent='آخر مزامنة: '+new Date(fbLastTS()).toLocaleString('fr-DZ'); }catch(e){}
 </script>
 </body>
