@@ -607,11 +607,16 @@ function migrate(){let ch=false;
   // ملاحظة: أُزيلت الإضافة التلقائية للآلات بالاسم (FL936F / FL936H #2) — كانت تُعيد
   // إنشاءها بمعرّفات جديدة حتى بعد حذفها، متجاهلةً شواهد الحذف، فتسبّب التكرار/الرجوع.
   if(ch&&!MEM_ONLY){try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}}}
+// طابع زمني تصاعدي صارم — يمنع تساوي/تراجع _mod عند حفظ متتالٍ سريع
+// أو عند تطابق ساعة جهازين بالمللي ثانية (راجع منطق LWW في mergeCloud)
+let _modLast=0;
+function nextMod(){ let t=Date.now()+(performance.now()%1)/1000; if(t<=_modLast)t=_modLast+0.001; _modLast=t; return t; }
+
 let ft;function save(){
   try{
-    DB._mod=Date.now();
+    DB._mod=nextMod();
     const a=DB.machines&&DB.active?DB.machines.find(x=>x.id===DB.active):null;
-    if(a) a._mod=Date.now();
+    if(a) a._mod=nextMod();
     if(!MEM_ONLY) localStorage.setItem(KEY,JSON.stringify(DB));
     flash('✓ تمّ الحفظ');
   }catch(e){flash('⚠ الحفظ غير متاح هنا');}
