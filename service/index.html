@@ -1410,7 +1410,7 @@ const FB_SECRET = 'EGTPH-Chlef-2026-x7Kq94RvTzM3pWd8';
 // مسار مستقل تحت egtph/ — مغطّى أصلاً بقاعدة egtph/$key (لا تعديل في Firebase)
 const FB_BASE   = '/egtph/parc';
 const FB_NODE   = FB_BASE + '.json';
-const FB_SYNC_INTERVAL = 15000;
+const FB_SYNC_INTERVAL = 5000; // حلقة احتياطية (SSE هو المسار الأساسي للتحديث الفوري)
 
 let _fbBusy=false, _fbDirty=false, _fbLoop=null, _fbLastHash='';
 // ── حارس الجلسة: يُمنع أي رفع للسحابة قبل أن نقرأها بنجاح مرّة واحدة هذه الجلسة ──
@@ -1515,13 +1515,25 @@ function fbStatus(state,title){
 async function fbPush(silent){
   if(_fbBusy) return false;
   if(!navigator.onLine){ if(!silent) flash('لا يوجد اتصال'); fbStatus('off','غير متصل'); return false; }
-  // حارس مضادّ للطمس: لا ترفع قبل قراءة السحابة بنجاح هذه الجلسة
-  if(!_fbSynced){ if(!silent) flash('⏳ لم تُقرأ السحابة بعد — جارٍ المزامنة أولاً'); try{ if(typeof fbSync==='function'){ await fbSync(silent); } }catch(e){} return false; }
+  // حارس مضادّ للطمس (مُعزَّز): قبل كل رفع، نجلب أحدث نسخة من السحابة ونَدمجها محلياً —
+  // وليس فقط في أول مرة بالجلسة. هذا يمنع تاب/جهاز قديم في الذاكرة من كتابة بياناته
+  // القديمة فوق تعديل وصل من جهاز آخر بعد آخر قراءة محلية (سباق PUT بلا دمج طازج).
+  _fbBusy=true;
+  try{
+    const remoteData=await fbFetchData();
+    _fbSynced=true;
+    if(remoteData && remoteData.machines) mergeCloud(remoteData);
+  }catch(e){
+    _fbBusy=false;
+    if(!silent) flash('⏳ تعذّر التحقق من السحابة — جارٍ إعادة المحاولة'); 
+    try{ if(typeof fbSync==='function'){ return await fbSync(silent); } }catch(e2){}
+    return false;
+  }
   const data=fbBuildData();
   const core=JSON.stringify({machines:data.machines,deletedIds:data.deletedIds});
   const h=fbHash(core);
-  if(silent && h===_fbLastHash){ _fbDirty=false; return true; }
-  _fbBusy=true; fbStatus('sync','جارٍ الرفع…');
+  if(silent && h===_fbLastHash){ _fbDirty=false; _fbBusy=false; return true; }
+  fbStatus('sync','جارٍ الرفع…');
   try{
     let body;
     if(_gzOK){ const gz=await _gzB64(JSON.stringify(data)); body=JSON.stringify({app:'parc',version:3,savedAt:data.savedAt,gz}); }
@@ -1619,6 +1631,38 @@ async function fbAutoTick(){
 
 function fbStartLoop(){ clearInterval(_fbLoop); _fbLoop=setInterval(fbAutoTick,FB_SYNC_INTERVAL); }
 
+// ── استماع لحظي عبر SSE (Server-Sent Events) ──
+// Firebase RTDB يدعم streaming عبر Accept: text/event-stream على نفس مسار .json
+// عند أي تعديل من جهاز آخر (put/patch) يصل الحدث فوراً بلا انتظار الحلقة الاحتياطية.
+let _fbSSE=null, _fbSSERetry=null;
+function fbStartSSE(){
+  if(!('EventSource' in window)) return; // متصفّح قديم → الاعتماد على الحلقة الاحتياطية فقط
+  if(_fbSSE){ try{ _fbSSE.close(); }catch(e){} _fbSSE=null; }
+  if(!navigator.onLine) return;
+  try{
+    _fbSSE = new EventSource(FB_URL+FB_BASE+'/savedAt.json');
+    _fbSSE.addEventListener('put', ()=>{ _fbSSEOnChange(); });
+    _fbSSE.addEventListener('patch', ()=>{ _fbSSEOnChange(); });
+    _fbSSE.onerror = ()=>{
+      // عند انقطاع الاتصال: نغلق ونعاود المحاولة بعد قليل (الحلقة الاحتياطية تبقى تعمل في الوسط)
+      try{ _fbSSE.close(); }catch(e){}
+      _fbSSE=null;
+      if(_fbSSERetry) clearTimeout(_fbSSERetry);
+      _fbSSERetry=setTimeout(fbStartSSE,8000);
+    };
+  }catch(e){ _fbSSE=null; }
+}
+let _fbSSEDebounce=null;
+function _fbSSEOnChange(){
+  // تجميع أحداث متقاربة في نداء واحد (تفادي عدّة nداءات متتالية عند كتابة سريعة من الطرف الآخر)
+  if(_fbSSEDebounce) clearTimeout(_fbSSEDebounce);
+  _fbSSEDebounce=setTimeout(()=>{ if(fbAuto()&&navigator.onLine&&!_fbBusy) fbAutoTick(); },300);
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'){ if(!_fbSSE) fbStartSSE(); if(fbAuto()&&navigator.onLine) fbAutoTick(); }
+});
+window.addEventListener('online',()=>{ fbStartSSE(); if(fbAuto()) fbAutoTick(); });
+
 function fbToggleAuto(chk){
   try{ localStorage.setItem('egtph_parc_fb_auto',chk.checked?'1':'0'); }catch(e){}
   flash(chk.checked?'☁️ المزامنة التلقائية مفعّلة':'المزامنة التلقائية متوقفة');
@@ -1627,21 +1671,10 @@ function fbToggleAuto(chk){
 
 async function fbStartupCheck(){
   if(!navigator.onLine){ fbStatus('off','غير متصل بالإنترنت'); return; }
-  fbStatus('sync','جارٍ فحص السحابة…');
-  try{
-    const r=await fetch(FB_URL+FB_BASE+'/savedAt.json');
-    if(!r.ok){
-      let hint='تحقّق من قواعد Firebase (HTTP '+r.status+')';
-      if(r.status===401||r.status===403) hint='⛔ مرفوض — أضِف قاعدة المسار egtph_parc_v3_ في Firebase';
-      fbStatus('err',hint); return;
-    }
-    const ts=await r.json(); const lt=fbLastTS(); _fbSynced=true;
-    if(ts && (!lt||ts>lt)){
-      if(fbAuto()){ fbStatus('new','يوجد جديد — جارٍ المزامنة…'); fbAutoTick(); }
-      else { fbStatus('new','🔔 يوجد جديد في السحابة — اضغط للمزامنة'); }
-    }
-    else fbStatus('ok', ts?null:'السحابة فارغة — اضغط للرفع الأول');
-  }catch(e){ fbStatus('err','تعذّر الاتصال بالسحابة — تحقّق من الإنترنت'); }
+  // عند الفتح: نجلب مباشرة بلا فحص savedAt أولاً (طلب واحد بدل اثنين، أسرع)
+  fbStatus('sync','جارٍ المزامنة…');
+  try{ await fbSync(true); }
+  catch(e){ fbStatus('err','تعذّر الاتصال بالسحابة — تحقّق من الإنترنت'); }
 }
 window.addEventListener('online', ()=>{ fbStatus('ok','عاد الاتصال'); _fbDirty=true; });
 window.addEventListener('offline',()=>fbStatus('off','غير متصل'));
@@ -1665,8 +1698,9 @@ document.addEventListener('visibilitychange',function(){
 
 load();renderGarage();
 try{ if(!DB.deletedIds) DB.deletedIds=[]; }catch(e){}
-setTimeout(fbStartupCheck,1000);
+fbStartupCheck();
 fbStartLoop();
+fbStartSSE();
 try{ const c=document.getElementById('fb-auto-chk'); if(c) c.checked=fbAuto(); const lt=document.getElementById('fb-last-txt'); if(lt&&fbLastTS()) lt.textContent='آخر مزامنة: '+new Date(fbLastTS()).toLocaleString('fr-DZ'); }catch(e){}
 </script>
 </body>
