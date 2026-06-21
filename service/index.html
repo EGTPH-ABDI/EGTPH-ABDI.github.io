@@ -1620,13 +1620,15 @@ document.addEventListener('focusout',()=>{ setTimeout(flushDeferredRender,200); 
 
 async function fbAutoTick(){
   if(!fbAuto()||!navigator.onLine||_fbBusy) return;
+  _fbBusy=true; // ← قفل ذرّي يغطي الفحص + القرار + التنفيذ كاملاً (لا نُحرّره في الوسط)
   let remoteNewer=false;
   try{
     const r=await fetch(FB_URL+FB_BASE+'/savedAt.json');
     if(r.ok){ const ts=await r.json(); _fbSynced=true; remoteNewer=!!(ts && ts>(fbLastTS()||'')); }
-  }catch(e){ return; }
-  if(remoteNewer){ await fbSync(true); return; }
-  if(_fbDirty) await fbPush(true);
+  }catch(e){ _fbBusy=false; return; }
+  if(remoteNewer){ _fbBusy=false; await fbSync(true); return; }
+  if(_fbDirty){ _fbBusy=false; await fbPush(true); return; }
+  _fbBusy=false;
 }
 
 function fbStartLoop(){ clearInterval(_fbLoop); _fbLoop=setInterval(fbAutoTick,FB_SYNC_INTERVAL); }
