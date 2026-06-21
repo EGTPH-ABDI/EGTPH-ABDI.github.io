@@ -1,1 +1,1093 @@
-x
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Système EGTPH - Pro (v8)</title>
+<style>
+:root{--primary:#2c3e50;--secondary:#3498db;--accent:#e67e22;--light:#f8f9fa;--border:#dee2e6;--success:#27ae60;--danger:#e74c3c;}
+*{box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
+body{background:#f0f2f5;margin:0;padding:20px;color:#333;}
+.container{max-width:1300px;margin:0 auto;background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.1);overflow:hidden;}
+.header{background:linear-gradient(135deg,var(--primary),#1a252f);color:white;padding:20px 25px;text-align:center;position:relative;}
+.header h1{margin:0;font-size:1.5rem;letter-spacing:1px;}
+.header .ids{font-size:0.8rem;opacity:0.9;margin-top:5px;line-height:1.4;}
+.mode-badge{position:absolute;top:15px;right:20px;background:var(--success);color:white;padding:5px 12px;border-radius:20px;font-size:0.8rem;font-weight:600;display:none;}
+.mode-badge.active{display:block;}
+.stats-bar{display:flex;background:#1a252f;}
+.stat-item{flex:1;text-align:center;padding:8px;border-right:1px solid rgba(255,255,255,0.1);color:white;}
+.stat-item:last-child{border-right:none;}
+.stat-value{font-size:1.05rem;font-weight:700;color:#3498db;}
+.stat-label{font-size:0.7rem;opacity:0.7;}
+.tabs{display:flex;background:var(--light);border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.tab{flex:1;min-width:150px;padding:12px;cursor:pointer;border:none;background:none;font-weight:600;color:#555;transition:0.3s;}
+.tab.active{color:var(--secondary);border-bottom:3px solid var(--secondary);background:white;}
+.content{padding:25px;}
+.section{display:none;animation:fadeIn 0.3s ease;}
+.section.active{display:block;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px;margin-bottom:20px;}
+.form-group label{display:block;margin-bottom:5px;font-weight:600;font-size:0.85rem;color:#444;}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:6px;font-size:0.9rem;}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--secondary);box-shadow:0 0 0 2px rgba(52,152,219,0.2);}
+table{width:100%;border-collapse:collapse;margin:15px 0;background:white;font-size:0.9rem;}
+th,td{padding:10px 8px;text-align:center;border:1px solid var(--border);vertical-align:top;}
+th{background:var(--light);font-weight:600;color:var(--primary);}
+input.tbl,textarea.tbl{width:100%;border:none;background:transparent;padding:6px;text-align:center;resize:vertical;}
+input.tbl[type=number]{-moz-appearance:textfield;padding:6px 2px;}
+input.tbl[type=number]::-webkit-outer-spin-button,input.tbl[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+textarea.tbl.desig{text-align:left;min-height:40px;}
+.progress-wrap{position:relative;width:100%;}
+.progress-bar-bg{height:5px;background:#eee;border-radius:3px;margin-top:4px;}
+.progress-bar-fill{height:5px;background:var(--success);border-radius:3px;transition:width 0.3s;}
+.btn{padding:9px 16px;border:none;border-radius:6px;cursor:pointer;font-weight:600;transition:0.2s;margin:3px;font-size:0.85rem;}
+.btn:hover{opacity:0.85;}
+.btn-primary{background:var(--secondary);color:white;}
+.btn-success{background:var(--success);color:white;}
+.btn-warning{background:var(--accent);color:white;}
+.btn-danger{background:var(--danger);color:white;padding:5px 8px;font-size:0.75rem;}
+.btn-outline{background:white;border:1px solid var(--secondary);color:var(--secondary);}
+.btn-purple{background:#8e44ad;color:white;}
+.btn-sm{padding:5px 10px;font-size:0.8rem;}
+.totals-box{background:var(--light);padding:15px;border-radius:8px;max-width:340px;margin-left:auto;margin-top:20px;border:1px solid var(--border);}
+.total-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed #ccc;font-size:0.9rem;}
+.total-row:last-child{border-bottom:none;font-weight:bold;font-size:1.1rem;color:var(--primary);margin-top:6px;border-top:2px solid var(--border);padding-top:8px;}
+.actions{margin:20px 0;text-align:center;padding-bottom:15px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
+.client-card{background:white;border:1px solid var(--border);padding:12px;margin-bottom:10px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;}
+.client-info h4{margin:0 0 4px;color:var(--primary);}
+.client-info p{margin:2px 0;font-size:0.85rem;color:#666;}
+.filter-bar{display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap;align-items:center;}
+.active-filter-badge{background:var(--secondary);color:white;padding:4px 10px;border-radius:12px;font-size:0.8rem;display:inline-flex;align-items:center;gap:5px;}
+.active-filter-badge .close{cursor:pointer;font-weight:bold;}
+.alert{padding:10px;margin-bottom:15px;border-radius:6px;font-size:0.9rem;display:none;}
+.alert-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;}
+.hist-stats{display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap;}
+.hist-stat{background:var(--light);border:1px solid var(--border);padding:8px 14px;border-radius:8px;font-size:0.85rem;}
+.hist-stat strong{color:var(--primary);display:block;font-size:1rem;}
+#toast{position:fixed;bottom:30px;right:30px;background:#2c3e50;color:white;padding:12px 20px;border-radius:8px;font-size:0.9rem;display:none;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);}
+#toast.success{background:var(--success);}
+#toast.error{background:var(--danger);}
+.avan-link{font-size:0.82rem;color:var(--secondary);cursor:pointer;text-decoration:underline;margin-left:10px;}
+@media print{
+body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+.no-print{display:none !important;}
+#print-area{display:block !important;width:100%;max-width:210mm;margin:0 auto;padding:12px;font-family:'Arial',sans-serif;color:#000;font-size:10px;line-height:1.3;}
+.print-header{text-align:center;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:8px;}
+.print-header h2{margin:0 0 2px;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;}
+.print-header .ids{font-size:9px;margin:2px 0;white-space:nowrap;}
+.print-info{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px;font-size:10px;}
+.print-info div{border:1px solid #000;padding:4px 6px;background:#fafafa;overflow:hidden;}
+.print-table{width:100%;border-collapse:collapse;margin-bottom:8px;font-size:9px;page-break-inside:avoid;}
+.print-table th,.print-table td{border:1px solid #000;padding:3px 5px;text-align:center;vertical-align:middle;}
+.print-table th{background-color:#f0f0f0;font-weight:bold;}
+.print-table .desig-cell{text-align:left;white-space:pre-wrap;}
+.totals-grid{display:grid;grid-template-columns:1fr 130px;border:1px solid #000;font-size:9px;margin-bottom:10px;}
+.totals-grid > div{border-bottom:1px solid #000;padding:4px 6px;display:flex;justify-content:space-between;}
+.totals-grid > div:last-child{border-bottom:none;background:#e8f4f8;font-weight:bold;font-size:10px;}
+.amount-words{margin-top:6px;font-style:italic;font-size:9px;padding:5px;border:1px solid #000;background:#fafafa;text-align:center;}
+.print-footer{margin-top:15px;font-size:8px;text-align:center;color:#555;}
+.print-notes{margin-top:6px;font-size:9px;padding:5px;border:1px solid #000;background:#fafafa;}
+}
+#print-area{display:none;}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+<div class="container no-print">
+<div class="header">
+<h1>🏗️ Système EGTPH - Pro (v8)</h1>
+<div class="ids" id="uiCoIds">RC: 02/00-4566908A15 | NIF: 192020105006199 | NIS: 1 992 0201 05006 48 | NIN: 109920029050060008</div>
+<div style="margin-top:3px" id="uiCoSub">Entreprise des Grands Travaux Publics et Hydrauliques – CHLEF</div>
+<div id="uiCoAddr" style="display:none"></div>
+<div id="modeBadge" class="mode-badge">📝 Mode Édition Actif</div>
+</div>
+
+<div class="stats-bar">
+<div class="stat-item"><div class="stat-value" id="statDocs">0</div><div class="stat-label">Documents</div></div>
+<div class="stat-item"><div class="stat-value" id="statClients">0</div><div class="stat-label">Clients</div></div>
+<div class="stat-item"><div class="stat-value" id="statFact">0</div><div class="stat-label">Total Factures (DA)</div></div>
+<div class="stat-item"><div class="stat-value" id="statSit">0</div><div class="stat-label">Total Situations (DA)</div></div>
+</div>
+
+<div class="tabs">
+<button class="tab active" onclick="enterDocTab(this)">📄 Document</button>
+<button class="tab" onclick="switchTab('sec-clients',this)">👥 Clients</button>
+<button class="tab" onclick="switchTab('sec-history',this)">📜 Historique</button>
+<button class="tab" onclick="switchTab('sec-settings',this)">⚙️ Réglages</button>
+</div>
+
+<div class="content">
+<div id="sec-doc" class="section active">
+<div id="storageAlert" class="alert alert-error">⚠️ التخزين المحلي غير متفعل.</div>
+<div class="form-grid">
+<div class="form-group"><label>Type Document</label>
+<select id="docType" onchange="onTypeChange();syncPrint()"><option>DEVIS</option><option>FACTURE</option><option>AVOIR</option><option selected>SITUATION ACTUELLE</option><option>DÉCOMPTE FINAL</option></select></div>
+<div class="form-group"><label>N° Document</label><input type="text" id="docNum" placeholder="Ex: 101/2026" oninput="syncPrint()"></div>
+<div class="form-group"><label>Date</label><input type="date" id="docDate" oninput="syncPrint()"></div>
+<div class="form-group"><label>Client / Projet</label>
+<input type="text" id="clientName" placeholder="Nom du client" list="clientsList" oninput="syncPrint()">
+<datalist id="clientsList"></datalist></div>
+<div class="form-group"><label>Réf. Interne</label><input type="text" id="refInt" placeholder="REF-XXX" oninput="syncPrint()"></div>
+<div class="form-group"><label>Mode Paiement</label>
+<select id="payMode" onchange="syncPrint()"><option selected>ESPÈCES</option><option>CHÈQUE</option><option>VIREMENT</option></select></div>
+<div class="form-group"><label>N° Chèque/Vir.</label><input type="text" id="payRef" oninput="syncPrint()"></div>
+<div class="form-group"><label>Banque</label><input type="text" id="bank" oninput="syncPrint()"></div>
+<div class="form-group" id="payDateGroup"><label>Date Paiement</label><input type="date" id="payDate" oninput="syncPrint()"></div>
+<div class="form-group"><label>TVA</label>
+<select id="tvaRate" onchange="calc();syncPrint()"><option selected value="0">0% (Exonéré)</option><option value="0.09">9%</option><option value="0.19">19%</option></select></div>
+<div class="form-group"><label>Retenue de Garantie (%)</label>
+<input type="number" id="garantieRate" value="0" min="0" max="100" step="0.5" placeholder="Ex: 5" oninput="calc();syncPrint()"></div>
+<div class="form-group" style="grid-column:1/-1"><label>Observations / Notes</label>
+<textarea id="docNotes" rows="2" placeholder="Conditions de paiement, remarques..." style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;" oninput="syncPrint()"></textarea></div>
+</div>
+
+<h3 style="margin:15px 0 8px;color:var(--primary)">📦 Articles
+<span id="avanLink" class="avan-link" onclick="toggleAvan()" style="display:none">📊 Afficher Avancement %</span>
+</h3>
+<table id="itemsTable"><thead><tr>
+<th style="width:35px">N°</th><th>Désignation</th>
+<th style="width:95px">Qté</th><th style="width:60px">Unité</th>
+<th style="width:90px">P.U HT (DA)</th>
+<th id="colAvanH" style="width:90px;display:none">Avance %</th>
+<th style="width:95px">Montant HT</th>
+<th style="width:35px"></th>
+</tr></thead><tbody id="itemsBody"></tbody></table>
+<button class="btn btn-primary btn-sm" onclick="addItem()">+ Ajouter Article</button>
+
+<h3 style="margin:20px 0 8px;color:var(--primary)">💰 Acomptes / Déductions</h3>
+<table><thead><tr><th style="width:100px">Date</th><th>Désignation / Mode</th><th style="width:100px">Montant (DA)</th><th style="width:35px"></th></tr></thead><tbody id="deductionsBody"></tbody></table>
+<button class="btn btn-outline btn-sm" onclick="addDeduction()">+ Ajouter Acompte</button>
+
+<div class="totals-box">
+<div class="total-row"><span>Total H.T.</span><span id="tHT">0,00</span></div>
+<div class="total-row"><span>TVA (<span id="tTvaLbl">0</span>%)</span><span id="tTVA">0,00</span></div>
+<div class="total-row" id="garRow" style="display:none"><span>Ret. Garantie (<span id="tGarLbl">0</span>%)</span><span id="tGar" style="color:var(--danger)">- 0,00</span></div>
+<div class="total-row"><span>Total Acomptes</span><span id="tAcc">- 0,00</span></div>
+<div class="total-row"><span>NET À PAYER</span><span id="tNet">0,00</span></div>
+</div>
+<div style="margin-top:10px;font-size:0.85rem;color:#555;">
+<label>Arrêté à la somme de :</label>
+<div id="amtWords" style="background:#f8f9fa;padding:6px;border-radius:4px;border:1px dashed #ccc;font-style:italic;margin-top:3px;min-height:20px;">ZÉRO DINARS ALGÉRIENS</div>
+</div>
+</div>
+
+<div id="sec-clients" class="section">
+<div class="filter-bar">
+<input type="text" id="searchClient" placeholder="🔍 Rechercher client..." style="flex:1;padding:8px;border:1px solid #ccc;border-radius:5px;" oninput="renderClients()">
+<button class="btn btn-primary" onclick="addClient()">+ Nouveau Client</button>
+</div>
+<div id="clientsListContainer"></div>
+</div>
+
+<div id="sec-history" class="section">
+<div id="histStats" class="hist-stats"></div>
+<div class="filter-bar">
+<input type="text" id="histSearch" placeholder="🔍 Rechercher (N°, Client)..." style="flex:1;min-width:140px;padding:8px;border:1px solid #ccc;border-radius:5px;" oninput="renderHistory()">
+<select id="histTypeFilter" style="padding:8px;border:1px solid #ccc;border-radius:5px;" onchange="renderHistory()">
+<option value="">Tous les types</option><option>DEVIS</option><option>FACTURE</option><option>AVOIR</option><option>SITUATION ACTUELLE</option><option>DÉCOMPTE FINAL</option>
+</select>
+<input type="date" id="histDateFrom" style="padding:8px;border:1px solid #ccc;border-radius:5px;" onchange="renderHistory()" title="Du">
+<input type="date" id="histDateTo" style="padding:8px;border:1px solid #ccc;border-radius:5px;" onchange="renderHistory()" title="Au">
+<button class="btn btn-sm btn-outline" onclick="clearHistFilters()">✖ Effacer</button>
+<div id="clientFilterBadge"></div>
+</div>
+<table><thead><tr><th>Date</th><th>Type</th><th>N°</th><th>Client</th><th>H.T.</th><th>Net</th><th>Actions</th></tr></thead><tbody id="histBody"></tbody></table>
+</div>
+
+<div id="sec-settings" class="section">
+<h3 style="margin:5px 0 12px;color:var(--primary)">⚙️ Informations de l'entreprise</h3>
+<div style="font-size:0.82rem;color:#666;margin-bottom:14px;">Ces informations apparaissent sur l'en-tête des documents imprimés et se synchronisent avec le cloud.</div>
+<div class="form-grid">
+<div class="form-group" style="grid-column:1/-1"><label>Nom de l'entreprise</label><input type="text" id="setCoName" placeholder="EGTPH ABDI YOUSSOUF ISLAM"></div>
+<div class="form-group" style="grid-column:1/-1"><label>Activité / Sous-titre</label><input type="text" id="setCoSub" placeholder="Entreprise des Grands Travaux Publics et Hydrauliques – CHLEF"></div>
+<div class="form-group" style="grid-column:1/-1"><label>Adresse</label><input type="text" id="setCoAddr" placeholder="Ex: Zone Oued Sly, Chlef"></div>
+<div class="form-group"><label>RC</label><input type="text" id="setCoRC" placeholder="02/00-4566908A15"></div>
+<div class="form-group"><label>NIF</label><input type="text" id="setCoNIF" placeholder="192020105006199"></div>
+<div class="form-group"><label>NIS</label><input type="text" id="setCoNIS" placeholder="1 992 0201 05006 48"></div>
+<div class="form-group"><label>NIN</label><input type="text" id="setCoNIN" placeholder="109920029050060008"></div>
+</div>
+<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+<button class="btn btn-primary" onclick="saveCompany()">💾 Enregistrer</button>
+<button class="btn btn-outline" onclick="resetCompany()">↺ Valeurs par défaut</button>
+</div>
+<div id="setPreview" style="margin-top:16px;padding:12px;border:1px dashed #ccc;border-radius:6px;background:#f8f9fa;font-size:0.85rem;"></div>
+</div>
+</div>
+
+<div class="actions">
+<button class="btn btn-success" onclick="window.print()">🖨️ Imprimer / PDF</button>
+<button class="btn btn-primary" onclick="saveDoc()">💾 Sauvegarder</button>
+<button class="btn" style="background:#16a085;color:white" onclick="saveAsNew()">🆕 Enregistrer sous</button>
+<button class="btn btn-outline" onclick="cancelEdit()">↩️ Annuler</button>
+<button class="btn btn-outline" id="btnUndo" onclick="undoEdit()">↶ Défaire</button>
+<button class="btn btn-outline" id="btnRedo" onclick="redoEdit()">↷ Refaire</button>
+<button class="btn btn-outline" onclick="goBackHistory()">⬅️ Retour</button>
+<span id="cloudDot" title="Synchroniser maintenant" onclick="cloudSync(true)" style="cursor:pointer;font-size:16px;vertical-align:middle;">⚪</span>
+<button class="btn btn-purple" onclick="duplicateDoc()">📋 Dupliquer</button>
+<button class="btn btn-warning" onclick="loadDemoData()">📥 تحميل بيانات التجربة</button>
+<button class="btn btn-outline" onclick="newDoc()">↺ Nouveau</button>
+<button class="btn btn-warning" onclick="exportJSON()">📤 Exporter JSON</button>
+<button class="btn btn-outline" onclick="document.getElementById('jsonImportInput').click()">📥 Importer JSON</button>
+<input type="file" id="jsonImportInput" accept=".json" onchange="importJSON(this)" style="display:none">
+<button class="btn btn-outline" onclick="exportCSV()">📊 Exporter CSV</button>
+<button class="btn btn-danger" onclick="deleteDoc()">🗑️ Supprimer</button>
+</div>
+</div>
+
+<!-- PRINT AREA -->
+<div id="print-area">
+<div class="print-header">
+<h2 id="pCoName">🏗️ EGTPH ABDI YOUSSOUF ISLAM</h2>
+<div class="ids" id="pCoIds">RC: 02/00-4566908A15 | NIF: 192020105006199 | NIS: 1 992 0201 05006 48 | NIN: 109920029050060008</div>
+<div id="pCoSub">Entreprise des Grands Travaux Publics et Hydrauliques – CHLEF</div>
+<div id="pCoAddr" style="display:none"></div>
+</div>
+<div class="print-info">
+<div><strong>Type :</strong> <span id="pType"></span></div><div><strong>N° :</strong> <span id="pNum"></span></div>
+<div><strong>Date :</strong> <span id="pDate"></span></div><div><strong>Client :</strong> <span id="pClient"></span></div>
+<div><strong>Réf. :</strong> <span id="pRef"></span></div><div><strong>Paiement :</strong> <span id="pPayMode"></span></div>
+<div><strong>N° Chèque/Vir. :</strong> <span id="pPayRef"></span></div><div><strong>Banque :</strong> <span id="pBank"></span></div>
+<div id="pPayDateRow"><strong>Date Paiement :</strong> <span id="pPayDate"></span></div><div><strong>Ret. Garantie :</strong> <span id="pGarInfo"></span></div>
+</div>
+<table class="print-table">
+<thead><tr><th>N°</th><th class="desig-cell">Désignation</th><th>Qté</th><th>Unité</th><th>P.U HT</th><th id="pColAvan" style="display:none">Avance %</th><th>Montant HT</th></tr></thead>
+<tbody id="pItemsBody"></tbody>
+</table>
+<table class="print-table" style="margin-top:8px;"><thead><tr><th>Date</th><th>Désignation / Mode</th><th>Montant</th></tr></thead><tbody id="pDeductionsBody"></tbody></table>
+<div class="totals-grid">
+<div>TOTAL H.T. :</div><div id="pTotalHT">0,00</div>
+<div>TVA :</div><div id="pTotalTVA">0,00</div>
+<div id="pGarRow" style="display:none">RETENUE GARANTIE :</div><div id="pTotalGar" style="display:none">0,00</div>
+<div>TOTAL ACOMPTES :</div><div id="pTotalAcc">- 0,00</div>
+<div style="background:#e8f4f8">NET À PAYER :</div><div style="background:#e8f4f8" id="pNet">0,00</div>
+</div>
+<div class="amount-words">Arrêté le présent document à la somme de : <span id="pAmtWords">ZÉRO DINARS ALGÉRIENS</span></div>
+<div id="pNotesBlock" class="print-notes" style="display:none"><strong>Observations :</strong> <span id="pNotes"></span></div>
+<div class="print-footer">Document généré le <span id="pGenDate"></span> via Système EGTPH - Pro v8</div>
+</div>
+
+<script>
+const DB_KEY='egtp_v8_database';
+let db={clients:[],documents:[],currentDocId:null};
+let activeFilterClientId=null;
+let showAvan=false;
+const fmt=n=>(isNaN(n)?0:n).toLocaleString('fr-DZ',{minimumFractionDigits:2,maximumFractionDigits:2});
+const uuid=()=>'doc_'+Date.now()+'_'+Math.random().toString(36).substr(2,9);
+const cliId=()=>'cli_'+Date.now()+'_'+Math.random().toString(36).substr(2,5);
+
+const DEFAULT_CO={name:'EGTPH ABDI YOUSSOUF ISLAM',sub:'Entreprise des Grands Travaux Publics et Hydrauliques – CHLEF',addr:'ANCIENNE ZEMALA, ANCIENNE CHORFA B1, Chlef',rc:'02/00-4566908A15',nif:'192020105006199',nis:'1 992 0201 05006 48',nin:'109920029050060008',_mod:0};
+function applyCompany(){
+  const c=db.company||DEFAULT_CO;
+  const ids='RC: '+(c.rc||'')+' | NIF: '+(c.nif||'')+' | NIS: '+(c.nis||'')+' | NIN: '+(c.nin||'');
+  const set=(id,txt)=>{const el=document.getElementById(id);if(el)el.textContent=txt;};
+  set('pCoName','🏗️ '+(c.name||''));
+  set('pCoIds',ids);set('pCoSub',c.sub||'');
+  set('uiCoIds',ids);set('uiCoSub',c.sub||'');
+  const addr=c.addr||'';
+  ['pCoAddr','uiCoAddr'].forEach(id=>{const el=document.getElementById(id);if(el){el.textContent=addr;el.style.display=addr?'block':'none';}});
+}
+function fillCompanyForm(){
+  const c=db.company||DEFAULT_CO;
+  const v=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val||'';};
+  v('setCoName',c.name);v('setCoSub',c.sub);v('setCoAddr',c.addr);v('setCoRC',c.rc);v('setCoNIF',c.nif);v('setCoNIS',c.nis);v('setCoNIN',c.nin);
+  const p=document.getElementById('setPreview');
+  if(p)p.innerHTML='<strong>Aperçu en-tête :</strong><br>🏗️ '+(c.name||'')+'<br>RC: '+(c.rc||'')+' | NIF: '+(c.nif||'')+' | NIS: '+(c.nis||'')+' | NIN: '+(c.nin||'')+'<br>'+(c.sub||'')+(c.addr?'<br>'+c.addr:'');
+}
+function saveCompany(){
+  const g=id=>(document.getElementById(id).value||'').trim();
+  db.company={name:g('setCoName'),sub:g('setCoSub'),addr:g('setCoAddr'),rc:g('setCoRC'),nif:g('setCoNIF'),nis:g('setCoNIS'),nin:g('setCoNIN'),_mod:nextMod()};
+  saveDB();applyCompany();fillCompanyForm();toast('✅ Informations enregistrées (sync cloud en cours).');
+}
+function resetCompany(){
+  if(!confirm('Restaurer les valeurs par défaut ?'))return;
+  db.company=Object.assign({},DEFAULT_CO,{_mod:nextMod()});
+  saveDB();applyCompany();fillCompanyForm();toast('↺ Valeurs par défaut restaurées.');
+}
+
+function toast(msg,type='success',dur=3000){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className=type;t.style.display='block';
+  clearTimeout(t._t);t._t=setTimeout(()=>{t.style.display='none';},dur);
+}
+
+function checkStorage(){
+  try{localStorage.setItem('t','1');localStorage.removeItem('t');document.getElementById('storageAlert').style.display='none';}
+  catch(e){document.getElementById('storageAlert').style.display='block';}
+}
+function loadDB(){
+  try{const s=localStorage.getItem(DB_KEY);if(s)db=JSON.parse(s);}catch(e){db={clients:[],documents:[],currentDocId:null};}
+  if(!db.company)db.company=Object.assign({},DEFAULT_CO);
+  applyCompany();fillCompanyForm();
+  populateClientDatalist();renderClients();renderHistory();updateStats();
+}
+function saveDB(){localStorage.setItem(DB_KEY,JSON.stringify(db));updateStats();if(!window._cloudApplying)window._cloudDirty=true;}
+
+function updateStats(){
+  document.getElementById('statDocs').textContent=db.documents.length;
+  document.getElementById('statClients').textContent=db.clients.length;
+  const tf=db.documents.filter(d=>d.type==='FACTURE').reduce((s,d)=>s+(d.totals?.net||0),0);
+  const ts=db.documents.filter(d=>d.type==='SITUATION ACTUELLE').reduce((s,d)=>s+(d.totals?.net||0),0);
+  document.getElementById('statFact').textContent=fmt(tf);
+  document.getElementById('statSit').textContent=fmt(ts);
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  checkStorage();loadDB();
+  document.getElementById('docDate').valueAsDate=new Date();
+  document.getElementById('payDate').valueAsDate=new Date();
+  addItem();addDeduction();calc();syncPrint();updateModeBadge();onTypeChange();
+  const sd=document.getElementById('sec-doc');
+  sd.addEventListener('input',_recordChange);
+  sd.addEventListener('change',_recordChange);
+  _initUndo();
+});
+
+function switchTab(id,el){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if(el)el.classList.add('active');
+  if(id==='sec-history')renderHistory();
+  if(id==='sec-settings')fillCompanyForm();
+}
+
+function updateModeBadge(){
+  const badge=document.getElementById('modeBadge');
+  if(db.currentDocId){
+    const doc=db.documents.find(d=>d.id===db.currentDocId);
+    badge.classList.add('active');
+    badge.textContent='📝 Édition: N°'+(doc?.num||'?')+' — '+(doc?.type||'');
+  }else{badge.classList.remove('active');}
+}
+
+function onTypeChange(){
+  const type=document.getElementById('docType').value;
+  const lnk=document.getElementById('avanLink');
+  lnk.style.display=(type==='SITUATION ACTUELLE'||type==='DÉCOMPTE FINAL')?'inline':'none';
+  applyPayDateVisibility();
+}
+function applyPayDateVisibility(){
+  const isFinal=document.getElementById('docType').value==='DÉCOMPTE FINAL';
+  const g=document.getElementById('payDateGroup');if(g)g.style.display=isFinal?'':'none';
+  const r=document.getElementById('pPayDateRow');if(r)r.style.display=isFinal?'':'none';
+}
+
+function toggleAvan(){
+  showAvan=!showAvan;
+  document.getElementById('colAvanH').style.display=showAvan?'table-cell':'none';
+  document.querySelectorAll('.avan-cell').forEach(c=>c.style.display=showAvan?'table-cell':'none');
+  document.getElementById('avanLink').textContent=showAvan?'📊 Masquer Avancement %':'📊 Afficher Avancement %';
+  calc();syncPrint();
+}
+
+function addItem(data=null){
+  const tbody=document.getElementById('itemsBody');
+  const tr=document.createElement('tr');
+  const av=data?.avancement!==undefined?data.avancement:100;
+  const clr=av>=100?'var(--success)':av>=50?'var(--accent)':'var(--danger)';
+  tr.innerHTML=`<td>${tbody.children.length+1}</td>
+    <td><textarea class="tbl desig" rows="2" oninput="calc();syncPrint();">${data?.desig||''}</textarea></td>
+    <td><input type="number" class="tbl qty" value="${data?.qty||'1'}" min="0" step="0.01" oninput="calc();syncPrint();"></td>
+    <td><input type="text" class="tbl unit" value="${data?.unit||'U'}" oninput="syncPrint();"></td>
+    <td><input type="number" class="tbl pu" value="${data?.pu||'0'}" min="0" step="0.01" oninput="calc();syncPrint();"></td>
+    <td class="avan-cell" style="display:${showAvan?'table-cell':'none'}">
+      <input type="number" class="tbl avan" value="${av}" min="0" max="100" step="1" style="font-weight:600;color:${clr}" oninput="calc();syncPrint();updatePb(this)">
+      <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${av}%;background:${clr}"></div></div>
+    </td>
+    <td class="row-total">0,00</td>
+    <td><button class="btn btn-danger" onclick="this.closest('tr').remove();renumber();calc();syncPrint();">X</button></td>`;
+  tbody.appendChild(tr);
+}
+
+function updatePb(inp){
+  const v=Math.min(100,Math.max(0,parseFloat(inp.value)||0));
+  const fill=inp.parentElement.querySelector('.progress-bar-fill');
+  const clr=v>=100?'var(--success)':v>=50?'var(--accent)':'var(--danger)';
+  fill.style.width=v+'%';fill.style.background=clr;inp.style.color=clr;
+}
+
+function addDeduction(data=null){
+  const tbody=document.getElementById('deductionsBody');
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td><input type="date" class="tbl ded-date" value="${data?.date||new Date().toISOString().split('T')[0]}" oninput="syncPrint();"></td>
+    <td><textarea class="tbl ded-desig" rows="1" oninput="syncPrint();">${data?.desig||''}</textarea></td>
+    <td><input type="number" class="tbl ded-amount" value="${data?.amount||'0'}" min="0" step="0.01" oninput="calc();syncPrint();"></td>
+    <td><button class="btn btn-danger" onclick="this.closest('tr').remove();calc();syncPrint();">X</button></td>`;
+  tbody.appendChild(tr);
+}
+
+function renumber(){document.querySelectorAll('#itemsBody tr').forEach((r,i)=>r.cells[0].textContent=i+1);}
+
+// ── CALC (منطق الحسابات المتحقق منه) ──────────────────────────────────────
+// row_total = qty × PU × (avancement/100)   [إذا كان عمود الإنجاز مفعّلاً]
+// HT        = Σ row_total
+// TVA       = HT × tvaRate
+// Garantie  = (HT + TVA) × garantieRate/100
+// Acomptes  = Σ déductions
+// NET       = max(0, HT + TVA - Garantie - Acomptes)
+function calc(){
+  let ht=0;
+  document.querySelectorAll('#itemsBody tr').forEach(r=>{
+    const q=parseFloat(r.querySelector('.qty').value)||0;
+    const p=parseFloat(r.querySelector('.pu').value)||0;
+    const aInp=r.querySelector('.avan');
+    const av=showAvan&&aInp?(parseFloat(aInp.value)||0)/100:1;
+    const t=q*p*av;
+    r.querySelector('.row-total').textContent=fmt(t);ht+=t;
+  });
+  let acc=0;
+  document.querySelectorAll('#deductionsBody tr').forEach(r=>acc+=parseFloat(r.querySelector('.ded-amount').value)||0);
+  const tvaR=parseFloat(document.getElementById('tvaRate').value)||0;
+  const garR=parseFloat(document.getElementById('garantieRate').value)||0;
+  const tva=ht*tvaR;
+  const gar=(ht+tva)*(garR/100);
+  const net=Math.max(0,ht+tva-gar-acc);
+  document.getElementById('tHT').textContent=fmt(ht);
+  document.getElementById('tTvaLbl').textContent=(tvaR*100).toFixed(0);
+  document.getElementById('tTVA').textContent=fmt(tva);
+  document.getElementById('tAcc').textContent='- '+fmt(acc);
+  document.getElementById('tNet').textContent=fmt(net);
+  if(garR>0){
+    document.getElementById('garRow').style.display='flex';
+    document.getElementById('tGarLbl').textContent=garR;
+    document.getElementById('tGar').textContent='- '+fmt(gar);
+  }else{document.getElementById('garRow').style.display='none';}
+  document.getElementById('amtWords').textContent=numToWords(Math.round(net))+' DINARS ALGÉRIENS';
+}
+
+function numToWords(n){
+  if(n===0)return 'ZÉRO';
+  const u=['','UN','DEUX','TROIS','QUATRE','CINQ','SIX','SEPT','HUIT','NEUF','DIX','ONZE','DOUZE','TREIZE','QUATORZE','QUINZE','SEIZE','DIX-SEPT','DIX-HUIT','DIX-NEUF'];
+  const t=['','','VINGT','TRENTE','QUARANTE','CINQUANTE','SOIXANTE','SOIXANTE','QUATRE-VINGT','QUATRE-VINGT'];
+  function c100(x){if(x<20)return u[x];let d=Math.floor(x/10),r=x%10;if(d===7||d===9)return t[d]+(r===0?'':'-'+u[10+r]);if(d===8&&r===0)return 'QUATRE-VINGTS';return t[d]+(r===0?'':'-'+u[r]);}
+  function c1000(x){if(x===0)return '';if(x<100)return c100(x);let h=Math.floor(x/100),r=x%100;return(h===1?'CENT':u[h]+' CENT'+(r===0?'S':''))+(r===0?'':' '+c100(r));}
+  let s='';
+  if(n>=1000000){let m=Math.floor(n/1000000);s+=(m===1?'UN ':c1000(m)+' ')+'MILLION'+(m>1?'S':' ');n%=1000000;}
+  if(n>=1000){let k=Math.floor(n/1000);s+=(k===1?'MILLE':c1000(k)+' MILLE')+' ';n%=1000;}
+  if(n>0)s+=c1000(n);
+  return s.trim().replace(/\s+/g,' ').replace(/- /g,'-');
+}
+
+function syncPrint(){
+  const gv=id=>document.getElementById(id).value;
+  document.getElementById('pType').textContent=gv('docType');
+  document.getElementById('pNum').textContent=gv('docNum');
+  document.getElementById('pDate').textContent=gv('docDate');
+  document.getElementById('pClient').textContent=gv('clientName');
+  document.getElementById('pRef').textContent=gv('refInt');
+  document.getElementById('pPayMode').textContent=gv('payMode');
+  document.getElementById('pPayRef').textContent=gv('payRef');
+  document.getElementById('pBank').textContent=gv('bank');
+  document.getElementById('pPayDate').textContent=gv('payDate');
+  applyPayDateVisibility();
+  document.getElementById('pGenDate').textContent=new Date().toLocaleDateString('fr-FR');
+  const garR=parseFloat(gv('garantieRate'))||0;
+  document.getElementById('pGarInfo').textContent=garR>0?garR+'%':'Néant';
+  const notes=gv('docNotes').trim();
+  document.getElementById('pNotesBlock').style.display=notes?'block':'none';
+  document.getElementById('pNotes').textContent=notes;
+  document.getElementById('pColAvan').style.display=showAvan?'table-cell':'none';
+  const pI=document.getElementById('pItemsBody');pI.innerHTML='';
+  let ht=0;
+  document.querySelectorAll('#itemsBody tr').forEach((row,i)=>{
+    const d=row.querySelector('.desig').value;
+    const q=row.querySelector('.qty').value;
+    const u=row.querySelector('.unit').value;
+    const p=row.querySelector('.pu').value;
+    const aInp=row.querySelector('.avan');
+    const av=showAvan&&aInp?(parseFloat(aInp.value)||0)/100:1;
+    const t=(parseFloat(q)||0)*(parseFloat(p)||0)*av;ht+=t;
+    const ac=showAvan?`<td>${aInp?aInp.value:'100'}%</td>`:'';
+    pI.innerHTML+=`<tr><td>${i+1}</td><td class="desig-cell">${d}</td><td>${q}</td><td>${u}</td><td>${fmt(parseFloat(p)||0)}</td>${ac}<td>${fmt(t)}</td></tr>`;
+  });
+  pI.innerHTML+=`<tr><td colspan="${showAvan?6:5}" style="text-align:right;font-weight:bold;">TOTAL H.T. :</td><td style="font-weight:bold;">${fmt(ht)}</td></tr>`;
+  const pD=document.getElementById('pDeductionsBody');pD.innerHTML='';
+  let acc=0;
+  document.querySelectorAll('#deductionsBody tr').forEach(row=>{
+    const dt=row.querySelector('.ded-date').value;
+    const d=row.querySelector('.ded-desig').value;
+    const a=parseFloat(row.querySelector('.ded-amount').value)||0;acc+=a;
+    pD.innerHTML+=`<tr><td>${dt}</td><td>${d}</td><td>${fmt(a)}</td></tr>`;
+  });
+  const tvaR=parseFloat(gv('tvaRate'))||0;
+  const tva=ht*tvaR;const gar=(ht+tva)*(garR/100);
+  const net=Math.max(0,ht+tva-gar-acc);
+  document.getElementById('pTotalHT').textContent=fmt(ht);
+  document.getElementById('pTotalTVA').textContent=fmt(tva);
+  document.getElementById('pTotalAcc').textContent='- '+fmt(acc);
+  document.getElementById('pNet').textContent=fmt(net);
+  if(garR>0){
+    document.getElementById('pGarRow').style.display='flex';
+    document.getElementById('pTotalGar').style.display='flex';
+    document.getElementById('pTotalGar').textContent='- '+fmt(gar);
+  }else{
+    document.getElementById('pGarRow').style.display='none';
+    document.getElementById('pTotalGar').style.display='none';
+  }
+  document.getElementById('pAmtWords').textContent=numToWords(Math.round(net))+' DINARS ALGÉRIENS';
+}
+
+function scrapeForm(){
+  const items=[];
+  document.querySelectorAll('#itemsBody tr').forEach(r=>{
+    const aInp=r.querySelector('.avan');
+    items.push({desig:r.querySelector('.desig').value,qty:r.querySelector('.qty').value,unit:r.querySelector('.unit').value,pu:r.querySelector('.pu').value,avancement:aInp?parseFloat(aInp.value):100});
+  });
+  const deductions=[];
+  document.querySelectorAll('#deductionsBody tr').forEach(r=>deductions.push({date:r.querySelector('.ded-date').value,desig:r.querySelector('.ded-desig').value,amount:r.querySelector('.ded-amount').value}));
+  return{type:document.getElementById('docType').value,num:document.getElementById('docNum').value,date:document.getElementById('docDate').value,clientName:document.getElementById('clientName').value,refInt:document.getElementById('refInt').value,payMode:document.getElementById('payMode').value,payRef:document.getElementById('payRef').value,bank:document.getElementById('bank').value,payDate:document.getElementById('payDate').value,tvaRate:document.getElementById('tvaRate').value,garantieRate:document.getElementById('garantieRate').value,notes:document.getElementById('docNotes').value,items,deductions};
+}
+
+function calcTotals(data){
+  const tvaR=parseFloat(data.tvaRate)||0;
+  const garR=parseFloat(data.garantieRate)||0;
+  let ht=data.items.reduce((s,i)=>s+((parseFloat(i.qty)||0)*(parseFloat(i.pu)||0)*((i.avancement||100)/100)),0);
+  let acc=data.deductions.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+  let tva=ht*tvaR;let gar=(ht+tva)*(garR/100);
+  return{ht,tva,garantie:gar,acc,net:Math.max(0,ht+tva-gar-acc)};
+}
+
+function saveDoc(){
+  const data=scrapeForm();
+  if(!data.num){toast('⚠️ Veuillez entrer un N° Document.','error');return;}
+  let doc=db.documents.find(d=>d.id===db.currentDocId);
+  const isNew=!doc;
+  if(isNew)doc={id:uuid(),createdAt:new Date().toISOString()};
+  let c=db.clients.find(x=>x.name.toLowerCase()===data.clientName.toLowerCase());
+  if(!c&&data.clientName){c={id:cliId(),name:data.clientName,docs:[]};db.clients.push(c);}
+  doc.clientId=c?c.id:null;
+  Object.assign(doc,data,{updatedAt:new Date().toISOString(),_mod:nextMod()});
+  doc.totals=calcTotals(data);
+  if(isNew)db.documents.push(doc);
+  db.currentDocId=doc.id;
+  if(c&&!c.docs.includes(doc.id))c.docs.push(doc.id);
+  populateClientDatalist();saveDB();updateModeBadge();renderHistory();renderClients();
+  toast(isNew?'✅ Document créé et lié au client !':'✅ Document mis à jour !');
+}
+
+function loadDocById(id){
+  const doc=db.documents.find(d=>d.id===id);if(!doc)return;
+  db.currentDocId=id;
+  document.getElementById('docType').value=doc.type||'';
+  document.getElementById('docNum').value=doc.num||'';
+  document.getElementById('docDate').value=doc.date||'';
+  document.getElementById('clientName').value=doc.clientName||'';
+  document.getElementById('refInt').value=doc.refInt||'';
+  document.getElementById('payMode').value=doc.payMode||'ESPÈCES';
+  document.getElementById('payRef').value=doc.payRef||'';
+  document.getElementById('bank').value=doc.bank||'';
+  document.getElementById('payDate').value=doc.payDate||'';
+  document.getElementById('tvaRate').value=doc.tvaRate||'0';
+  document.getElementById('garantieRate').value=doc.garantieRate||'0';
+  document.getElementById('docNotes').value=doc.notes||'';
+  document.getElementById('itemsBody').innerHTML='';
+  doc.items.forEach(i=>addItem(i));
+  document.getElementById('deductionsBody').innerHTML='';
+  doc.deductions.forEach(d=>addDeduction(d));
+  renumber();calc();syncPrint();updateModeBadge();onTypeChange();
+  _initUndo();
+  switchTab('sec-doc',document.querySelectorAll('.tab')[0]);
+}
+
+function newDoc(silent){
+  db.currentDocId=null;
+  ['itemsBody','deductionsBody'].forEach(id=>document.getElementById(id).innerHTML='');
+  document.getElementById('docNotes').value='';
+  document.getElementById('garantieRate').value='0';
+  // page vraiment vierge : on vide aussi les en-têtes
+  document.getElementById('docNum').value='';
+  document.getElementById('clientName').value='';
+  document.getElementById('refInt').value='';
+  document.getElementById('payRef').value='';
+  document.getElementById('bank').value='';
+  document.getElementById('docDate').valueAsDate=new Date();
+  document.getElementById('payDate').valueAsDate=new Date();
+  addItem();addDeduction();calc();syncPrint();updateModeBadge();onTypeChange();
+  activeFilterClientId=null;renderHistory();
+  _initUndo();
+  if(!silent)toast('📄 Nouveau document prêt.');
+}
+
+// Cliquer sur l'onglet « Document » depuis un autre onglet → page vierge.
+// (la modification d'un document existant se fait via Historique → 📥 Modifier)
+function enterDocTab(el){
+  const wasActive=document.getElementById('sec-doc').classList.contains('active');
+  switchTab('sec-doc',el);
+  if(!wasActive)newDoc(true);
+}
+
+// Enregistrer sous : crée un NOUVEAU document (nouveau N° + date du jour)
+// tout en conservant l'ancien document intact.
+function saveAsNew(){
+  const data=scrapeForm();
+  if(!data.num){toast('⚠️ Veuillez entrer un N° Document.','error');return;}
+  const proposed=prompt('🆕 Enregistrer comme NOUVEAU document.\nL\'ancien document est conservé.\n\nN° du nouveau document :',data.num);
+  if(proposed===null)return; // annulé
+  const newNum=(proposed||'').trim()||data.num;
+  db.currentDocId=null; // force la création d'un nouveau document
+  document.getElementById('docNum').value=newNum;
+  document.getElementById('docDate').valueAsDate=new Date(); // nouvelle date = aujourd'hui
+  syncPrint();
+  saveDoc(); // l'ancien reste, un nouveau est créé
+}
+
+// Annuler : abandonne les modifications non enregistrées.
+// - document existant → recharge la version sauvegardée (revient en arrière)
+// - nouveau document non enregistré → vide le formulaire
+function cancelEdit(){
+  if(db.currentDocId){
+    if(!confirm('↩️ Annuler les modifications et revenir à la version enregistrée ?'))return;
+    loadDocById(db.currentDocId);
+    toast('↩️ Modifications annulées.');
+  }else{
+    if(!confirm('↩️ Effacer ce document non enregistré ?'))return;
+    newDoc(true);toast('↩️ Annulé.');
+  }
+}
+
+// Retour : revenir à la liste (Historique) sans rien enregistrer.
+function goBackHistory(){
+  const tabs=document.querySelectorAll('.tab');
+  switchTab('sec-history',tabs[2]);
+}
+
+// ══ UNDO / REDO (annuler/rétablir une frappe pendant l'édition) ══
+let _undoStack=[],_redoStack=[],_lastState=null,_undoLock=false,_undoTimer=null;
+function _snap(){return JSON.stringify(scrapeForm());}
+function _initUndo(){_lastState=_snap();_undoStack=[];_redoStack=[];updateUndoBtns();}
+function updateUndoBtns(){
+  const u=document.getElementById('btnUndo'),r=document.getElementById('btnRedo');
+  if(u){u.disabled=!_undoStack.length;u.style.opacity=_undoStack.length?'1':'0.45';}
+  if(r){r.disabled=!_redoStack.length;r.style.opacity=_redoStack.length?'1':'0.45';}
+}
+function _recordChange(){
+  if(_undoLock)return;
+  clearTimeout(_undoTimer);
+  _undoTimer=setTimeout(()=>{
+    const now=_snap();
+    if(_lastState===null){_lastState=now;return;}
+    if(now!==_lastState){
+      _undoStack.push(_lastState);
+      if(_undoStack.length>60)_undoStack.shift();
+      _lastState=now;_redoStack=[];updateUndoBtns();
+    }
+  },500);
+}
+function restoreForm(d){
+  document.getElementById('docType').value=d.type||'SITUATION ACTUELLE';
+  document.getElementById('docNum').value=d.num||'';
+  document.getElementById('docDate').value=d.date||'';
+  document.getElementById('clientName').value=d.clientName||'';
+  document.getElementById('refInt').value=d.refInt||'';
+  document.getElementById('payMode').value=d.payMode||'ESPÈCES';
+  document.getElementById('payRef').value=d.payRef||'';
+  document.getElementById('bank').value=d.bank||'';
+  document.getElementById('payDate').value=d.payDate||'';
+  document.getElementById('tvaRate').value=d.tvaRate||'0';
+  document.getElementById('garantieRate').value=d.garantieRate||'0';
+  document.getElementById('docNotes').value=d.notes||'';
+  document.getElementById('itemsBody').innerHTML='';
+  (d.items||[]).forEach(i=>addItem(i));
+  document.getElementById('deductionsBody').innerHTML='';
+  (d.deductions||[]).forEach(x=>addDeduction(x));
+  renumber();calc();syncPrint();onTypeChange();
+}
+function undoEdit(){
+  if(!_undoStack.length){toast('Rien à défaire.','error');return;}
+  _undoLock=true;
+  _redoStack.push(_snap());
+  const prev=_undoStack.pop();
+  restoreForm(JSON.parse(prev));_lastState=prev;
+  _undoLock=false;updateUndoBtns();toast('↶ Défait.');
+}
+function redoEdit(){
+  if(!_redoStack.length){toast('Rien à refaire.','error');return;}
+  _undoLock=true;
+  _undoStack.push(_snap());
+  const nxt=_redoStack.pop();
+  restoreForm(JSON.parse(nxt));_lastState=nxt;
+  _undoLock=false;updateUndoBtns();toast('↷ Refait.');
+}
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){
+    if(!document.getElementById('sec-doc').classList.contains('active'))return;
+    e.preventDefault();e.shiftKey?redoEdit():undoEdit();
+  }
+});
+
+function duplicateDoc(){
+  if(!db.currentDocId){toast('⚠️ Ouvrez d\'abord un document à dupliquer.','error');return;}
+  const data=scrapeForm();
+  db.currentDocId=null;
+  data.num=data.num+' (copie)';
+  document.getElementById('docType').value=data.type;
+  document.getElementById('docNum').value=data.num;
+  document.getElementById('docDate').value=data.date;
+  document.getElementById('clientName').value=data.clientName;
+  document.getElementById('refInt').value=data.refInt;
+  document.getElementById('payMode').value=data.payMode;
+  document.getElementById('payRef').value=data.payRef;
+  document.getElementById('bank').value=data.bank;
+  document.getElementById('payDate').value=data.payDate;
+  document.getElementById('tvaRate').value=data.tvaRate;
+  document.getElementById('garantieRate').value=data.garantieRate||'0';
+  document.getElementById('docNotes').value=data.notes||'';
+  updateModeBadge();toast('📋 Document dupliqué. Modifiez le N° puis Sauvegardez.');
+}
+
+function deleteDoc(){
+  if(!db.currentDocId)return;
+  if(!confirm('🗑️ Supprimer définitivement ce document ?'))return;
+  _factDel(db.currentDocId);
+  db.documents=db.documents.filter(d=>d.id!==db.currentDocId);
+  db.clients.forEach(c=>c.docs=c.docs.filter(did=>did!==db.currentDocId));
+  saveDB();newDoc(true);renderHistory();renderClients();toast('🗑️ Document supprimé.','error');
+  if(typeof cloudSync==='function'){cloudSync();setTimeout(cloudSync,1500);} // propager tout de suite (+ relance si occupé)
+}
+
+// Supprimer directement depuis l'Historique (sans ouvrir le document)
+function deleteDocById(id){
+  if(!id)return;
+  const d=db.documents.find(x=>x.id===id);
+  if(!confirm('🗑️ Supprimer définitivement ce document'+(d?' N° '+d.num:'')+' ?'))return;
+  _factDel(id);
+  db.documents=db.documents.filter(x=>x.id!==id);
+  db.clients.forEach(c=>c.docs=c.docs.filter(did=>did!==id));
+  if(db.currentDocId===id){db.currentDocId=null;newDoc(true);}
+  saveDB();renderHistory();renderClients();updateModeBadge();toast('🗑️ Document supprimé.','error');
+  if(typeof cloudSync==='function'){cloudSync();setTimeout(cloudSync,1500);}
+}
+
+function populateClientDatalist(){
+  const dl=document.getElementById('clientsList');dl.innerHTML='';
+  db.clients.forEach(c=>{const o=document.createElement('option');o.value=c.name;dl.appendChild(o);});
+}
+function addClient(){
+  const name=prompt('Nom du client :');if(!name)return;
+  if(db.clients.find(c=>c.name.toLowerCase()===name.toLowerCase())){toast('Client existe déjà.','error');return;}
+  db.clients.push({id:cliId(),name,docs:[]});saveDB();populateClientDatalist();renderClients();toast('✅ Client ajouté.');
+}
+function renderClients(){
+  const c=document.getElementById('clientsListContainer');c.innerHTML='';
+  const f=document.getElementById('searchClient').value.toLowerCase();
+  const filtered=db.clients.filter(x=>x.name.toLowerCase().includes(f));
+  if(!filtered.length){c.innerHTML='<p style="color:#888;padding:20px;text-align:center;">Aucun client trouvé</p>';return;}
+  filtered.forEach(cl=>{
+    const tot=db.documents.filter(d=>d.clientId===cl.id).reduce((s,d)=>s+(d.totals?.net||0),0);
+    c.innerHTML+=`<div class="client-card"><div class="client-info"><h4>${cl.name}</h4><p>📄 ${cl.docs.length} document(s) &nbsp;|&nbsp; 💰 Net total: <strong>${fmt(tot)} DA</strong></p></div>
+    <div><button class="btn btn-sm btn-outline" onclick="viewClientDocs('${cl.id}')">Voir Documents</button>
+    <button class="btn btn-sm btn-danger" onclick="deleteClient('${cl.id}')">Supprimer</button></div></div>`;
+  });
+}
+function viewClientDocs(cid){activeFilterClientId=cid;renderHistory();switchTab('sec-history',document.querySelectorAll('.tab')[2]);}
+function deleteClient(cid){if(!confirm('Supprimer ?'))return;_cliDel(cid);db.clients=db.clients.filter(c=>c.id!==cid);saveDB();populateClientDatalist();renderClients();toast('Client supprimé.','error');}
+function clearClientFilter(){activeFilterClientId=null;renderHistory();}
+function matchesSearch(text,query){if(!query||!text)return!query;return query.toLowerCase().split(/\s+/).filter(w=>w).every(w=>text.toLowerCase().includes(w));}
+
+const TYPE_COLOR={'FACTURE':'#e74c3c','DEVIS':'#3498db','AVOIR':'#9b59b6','SITUATION ACTUELLE':'#e67e22','DÉCOMPTE FINAL':'#27ae60'};
+function clearHistFilters(){
+  ['histSearch','histDateFrom','histDateTo'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('histTypeFilter').value='';activeFilterClientId=null;renderHistory();
+}
+function renderHistory(){
+  const tb=document.getElementById('histBody');tb.innerHTML='';
+  const s=document.getElementById('histSearch').value;
+  const tf=document.getElementById('histTypeFilter').value;
+  const dfr=document.getElementById('histDateFrom').value;
+  const dto=document.getElementById('histDateTo').value;
+  const badge=document.getElementById('clientFilterBadge');
+  if(activeFilterClientId){
+    const c=db.clients.find(x=>x.id===activeFilterClientId);
+    badge.innerHTML=`<span class="active-filter-badge">🔍 ${c?c.name:'Client'} <span class="close" onclick="clearClientFilter()">✖</span></span>`;
+  }else{badge.innerHTML='';}
+  let list=db.documents.filter(d=>{
+    const cn=d.clientName||'';
+    const mCli=activeFilterClientId?(d.clientId===activeFilterClientId||(db.clients.find(c=>c.id===activeFilterClientId)?.name||'').toLowerCase()===cn.toLowerCase()):true;
+    return mCli&&(matchesSearch(d.num,s)||matchesSearch(cn,s))&&(tf?d.type===tf:true)&&(dfr?d.date>=dfr:true)&&(dto?d.date<=dto:true);
+  }).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const totNet=list.reduce((s,d)=>s+(d.totals?.net||0),0);
+  const totHT=list.reduce((s,d)=>s+(d.totals?.ht||0),0);
+  document.getElementById('histStats').innerHTML=`
+    <div class="hist-stat">${list.length} document(s)</div>
+    <div class="hist-stat">Total H.T. : <strong>${fmt(totHT)} DA</strong></div>
+    <div class="hist-stat">Total Net : <strong>${fmt(totNet)} DA</strong></div>`;
+  list.forEach(d=>{
+    const clr=TYPE_COLOR[d.type]||'#95a5a6';
+    tb.innerHTML+=`<tr><td>${d.date}</td>
+      <td><span style="background:${clr};color:white;padding:2px 6px;border-radius:4px;font-size:0.75rem;">${d.type}</span></td>
+      <td>${d.num}</td><td>${d.clientName||'-'}</td>
+      <td>${fmt(d.totals?.ht||0)}</td><td><strong>${fmt(d.totals?.net||0)}</strong></td>
+      <td><button class="btn btn-sm btn-outline" onclick="loadDocById('${d.id}')">📥 Modifier</button>
+      <button class="btn btn-sm btn-danger" onclick="deleteDocById('${d.id}')">🗑️</button></td></tr>`;
+  });
+  if(!list.length)tb.innerHTML='<tr><td colspan="7" style="color:#777;padding:20px;text-align:center;">Aucun document trouvé</td></tr>';
+}
+
+function loadDemoData(){
+  document.getElementById('docType').value='SITUATION ACTUELLE';
+  document.getElementById('docNum').value='101/2026';
+  document.getElementById('docDate').value='2026-05-14';
+  document.getElementById('clientName').value='DJALOUL RAHMOUN';
+  document.getElementById('payMode').value='ESPÈCES';
+  document.getElementById('payDate').value='2026-05-07';
+  document.getElementById('tvaRate').value='0';
+  document.getElementById('garantieRate').value='0';
+  document.getElementById('itemsBody').innerHTML='';
+  [{desig:'Pose de tube annelé Ø500 mm(fourniture non incluse) › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable › Remblaiement en matériaux de terre',qty:'153.2',unit:'ML',pu:'2500'},
+  {desig:'Pose de tube annelé Ø315 mm(fourniture non incluse) › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable › Remblaiement en matériaux de tuf',qty:'721.25',unit:'ML',pu:'2500'},
+  {desig:'Fourniture de tube annelé Ø315 mm',qty:'159',unit:'ML',pu:'1100'},
+  {desig:'Fourniture de tube annelé Ø200 mm',qty:'72',unit:'ML',pu:'670'},
+  {desig:'Fourniture et pose de regard double nappe(profondeur ≤ 2 m)',qty:'23',unit:'U',pu:'30000'},
+  {desig:'Fourniture et pose de regard double nappe(profondeur> 2 m)',qty:'1',unit:'U',pu:'35000'},
+  {desig:'Fourniture et pose de tampon CPH 850×850 Série lourde',qty:'31',unit:'U',pu:'25000'},
+  {desig:'Fourniture et pose de boite de raccordement › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable carriére › Remblaiement en matériaux de grave',qty:'27',unit:'U',pu:'34000'}
+  ].forEach(i=>addItem(i));
+  document.getElementById('deductionsBody').innerHTML='';
+  addDeduction({date:'2026-05-07',desig:'Versement',amount:'3000000'});
+  onTypeChange();calc();syncPrint();saveDoc();
+  toast('✅ بيانات التجربة محملة ومحفوظة!');
+}
+
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='EGTPH_Backup_'+new Date().toISOString().split('T')[0]+'.json';a.click();
+  toast('📤 JSON exporté.');
+}
+function importJSON(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const imp=JSON.parse(e.target.result);
+      if(!imp.documents)throw new Error('Format invalide');
+      if(confirm('⚠️ Importer '+imp.documents.length+' documents ?\nCela remplacera la base actuelle.')){
+        db=imp;saveDB();loadDB();newDoc();toast('✅ Importation réussie !');
+      }
+    }catch(err){toast('❌ Erreur: '+err.message,'error');}
+    input.value='';
+  };
+  reader.readAsText(file);
+}
+
+function exportCSV(){
+  const rows=[['Date','Type','N°','Client','Total HT','TVA','Garantie','Acomptes','Net']];
+  db.documents.forEach(d=>rows.push([d.date,d.type,d.num,d.clientName||'',(d.totals?.ht||0).toFixed(2),(d.totals?.tva||0).toFixed(2),(d.totals?.garantie||0).toFixed(2),(d.totals?.acc||0).toFixed(2),(d.totals?.net||0).toFixed(2)]));
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='EGTPH_Export_'+new Date().toISOString().split('T')[0]+'.csv';a.click();
+  toast('📊 CSV exporté.');
+}
+window.onbeforeprint=syncPrint;
+
+// ══ CLOUD SYNC (Firebase) ══
+const _CLOUD_URL='https://egtph-abdi-youssouf-islam-default-rtdb.europe-west1.firebasedatabase.app';
+const _CLOUD_KEY='EGTPH-FACT-xB9U6PtjCLYVz8d0NdNTELtq';
+// طابع زمني تصاعدي صارم بدقّة دون-المللي ثانية — يمنع تساوي/تراجع _mod
+// عند حفظ متتالٍ سريع أو تطابق ساعة جهازين (يُستعمل في الدمج "الأحدث يغلب")
+let _modLast=0;
+function nextMod(){ let t=Date.now()+(performance.now()%1)/1000; if(t<=_modLast)t=_modLast+0.001; _modLast=t; return t; }
+let _cloudBusy=false,_cloudStamp=localStorage.getItem('egtp_fact_stamp')||'';
+window._cloudDirty=false;window._cloudApplying=false;
+let FACTDEL=[];try{FACTDEL=JSON.parse(localStorage.getItem('egtp_fact_del')||'[]');}catch(e){FACTDEL=[];}
+// تومبستون مستقل للعملاء (نفس آلية الوثائق — لا يعود محذوف حتى لو وصل من جهاز آخر)
+let CLIDEL=[];try{CLIDEL=JSON.parse(localStorage.getItem('egtp_fact_cli_del')||'[]');}catch(e){CLIDEL=[];}
+function _cliDel(id){
+  if(id&&CLIDEL.indexOf(id)<0){CLIDEL.push(id);localStorage.setItem('egtp_fact_cli_del',JSON.stringify(CLIDEL.slice(-300)));}
+  if(id)_pushTomb([],[id]); // يكتب تومبستون العميل في العقدة الدائمة فوراً
+}
+function _factDel(id){
+  if(id&&FACTDEL.indexOf(id)<0){FACTDEL.push(id);localStorage.setItem('egtp_fact_del',JSON.stringify(FACTDEL.slice(-300)));}
+  if(id)_pushTomb([id]); // écrit le tombstone dans le nœud durable tout de suite
+}
+function _cloudEP(){return _CLOUD_URL+'/egtph/'+encodeURIComponent(_CLOUD_KEY)+'.json';}
+// Nœud SÉPARÉ pour les suppressions : écrit en PATCH (additif), jamais écrasé par un PUT complet.
+function _tombEP(){return _CLOUD_URL+'/egtph_del/'+encodeURIComponent(_CLOUD_KEY)+'.json';}
+function _tombEPcli(){return _CLOUD_URL+'/egtph_del_cli/'+encodeURIComponent(_CLOUD_KEY)+'.json';}
+function _safeKey(id){return String(id).replace(/[.$#\[\]\/]/g,'_');}
+async function _pushTomb(ids,cliIds){
+  try{
+    const body={};(ids||[]).forEach(id=>{if(id)body[_safeKey(id)]=true;});
+    if(Object.keys(body).length)await fetch(_tombEP(),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  }catch(e){}
+  try{
+    const cbody={};(cliIds||[]).forEach(id=>{if(id)cbody[_safeKey(id)]=true;});
+    if(Object.keys(cbody).length)await fetch(_tombEPcli(),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(cbody)});
+  }catch(e){}
+}
+async function _pullTomb(){
+  let added=false;
+  try{
+    const r=await fetch(_tombEP());
+    if(r.ok){
+      const tm=await r.json();
+      if(tm&&typeof tm==='object'){
+        Object.keys(tm).forEach(k=>{if(tm[k]&&FACTDEL.indexOf(k)<0){FACTDEL.push(k);added=true;}});
+        if(added)localStorage.setItem('egtp_fact_del',JSON.stringify(FACTDEL.slice(-300)));
+      }
+    }
+  }catch(e){}
+  try{
+    const r2=await fetch(_tombEPcli());
+    if(r2.ok){
+      const tm2=await r2.json();
+      if(tm2&&typeof tm2==='object'){
+        Object.keys(tm2).forEach(k=>{if(tm2[k]&&CLIDEL.indexOf(k)<0){CLIDEL.push(k);added=true;}});
+        localStorage.setItem('egtp_fact_cli_del',JSON.stringify(CLIDEL.slice(-300)));
+      }
+    }
+  }catch(e){}
+  return added;
+}
+function _setDot(t,title){const el=document.getElementById('cloudDot');if(el){el.textContent=t;if(title)el.title=title;}}
+// Firebase peut renvoyer un tableau sous forme d'objet {0:..,1:..} ou null → on normalise.
+function _normArr(x){if(Array.isArray(x))return x;if(x&&typeof x==='object')return Object.values(x);return[];}
+function mergeRemoteFact(remote){
+  if(!remote||typeof remote!=='object')return false;
+  let changed=false;
+  // 1) Tombstones (suppressions) — TOUJOURS traités, même si documents est vide/null côté cloud.
+  const rDel=_normArr(remote.deleted);
+  if(rDel.length){
+    rDel.forEach(id=>{if(id&&FACTDEL.indexOf(id)<0){FACTDEL.push(id);changed=true;}});
+    localStorage.setItem('egtp_fact_del',JSON.stringify(FACTDEL.slice(-300)));
+  }
+  // 1b) Tombstones clients (union) — même principe, nœud séparé
+  const rCliDel=_normArr(remote.deletedClients);
+  if(rCliDel.length){
+    rCliDel.forEach(id=>{if(id&&CLIDEL.indexOf(id)<0){CLIDEL.push(id);changed=true;}});
+    localStorage.setItem('egtp_fact_cli_del',JSON.stringify(CLIDEL.slice(-300)));
+  }
+  // Appliquer les tombstones au local (retire ce qui a été supprimé ailleurs) — AVANT le merge
+  const before=db.documents.length;
+  db.documents=db.documents.filter(d=>FACTDEL.indexOf(d.id)<0);
+  if(db.documents.length!==before)changed=true;
+  const beforeC=db.clients.length;
+  db.clients=db.clients.filter(c=>CLIDEL.indexOf(c.id)<0);
+  if(db.clients.length!==beforeC)changed=true;
+  // 2) Documents distants
+  const rDocs=_normArr(remote.documents);
+  const byId={};db.documents.forEach(d=>byId[d.id]=d);
+  rDocs.forEach(rd=>{
+    if(!rd||!rd.id||FACTDEL.indexOf(rd.id)>=0)return; // jamais ré-ajouter un document supprimé
+    const loc=byId[rd.id];
+    if(!loc){db.documents.push(rd);byId[rd.id]=rd;changed=true;}
+    else{
+      const rModN=+rd._mod||0, lModN=+loc._mod||0;
+      const newer=(rModN||lModN)?(rModN>lModN):((rd.updatedAt||'')>(loc.updatedAt||''));
+      if(newer){Object.assign(loc,rd);changed=true;}
+    }
+  });
+  // 3) Clients distants
+  const rCli=_normArr(remote.clients);
+  if(rCli.length){
+    const cById={};db.clients.forEach(c=>cById[c.id]=c);
+    rCli.forEach(rc=>{
+      if(!rc||!rc.id||CLIDEL.indexOf(rc.id)>=0)return; // jamais ré-ajouter un client supprimé
+      const loc=cById[rc.id];
+      if(!loc){rc.docs=_normArr(rc.docs);db.clients.push(rc);cById[rc.id]=rc;changed=true;}
+      else{if(!Array.isArray(loc.docs))loc.docs=[];_normArr(rc.docs).forEach(id=>{if(loc.docs.indexOf(id)<0){loc.docs.push(id);changed=true;}});}
+    });
+  }
+  // 4) Société
+  if(remote.company && (remote.company._mod||0) > ((db.company&&db.company._mod)||0)){
+    db.company=remote.company;applyCompany();fillCompanyForm();changed=true;
+  }
+  // Garde de hذف مزدوج بعد الدمج — لو الجهاز الآخر رجّع نسخة عميل/وثيقة بنفس الوقت
+  if(FACTDEL.length){const b2=db.documents.length;db.documents=db.documents.filter(d=>FACTDEL.indexOf(d.id)<0);if(db.documents.length!==b2)changed=true;}
+  if(CLIDEL.length){const b3=db.clients.length;db.clients=db.clients.filter(c=>CLIDEL.indexOf(c.id)<0);if(db.clients.length!==b3)changed=true;}
+  return changed;
+}
+async function cloudSync(manual){
+  if(_cloudBusy)return;_cloudBusy=true;
+  try{
+    // ── JLB INTELLIGENT (smart fetch) : si le cloud n'a pas changé et rien à pousser → on sort ──
+    if(!manual&&!window._cloudDirty){
+      const pr=await fetch(_cloudEP().replace('.json','/syncedAt.json'));
+      if(pr.ok){const rs=await pr.json();
+        if(rs&&String(rs)===_cloudStamp){_cloudBusy=false;return;}}
+    }
+    _setDot('🔄');
+    await _pullTomb(); // suppressions durables d'abord (nœud séparé, additif)
+
+    // ── GARDE n°1 : on NE PUT JAMAIS sans un GET réussi (sinon risque d'écraser le cloud) ──
+    const g=await fetch(_cloudEP());
+    if(!g.ok)throw new Error('GET '+g.status);
+    let remote=null;try{remote=await g.json();}catch(_){remote=null;}
+
+    // ── DMG INTELLIGENT (smart merge) : distant → local (LWW par document, union clients) ──
+    const ch=remote?mergeRemoteFact(remote):false;
+    if(ch){
+      window._cloudApplying=true;
+      saveDB();populateClientDatalist();renderHistory();renderClients();
+      window._cloudApplying=false;
+    }
+
+    // ── GARDE n°2 (anti-perte) : aucun document/client distant non-supprimé ne doit disparaître ──
+    const _ids=new Set(db.documents.map(d=>d.id));
+    _normArr(remote&&remote.documents).forEach(rd=>{
+      if(rd&&rd.id&&FACTDEL.indexOf(rd.id)<0&&!_ids.has(rd.id)){db.documents.push(rd);_ids.add(rd.id);} // on restaure au lieu d'effacer
+    });
+    const _cids=new Set(db.clients.map(c=>c.id));
+    _normArr(remote&&remote.clients).forEach(rc=>{
+      if(rc&&rc.id&&CLIDEL.indexOf(rc.id)<0&&!_cids.has(rc.id)){rc.docs=_normArr(rc.docs);db.clients.push(rc);_cids.add(rc.id);}
+    });
+
+    if(FACTDEL.length||CLIDEL.length)_pushTomb(FACTDEL,CLIDEL); // propager les suppressions vers les nœuds durables
+
+    // ── ÉCRITURE seulement si nécessaire ──
+    const needPut = manual || window._cloudDirty || ch || FACTDEL.length>0 || CLIDEL.length>0;
+    if(needPut){
+      const stamp=String(Date.now());
+      const payload={documents:db.documents,clients:db.clients,company:db.company,deleted:FACTDEL.slice(-300),deletedClients:CLIDEL.slice(-300),syncedAt:stamp,device:navigator.userAgent.slice(0,60)};
+      const p=await fetch(_cloudEP(),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      if(!p.ok)throw new Error('PUT '+p.status);
+      _cloudStamp=stamp;localStorage.setItem('egtp_fact_stamp',stamp);
+    }else if(remote&&remote.syncedAt){
+      _cloudStamp=String(remote.syncedAt);localStorage.setItem('egtp_fact_stamp',_cloudStamp);
+    }
+    window._cloudDirty=false;
+    _setDot('🟢','🛡️ Sync OK '+new Date().toLocaleTimeString('fr-FR'));
+    if(manual)toast('☁️ Synchronisé !');
+  }catch(e){
+    // GARDE : en cas d'erreur (GET/PUT/réseau) on ne touche PAS au cloud — données préservées.
+    _setDot('🔴','Hors ligne / erreur: '+e.message);
+    if(manual)toast('☁️ Erreur sync (données préservées): '+e.message,'error');
+  }
+  _cloudBusy=false;
+}
+
+// ══ SEED: Situation 101/2026 RAHMOUN — injection UNIQUE, appelée par cloudSync ══
+// (n'injecte qu'après lecture des suppressions cloud → une fois supprimée, elle ne revient plus)
+function maybeSeedRahmoun(){
+  const SEED_ID='doc_seed_rahmoun_101_2026';
+  if(localStorage.getItem('egtp_fact_seeded'))return false;            // déjà fait une fois
+  if(FACTDEL.indexOf(SEED_ID)>=0){localStorage.setItem('egtp_fact_seeded','1');return false;} // supprimée → ne pas recréer
+  if(db.documents.some(d=>d.id===SEED_ID||d.num==='101/2026')){localStorage.setItem('egtp_fact_seeded','1');return false;} // déjà présente
+  localStorage.setItem('egtp_fact_seeded','1');
+  const data={type:'SITUATION ACTUELLE',num:'101/2026',date:'2026-05-14',clientName:'DJALOUL RAHMOUN',
+    refInt:'',payMode:'ESPÈCES',payRef:'/',bank:'/',payDate:'2026-05-07',tvaRate:'0',garantieRate:'0',notes:'',
+    items:[
+      {desig:'"Pose de tube annelé Ø500 mm (fourniture non incluse) › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable › Remblaiement en matériaux de terre"',qty:'153.2',unit:'ML',pu:'2500',avancement:100},
+      {desig:'"Pose de tube annelé Ø315 mm (fourniture non incluse) › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable › Remblaiement en matériaux de tuf"',qty:'721.25',unit:'ML',pu:'2500',avancement:100},
+      {desig:'Fourniture de tube annelé Ø315 mm',qty:'159',unit:'ML',pu:'1100',avancement:100},
+      {desig:'Fourniture de tube annelé Ø200 mm',qty:'72',unit:'ML',pu:'670',avancement:100},
+      {desig:'"Fourniture et pose de regard double nappe (profondeur ≤ 2 m)"',qty:'23',unit:'U',pu:'30000',avancement:100},
+      {desig:'"Fourniture et pose de regard double nappe (profondeur > 2 m)"',qty:'1',unit:'U',pu:'35000',avancement:100},
+      {desig:'"Fourniture et pose de tampon CPH 850×850 Série lourde"',qty:'31',unit:'U',pu:'25000',avancement:100},
+      {desig:'"Fourniture et pose de boite de raccordement › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable carriére › Remblaiement en matériaux de grave"',qty:'27',unit:'U',pu:'34000',avancement:100}
+    ],
+    deductions:[{date:'2026-05-07',desig:'Versement',amount:'3000000'}]};
+  let c=db.clients.find(x=>x.name.toLowerCase()==='djaloul rahmoun');
+  if(!c){c={id:cliId(),name:'DJALOUL RAHMOUN',docs:[]};db.clients.push(c);}
+  const doc=Object.assign({id:SEED_ID,createdAt:'2026-05-14T10:00:00.000Z',updatedAt:'2026-05-14T10:00:00.000Z',clientId:c.id},data);
+  doc.totals=calcTotals(data);
+  db.documents.push(doc);
+  if(c.docs.indexOf(SEED_ID)<0)c.docs.push(SEED_ID);
+  return true; // injecté → le caller (cloudSync) sauvegarde et rafraîchit
+}
+cloudSync(false);
+setInterval(()=>cloudSync(false),5000);
+</script>
+</body>
+</html>
