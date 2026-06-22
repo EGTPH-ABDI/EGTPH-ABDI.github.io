@@ -2866,10 +2866,27 @@ function cloudAutoSetup(){
   }
 }
 let _cloudTriggersWired=false;
+// ── تثبيت الخانة النشطة تلقائياً: لو كنت تكتب في خانة (onchange) ولم تخرج منها بعد،
+//    نُطلق حفظها (blur) قبل الإغلاق/التصغير — حتى لا تبقى القيمة «أمام عينيك فقط» ──
+function _commitActiveField(){
+  try{
+    const el=document.activeElement;
+    if(el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'||el.isContentEditable)){
+      el.blur(); // يُطلق onchange فيُحفظ ويُجدول الرفع للسحابة
+    }
+  }catch(e){}
+}
 function _wireCloudTriggers(){
   if(_cloudTriggersWired)return;_cloudTriggersWired=true;
-  window.addEventListener('beforeunload',(e)=>{ if(_cloudDirty){ e.preventDefault(); e.returnValue=''; } });
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden){cloudPullOnly();schedulePush();}});
+  window.addEventListener('beforeunload',(e)=>{ _commitActiveField(); if(_cloudDirty){ e.preventDefault(); e.returnValue=''; } });
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){
+      _commitActiveField();
+      if(_cloudDirty&&navigator.onLine&&!_cloudBusy)cloudSync(false); // تصغير التطبيق على الهاتف = أحياناً إغلاق فعلي
+    } else {
+      cloudPullOnly();schedulePush();
+    }
+  });
   window.addEventListener('focus',()=>{cloudPullOnly();});
   window.addEventListener('online',()=>{cloudPullOnly();schedulePush();cloudAutoSetup();});
 }
