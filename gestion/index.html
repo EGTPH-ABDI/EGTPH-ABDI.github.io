@@ -6681,10 +6681,12 @@ async function mergeStore(storeName, embArr, currentArr) {
   if (!embArr?.length) return currentArr;
   const map = Object.fromEntries(currentArr.map(x=>[x.id,x]));
   for (const item of embArr) {
-    if (!map[item.id]) {
-      map[item.id] = item;
-      await dbP(storeName, item);
-    }
+    if (map[item.id]) continue;
+    // ⚠️ حارس الحذف: لا تُعِد أبداً عنصراً مضمّناً في الملف إن كان معرّفه ضمن شواهد الحذف —
+    //    وإلا يعود المحذوف عند كل فتح للملف لأن البيانات المضمّنة تُدمج دائماً.
+    if (tombstones.some(x => x.s===storeName && x.id===item.id)) continue;
+    map[item.id] = item;
+    await dbP(storeName, item);
   }
   return Object.values(map);
 }
@@ -6702,11 +6704,11 @@ async function mergeEmbeddedData(emb) {
   suppliers  = await mergeStore('suppliers',   emb.suppliers||[],  suppliers);
   supPays    = await mergeStore('sup_pays',    emb.supPays||[],    supPays);
   prices     = await mergeStore('prices',      emb.prices||[],     prices);
-  // lockedDays: union — DB تفوز، الملف يُضيف فقط ما هو مفقود
+  // lockedDays: union — DB تفوز، الملف يُضيف فقط ما هو مفقود (ويحترم شواهد الحذف)
   if (emb.lockedDays?.length) {
     const dbIds = new Set(lockedDays.map(l=>l.id));
     for (const l of emb.lockedDays) {
-      if (!dbIds.has(l.id)) {
+      if (!dbIds.has(l.id) && !tombstones.some(x=>x.s==='locked_days'&&x.id===l.id)) {
         lockedDays.push(l);
         await dbP('locked_days', l);
       }
