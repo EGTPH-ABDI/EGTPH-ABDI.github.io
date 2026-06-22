@@ -863,9 +863,18 @@ function setAlertDays(v){if(!DB.settings)DB.settings={};DB.settings.alertDays=Ma
 function renderDashRatePanel(){
   const box=document.getElementById('dashRatePanel');if(!box)return;
   const t=globalRateOf('truck'),m=globalRateOf('machine');
+  const tLocked=rateLocked('truck'), mLocked=rateLocked('machine');
+  const tAt=DB.settings&&DB.settings.rateTruckSetAt, mAt=DB.settings&&DB.settings.rateMachineSetAt;
+  const tLockAt=DB.settings&&DB.settings.rateLockTruckAt, mLockAt=DB.settings&&DB.settings.rateLockMachineAt;
+  const fmtDT=v=>{ if(!v)return '—'; try{ return String(v).indexOf('T')>=0?new Date(v).toLocaleString('fr-DZ'):v; }catch(e){return v;} };
+  const lockChip=(locked,kind)=>'<label style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;cursor:pointer;padding:3px 9px;border-radius:20px;border:1px solid '+(locked?'var(--ok,#1a7a47)':'var(--soon)')+';color:'+(locked?'var(--ok,#1a7a47)':'var(--soon)')+';background:'+(locked?'rgba(26,122,71,.08)':'rgba(200,133,26,.1)')+'">'
+    +'<input type="checkbox" '+(locked?'checked':'')+' onchange="toggleRateLock(\''+kind+'\',this.checked);renderGarage();" style="width:13px;height:13px;accent-color:var(--ok,#1a7a47);margin:0">'
+    +(locked?'🔒 مقفول':'🔓 غير مقفول')+'</label>';
   box.innerHTML=
-    '<div class="ratein" style="margin-bottom:7px"><span class="grate-l" style="min-width:96px;text-align:start">🚛 كل الشاحنات</span><input type="number" id="dashRateTruck" min="0" value="'+t+'"><span class="u">km/يوم</span></div>'
+    '<div class="ratein" style="margin-bottom:4px"><span class="grate-l" style="min-width:96px;text-align:start">🚛 كل الشاحنات</span><input type="number" id="dashRateTruck" min="0" value="'+t+'"><span class="u">km/يوم</span></div>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 10px 4px;flex-wrap:wrap">'+lockChip(tLocked,'truck')+'<span style="font-size:10px;color:var(--muted)">آخر تحديث: '+fmtDT(tAt)+(tLocked&&tLockAt?(' · 🔒 '+fmtDT(tLockAt)):'')+'</span></div>'
     +'<div class="ratein"><span class="grate-l" style="min-width:96px;text-align:start">🏗️ كل الآلات</span><input type="number" id="dashRateMachine" min="0" value="'+m+'"><span class="u">h/يوم</span></div>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 4px 4px;flex-wrap:wrap">'+lockChip(mLocked,'machine')+'<span style="font-size:10px;color:var(--muted)">آخر تحديث: '+fmtDT(mAt)+(mLocked&&mLockAt?(' · 🔒 '+fmtDT(mLockAt)):'')+'</span></div>'
     +'<button class="est-btn" style="margin-top:10px" onclick="saveDashRates()">✓ حفظ وتطبيق على الكل</button>'
     +'<div class="note" style="text-align:center;margin-top:7px">يُطبَّق على كل عتاد لم تُخصّص له معدّلاً. لتخصيص آلة واحدة: ادخل إليها → تبويب 📅 المعدّل.</div>';
 }
@@ -873,8 +882,8 @@ function saveDashRates(){
   const t=Math.max(0,parseFloat(document.getElementById('dashRateTruck').value)||0);
   const m=Math.max(0,parseFloat(document.getElementById('dashRateMachine').value)||0);
   if(!DB.settings)DB.settings={};
-  DB.settings.rateTruck=t;DB.settings.rateTruckSetAt=todayISO();
-  DB.settings.rateMachine=m;DB.settings.rateMachineSetAt=todayISO();
+  DB.settings.rateTruck=t;DB.settings.rateTruckSetAt=new Date().toISOString();
+  DB.settings.rateMachine=m;DB.settings.rateMachineSetAt=new Date().toISOString();
   save();flash('✓ طُبِّق المعدّل العام على كل العتاد');renderGarage();
 }
 function renderAlertsCard(){
