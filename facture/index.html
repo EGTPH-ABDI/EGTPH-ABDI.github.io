@@ -1087,7 +1087,55 @@ function maybeSeedRahmoun(){
   return true; // injecté → le caller (cloudSync) sauvegarde et rafraîchit
 }
 cloudSync(false);
-setInterval(()=>cloudSync(false),5000);
+
+// ── البثّ المباشر (SSE) الأذكى: يبثّ syncedAt فقط (طابع خفيف)؛ عند تغيّره يُزامِن فوراً ──
+//    أخفّ بكثير على النت من فحص دوري كل 5 ثوانٍ.
+let _sse=null,_sseRetry=null;
+function startCloudStream(){
+  if(!('EventSource' in window))return; // متصفّح قديم → الفحص الدوري يكفي
+  if(_sse){try{_sse.close();}catch(e){}_sse=null;}
+  if(!navigator.onLine)return;
+  try{
+    _sse=new EventSource(_cloudEP().replace('.json','/syncedAt.json'));
+    const onCh=()=>{ if(_sseDeb)clearTimeout(_sseDeb); _sseDeb=setTimeout(()=>{ if(!_cloudBusy)cloudSync(false); },300); };
+    _sse.addEventListener('put',onCh);
+    _sse.addEventListener('patch',onCh);
+    _sse.onerror=()=>{
+      try{_sse.close();}catch(e){} _sse=null;
+      if(_sseRetry)clearTimeout(_sseRetry);
+      _sseRetry=setTimeout(startCloudStream,8000);
+    };
+  }catch(e){_sse=null;}
+}
+let _sseDeb=null;
+startCloudStream();
+// فحص دوري خفيف كل 15ث كخطّة بديلة (يغطّي انقطاع SSE المؤقّت)
+setInterval(()=>cloudSync(false),15000);
+
+// ── تثبيت الخانة النشطة تلقائياً: لو كنت تكتب في خانة (onchange) ولم تخرج منها بعد،
+//    نُطلق حفظها (blur) قبل الإغلاق/التصغير — حتى لا تبقى القيمة «أمام عينيك فقط» ──
+function _commitActiveField(){
+  try{
+    const el=document.activeElement;
+    if(el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'||el.isContentEditable)){
+      el.blur();
+    }
+  }catch(e){}
+}
+window.addEventListener('beforeunload',function(e){
+  _commitActiveField();
+  if(window._cloudDirty){ e.preventDefault(); e.returnValue=''; }
+});
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='hidden'){
+    _commitActiveField();
+    if(window._cloudDirty&&navigator.onLine&&!_cloudBusy)cloudSync(false);
+  } else {
+    try{startCloudStream();}catch(e){}
+    if(!_cloudBusy)cloudSync(false);
+  }
+});
+window.addEventListener('online',function(){ try{startCloudStream();}catch(e){} if(!_cloudBusy)cloudSync(false); });
 </script>
 </body>
 </html>
