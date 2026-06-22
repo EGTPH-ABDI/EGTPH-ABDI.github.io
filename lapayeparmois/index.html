@@ -2142,11 +2142,15 @@ body{
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px">
         <button class="btn1" onclick="cloudConfigSave()">💾 حفظ الإعدادات</button>
         <button class="btn2" onclick="cloudSync(true)">🔄 مزامنة الآن</button>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cloud_auto" onchange="DB.settings.cloudAuto=this.checked;saveDB();cloudAutoSetup();toast(this.checked?'✅ مزامنة تلقائية مفعّلة':'⏸ مزامنة يدوية فقط')"> مزامنة تلقائية (كل 5 ثوانٍ + عند الفتح)</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cloud_auto" onchange="DB.settings.cloudAuto=this.checked;saveDB();cloudAutoSetup();cloudStartStream();toast(this.checked?'✅ مزامنة تلقائية مفعّلة':'⏸ مزامنة يدوية فقط')"> مزامنة تلقائية (لحظية + عند الإدخال)</label>
       </div>
       <div style="margin-top:10px;padding:9px;border:1.5px dashed var(--red);border-radius:10px">
         <button class="btn2" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="cloudForcePush()">⚠️ رفع قسري — استبدال السحابة بالكامل (بلا دمج)</button>
         <div style="font-size:10px;color:var(--red);margin-top:6px">استخدمها فقط بعد استيراد JSON نظيف (استبدال كامل) لتنظيف بيانات سحابية تالفة/مكرّرة. تمحي محتوى السحابة بالكامل وتعوّضه ببيانات هذا الجهاز <b>بلا أي سحب أو دمج</b> — افعلها مرّة، ثم فعّل المزامنة العادية في كل الأجهزة الأخرى لتأخذ النسخة النظيفة.</div>
+      </div>
+      <div style="margin-top:10px;padding:9px;border:1.5px dashed var(--blu,#1456b8);border-radius:10px;background:rgba(20,86,184,.06)">
+        <button class="btn2" style="background:#0b3b8c;color:#fff" onclick="cloudPullReplace()">⬇️ جلب السحابة (استبدال كامل لهذا الجهاز)</button>
+        <div style="font-size:10px;color:var(--blu,#1456b8);margin-top:6px">لتنظيف جهاز رجعت فيه بيانات قديمة: يجلب نسخة السحابة ويستبدل بها بيانات هذا الجهاز <b>بالكامل بلا دمج</b>. استعمله في الجهاز الخطأ بعد «الرفع القسري» من الجهاز الصحيح.</div>
       </div>
       <div id="cloud_status" style="font-size:11px;color:var(--gray);margin-top:8px">⚪ غير مهيأة</div>
       <div style="font-size:10px;color:var(--green1);margin-top:6px">✅ المزامنة الكاملة: الإضافة، التعديل، والحذف كلها تتزامن بين الأجهزة. عند تعديل نفس القيد في جهازين، النسخة الأحدث تغلب.</div>
@@ -2977,6 +2981,9 @@ function updateOpenAbsences(){
   if(changed)saveDB();
 }
 
+// ── طابع زمني بدقّة الميلي-ثانية مع تصاعد صارم: الأحدث يغلب دائماً حتى لو نفس الميلي ──
+let _lastMod=0;
+function nextMod(){ let t=Date.now(); try{t+=(performance.now()%1)/1000;}catch(e){} if(t<=_lastMod)t=_lastMod+0.001; _lastMod=t; return t; }
 function saveDB(){
   // ── 0) أي حفظ محلي = تغيير يجب رفعه للسحابة — مركزياً هنا، لا حسب كل دالة ──
   //    (يضمن أن تعديلات لا تستدعي audit() مباشرة، كبعض المسارات الفرعية، تُزامَن أيضاً)
@@ -4627,8 +4634,8 @@ function saveWorker(){
   if(!name){toast('❌ الاسم مطلوب',true);return;}
   if(salary<=0){toast('❌ أدخل راتباً صحيحاً',true);return;}
   if(day<1||day>30){toast('❌ يوم الدخول بين 1 و30',true);return;}
-  if(_editWid){Object.assign(getW(_editWid),{name,type,mat,day,salary,payday,phone,idnum,contract,startDate,exitDate,_mod:Date.now()});}
-  else{DB.workers.push({id:Date.now(),name,type,mat,day,salary,payday,phone,idnum,contract,startDate,exitDate});}
+  if(_editWid){Object.assign(getW(_editWid),{name,type,mat,day,salary,payday,phone,idnum,contract,startDate,exitDate,_mod:nextMod()});}
+  else{DB.workers.push({id:Date.now(),name,type,mat,day,salary,payday,phone,idnum,contract,startDate,exitDate,_mod:nextMod()});}
   audit((_editWid?'تعديل':'إضافة')+' عامل: '+name);
   saveDB();closeModal('mWorker');renderWorkers();updateBadges();
   toast(_editWid?'✅ تم التعديل':'✅ تم إضافة العامل');
@@ -5201,7 +5208,7 @@ function editAdv(wid,bucket,eid){
   const dt=prompt('تعديل التاريخ (YYYY-MM-DD):',dToISO(e.date)||e.date);if(dt===null)return;
   const nt=prompt('تعديل الملاحظة:',e.note||'');if(nt===null)return;
   if(+amt<=0){toast('❌ مبلغ غير صالح',true);return;}
-  e.amount=+amt;e.date=dt.includes('-')&&dt.length===10?isoToD(dt):dt;e.note=nt;e._mod=Date.now();
+  e.amount=+amt;e.date=dt.includes('-')&&dt.length===10?isoToD(dt):dt;e.note=nt;e._mod=nextMod();
   audit(`تعديل تسبيق — ${getW(wid)?.name} — ${fmt(+amt)}`);
   saveDB();renderSalContent();renderDash();toast('✅ تم تعديل التسبيق');
 }
@@ -5430,7 +5437,7 @@ function editHrs(wid,hid){
   if(+hrs<=0){toast('❌ عدد ساعات غير صالح',true);return;}
   const w=getW(wid);const daily=w.customHourlyRate||Math.round(w.salary/30/8*100)/100;
   h.hours=+hrs;h.date=dt.includes('-')&&dt.length===10?isoToD(dt):dt;h.note=nt;
-  h.total=Math.round(h.hours*(h.rateType==='custom'?h.hourly:daily*(h.mult||DB.settings.mult||1.5)));h._mod=Date.now();
+  h.total=Math.round(h.hours*(h.rateType==='custom'?h.hourly:daily*(h.mult||DB.settings.mult||1.5)));h._mod=nextMod();
   audit(`تعديل ساعات — ${w?.name}`);saveDB();renderHrsContent();renderDash();
   if(S.sw===wid)renderSalContent();
   toast('✅ تم تعديل الساعات');
@@ -5830,7 +5837,7 @@ function editAbs(wid,aid){
   const reason=prompt('تعديل السبب:',a.reason||'');if(reason===null)return;
   if(+days<=0){toast('❌ عدد أيام غير صالح',true);return;}
   const w=getW(wid);a.days=+days;a.reason=reason;
-  if(a.deductOpt!=='cancel')a.deduct=Math.round(+days*(w.salary/30));a._mod=Date.now();
+  if(a.deductOpt!=='cancel')a.deduct=Math.round(+days*(w.salary/30));a._mod=nextMod();
   audit(`تعديل غياب — ${w?.name}`);saveDB();renderAbsContent();renderDash();updateBadges();
   if(S.sw===wid)renderSalContent();
   toast('✅ تم تعديل الغياب');
@@ -5953,7 +5960,7 @@ function editBon(wid,m,idx){
   // إعادة تطبيق ضريبة المكافآت إذا كانت موجودة
   const tax=+(DB.settings.bonTax||0);
   const net=tax>0?Math.round(+amt*(1-tax/100)*100)/100:+amt;
-  b.amount=+amt;b.reason=reason;b.net=net;b.tax=tax;b._mod=Date.now();
+  b.amount=+amt;b.reason=reason;b.net=net;b.tax=tax;b._mod=nextMod();
   audit(`تعديل مكافأة — ${getW(wid)?.name} — ${fmt(+amt)}${tax>0?' (صافي: '+fmt(net)+')':''}`);
   saveDB();renderBonContent();renderDash();
   if(S.sw===wid)renderSalContent();
@@ -8453,6 +8460,7 @@ function _applyDeletions(delIds){
   return removed;
 }
 function mergeImportData(d){
+  // ── طابع زمني بدقّة الميلي-ثانية مع تصاعد صارم (الأحدث يغلب حتى لو نفس المللي) ──
   // ── حارس الطابع: أي _mod مستقبلي (>الآن+دقيقتين، ساعة جهاز غلط) يُعامَل كصفر فلا يغلب ──
   const _NOWMAX=Date.now()+120000;
   const _modOf=x=>{let m=+((x&&x._mod))||0;return (m>_NOWMAX)?0:m;};
@@ -8526,6 +8534,8 @@ function mergeImportData(d){
       }
     });
   });
+  // ── حارس مزدوج: نطبّق الحذف مرّة أخرى بعد الدمج، لضمان أن لا يتسرّب أي قيد محذوف ──
+  _applyDeletions(DB.deletedIds);
   return added;
 }
 
@@ -8571,7 +8581,7 @@ function cloudConfigSave(){
   DB.settings.cloudUrl=(document.getElementById('cloud_url')?.value||'').trim();
   DB.settings.cloudKey=(document.getElementById('cloud_key')?.value||'').trim();
   saveDB();
-  if(_cloudCfg()){toast('✅ حُفظت إعدادات المزامنة');_cloudStatus('🟡 مهيأة — اضغط مزامنة الآن','var(--amber)');}
+  if(_cloudCfg()){toast('✅ حُفظت إعدادات المزامنة');_cloudStatus('🟡 مهيأة — اضغط مزامنة الآن','var(--amber)');cloudStartStream();}
   else{toast('❌ الرابط أو المفتاح ناقص (المفتاح 8 أحرف على الأقل)',true);_cloudStatus('⚪ غير مهيأة');}
 }
 function cloudFillInputs(){
@@ -8643,6 +8653,7 @@ async function cloudSync(manual){
     const now=todayStr()+' '+new Date().toLocaleTimeString('fr-DZ',{hour:'2-digit',minute:'2-digit'});
     DB.settings.cloudLastSync=now;
     DB.settings.cloudRemoteStamp=JSON.parse(payload).syncedAt; // طابع نسختنا في السحابة
+    _lastPushedSyncedAt=DB.settings.cloudRemoteStamp; // لتمييز صدى رفعنا نحن عبر SSE
     saveDB();updateBadges();
     _cloudDirty=false; // بعد saveDB() حتى لا يُعاد تعليمها فوراً (saveDB يُعلِّمها مركزياً)
     try{safeDash();}catch(e){}
@@ -8685,7 +8696,73 @@ async function cloudForcePush(){
   }
   _cloudBusy=false;
 }
-let _cloudTimer=null;
+// ── جلب-استبدال: يجلب نسخة السحابة ويستبدل بها بيانات هذا الجهاز بالكامل (بلا دمج) ──
+//    لتنظيف جهاز رجعت فيه بيانات قديمة، بعد أن رفعت النسخة الصحيحة من جهاز آخر بالرفع القسري.
+async function cloudPullReplace(){
+  const cfg=_cloudCfg();
+  if(!cfg){toast('❌ هيّئ الإعدادات أولاً (رابط + مفتاح)',true);return;}
+  if(!navigator.onLine){toast('📡 لا يوجد اتصال — حاول لاحقاً',true);return;}
+  if(!confirm('⬇️ سيتم استبدال كل بيانات هذا الجهاز بنسخة السحابة بالكامل، بلا أي دمج.\n\nاستخدمه في الجهاز الذي رجعت فيه بيانات قديمة، بعد أن رفعت النسخة الصحيحة من الجهاز الآخر بالرفع القسري.\n\nمتابعة؟')) return;
+  if(_cloudBusy){toast('⏳ مزامنة أخرى جارية، انتظر قليلاً',true);return;}
+  _cloudBusy=true;
+  try{
+    _cloudStatus('⏳ جارٍ جلب السحابة...','var(--teal)');
+    const res=await fbFetch(cfg.endpoint);
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const remote=await res.json();
+    if(!remote||!Array.isArray(remote.workers)){_cloudBusy=false;toast('❌ السحابة فارغة — لا يوجد ما يُجلب',true);_cloudStatus('🔴 السحابة فارغة','var(--red)');return;}
+    DB.workers=remote.workers||[];
+    DB.advances=remote.advances||{};
+    DB.hours=remote.hours||{};
+    DB.absences=remote.absences||{};
+    DB.bonuses=remote.bonuses||{};
+    DB.debts=remote.debts||{};
+    DB.deletedIds=remote.deletedIds||[];
+    const now=todayStr()+' '+new Date().toLocaleTimeString('fr-DZ',{hour:'2-digit',minute:'2-digit'});
+    DB.settings.cloudLastSync=now;
+    DB.settings.cloudRemoteStamp=remote.syncedAt||'';
+    _lastPushedSyncedAt=DB.settings.cloudRemoteStamp;
+    audit('⬇️ جلب السحابة — استبدال كامل لهذا الجهاز');
+    saveDB();updateBadges();
+    _cloudDirty=false;
+    try{safeDash();}catch(e){}
+    try{renderWorkers();}catch(e){}
+    _cloudStatus('🟢 تمّ الاستبدال من السحابة: '+now,'var(--green1)');
+    toast('✅ تم استبدال بيانات هذا الجهاز بنسخة السحابة');
+  }catch(err){
+    console.warn('cloudPullReplace:',err);
+    _cloudStatus('🔴 فشل الاستبدال: '+err.message,'var(--red)');
+    toast('❌ فشل الاستبدال: '+err.message,true);
+  }
+  _cloudBusy=false;
+}
+// ── البثّ المباشر (SSE) الأذكى: يبثّ syncedAt فقط (طابع خفيف)؛ عند تغيّره يُزامِن فوراً ──
+let _sse=null, _sseRetry=null, _lastPushedSyncedAt='';
+function cloudStartStream(){
+  const cfg=_cloudCfg();
+  if(!cfg||!('EventSource' in window)) return; // غير مهيّأ أو متصفّح قديم → الفحص الدوري يكفي
+  if(_sse){ try{_sse.close();}catch(e){} _sse=null; }
+  if(!navigator.onLine) return;
+  try{
+    _sse=new EventSource(cfg.endpoint.replace('.json','/syncedAt.json'));
+    _sse.addEventListener('put',_sseOnChange);
+    _sse.addEventListener('patch',_sseOnChange);
+    _sse.onerror=()=>{
+      try{_sse.close();}catch(e){} _sse=null;
+      if(_sseRetry)clearTimeout(_sseRetry);
+      _sseRetry=setTimeout(cloudStartStream,8000);
+    };
+  }catch(e){_sse=null;}
+}
+let _sseDeb=null;
+function _sseOnChange(ev){
+  try{
+    const j=JSON.parse((ev&&ev.data)||'{}');
+    if(j&&j.data&&j.data===_lastPushedSyncedAt)return; // صدى رفعنا نحن — تجاهله
+  }catch(e){}
+  if(_sseDeb)clearTimeout(_sseDeb);
+  _sseDeb=setTimeout(()=>{ if(DB.settings.cloudAuto&&navigator.onLine&&!_cloudBusy)cloudSync(false); },300);
+}
 let _cloudDebTimer=null;
 // ── مزامنة آمنة واحدة بعد ~1.5ث من آخر إدخال (debounce) — تُطلق فقط عند وجود تغيير ──
 function fbScheduleAutoPush(){
@@ -9310,7 +9387,14 @@ try{
   if(DB.settings.cloudAuto===undefined)DB.settings.cloudAuto=true;
 }catch(e){}
 try{cloudFillInputs();}catch(e){}
-try{if(DB.settings.cloudAuto&&_cloudCfg()){setTimeout(()=>{try{cloudSync(false);}catch(e){}},350);cloudAutoSetup();}}catch(e){}
+try{if(DB.settings.cloudAuto&&_cloudCfg()){setTimeout(()=>{try{cloudSync(false);}catch(e){}},350);cloudAutoSetup();setTimeout(cloudStartStream,1500);}}catch(e){}
+window.addEventListener('online',()=>{try{cloudStartStream();}catch(e){}});
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible'){
+    try{cloudStartStream();}catch(e){}
+    try{if(DB.settings.cloudAuto&&navigator.onLine&&!_cloudBusy)cloudSync(false);}catch(e){}
+  }
+});
 try{ghInit();}catch(e){}
 setTimeout(()=>{try{saveDB();}catch(e){}},500);
 
