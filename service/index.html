@@ -770,7 +770,9 @@ function statusOf(mc,it){
 
 function toggleRateLock(kind,on){
   if(!DB.settings)DB.settings={};
-  if(kind==='truck')DB.settings.rateLockTruck=!!on; else DB.settings.rateLockMachine=!!on;
+  const now=new Date().toISOString();
+  if(kind==='truck'){DB.settings.rateLockTruck=!!on; if(on)DB.settings.rateLockTruckAt=now;}
+  else{DB.settings.rateLockMachine=!!on; if(on)DB.settings.rateLockMachineAt=now;}
   save();flash(on?'🔒 قُفل المعدّل':'🔓 فُكّ القفل');
   const mc=getActive();if(mc)renderRateTab(mc);
 }
@@ -779,8 +781,8 @@ function setGlobalRate(kind,v){
   const val=Math.max(0,parseFloat(v)||0);
   if(!val){flash('أدخل رقماً صالحاً');return;}
   if(!DB.settings)DB.settings={};
-  if(kind==='truck'){DB.settings.rateTruck=val;DB.settings.rateTruckSetAt=todayISO();}
-  else{DB.settings.rateMachine=val;DB.settings.rateMachineSetAt=todayISO();}
+  if(kind==='truck'){DB.settings.rateTruck=val;DB.settings.rateTruckSetAt=new Date().toISOString();}
+  else{DB.settings.rateMachine=val;DB.settings.rateMachineSetAt=new Date().toISOString();}
   save();flash('✓ طُبِّق على كل '+(kind==='truck'?'الشاحنات':'الآلات'));
   const mc=getActive();if(mc)renderRateTab(mc);
 }
@@ -788,7 +790,7 @@ function setCustomRate(v){
   const mc=getActive();if(!mc)return;
   const val=Math.max(0,parseFloat(v)||0);
   if(!val){flash('أدخل رقماً صالحاً');return;}
-  mc.dailyRate=val;mc.rateSetAt=todayISO();
+  mc.dailyRate=val;mc.rateSetAt=new Date().toISOString();
   save();flash('✓ معدّل خاص بهذه الآلة فقط');
   renderRateTab(mc);
 }
@@ -817,14 +819,15 @@ function renderRateTab(mc){
           +(rateLocked(mc.type)?'🔒 مقفول — يحسب بالمعدّل المُدخَل فقط':'🔓 غير مقفول — يستنتج تلقائياً (قد يخطئ)')
         +'</label>'
         +'<div class="note" style="margin-top:5px;font-size:10px">القفل يضمن الحساب بـ'+gVal+' '+u+'/يوم الذي أدخلته أنت، لا بمعدّل مُستنتَج من قراءات متقاربة.</div>'
+        +(rateLocked(mc.type)&&(isTruck?DB.settings.rateLockTruckAt:DB.settings.rateLockMachineAt)?('<div class="note" style="margin-top:3px;font-size:10px;color:var(--ok,#1a7a47)">🔒 قُفِل في: '+new Date(isTruck?DB.settings.rateLockTruckAt:DB.settings.rateLockMachineAt).toLocaleString('fr-DZ')+'</div>'):'')
       +'</div>'
-      +'<div class="note" style="margin-top:7px">'+(gDate?('آخر تحديث: '+esc(gDate)):'افتراضي — لم يُعدَّل بعد')+'</div>'
+      +'<div class="note" style="margin-top:7px">'+(gDate?('آخر تحديث: '+(gDate.indexOf('T')>=0?new Date(gDate).toLocaleString('fr-DZ'):esc(gDate))):'افتراضي — لم يُعدَّل بعد')+'</div>'
     +'</div></div>'
     +'<div class="card"><div class="card-h"><span class="ic">⚙️</span><div><h2>معدّل خاص بهذه الآلة فقط</h2><div class="fr">اختياري — يتجاوز العام لهذا العتاد وحده</div></div></div>'
     +'<div style="padding:11px;text-align:center">'
       +'<div class="ratein"><input type="number" id="cRateInput" min="0" value="'+(cVal!=null?cVal:'')+'" placeholder="بلا تخصيص"><span class="u">'+u+'/يوم</span></div>'
       +'<button class="est-btn" style="margin-top:8px" onclick="setCustomRate(document.getElementById(\'cRateInput\').value)">✓ تأكيد لهذه الآلة فقط</button>'
-      +(cVal!=null?('<button class="est-btn ghost" style="margin-top:7px" onclick="clearCustomRate()">↺ إرجاع لمتابعة العام</button><div class="note" style="margin-top:7px">آخر تحديث: '+esc(mc.rateSetAt||'')+'</div>'):'<div class="note" style="margin-top:7px">هذه الآلة تتبع المعدّل العام حالياً.</div>')
+      +(cVal!=null?('<button class="est-btn ghost" style="margin-top:7px" onclick="clearCustomRate()">↺ إرجاع لمتابعة العام</button><div class="note" style="margin-top:7px">🔒 آخر تحديث: '+(mc.rateSetAt?(String(mc.rateSetAt).indexOf('T')>=0?new Date(mc.rateSetAt).toLocaleString('fr-DZ'):esc(mc.rateSetAt)):'')+'</div>'):'<div class="note" style="margin-top:7px">هذه الآلة تتبع المعدّل العام حالياً.</div>')
     +'</div></div>'
     +'<div class="note" style="text-align:center;padding:0 14px">📌 هذا المعدّل مستقل تماماً عن العدّاد الفعلي — لا يُعدّله ولا يتأثر بتغييره. يُستعمل فقط لتقدير تاريخ التنبيهات.</div>';
   }catch(e){box.innerHTML='<div class="note" style="padding:14px">تعذّر عرض المعدّل. أعد فتح الآلة.</div>';}
@@ -1698,31 +1701,35 @@ async function fbAutoTick(){
 
 function fbStartLoop(){ clearInterval(_fbLoop); _fbLoop=setInterval(fbAutoTick,FB_SYNC_INTERVAL); }
 
-// ── البثّ المباشر (SSE) — تحديث فوري لحظي بين الأجهزة بدل انتظار الفحص الدوري ──
-let _sse=null, _lastPushedSavedAt='', _sseOK=false;
+// ── البثّ المباشر (SSE) الأذكى: يبثّ savedAt فقط (طابع خفيف)؛ عند تغيّره يجلب البيانات ──
+//    أخفّ بكثير على النت من بثّ المسار الكامل المضغوط في كل تغيير.
+let _sse=null, _sseRetry=null, _lastPushedSavedAt='';
 function fbStartStream(){
-  if(typeof EventSource==='undefined') return; // غير مدعوم → يبقى الفحص الدوري
-  try{ if(_sse) _sse.close(); }catch(e){}
+  if(!('EventSource' in window)) return; // متصفّح قديم → الفحص الدوري يكفي
+  if(_sse){ try{ _sse.close(); }catch(e){} _sse=null; }
+  if(!navigator.onLine) return;
   try{
-    _sse=new EventSource(FB_URL+FB_NODE);
-    _sse.addEventListener('put', onSseMsg);
-    _sse.addEventListener('patch', onSseMsg);
-    _sse.onopen=()=>{ _sseOK=true; };
-    _sse.onerror=()=>{ _sseOK=false; /* الفحص الدوري يغطّي الانقطاع */ };
-  }catch(e){ _sseOK=false; }
+    _sse=new EventSource(FB_URL+FB_BASE+'/savedAt.json'+(typeof FB_AUTH!=='undefined'?FB_AUTH:''));
+    _sse.addEventListener('put', _sseOnChange);
+    _sse.addEventListener('patch', _sseOnChange);
+    _sse.onerror=()=>{
+      // انقطاع الاتصال → أغلق وأعد المحاولة بعد قليل (الفحص الدوري يعمل في الوسط)
+      try{ _sse.close(); }catch(e){} _sse=null;
+      if(_sseRetry) clearTimeout(_sseRetry);
+      _sseRetry=setTimeout(fbStartStream,8000);
+    };
+  }catch(e){ _sse=null; }
 }
-async function onSseMsg(ev){
+let _sseDeb=null;
+function _sseOnChange(ev){
+  // تجميع أحداث متقاربة في نداء واحد (تفادي عدّة نداءات عند كتابة سريعة من الطرف الآخر)
   try{
-    if(!fbAuto()||_fbBusy) return;
-    const payload=JSON.parse(ev.data||'{}');
-    const d=payload && payload.data; // قد يكون null (حذف) أو الكائن الكامل
-    // استخرج savedAt للتحقّق من الصدى (تجاهل تعديلاتنا نحن)
-    let sa=null;
-    if(d && typeof d==='object') sa = d.savedAt || (d.app?d.savedAt:null);
-    if(sa && sa===_lastPushedSavedAt) return; // صدى رفعنا نحن — تجاهله
-    // تغيير حقيقي من جهاز آخر → اجلب وادمج فوراً
-    fbAutoTick();
+    // تجاهل صدى رفعنا نحن
+    const sa=JSON.parse((ev&&ev.data)||'{}'); const v=sa&&sa.data;
+    if(v && v===_lastPushedSavedAt) return;
   }catch(e){}
+  if(_sseDeb) clearTimeout(_sseDeb);
+  _sseDeb=setTimeout(()=>{ if(fbAuto()&&navigator.onLine&&!_fbBusy) fbAutoTick(); },300);
 }
 
 function fbToggleAuto(chk){
