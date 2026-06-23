@@ -1,4 +1,5 @@
 <html lang="ar" dir="rtl"><head>
+<script src="../egtph-auth.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>EGTPH — سجل الأجور v32</title>
@@ -8565,13 +8566,21 @@ async function fbFetch(url,opts,tries){
   }
   throw lastErr;
 }
+// ── حماية حقيقية: تسجيل دخول بكلمة سر (مرة واحدة لكل جهاز)، الرمز يتجدد وحده ──
+// كلمة السر لا تُكتب هنا أبداً — تُكتب من المستخدم في النافذة التي تظهر.
+EGTPHAuth.init({
+  appId:   'lapayeparmois',
+  apiKey:  'AIzaSyD6Up-mmyDwqhr0UMBmV3aI5Xv-TjvoMDA', // Web API Key — مشروع egtph-pay
+  email:   'abdiyoucefislam@gmail.com',   // إيميل المستخدم المسجَّل في Firebase Authentication لهذا المشروع
+  onReady: function(){ try{ if(typeof cloudSync==='function') cloudSync(false); }catch(e){} }
+});
 function _cloudCfg(){
   const url=(DB.settings.cloudUrl||'').trim().replace(/\/+$/,'');
   const key=(DB.settings.cloudKey||'').trim();
   if(!url||!key||key.length<8)return null;
   // المفتاح يصبح جزءاً من المسار — ننظفه من الرموز الممنوعة في Firebase
   const safe=key.replace(/[.#$\[\]\/\s]/g,'_');
-  return{endpoint:url+'/egtph/'+encodeURIComponent(safe)+'.json'};
+  return{endpoint:url+'/egtph/'+encodeURIComponent(safe)+'.json'+EGTPHAuth.authParam('lapayeparmois')};
 }
 function _cloudStatus(txt,col){
   const el=document.getElementById('cloud_status');
