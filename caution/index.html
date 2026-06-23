@@ -8,9 +8,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#faf6ee;
-  --card:#faf6ee;
-  --card2:#faf6ee;
+  --bg:#fdfbf6;
+  --card:#fdfbf6;
+  --card2:#fdfbf6;
   --gold:#b08d4f;
   --gold-soft:#8a6c38;
   --text:#1f2421;
@@ -102,6 +102,7 @@ header{
 .stat.late b{color:var(--red);}
 .stat.soon b{color:var(--amber);}
 .stat.ontime b{color:var(--green);}
+.stat.incomplete b{color:var(--red);}
 
 /* ===== Filter pills ===== */
 .filters{
@@ -163,6 +164,7 @@ header{
 .proj-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
 .proj-name{font-size:17.5px;color:var(--text);font-weight:600;margin:0 0 2px;}
 .proj-sub{font-size:13px;color:var(--text-dim);margin:0;}
+.missing-fields{font-size:12px;color:var(--red);margin:4px 0 0;font-weight:600;}
 .badge{
   font-size:12px;
   padding:5px 12px;
@@ -815,14 +817,18 @@ function computeStatus(p){
 }
 const STATUS_LABEL = {late:"متأخر", soon:"قريب", ontime:"في موعده", far:"بعيد", closed:"مغلق", incomplete:"غير مكتمل"};
 
-/* ---------- فحص النقص: علم مستقل يعمل بالتوازي مع الحالة الزمنية (لا يعطّلها إن توفر الشرطان الحاسمان) ---------- */
+/* ---------- فحص النقص: يحدد بالضبط أي معلومة أساسية ناقصة ---------- */
+function getMissingFields(p){
+  const missing = [];
+  if(!p.name || !p.name.trim()) missing.push("اسم المشروع");
+  if(!p.commune || !p.commune.trim()) missing.push("اسم البلدية");
+  if(!p.marketNum || !p.marketNum.trim()) missing.push("رقم الصفقة");
+  if(!p.amount) missing.push("مبلغ الصفقة");
+  if(!p.dateProv) missing.push("تاريخ الاستلام المؤقت");
+  return missing;
+}
 function isProjectIncomplete(p){
-  if(!p.name || !p.name.trim()) return true;
-  if(!p.commune || !p.commune.trim()) return true;
-  if(!p.marketNum || !p.marketNum.trim()) return true;
-  if(!p.amount) return true;
-  if(!p.dateProv) return true;
-  return false;
+  return getMissingFields(p).length > 0;
 }
 
 /* ---------- صياغة "كم بقي" بصيغة أشهر وأيام ---------- */
@@ -864,10 +870,12 @@ function render(){
 
 function renderStats(){
   const all = getAllActiveProjects();
-  const counts = {late:0, soon:0, ontime:0, far:0, closed:0, incomplete:0};
+  const counts = {late:0, soon:0, ontime:0, far:0, closed:0};
+  let incompleteCount = 0;
   all.forEach(p => {
-    counts[computeStatus(p)]++;
-    if(isProjectIncomplete(p)) counts.incomplete++; // عدّ مستقل: قد يتراكب مع حالة زمنية طبيعية
+    const st = computeStatus(p);
+    if(counts[st] !== undefined) counts[st]++;
+    if(isProjectIncomplete(p)) incompleteCount++; // عدّ مستقل بالكامل، لا يتراكم مع computeStatus
   });
   const bar = document.getElementById('statsBar');
   bar.innerHTML = `
@@ -875,11 +883,12 @@ function renderStats(){
     <div class="stat late"><b>${counts.late}</b><span>متأخر</span></div>
     <div class="stat soon"><b>${counts.soon}</b><span>قريب</span></div>
     <div class="stat ontime"><b>${counts.ontime}</b><span>في موعده</span></div>
+    <div class="stat incomplete"><b>${incompleteCount}</b><span>غير مكتمل</span></div>
   `;
 
   // تحديث عدّاد كل فلتر داخل شريط الفلاتر نفسه (مثلاً "متأخر (3)")
   const filterLabels = {all: "الكل", late:"متأخر", soon:"قريب", ontime:"في موعده", closed:"مغلق", incomplete:"غير مكتمل"};
-  const filterCounts = {all: all.length, late:counts.late, soon:counts.soon, ontime:counts.ontime, closed:counts.closed, incomplete:counts.incomplete};
+  const filterCounts = {all: all.length, late:counts.late, soon:counts.soon, ontime:counts.ontime, closed:counts.closed, incomplete:incompleteCount};
   document.querySelectorAll('#filterBar .pill').forEach(pill=>{
     const key = pill.dataset.filter;
     if(filterLabels[key] !== undefined){
@@ -953,7 +962,8 @@ function renderList(){
 
 function renderCard(p){
   const status = computeStatus(p);
-  const incomplete = isProjectIncomplete(p);
+  const missingFields = getMissingFields(p);
+  const incomplete = missingFields.length > 0;
   const dProv = parseDateOnly(p.dateProv);
   const dFinal = parseDateOnly(p.dateFinal);
   const today = new Date(); today.setHours(0,0,0,0);
@@ -980,6 +990,7 @@ function renderCard(p){
       <div>
         <p class="proj-name">${escapeHtml(p.name||'مشروع بدون اسم')}</p>
         <p class="proj-sub">${escapeHtml(p.commune||'')}${p.marketNum ? ' · صفقة رقم '+escapeHtml(p.marketNum) : ''}</p>
+        ${incomplete ? `<p class="missing-fields">ناقص: ${escapeHtml(missingFields.join('، '))}</p>` : ''}
       </div>
       <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;">
         ${showTimeBadge ? `<span class="badge ${status}">${STATUS_LABEL[status]}</span>` : (status === "incomplete" ? `<span class="badge incomplete">${STATUS_LABEL.incomplete}</span>` : '')}
