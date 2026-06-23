@@ -16,12 +16,11 @@
   --text-onDark:#e9ebee; --text-onDark-muted:#8b9099;
   --accent:#ff7a1a; --accent-dim:#cc6314; --accent-soft:rgba(255,122,26,.14); --accent-soft-2:rgba(255,122,26,.28);
   --content-bg:#f3f4f6; --ink:#15171c; --muted:#6b7280; --line-light:#e2e4e8; --card:#ffffff;
+  --danger:#e0493c; --danger-soft:rgba(224,73,60,.12);
   --font-lat:"Inter",sans-serif;
   --font-ar:"IBM Plex Sans Arabic",sans-serif;
   --font-mono:"IBM Plex Mono",monospace;
-  --font-crest:"Cinzel",serif;
   --topbar-h:56px;
-  --radius:10px;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden;background:var(--bg-deep)}
@@ -38,7 +37,7 @@ svg{display:block}
 .shell{display:flex;flex-direction:column;height:100%}
 
 /* ---------- topbar ---------- */
-.topbar{flex:0 0 var(--topbar-h);height:var(--topbar-h);display:flex;align-items:center;gap:10px;padding:0 12px;
+.topbar{flex:0 0 var(--topbar-h);height:var(--topbar-h);display:flex;align-items:center;gap:8px;padding:0 12px;
   background:var(--bg-deep);border-bottom:1px solid var(--line-dark);position:relative;z-index:70}
 .hamburger{display:none;width:36px;height:36px;border-radius:9px;align-items:center;justify-content:center;flex:0 0 36px}
 .hamburger:hover{background:var(--bg-elevate)}
@@ -51,6 +50,10 @@ svg{display:block}
   border-inline-start:1px solid var(--line-dark);padding-inline-start:12px;margin-inline-start:2px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:620px){.current-title{display:none}}
+.app-tools{display:flex;align-items:center;gap:2px}
+.icon-btn{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--text-onDark-muted)}
+.icon-btn:hover{background:var(--bg-elevate);color:var(--text-onDark)}
+.icon-btn svg{width:16px;height:16px;stroke:currentColor}
 .topbar-actions{display:flex;align-items:center;gap:8px;margin-inline-start:auto}
 .edit-toggle{display:flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;color:var(--text-onDark);padding:8px 12px;border-radius:9px;border:1px solid var(--line-dark)}
 .edit-toggle svg{width:14px;height:14px;stroke:var(--text-onDark)}
@@ -120,19 +123,52 @@ svg{display:block}
 .back-link:hover{color:var(--text-onDark)}
 
 /* ---------- content area ---------- */
-.content{flex:1 1 auto;position:relative;background:var(--content-bg);min-width:0}
+.content{flex:1 1 auto;position:relative;background:#fff;min-width:0}
 .content iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
-.welcome{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:30px;
-  background:var(--content-bg)}
-.welcome .crest{width:60px;height:60px;opacity:.92}
-.welcome h1{font-family:var(--font-lat);font-weight:700;color:var(--ink);font-size:1.1rem}
-html[lang="ar"] .welcome h1{font-family:var(--font-ar)}
-.welcome p{color:var(--muted);font-size:.9rem;max-width:320px}
-.loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--content-bg);gap:10px;flex-direction:column}
+
+/* ---------- home / welcome (card launcher) ---------- */
+.welcome{position:absolute;inset:0;overflow-y:auto;background:var(--content-bg)}
+.welcome-inner{max-width:960px;margin:0 auto;padding:34px 20px 50px}
+.welcome-head{display:flex;align-items:center;gap:14px;margin-bottom:26px}
+.welcome-head .crest{width:42px;height:42px;flex:0 0 42px}
+.welcome-head h1{font-family:var(--font-lat);font-weight:700;color:var(--ink);font-size:1.15rem}
+html[lang="ar"] .welcome-head h1{font-family:var(--font-ar)}
+.welcome-head p{color:var(--muted);font-size:.85rem;margin-top:2px}
+.home-cat{margin-bottom:24px}
+.home-cat-label{font-family:var(--font-mono);font-size:.7rem;font-weight:600;letter-spacing:.1em;color:var(--muted);
+  text-transform:uppercase;margin-bottom:10px}
+.home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:12px}
+.home-card{background:var(--card);border:1px solid var(--line-light);border-radius:13px;padding:14px 10px;display:flex;flex-direction:column;
+  align-items:center;text-align:center;gap:9px;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s}
+.home-card:hover{transform:translateY(-3px);box-shadow:0 10px 26px rgba(20,20,25,.1);border-color:var(--accent)}
+.home-card .ic-box{width:46px;height:46px;border-radius:11px;background:var(--bg-deep);display:flex;align-items:center;justify-content:center}
+.home-card .ic-box svg{width:22px;height:22px;stroke:var(--accent)}
+.home-card .home-lbl{font-size:.78rem;color:var(--ink);font-weight:600;line-height:1.3}
+
+/* ---------- loading / error state ---------- */
+.loading,.frame-error{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--content-bg);gap:10px;flex-direction:column;padding:30px;text-align:center}
 .spinner{width:28px;height:28px;border-radius:50%;border:3px solid var(--line-light);border-top-color:var(--accent);animation:spin .9s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spinner{animation:none;border-top-color:var(--accent)}}
 .loading span{font-size:.8rem;color:var(--muted);font-family:var(--font-mono)}
+.frame-error .err-ic{width:46px;height:46px;border-radius:50%;background:var(--danger-soft);display:flex;align-items:center;justify-content:center}
+.frame-error .err-ic svg{width:22px;height:22px;stroke:var(--danger)}
+.frame-error h2{font-size:.98rem;color:var(--ink);font-weight:700}
+.frame-error p{font-size:.84rem;color:var(--muted);max-width:320px}
+.frame-error .err-detail{font-family:var(--font-mono);font-size:.72rem;color:var(--danger);background:var(--danger-soft);padding:6px 10px;border-radius:7px;max-width:90%;overflow-wrap:break-word}
+.frame-error .err-actions{display:flex;gap:10px;margin-top:4px}
+.err-btn{padding:9px 16px;border-radius:9px;font-size:.84rem;font-weight:600}
+.err-btn.primary{background:var(--accent);color:#fff}
+.err-btn.primary:hover{background:var(--accent-dim)}
+.err-btn.ghost{border:1.3px solid var(--line-light);color:var(--ink)}
+.err-btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ---------- in-app runtime error banner ---------- */
+.runtime-err-banner{position:absolute;inset-inline:0;bottom:0;z-index:30;background:#2a1410;border-top:1px solid var(--danger);
+  color:#ffd9d3;padding:10px 14px;display:flex;align-items:flex-start;gap:10px;font-size:.78rem}
+.runtime-err-banner svg{width:16px;height:16px;stroke:#ff8a78;flex:0 0 16px;margin-top:1px}
+.runtime-err-banner .msg{flex:1 1 auto;font-family:var(--font-mono);word-break:break-word}
+.runtime-err-banner button{flex:0 0 auto;color:#ffd9d3;font-weight:700;font-size:.9rem;padding:0 4px}
 
 /* ---------- overlay (mobile) ---------- */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:55;display:none}
@@ -168,6 +204,14 @@ html[lang="ar"] .welcome h1{font-family:var(--font-ar)}
       <b>EGTPH</b>
     </a>
     <span class="current-title" id="currentTitle"></span>
+    <span class="app-tools" id="appTools" hidden>
+      <button class="icon-btn" id="reloadBtn" aria-label="reload" title="إعادة تحميل البرنامج">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/></svg>
+      </button>
+      <button class="icon-btn" id="openDirectBtn" aria-label="open in new tab" title="فتح في نافذة جديدة">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
+      </button>
+    </span>
     <div class="topbar-actions">
       <button class="edit-toggle" id="editToggle" aria-pressed="false">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
@@ -215,21 +259,28 @@ html[lang="ar"] .welcome h1{font-family:var(--font-ar)}
 
     <main class="content">
       <div class="welcome" id="welcome">
-        <svg class="crest" viewBox="0 0 100 100" aria-hidden="true">
-          <path d="M50 4 L90 18 V52 C90 74 72 90 50 96 C28 90 10 74 10 52 V18 Z" fill="none" stroke="#c8a86a" stroke-width="2.5"/>
-          <path d="M50 11 L83 22 V51 C83 69 68 83 50 88 C32 83 17 69 17 51 V22 Z" fill="#11242a"/>
-          <text x="50" y="58" font-family="Cinzel,serif" font-size="30" fill="#c8a86a" text-anchor="middle" font-weight="600">EG</text>
-          <path d="M34 66 h32" stroke="#c8a86a" stroke-width="1.6"/>
-          <text x="50" y="78" font-family="Cinzel,serif" font-size="9" fill="#c8a86a" text-anchor="middle" letter-spacing="2">TPH</text>
-        </svg>
-        <h1 data-ar="مرحبًا بك في لوحة EGTPH" data-fr="Bienvenue dans le tableau de bord EGTPH">مرحبًا بك في لوحة EGTPH</h1>
-        <p data-ar="اختر برنامجًا من القائمة الجانبية للبدء." data-fr="Choisissez un programme dans le menu pour commencer.">اختر برنامجًا من القائمة الجانبية للبدء.</p>
+        <div class="welcome-inner" id="welcomeInner"></div>
       </div>
       <div class="loading" id="loading" hidden>
         <div class="spinner"></div>
         <span data-ar="جارٍ التحميل…" data-fr="Chargement…">جارٍ التحميل…</span>
       </div>
+      <div class="frame-error" id="frameError" hidden>
+        <div class="err-ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg></div>
+        <h2 data-ar="تعذّر تحميل البرنامج" data-fr="Le programme n'a pas pu charger">تعذّر تحميل البرنامج</h2>
+        <p data-ar="قد يكون السبب اتصال بطيء أو خطأ داخل البرنامج نفسه." data-fr="Cela peut venir d'une connexion lente ou d'une erreur dans le programme.">قد يكون السبب اتصال بطيء أو خطأ داخل البرنامج نفسه.</p>
+        <div class="err-detail" id="errDetail" hidden></div>
+        <div class="err-actions">
+          <button class="err-btn primary" id="retryBtn" data-ar="إعادة المحاولة" data-fr="Réessayer">إعادة المحاولة</button>
+          <a class="err-btn ghost" id="errOpenDirect" target="_blank" rel="noopener" data-ar="فتح في نافذة جديدة" data-fr="Ouvrir dans un nouvel onglet">فتح في نافذة جديدة</a>
+        </div>
+      </div>
       <iframe id="appFrame" title="EGTPH" hidden></iframe>
+      <div class="runtime-err-banner" id="runtimeErrBanner" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+        <span class="msg" id="runtimeErrMsg"></span>
+        <button id="runtimeErrClose" aria-label="close">✕</button>
+      </div>
     </main>
 
   </div>
@@ -240,6 +291,8 @@ html[lang="ar"] .welcome h1{font-family:var(--font-ar)}
 "use strict";
 
 var html = document.documentElement;
+var LOAD_TIMEOUT_MS = 15000;
+
 var ICONS = {
   grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
   receipt:'<path d="M6 2h9l3 3v17l-3-2-3 2-3-2-3 2V2Z"/><path d="M9 8h6M9 12h6M9 16h4"/>',
@@ -314,6 +367,8 @@ function saveNames(){ saveJSON(NAMES_KEY, names); }
 function saveCustom(){ saveJSON(CUSTOM_KEY, customApps); }
 
 var activeId = null;
+var loadTimer = null;
+var errListenerWin = null;
 
 var sidebar=document.getElementById('sidebar'),
     sidebarScroll=document.getElementById('sidebarScroll'),
@@ -323,9 +378,20 @@ var sidebar=document.getElementById('sidebar'),
     langBtn=document.getElementById('langBtn'),
     appSearch=document.getElementById('appSearch'),
     currentTitle=document.getElementById('currentTitle'),
+    appTools=document.getElementById('appTools'),
+    reloadBtn=document.getElementById('reloadBtn'),
+    openDirectBtn=document.getElementById('openDirectBtn'),
     welcome=document.getElementById('welcome'),
+    welcomeInner=document.getElementById('welcomeInner'),
     loading=document.getElementById('loading'),
+    frameError=document.getElementById('frameError'),
+    errDetail=document.getElementById('errDetail'),
+    retryBtn=document.getElementById('retryBtn'),
+    errOpenDirect=document.getElementById('errOpenDirect'),
     frame=document.getElementById('appFrame'),
+    runtimeErrBanner=document.getElementById('runtimeErrBanner'),
+    runtimeErrMsg=document.getElementById('runtimeErrMsg'),
+    runtimeErrClose=document.getElementById('runtimeErrClose'),
     resetCustom=document.getElementById('resetCustom'),
     brandHome=document.getElementById('brandHome'),
     addAppToggle=document.getElementById('addAppToggle'),
@@ -369,17 +435,100 @@ function renderSidebar(){
 }
 function escapeHTML(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
+/* ---------- render home cards ---------- */
+function renderWelcomeCards(){
+  var html2 =
+    '<div class="welcome-head">'+
+      '<svg class="crest" viewBox="0 0 100 100" aria-hidden="true">'+
+        '<path d="M50 4 L90 18 V52 C90 74 72 90 50 96 C28 90 10 74 10 52 V18 Z" fill="none" stroke="#c8a86a" stroke-width="2.5"/>'+
+        '<path d="M50 11 L83 22 V51 C83 69 68 83 50 88 C32 83 17 69 17 51 V22 Z" fill="#11242a"/>'+
+        '<text x="50" y="58" font-family="Cinzel,serif" font-size="30" fill="#c8a86a" text-anchor="middle" font-weight="600">EG</text>'+
+        '<path d="M34 66 h32" stroke="#c8a86a" stroke-width="1.6"/>'+
+        '<text x="50" y="78" font-family="Cinzel,serif" font-size="9" fill="#c8a86a" text-anchor="middle" letter-spacing="2">TPH</text>'+
+      '</svg>'+
+      '<div><h1>'+(isFr()?'Bienvenue dans le tableau de bord EGTPH':'مرحبًا بك في لوحة EGTPH')+'</h1>'+
+      '<p>'+(isFr()?'Choisissez un programme ci-dessous.':'اختر برنامجًا من الأسفل.')+'</p></div>'+
+    '</div>';
+  CATS.forEach(function(cat){
+    var ids = order.filter(function(id){ return appExists(id) && getCat(id)===cat.key; });
+    if(!ids.length) return;
+    html2 += '<div class="home-cat"><div class="home-cat-label">'+(isFr()?cat.fr:cat.ar)+'</div><div class="home-grid">';
+    ids.forEach(function(id){
+      html2 +=
+        '<div class="home-card" data-app-id="'+id+'" role="button" tabindex="0">'+
+          '<span class="ic-box"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+ICONS[getIconKey(id)]+'</svg></span>'+
+          '<span class="home-lbl">'+escapeHTML(displayLabel(id))+'</span>'+
+        '</div>';
+    });
+    html2 += '</div></div>';
+  });
+  welcomeInner.innerHTML = html2;
+}
+welcomeInner.addEventListener('click', function(e){
+  var card = e.target.closest('.home-card'); if(!card) return;
+  selectApp(card.dataset.appId);
+});
+welcomeInner.addEventListener('keydown', function(e){
+  if(e.key!=='Enter' && e.key!==' ') return;
+  var card = e.target.closest('.home-card'); if(!card) return;
+  e.preventDefault(); selectApp(card.dataset.appId);
+});
+
 /* ---------- app switching ---------- */
+function clearLoadTimer(){ if(loadTimer){ clearTimeout(loadTimer); loadTimer=null; } }
+function detachErrListener(){
+  if(errListenerWin && errListenerWin.__egtphErrHandler){
+    try{ errListenerWin.removeEventListener('error', errListenerWin.__egtphErrHandler); }catch(e){}
+  }
+  errListenerWin=null;
+}
+function showRuntimeError(message){
+  runtimeErrMsg.textContent = message;
+  runtimeErrBanner.hidden = false;
+}
+runtimeErrClose.addEventListener('click', function(){ runtimeErrBanner.hidden=true; });
+
+function attachErrListener(){
+  detachErrListener();
+  try{
+    var win = frame.contentWindow;
+    if(!win) return;
+    var handler = function(ev){
+      var msg = (ev && ev.message) ? ev.message : (isFr()?'Erreur inconnue':'خطأ غير معروف');
+      showRuntimeError(msg);
+    };
+    win.addEventListener('error', handler);
+    win.__egtphErrHandler = handler;
+    errListenerWin = win;
+  }catch(e){}
+}
+
 function selectApp(id, opts){
   opts = opts || {};
   if(!appExists(id)) return;
   activeId = id;
   document.querySelectorAll('.app-item').forEach(function(li){ li.classList.toggle('active', li.dataset.appId===id); });
   currentTitle.textContent = displayLabel(id);
+  appTools.hidden = false;
+  runtimeErrBanner.hidden = true;
   welcome.hidden = true;
   frame.hidden = true;
+  frameError.hidden = true;
   loading.hidden = false;
-  frame.src = getHref(id);
+  clearLoadTimer();
+  detachErrListener();
+
+  var url = getHref(id) + (getHref(id).indexOf('?')===-1 ? '?' : '&') + 't=' + Date.now();
+  frame.src = url;
+
+  loadTimer = setTimeout(function(){
+    loading.hidden = true;
+    frame.hidden = true;
+    frameError.hidden = false;
+    errDetail.hidden = true;
+    errOpenDirect.href = getHref(id);
+  }, LOAD_TIMEOUT_MS);
+
   saveJSON(LAST_KEY, id);
   if(!opts.skipHistory){ history.pushState({app:id}, '', '#'+id); }
   closeDrawer();
@@ -389,12 +538,26 @@ function showWelcome(opts){
   activeId = null;
   document.querySelectorAll('.app-item').forEach(function(li){ li.classList.remove('active'); });
   currentTitle.textContent='';
-  welcome.hidden=false; loading.hidden=true; frame.hidden=true;
+  appTools.hidden = true;
+  runtimeErrBanner.hidden = true;
+  clearLoadTimer();
+  detachErrListener();
+  renderWelcomeCards();
+  welcome.hidden=false; loading.hidden=true; frame.hidden=true; frameError.hidden=true;
   frame.removeAttribute('src');
   if(!opts.skipHistory){ history.pushState({}, '', location.pathname+location.search); }
   closeDrawer();
 }
-frame.addEventListener('load', function(){ if(frame.getAttribute('src')){ loading.hidden=true; frame.hidden=false; } });
+frame.addEventListener('load', function(){
+  if(!frame.getAttribute('src')) return;
+  clearLoadTimer();
+  loading.hidden=true; frame.hidden=false; frameError.hidden=true;
+  attachErrListener();
+});
+
+retryBtn.addEventListener('click', function(){ if(activeId) selectApp(activeId, {skipHistory:true}); });
+reloadBtn.addEventListener('click', function(){ if(activeId) selectApp(activeId, {skipHistory:true}); });
+openDirectBtn.addEventListener('click', function(){ if(activeId) window.open(getHref(activeId), '_blank', 'noopener'); });
 
 /* ---------- delegated clicks in sidebar ---------- */
 sidebarScroll.addEventListener('click', function(e){
@@ -431,6 +594,7 @@ function startRename(id, labelSpan){
     if(v){ names[id]=v; } else { delete names[id]; }
     saveNames();
     renderSidebar();
+    if(activeId===id) currentTitle.textContent = displayLabel(id);
   }
   input.addEventListener('blur', commit);
   input.addEventListener('keydown', function(e){
@@ -468,6 +632,7 @@ addAppForm.addEventListener('submit', function(e){
   order.push(id); saveOrder();
   addAppForm.reset(); addAppForm.hidden=true; addAppToggle.hidden=false;
   renderSidebar();
+  if(welcome.hidden===false) renderWelcomeCards();
 });
 
 /* ---------- reset customization ---------- */
@@ -479,6 +644,7 @@ resetCustom.addEventListener('click', function(){
   names = {};
   saveOrder(); saveNames();
   renderSidebar();
+  if(welcome.hidden===false) renderWelcomeCards();
 });
 
 /* ---------- edit mode toggle ---------- */
@@ -508,6 +674,15 @@ function applySearchFilter(){
   });
 }
 
+/* ---------- keyboard shortcuts ---------- */
+document.addEventListener('keydown', function(e){
+  if(e.key==='/' && document.activeElement!==appSearch && document.activeElement.tagName!=='INPUT'){
+    e.preventDefault(); openDrawer(); appSearch.focus();
+  } else if(e.key==='Escape'){
+    if(sidebar.classList.contains('open')) closeDrawer();
+  }
+});
+
 /* ---------- mobile drawer ---------- */
 function openDrawer(){ sidebar.classList.add('open'); overlay.classList.add('show'); menuToggle.setAttribute('aria-expanded','true'); }
 function closeDrawer(){ sidebar.classList.remove('open'); overlay.classList.remove('show'); menuToggle.setAttribute('aria-expanded','false'); }
@@ -535,6 +710,7 @@ function setLang(l){
   saveJSON(LANG_KEY, l);
   applyStaticTranslations();
   renderSidebar();
+  if(welcome.hidden===false) renderWelcomeCards();
   if(activeId) currentTitle.textContent = displayLabel(activeId);
 }
 langBtn.addEventListener('click', function(){ setLang(html.lang==='ar'?'fr':'ar'); });
@@ -559,6 +735,7 @@ window.addEventListener('popstate', function(){
   var lastId = loadJSON(LAST_KEY, null);
   var startId = (hashId && appExists(hashId)) ? hashId : ((lastId && appExists(lastId)) ? lastId : null);
   if(startId) selectApp(startId, {skipHistory:true});
+  else renderWelcomeCards();
 })();
 
 })();
