@@ -1,1 +1,567 @@
-x
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>لوحة برامج EGTPH</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg-deep:#15171c; --bg-elevate:#1f222a; --bg-elevate-2:#262a33;
+  --line-dark:#2a2e37;
+  --text-onDark:#e9ebee; --text-onDark-muted:#8b9099;
+  --accent:#ff7a1a; --accent-dim:#cc6314; --accent-soft:rgba(255,122,26,.14); --accent-soft-2:rgba(255,122,26,.28);
+  --content-bg:#f3f4f6; --ink:#15171c; --muted:#6b7280; --line-light:#e2e4e8; --card:#ffffff;
+  --font-lat:"Inter",sans-serif;
+  --font-ar:"IBM Plex Sans Arabic",sans-serif;
+  --font-mono:"IBM Plex Mono",monospace;
+  --font-crest:"Cinzel",serif;
+  --topbar-h:56px;
+  --radius:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:var(--bg-deep)}
+body{font-family:var(--font-ar);color:var(--text-onDark);font-size:14px}
+html[lang="fr"] body{font-family:var(--font-lat)}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select{font-family:inherit}
+svg{display:block}
+:focus-visible{outline:2.5px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+.shell{display:flex;flex-direction:column;height:100%}
+
+/* ---------- topbar ---------- */
+.topbar{flex:0 0 var(--topbar-h);height:var(--topbar-h);display:flex;align-items:center;gap:10px;padding:0 12px;
+  background:var(--bg-deep);border-bottom:1px solid var(--line-dark);position:relative;z-index:70}
+.hamburger{display:none;width:36px;height:36px;border-radius:9px;align-items:center;justify-content:center;flex:0 0 36px}
+.hamburger:hover{background:var(--bg-elevate)}
+.hamburger svg{width:20px;height:20px;stroke:var(--text-onDark)}
+.brand{display:flex;align-items:center;gap:9px;flex:0 0 auto;padding:6px 4px;border-radius:9px}
+.brand:hover{background:var(--bg-elevate)}
+.brand .crest{width:28px;height:28px;flex:0 0 28px}
+.brand b{font-family:var(--font-mono);font-weight:600;color:var(--text-onDark);font-size:.86rem;letter-spacing:.08em}
+.current-title{font-family:var(--font-mono);font-size:.76rem;color:var(--text-onDark-muted);letter-spacing:.03em;
+  border-inline-start:1px solid var(--line-dark);padding-inline-start:12px;margin-inline-start:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:620px){.current-title{display:none}}
+.topbar-actions{display:flex;align-items:center;gap:8px;margin-inline-start:auto}
+.edit-toggle{display:flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;color:var(--text-onDark);padding:8px 12px;border-radius:9px;border:1px solid var(--line-dark)}
+.edit-toggle svg{width:14px;height:14px;stroke:var(--text-onDark)}
+.edit-toggle:hover{background:var(--bg-elevate)}
+.edit-toggle.active{background:var(--accent);color:#1a0f06;border-color:var(--accent)}
+.edit-toggle.active svg{stroke:#1a0f06}
+@media(max-width:480px){.edit-toggle span{display:none}}
+.lang-btn{font-family:var(--font-mono);font-weight:700;font-size:.74rem;letter-spacing:.06em;padding:8px 13px;border-radius:9px;
+  background:var(--accent);color:#1a0f06}
+.lang-btn:hover{background:#ff8c3a}
+
+/* ---------- body row ---------- */
+.body-row{flex:1 1 auto;display:flex;min-height:0;position:relative}
+
+/* ---------- sidebar ---------- */
+.sidebar{flex:0 0 270px;display:flex;flex-direction:column;background:var(--bg-deep);border-inline-end:1px solid var(--line-dark);min-height:0}
+.sidebar-search{flex:0 0 auto;padding:12px}
+.sidebar-search input{width:100%;padding:9px 12px;border-radius:9px;border:1.3px solid var(--line-dark);background:var(--bg-elevate);
+  font-family:inherit;font-size:.84rem;color:var(--text-onDark)}
+.sidebar-search input:focus{outline:none;border-color:var(--accent)}
+.sidebar-search input::placeholder{color:var(--text-onDark-muted)}
+.sidebar-scroll{flex:1 1 auto;overflow-y:auto;padding:0 10px 10px}
+.cat-group{margin-bottom:14px}
+.cat-label{font-family:var(--font-mono);font-size:.66rem;font-weight:600;letter-spacing:.1em;color:var(--text-onDark-muted);
+  text-transform:uppercase;padding:8px 8px 5px}
+.app-list{list-style:none}
+.app-item{display:flex;align-items:stretch;border-radius:9px;margin-bottom:2px}
+.app-item.active{background:var(--accent-soft)}
+.app-item.active .app-link{border-inline-start:3px solid var(--accent);padding-inline-start:9px}
+.app-item.hidden-by-search{display:none}
+.app-link{flex:1 1 auto;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;border-inline-start:3px solid transparent;
+  font-size:.87rem;color:var(--text-onDark);text-align:start;min-width:0}
+.app-item:not(.active) .app-link:hover{background:var(--bg-elevate)}
+.app-link .ic{flex:0 0 19px;width:19px;height:19px;stroke:var(--text-onDark-muted)}
+.app-item.active .app-link .ic{stroke:var(--accent)}
+.app-link .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto}
+.rename-input{flex:1 1 auto;min-width:0;font-family:inherit;font-size:.87rem;padding:3px 6px;border-radius:6px;border:1.3px solid var(--accent);
+  background:var(--bg-elevate-2);color:var(--text-onDark)}
+.edit-controls{display:none;align-items:center;gap:1px;padding-inline-end:4px}
+.sidebar.edit-mode .edit-controls{display:flex}
+.ctl-btn{width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--text-onDark-muted)}
+.ctl-btn:hover{background:var(--bg-elevate-2);color:var(--text-onDark)}
+.ctl-btn.danger:hover{background:rgba(220,80,60,.25);color:#ff8a78}
+.ctl-btn:disabled{opacity:.25;pointer-events:none}
+.ctl-btn svg{width:13px;height:13px;stroke:currentColor}
+
+/* ---------- sidebar footer / add-app ---------- */
+.sidebar-footer{flex:0 0 auto;border-top:1px solid var(--line-dark);padding:10px 14px;display:flex;flex-direction:column;gap:8px}
+.edit-only{display:none}
+.sidebar.edit-mode .edit-only{display:block}
+.add-app-toggle{display:flex;align-items:center;gap:6px;width:100%;justify-content:center;font-size:.8rem;font-weight:600;
+  padding:8px;border-radius:9px;border:1.3px dashed var(--line-dark);color:var(--text-onDark-muted)}
+.add-app-toggle:hover{border-color:var(--accent);color:var(--accent)}
+.add-app-toggle svg{width:14px;height:14px;stroke:currentColor}
+.add-app-form{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.add-app-form input,.add-app-form select{width:100%;padding:8px 10px;border-radius:8px;border:1.3px solid var(--line-dark);
+  background:var(--bg-elevate);color:var(--text-onDark);font-size:.82rem}
+.add-app-form input:focus,.add-app-form select:focus{outline:none;border-color:var(--accent)}
+.add-app-actions{display:flex;gap:8px;margin-top:2px}
+.add-app-save{flex:1 1 auto;padding:8px;border-radius:8px;background:var(--accent);color:#1a0f06;font-weight:700;font-size:.8rem;text-align:center}
+.add-app-save:hover{background:#ff8c3a}
+.add-app-cancel{flex:0 0 auto;padding:8px 12px;border-radius:8px;border:1px solid var(--line-dark);color:var(--text-onDark-muted);font-size:.8rem}
+.add-app-cancel:hover{color:var(--text-onDark)}
+.reset-link{font-size:.78rem;color:#ff8a78;font-weight:600;text-align:start;width:100%}
+.reset-link:hover{text-decoration:underline}
+.back-link{font-size:.8rem;color:var(--text-onDark-muted);font-weight:600}
+.back-link:hover{color:var(--text-onDark)}
+
+/* ---------- content area ---------- */
+.content{flex:1 1 auto;position:relative;background:var(--content-bg);min-width:0}
+.content iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
+.welcome{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:30px;
+  background:var(--content-bg)}
+.welcome .crest{width:60px;height:60px;opacity:.92}
+.welcome h1{font-family:var(--font-lat);font-weight:700;color:var(--ink);font-size:1.1rem}
+html[lang="ar"] .welcome h1{font-family:var(--font-ar)}
+.welcome p{color:var(--muted);font-size:.9rem;max-width:320px}
+.loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--content-bg);gap:10px;flex-direction:column}
+.spinner{width:28px;height:28px;border-radius:50%;border:3px solid var(--line-light);border-top-color:var(--accent);animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spinner{animation:none;border-top-color:var(--accent)}}
+.loading span{font-size:.8rem;color:var(--muted);font-family:var(--font-mono)}
+
+/* ---------- overlay (mobile) ---------- */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:55;display:none}
+.overlay.show{display:block}
+
+/* ---------- mobile ---------- */
+@media(max-width:880px){
+  .hamburger{display:flex}
+  .sidebar{position:fixed;top:var(--topbar-h);bottom:0;width:86vw;max-width:320px;z-index:60;transition:transform .25s ease;box-shadow:0 10px 40px rgba(0,0,0,.4)}
+  html[dir="rtl"] .sidebar{right:0;transform:translateX(100%)}
+  html[dir="rtl"] .sidebar.open{transform:translateX(0)}
+  html[dir="ltr"] .sidebar{left:0;transform:translateX(-100%)}
+  html[dir="ltr"] .sidebar.open{transform:translateX(0)}
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <header class="topbar">
+    <button class="hamburger" id="menuToggle" aria-label="فتح القائمة" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <a class="brand" href="#" id="brandHome">
+      <svg class="crest" viewBox="0 0 100 100" aria-label="EGTPH">
+        <path d="M50 4 L90 18 V52 C90 74 72 90 50 96 C28 90 10 74 10 52 V18 Z" fill="none" stroke="#c8a86a" stroke-width="2.5"/>
+        <path d="M50 11 L83 22 V51 C83 69 68 83 50 88 C32 83 17 69 17 51 V22 Z" fill="#0a161a"/>
+        <text x="50" y="58" font-family="Cinzel,serif" font-size="30" fill="#c8a86a" text-anchor="middle" font-weight="600">EG</text>
+        <path d="M34 66 h32" stroke="#c8a86a" stroke-width="1.6"/>
+        <text x="50" y="78" font-family="Cinzel,serif" font-size="9" fill="#c8a86a" text-anchor="middle" letter-spacing="2">TPH</text>
+      </svg>
+      <b>EGTPH</b>
+    </a>
+    <span class="current-title" id="currentTitle"></span>
+    <div class="topbar-actions">
+      <button class="edit-toggle" id="editToggle" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        <span data-ar="تعديل القائمة" data-fr="Modifier le menu">تعديل القائمة</span>
+      </button>
+      <button class="lang-btn" id="langBtn" aria-label="Changer de langue">FR</button>
+    </div>
+  </header>
+
+  <div class="body-row">
+
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-search">
+        <input type="text" id="appSearch" autocomplete="off"
+          data-ph-ar="بحث في البرامج…" data-ph-fr="Rechercher…" placeholder="بحث في البرامج…">
+      </div>
+      <div class="sidebar-scroll" id="sidebarScroll"></div>
+      <div class="sidebar-footer">
+        <div class="edit-only" id="addAppBlock">
+          <button type="button" id="addAppToggle" class="add-app-toggle">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            <span data-ar="إضافة برنامج" data-fr="Ajouter un programme">إضافة برنامج</span>
+          </button>
+          <form id="addAppForm" class="add-app-form" hidden>
+            <input type="text" id="newAppName" data-ph-ar="اسم البرنامج" data-ph-fr="Nom du programme" placeholder="اسم البرنامج" required>
+            <input type="text" id="newAppUrl" data-ph-ar="الرابط (مثلا: monoutil/ أو https://…)" data-ph-fr="Lien (ex: monoutil/ ou https://…)" placeholder="الرابط (مثلا: monoutil/ أو https://…)" required>
+            <select id="newAppCat">
+              <option value="finance" data-ar="المحاسبة والفوترة" data-fr="Comptabilité & Facturation">المحاسبة والفوترة</option>
+              <option value="hr" data-ar="الموارد البشرية" data-fr="Ressources humaines">الموارد البشرية</option>
+              <option value="fleet" data-ar="العتاد والورشات" data-fr="Matériel & Chantiers">العتاد والورشات</option>
+              <option value="other" data-ar="أخرى" data-fr="Autres" selected>أخرى</option>
+            </select>
+            <div class="add-app-actions">
+              <button type="submit" class="add-app-save" data-ar="إضافة" data-fr="Ajouter">إضافة</button>
+              <button type="button" id="addAppCancel" class="add-app-cancel" data-ar="إلغاء" data-fr="Annuler">إلغاء</button>
+            </div>
+          </form>
+        </div>
+        <button class="reset-link edit-only" id="resetCustom" data-ar="↺ إعادة ضبط القائمة" data-fr="↺ Réinitialiser le menu">↺ إعادة ضبط القائمة</button>
+        <a class="back-link" href="index.html" data-ar="← الموقع الرئيسي" data-fr="← Site principal">← الموقع الرئيسي</a>
+      </div>
+    </nav>
+
+    <div class="overlay" id="overlay"></div>
+
+    <main class="content">
+      <div class="welcome" id="welcome">
+        <svg class="crest" viewBox="0 0 100 100" aria-hidden="true">
+          <path d="M50 4 L90 18 V52 C90 74 72 90 50 96 C28 90 10 74 10 52 V18 Z" fill="none" stroke="#c8a86a" stroke-width="2.5"/>
+          <path d="M50 11 L83 22 V51 C83 69 68 83 50 88 C32 83 17 69 17 51 V22 Z" fill="#11242a"/>
+          <text x="50" y="58" font-family="Cinzel,serif" font-size="30" fill="#c8a86a" text-anchor="middle" font-weight="600">EG</text>
+          <path d="M34 66 h32" stroke="#c8a86a" stroke-width="1.6"/>
+          <text x="50" y="78" font-family="Cinzel,serif" font-size="9" fill="#c8a86a" text-anchor="middle" letter-spacing="2">TPH</text>
+        </svg>
+        <h1 data-ar="مرحبًا بك في لوحة EGTPH" data-fr="Bienvenue dans le tableau de bord EGTPH">مرحبًا بك في لوحة EGTPH</h1>
+        <p data-ar="اختر برنامجًا من القائمة الجانبية للبدء." data-fr="Choisissez un programme dans le menu pour commencer.">اختر برنامجًا من القائمة الجانبية للبدء.</p>
+      </div>
+      <div class="loading" id="loading" hidden>
+        <div class="spinner"></div>
+        <span data-ar="جارٍ التحميل…" data-fr="Chargement…">جارٍ التحميل…</span>
+      </div>
+      <iframe id="appFrame" title="EGTPH" hidden></iframe>
+    </main>
+
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var html = document.documentElement;
+var ICONS = {
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  receipt:'<path d="M6 2h9l3 3v17l-3-2-3 2-3-2-3 2V2Z"/><path d="M9 8h6M9 12h6M9 16h4"/>',
+  shield:'<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6Z"/><path d="m9 12 2.2 2.2L15 10"/>',
+  clipboard:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2h6v3H9z"/><path d="M9 11h6M9 15h6"/>',
+  wallet:'<rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1.4"/>',
+  calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  truck:'<rect x="1" y="7" width="13" height="10" rx="1"/><path d="M14 10h4l3 3v4h-7z"/><circle cx="6" cy="19" r="1.6"/><circle cx="17" cy="19" r="1.6"/>',
+  wrench:'<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2 2-2.6-.7-.7-2.6Z"/>',
+  custom:'<path d="M10 14a4 4 0 0 0 5.66 0l2-2a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-2 2a4 4 0 0 0 5.66 5.66l1-1"/>'
+};
+
+var BUILT_IN = {
+  gestion:        {href:'gestion/',        cat:'finance', ar:'نظام الإدارة الشامل',            fr:'Gestion Pro',                icon:'grid'},
+  facture:        {href:'facture/',        cat:'finance', ar:'الفوترة',                        fr:'Facturation',                icon:'receipt'},
+  caution:        {href:'caution/',        cat:'finance', ar:'الاستلام النهائي والكفالة',      fr:'Réception & caution',        icon:'shield'},
+  commande:       {href:'commande/',       cat:'finance', ar:'Bon de Commande',                fr:'Bon de Commande',            icon:'clipboard'},
+  lapayeparmois:  {href:'lapayeparmois/',  cat:'hr',      ar:'سجل الأجور الشهري',              fr:'Paie mensuelle',             icon:'wallet'},
+  semaine:        {href:'Semaine/',        cat:'hr',      ar:'سجل الأجرة الأسبوعي',            fr:'Pointage hebdomadaire',      icon:'calendar'},
+  parc_document:  {href:'parc_document/',  cat:'fleet',   ar:'العتاد والعروض',                 fr:'Matériel & Soumissions',     icon:'truck'},
+  service:        {href:'service/',        cat:'fleet',   ar:'صيانة الأسطول',                  fr:'Entretien du parc',          icon:'wrench'}
+};
+var DEFAULT_ORDER = ['gestion','facture','caution','commande','lapayeparmois','semaine','parc_document','service'];
+var CATS = [
+  {key:'finance', ar:'المحاسبة والفوترة',  fr:'Comptabilité & Facturation'},
+  {key:'hr',      ar:'الموارد البشرية',    fr:'Ressources humaines'},
+  {key:'fleet',   ar:'العتاد والورشات',    fr:'Matériel & Chantiers'},
+  {key:'other',   ar:'أخرى',              fr:'Autres'}
+];
+
+var ORDER_KEY='egtph_shell_order', NAMES_KEY='egtph_shell_names', LANG_KEY='egtph_site_lang',
+    LAST_KEY='egtph_shell_last_app', CUSTOM_KEY='egtph_shell_custom';
+
+function loadJSON(key, fallback){
+  try{ var v=JSON.parse(localStorage.getItem(key)); return v==null?fallback:v; }catch(e){ return fallback; }
+}
+function saveJSON(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
+
+var customApps = (function(){
+  var saved = loadJSON(CUSTOM_KEY, {});
+  return (typeof saved==='object' && saved) ? saved : {};
+})();
+var names = (function(){
+  var saved = loadJSON(NAMES_KEY, {});
+  if(typeof saved!=='object'||!saved) saved={};
+  return saved;
+})();
+
+function appExists(id){ return BUILT_IN.hasOwnProperty(id) || customApps.hasOwnProperty(id); }
+function isCustomApp(id){ return customApps.hasOwnProperty(id); }
+function getHref(id){ return BUILT_IN[id] ? BUILT_IN[id].href : (customApps[id] ? customApps[id].href : '#'); }
+function getCat(id){ return BUILT_IN[id] ? BUILT_IN[id].cat : (customApps[id] ? customApps[id].cat : 'other'); }
+function getIconKey(id){ return BUILT_IN[id] ? BUILT_IN[id].icon : 'custom'; }
+function getDefaultLabel(id){
+  if(BUILT_IN[id]) return isFr() ? BUILT_IN[id].fr : BUILT_IN[id].ar;
+  return customApps[id] ? customApps[id].label : id;
+}
+function displayLabel(id){ return names[id] ? names[id] : getDefaultLabel(id); }
+function isFr(){ return html.lang==='fr'; }
+
+var order = (function(){
+  var saved = loadJSON(ORDER_KEY, []);
+  if(!Array.isArray(saved)) saved=[];
+  var valid = saved.filter(function(id){ return appExists(id); });
+  DEFAULT_ORDER.forEach(function(id){ if(valid.indexOf(id)===-1) valid.push(id); });
+  Object.keys(customApps).forEach(function(id){ if(valid.indexOf(id)===-1) valid.push(id); });
+  return valid;
+})();
+
+function saveOrder(){ saveJSON(ORDER_KEY, order); }
+function saveNames(){ saveJSON(NAMES_KEY, names); }
+function saveCustom(){ saveJSON(CUSTOM_KEY, customApps); }
+
+var activeId = null;
+
+var sidebar=document.getElementById('sidebar'),
+    sidebarScroll=document.getElementById('sidebarScroll'),
+    overlay=document.getElementById('overlay'),
+    menuToggle=document.getElementById('menuToggle'),
+    editToggle=document.getElementById('editToggle'),
+    langBtn=document.getElementById('langBtn'),
+    appSearch=document.getElementById('appSearch'),
+    currentTitle=document.getElementById('currentTitle'),
+    welcome=document.getElementById('welcome'),
+    loading=document.getElementById('loading'),
+    frame=document.getElementById('appFrame'),
+    resetCustom=document.getElementById('resetCustom'),
+    brandHome=document.getElementById('brandHome'),
+    addAppToggle=document.getElementById('addAppToggle'),
+    addAppForm=document.getElementById('addAppForm'),
+    addAppCancel=document.getElementById('addAppCancel'),
+    newAppName=document.getElementById('newAppName'),
+    newAppUrl=document.getElementById('newAppUrl'),
+    newAppCat=document.getElementById('newAppCat');
+
+/* ---------- render sidebar ---------- */
+function renderSidebar(){
+  sidebarScroll.innerHTML='';
+  CATS.forEach(function(cat){
+    var ids = order.filter(function(id){ return appExists(id) && getCat(id)===cat.key; });
+    if(!ids.length) return;
+    var group=document.createElement('div'); group.className='cat-group';
+    var label=document.createElement('div'); label.className='cat-label'; label.textContent = isFr()?cat.fr:cat.ar;
+    group.appendChild(label);
+    var ul=document.createElement('ul'); ul.className='app-list'; ul.dataset.cat=cat.key;
+    ids.forEach(function(id, idx){
+      var li=document.createElement('li');
+      li.className='app-item'+(id===activeId?' active':'');
+      li.dataset.appId=id;
+      var icSvg='<svg class="ic" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+ICONS[getIconKey(id)]+'</svg>';
+      var ctls =
+          '<button type="button" class="ctl-btn" data-action="up" aria-label="up"'+(idx===0?' disabled':'')+'><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15 12 9 6 15"/></svg></button>'+
+          '<button type="button" class="ctl-btn" data-action="down" aria-label="down"'+(idx===ids.length-1?' disabled':'')+'><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>'+
+          '<button type="button" class="ctl-btn" data-action="rename" aria-label="rename"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>';
+      if(isCustomApp(id)){
+        ctls += '<button type="button" class="ctl-btn danger" data-action="delete" aria-label="delete"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>';
+      }
+      li.innerHTML =
+        '<button type="button" class="app-link" data-action="open">'+icSvg+'<span class="lbl">'+escapeHTML(displayLabel(id))+'</span></button>'+
+        '<span class="edit-controls">'+ctls+'</span>';
+      ul.appendChild(li);
+    });
+    group.appendChild(ul);
+    sidebarScroll.appendChild(group);
+  });
+  applySearchFilter();
+}
+function escapeHTML(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+/* ---------- app switching ---------- */
+function selectApp(id, opts){
+  opts = opts || {};
+  if(!appExists(id)) return;
+  activeId = id;
+  document.querySelectorAll('.app-item').forEach(function(li){ li.classList.toggle('active', li.dataset.appId===id); });
+  currentTitle.textContent = displayLabel(id);
+  welcome.hidden = true;
+  frame.hidden = true;
+  loading.hidden = false;
+  frame.src = getHref(id);
+  saveJSON(LAST_KEY, id);
+  if(!opts.skipHistory){ history.pushState({app:id}, '', '#'+id); }
+  closeDrawer();
+}
+function showWelcome(opts){
+  opts = opts || {};
+  activeId = null;
+  document.querySelectorAll('.app-item').forEach(function(li){ li.classList.remove('active'); });
+  currentTitle.textContent='';
+  welcome.hidden=false; loading.hidden=true; frame.hidden=true;
+  frame.removeAttribute('src');
+  if(!opts.skipHistory){ history.pushState({}, '', location.pathname+location.search); }
+  closeDrawer();
+}
+frame.addEventListener('load', function(){ if(frame.getAttribute('src')){ loading.hidden=true; frame.hidden=false; } });
+
+/* ---------- delegated clicks in sidebar ---------- */
+sidebarScroll.addEventListener('click', function(e){
+  var btn = e.target.closest('button'); if(!btn) return;
+  var li = btn.closest('.app-item'); if(!li) return;
+  var id = li.dataset.appId, action = btn.dataset.action;
+  if(action==='open'){ selectApp(id); }
+  else if(action==='up' || action==='down'){ moveItem(id, action==='up'?-1:1); }
+  else if(action==='rename'){ startRename(id, li.querySelector('.lbl')); }
+  else if(action==='delete'){ deleteCustomApp(id); }
+});
+function moveItem(id, dir){
+  var cat = getCat(id);
+  var catIds = order.filter(function(x){ return appExists(x) && getCat(x)===cat; });
+  var idx = catIds.indexOf(id);
+  var swapWith = catIds[idx+dir];
+  if(!swapWith) return;
+  var i1=order.indexOf(id), i2=order.indexOf(swapWith);
+  order[i1]=swapWith; order[i2]=id;
+  saveOrder();
+  renderSidebar();
+}
+function startRename(id, labelSpan){
+  if(!labelSpan) return;
+  var current = displayLabel(id);
+  var input = document.createElement('input');
+  input.type='text'; input.className='rename-input'; input.value=current;
+  labelSpan.replaceWith(input);
+  input.focus(); input.select();
+  var done=false;
+  function commit(){
+    if(done) return; done=true;
+    var v = input.value.trim();
+    if(v){ names[id]=v; } else { delete names[id]; }
+    saveNames();
+    renderSidebar();
+  }
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', function(e){
+    if(e.key==='Enter'){ e.preventDefault(); input.blur(); }
+    if(e.key==='Escape'){ done=true; renderSidebar(); }
+  });
+}
+function deleteCustomApp(id){
+  if(!isCustomApp(id)) return;
+  var msg = isFr() ? 'Supprimer ce programme du menu ?' : 'حذف هذا البرنامج من القائمة؟';
+  if(!confirm(msg)) return;
+  delete customApps[id]; saveCustom();
+  delete names[id]; saveNames();
+  order = order.filter(function(x){ return x!==id; }); saveOrder();
+  if(activeId===id) showWelcome();
+  renderSidebar();
+}
+
+/* ---------- add new app ---------- */
+addAppToggle.addEventListener('click', function(){
+  addAppToggle.hidden=true; addAppForm.hidden=false; newAppName.focus();
+});
+addAppCancel.addEventListener('click', function(){
+  addAppForm.reset(); addAppForm.hidden=true; addAppToggle.hidden=false;
+});
+addAppForm.addEventListener('submit', function(e){
+  e.preventDefault();
+  var name = newAppName.value.trim();
+  var url = newAppUrl.value.trim();
+  var cat = newAppCat.value;
+  if(!name || !url) return;
+  var id = 'custom_' + Date.now().toString(36);
+  customApps[id] = {label:name, href:url, cat:cat};
+  saveCustom();
+  order.push(id); saveOrder();
+  addAppForm.reset(); addAppForm.hidden=true; addAppToggle.hidden=false;
+  renderSidebar();
+});
+
+/* ---------- reset customization ---------- */
+resetCustom.addEventListener('click', function(){
+  var msg = isFr() ? "Réinitialiser l'ordre et les noms du menu ?" : 'إعادة ضبط ترتيب وتسمية القائمة؟';
+  if(!confirm(msg)) return;
+  var customIds = Object.keys(customApps);
+  order = DEFAULT_ORDER.slice().concat(customIds);
+  names = {};
+  saveOrder(); saveNames();
+  renderSidebar();
+});
+
+/* ---------- edit mode toggle ---------- */
+editToggle.addEventListener('click', function(){
+  var on = sidebar.classList.toggle('edit-mode');
+  editToggle.classList.toggle('active', on);
+  editToggle.setAttribute('aria-pressed', on?'true':'false');
+  var span = editToggle.querySelector('span');
+  span.textContent = on ? (isFr()?'Terminé':'تم') : (isFr()?'Modifier le menu':'تعديل القائمة');
+  if(!on){ addAppForm.reset(); addAppForm.hidden=true; addAppToggle.hidden=false; }
+});
+
+/* ---------- search filter ---------- */
+appSearch.addEventListener('input', applySearchFilter);
+function applySearchFilter(){
+  var q = appSearch.value.trim().toLowerCase();
+  document.querySelectorAll('.cat-group').forEach(function(group){
+    var groupHasMatch = false;
+    group.querySelectorAll('.app-item').forEach(function(li){
+      var id = li.dataset.appId;
+      var hay = (getDefaultLabel(id)+' '+displayLabel(id)).toLowerCase();
+      var match = !q || hay.indexOf(q)!==-1;
+      li.classList.toggle('hidden-by-search', !match);
+      if(match) groupHasMatch=true;
+    });
+    group.style.display = groupHasMatch ? '' : 'none';
+  });
+}
+
+/* ---------- mobile drawer ---------- */
+function openDrawer(){ sidebar.classList.add('open'); overlay.classList.add('show'); menuToggle.setAttribute('aria-expanded','true'); }
+function closeDrawer(){ sidebar.classList.remove('open'); overlay.classList.remove('show'); menuToggle.setAttribute('aria-expanded','false'); }
+menuToggle.addEventListener('click', function(){ sidebar.classList.contains('open') ? closeDrawer() : openDrawer(); });
+overlay.addEventListener('click', closeDrawer);
+
+/* ---------- brand = home ---------- */
+brandHome.addEventListener('click', function(e){ e.preventDefault(); showWelcome(); });
+
+/* ---------- language toggle ---------- */
+function applyStaticTranslations(){
+  document.querySelectorAll('[data-ar][data-fr]').forEach(function(el){
+    var txt = isFr() ? el.getAttribute('data-fr') : el.getAttribute('data-ar');
+    if(el.tagName==='INPUT'){ el.placeholder = txt; } else { el.textContent = txt; }
+  });
+  appSearch.placeholder = appSearch.getAttribute(isFr()?'data-ph-fr':'data-ph-ar');
+  newAppName.placeholder = newAppName.getAttribute(isFr()?'data-ph-fr':'data-ph-ar');
+  newAppUrl.placeholder = newAppUrl.getAttribute(isFr()?'data-ph-fr':'data-ph-ar');
+  var editSpan = editToggle.querySelector('span');
+  var on = sidebar.classList.contains('edit-mode');
+  editSpan.textContent = on ? (isFr()?'Terminé':'تم') : (isFr()?'Modifier le menu':'تعديل القائمة');
+}
+function setLang(l){
+  html.lang=l; html.dir=(l==='ar')?'rtl':'ltr'; langBtn.textContent=(l==='ar')?'FR':'عربي';
+  saveJSON(LANG_KEY, l);
+  applyStaticTranslations();
+  renderSidebar();
+  if(activeId) currentTitle.textContent = displayLabel(activeId);
+}
+langBtn.addEventListener('click', function(){ setLang(html.lang==='ar'?'fr':'ar'); });
+
+/* ---------- history (deep links) ---------- */
+window.addEventListener('popstate', function(){
+  var id = (location.hash||'').slice(1);
+  if(id && appExists(id)) selectApp(id, {skipHistory:true});
+  else showWelcome({skipHistory:true});
+});
+
+/* ---------- init ---------- */
+(function init(){
+  var savedLang = loadJSON(LANG_KEY, null);
+  if(savedLang==='fr'||savedLang==='ar'){
+    html.lang=savedLang; html.dir=(savedLang==='ar')?'rtl':'ltr'; langBtn.textContent=(savedLang==='ar')?'FR':'عربي';
+  }
+  applyStaticTranslations();
+  renderSidebar();
+
+  var hashId = (location.hash||'').slice(1);
+  var lastId = loadJSON(LAST_KEY, null);
+  var startId = (hashId && appExists(hashId)) ? hashId : ((lastId && appExists(lastId)) ? lastId : null);
+  if(startId) selectApp(startId, {skipHistory:true});
+})();
+
+})();
+</script>
+</body>
+</html>
