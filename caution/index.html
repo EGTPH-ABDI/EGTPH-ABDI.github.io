@@ -1,1 +1,1360 @@
-x
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>EGTPH | الاستلام النهائي والكفالة البنكية</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#ffffff;
+  --card:#ffffff;
+  --card2:#f7f5f0;
+  --gold:#b08d4f;
+  --gold-soft:#8a6c38;
+  --text:#1f2421;
+  --text-dim:#6b7570;
+  --green:#3f7a57;
+  --amber:#9a6b10;
+  --red:#a8453a;
+  --gray:#7c8a88;
+  --line:rgba(176,141,79,0.35);
+  --radius:14px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'IBM Plex Sans Arabic',sans-serif;
+  font-size:16px;
+  min-height:100vh;
+  padding-bottom:90px;
+}
+h1,h2,h3,.brand,.proj-name{font-family:'Cinzel','IBM Plex Sans Arabic',sans-serif;}
+
+/* ===== Header ===== */
+header{
+  padding:22px 16px 18px;
+  text-align:center;
+  border-bottom:1px solid var(--line);
+  background:#ffffff;
+  position:relative;
+}
+.brand{
+  color:var(--gold-soft);
+  font-size:22px;
+  letter-spacing:1px;
+  font-weight:600;
+  margin:0;
+}
+.brand small{
+  display:block;
+  font-family:'IBM Plex Sans Arabic',sans-serif;
+  color:var(--text-dim);
+  font-size:12.5px;
+  font-weight:400;
+  margin-top:4px;
+  letter-spacing:0;
+}
+.sync-dot{
+  position:absolute;
+  top:18px; left:16px;
+  width:9px;height:9px;border-radius:50%;
+  background:var(--text-dim);
+  transition:background .3s;
+}
+.sync-dot.ok{background:var(--green);box-shadow:0 0 8px var(--green);}
+.sync-dot.busy{background:var(--amber);animation:pulse 1s infinite;}
+.sync-dot.err{background:var(--red);}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.communes-btn{
+  position:absolute;
+  top:14px; right:16px;
+  background:var(--card2);
+  border:1px solid var(--line);
+  border-radius:10px;
+  font-size:18px;
+  padding:6px 10px;
+  cursor:pointer;
+  line-height:1;
+}
+
+/* ===== Stats strip ===== */
+.stats{
+  display:flex;
+  gap:8px;
+  padding:14px 12px 4px;
+  overflow-x:auto;
+}
+.stat{
+  flex:1;
+  min-width:84px;
+  background:var(--card2);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:10px 8px;
+  text-align:center;
+}
+.stat b{display:block;font-size:22px;color:var(--gold-soft);font-family:'Cinzel',sans-serif;}
+.stat span{font-size:12px;color:var(--text-dim);}
+.stat.late b{color:var(--red);}
+.stat.soon b{color:var(--amber);}
+.stat.ontime b{color:var(--green);}
+
+/* ===== Filter pills ===== */
+.filters{
+  display:flex;gap:6px;padding:14px 12px 4px;overflow-x:auto;
+}
+.pill{
+  flex-shrink:0;
+  padding:8px 15px;
+  border-radius:20px;
+  border:1px solid var(--line);
+  background:var(--card2);
+  color:var(--text-dim);
+  font-size:13.5px;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.pill.active{
+  background:var(--gold);
+  color:#ffffff;
+  border-color:var(--gold);
+  font-weight:600;
+}
+
+/* ===== Year groups ===== */
+.year-group{padding:18px 12px 0;}
+.year-title{
+  display:flex;align-items:center;gap:10px;
+  color:var(--gold-soft);
+  font-size:16px;
+  font-weight:600;
+  margin:0 0 10px 4px;
+}
+.year-title::after{
+  content:'';flex:1;height:1px;background:var(--line);
+}
+
+/* ===== Project card ===== */
+.proj-card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:14px;
+  margin-bottom:12px;
+  position:relative;
+  overflow:hidden;
+  box-shadow:0 1px 4px rgba(0,0,0,0.06);
+}
+.proj-card::before{
+  content:'';
+  position:absolute;inset-inline-start:0;top:0;bottom:0;width:4px;
+}
+.proj-card.status-late::before{background:var(--red);}
+.proj-card.status-soon::before{background:var(--amber);}
+.proj-card.status-ontime::before{background:var(--green);}
+.proj-card.status-far::before{background:var(--gray);}
+.proj-card.status-closed::before{background:var(--text-dim);}
+
+.proj-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.proj-name{font-size:17.5px;color:var(--text);font-weight:600;margin:0 0 2px;}
+.proj-sub{font-size:13px;color:var(--text-dim);margin:0;}
+.badge{
+  font-size:12px;
+  padding:5px 12px;
+  border-radius:20px;
+  font-weight:600;
+  white-space:nowrap;
+  flex-shrink:0;
+}
+.badge.late{background:rgba(168,69,58,0.12);color:var(--red);}
+.badge.soon{background:rgba(154,107,16,0.14);color:var(--amber);}
+.badge.ontime{background:rgba(63,122,87,0.14);color:var(--green);}
+.badge.closed{background:rgba(107,117,112,0.12);color:var(--text-dim);}
+
+/* جدول المعلومات: مبلغ الصفقة ↔ الكفالة، تاريخ مؤقت ↔ تاريخ نهائي */
+.info-table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:14px;
+  table-layout:fixed;
+}
+.info-table td{
+  width:50%;
+  padding:10px 8px;
+  border:1px solid var(--line);
+  vertical-align:top;
+}
+.info-table td b{
+  display:block;
+  color:var(--text-dim);
+  font-size:12.5px;
+  font-weight:400;
+  margin-bottom:5px;
+}
+.info-table td span{
+  display:block;
+  color:var(--text);
+  font-weight:700;
+  font-size:18px;
+}
+.info-table td span.gold{color:var(--gold-soft);}
+
+.remaining-row{
+  margin-top:10px;
+  padding:10px 12px;
+  background:var(--card2);
+  border:1px solid var(--line);
+  border-radius:10px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.remaining-row b{color:var(--text-dim);font-size:13px;font-weight:500;}
+.remaining-row span{color:var(--text);font-weight:700;font-size:15.5px;}
+
+/* timeline bar */
+.timeline{
+  margin-top:12px;
+  height:6px;
+  border-radius:6px;
+  background:#eee9de;
+  position:relative;
+  overflow:hidden;
+}
+.timeline-fill{
+  position:absolute;inset-inline-start:0;top:0;bottom:0;
+  border-radius:6px;
+  background:linear-gradient(90deg, var(--gold), var(--gold-soft));
+}
+.timeline-dates{
+  display:flex;justify-content:space-between;
+  font-size:11px;color:var(--text-dim);margin-top:5px;
+}
+
+.proj-actions{
+  display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;
+}
+.check-pill{
+  flex:1;min-width:130px;
+  display:flex;align-items:center;gap:7px;
+  padding:9px 10px;
+  border-radius:10px;
+  border:1px solid var(--line);
+  background:var(--card2);
+  font-size:13px;
+  cursor:pointer;
+  color:var(--text-dim);
+}
+.check-pill input{accent-color:var(--gold);width:17px;height:17px;flex-shrink:0;}
+.check-pill.done{
+  background:#ffffff;
+  border-color:var(--gold);
+  color:var(--text);
+  font-weight:600;
+}
+.row-btns{display:flex;gap:8px;margin-top:10px;}
+.icon-btn{
+  border:1px solid var(--line);
+  background:transparent;
+  color:var(--text-dim);
+  border-radius:8px;
+  padding:7px 13px;
+  font-size:13px;
+  cursor:pointer;
+}
+.icon-btn.danger{color:var(--red);border-color:rgba(168,69,58,0.35);}
+
+.empty-state{
+  text-align:center;
+  padding:60px 20px;
+  color:var(--text-dim);
+  font-size:15px;
+}
+.empty-state .e-icon{font-size:38px;display:block;margin-bottom:10px;opacity:.6;}
+
+/* ===== FAB ===== */
+.fab{
+  position:fixed;
+  inset-inline-end:18px;
+  bottom:22px;
+  width:58px;height:58px;
+  border-radius:50%;
+  background:linear-gradient(145deg, var(--gold), #8a6c38);
+  color:#ffffff;
+  font-size:28px;
+  border:none;
+  box-shadow:0 6px 18px rgba(0,0,0,0.25);
+  cursor:pointer;
+  z-index:30;
+  display:flex;align-items:center;justify-content:center;
+}
+
+/* ===== Modal ===== */
+.overlay{
+  position:fixed;inset:0;
+  background:rgba(0,0,0,0.55);
+  display:none;
+  align-items:flex-end;
+  justify-content:center;
+  z-index:50;
+}
+.overlay.show{display:flex;}
+.sheet{
+  background:var(--bg);
+  border:1px solid var(--line);
+  border-top:1px solid var(--gold);
+  width:100%;
+  max-width:520px;
+  max-height:92vh;
+  overflow-y:auto;
+  border-radius:20px 20px 0 0;
+  padding:18px 16px 26px;
+  animation:slideUp .25s ease;
+}
+@keyframes slideUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+.sheet h2{
+  font-size:18px;color:var(--gold-soft);margin:0 0 16px;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.sheet h2 .x{cursor:pointer;color:var(--text-dim);font-size:24px;line-height:1;}
+.field{margin-bottom:14px;}
+.field label{
+  display:block;font-size:13.5px;color:var(--text-dim);margin-bottom:6px;
+}
+.field input,.field textarea{
+  width:100%;
+  background:var(--card2);
+  border:1px solid var(--line);
+  color:var(--text);
+  border-radius:10px;
+  padding:12px 13px;
+  font-size:15.5px;
+  font-family:inherit;
+}
+.field input:focus,.field textarea:focus{
+  outline:none;border-color:var(--gold);background:#ffffff;
+}
+.field .hint{font-size:12px;color:var(--text-dim);margin-top:4px;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.guarantee-preview{
+  background:var(--card2);
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:13px;
+  margin-bottom:14px;
+  font-size:14px;
+}
+.guarantee-preview b{color:var(--gold-soft);font-size:17px;}
+.save-btn{
+  width:100%;
+  padding:15px;
+  background:var(--gold);
+  color:#ffffff;
+  border:none;
+  border-radius:12px;
+  font-size:16px;
+  font-weight:700;
+  cursor:pointer;
+  margin-top:6px;
+}
+.save-btn:active{transform:scale(0.98);}
+.confirm-text{font-size:14.5px;color:var(--text-dim);line-height:1.7;margin-bottom:16px;}
+.confirm-btns{display:flex;gap:10px;}
+.confirm-btns button{flex:1;padding:12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text);font-size:14.5px;cursor:pointer;}
+.confirm-btns .danger{background:var(--red);border-color:var(--red);color:#fff;font-weight:600;}
+
+/* ===== Communes overview ===== */
+.commune-year-title{
+  color:var(--gold-soft);
+  font-size:14px;
+  font-weight:600;
+  margin:16px 0 8px 4px;
+}
+.commune-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:13px 14px;
+  background:var(--card2);
+  border:1px solid var(--line);
+  border-radius:10px;
+  margin-bottom:8px;
+  cursor:pointer;
+}
+.commune-row:active{background:#efe9da;}
+.commune-row .c-name{font-size:15px;font-weight:600;color:var(--text);}
+.commune-row .c-count{
+  font-size:14px;
+  font-weight:700;
+  color:#ffffff;
+  background:var(--gold);
+  border-radius:20px;
+  padding:3px 13px;
+  min-width:34px;
+  text-align:center;
+}
+.commune-cards{
+  margin:-2px 0 14px 0;
+  padding:12px 10px 2px;
+  border:1px dashed var(--line);
+  border-radius:10px;
+  background:#fbfaf6;
+}
+
+@media(min-width:560px){
+  .sheet{margin-bottom:30px;border-radius:20px;}
+  .overlay{align-items:center;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="sync-dot" id="syncDot" title="حالة المزامنة"></div>
+  <button class="communes-btn" id="communesBtn" title="عرض البلديات">🏛️</button>
+  <p class="brand">EGTPH<small>الاستلام النهائي والكفالة البنكية</small></p>
+</header>
+
+<div class="stats" id="statsBar"></div>
+
+<div class="filters" id="filterBar">
+  <div class="pill active" data-filter="all">الكل</div>
+  <div class="pill" data-filter="late">متأخر</div>
+  <div class="pill" data-filter="soon">قريب</div>
+  <div class="pill" data-filter="ontime">في موعده</div>
+  <div class="pill" data-filter="closed">مغلق</div>
+</div>
+
+<div id="listRoot"></div>
+
+<button class="fab" id="fabAdd" aria-label="إضافة مشروع">+</button>
+
+<!-- Add/Edit Sheet -->
+<div class="overlay" id="formOverlay">
+  <div class="sheet">
+    <h2><span id="formTitle">إضافة مشروع</span><span class="x" id="formClose">&times;</span></h2>
+
+    <div class="field">
+      <label>اسم المشروع</label>
+      <input type="text" id="f_name" placeholder="مثال: شبكة التطهير - حي النصر">
+    </div>
+    <div class="field">
+      <label>اسم البلدية</label>
+      <input type="text" id="f_commune" placeholder="مثال: بلدية وادي السلي">
+    </div>
+    <div class="field">
+      <label>رقم الصفقة</label>
+      <input type="text" id="f_marketNum" placeholder="مثال: 12/2024">
+    </div>
+    <div class="field">
+      <label>مبلغ الصفقة (دج) — بكل الرسوم</label>
+      <input type="number" inputmode="decimal" id="f_amount" placeholder="0.00">
+    </div>
+    <div class="guarantee-preview">
+      الكفالة البنكية (5%): <b id="guaranteePreview">0.00 دج</b>
+    </div>
+    <div class="field">
+      <label>تاريخ الاستلام المؤقت</label>
+      <input type="date" id="f_dateProv">
+    </div>
+    <div class="field">
+      <label>تاريخ الاستلام النهائي (محسوب تلقائياً: +سنة)</label>
+      <input type="date" id="f_dateFinal" readonly style="opacity:.75">
+    </div>
+
+    <button class="save-btn" id="saveProjectBtn">حفظ المشروع</button>
+  </div>
+</div>
+
+<!-- Delete confirm -->
+<div class="overlay" id="deleteOverlay">
+  <div class="sheet">
+    <h2><span>حذف المشروع</span><span class="x" id="deleteClose">&times;</span></h2>
+    <p class="confirm-text">سيتم حذف هذا المشروع نهائياً من كل أجهزتك المتصلة بالمزامنة. هذا الإجراء لا يمكن التراجع عنه.</p>
+    <div class="confirm-btns">
+      <button id="deleteCancelBtn">تراجع</button>
+      <button class="danger" id="deleteConfirmBtn">حذف نهائي</button>
+    </div>
+  </div>
+</div>
+
+<!-- Communes overview -->
+<div class="overlay" id="communesOverlay">
+  <div class="sheet">
+    <h2><span>المشاريع حسب البلدية</span><span class="x" id="communesClose">&times;</span></h2>
+    <div class="filters" id="communesSortBar" style="padding:0 0 14px;">
+      <div class="pill active" data-sort="alpha">أبجدي</div>
+      <div class="pill" data-sort="year">حسب الأعوام</div>
+    </div>
+    <div id="communesList"></div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   EGTPH — تتبع الاستلام النهائي والكفالة البنكية
+   تخزين محلي دائم: localStorage
+   مزامنة سحابية: Firebase Realtime Database (REST + SSE)
+   ===================================================================== */
+
+/* ---------- Firebase config (مسار سري خاص بهذا البرنامج فقط) ---------- */
+const FB_BASE   = "https://egtph-reception-default-rtdb.europe-west1.firebasedatabase.app";
+const FB_SECRET = "40cab858521b8d71856a60c0f258e483";
+const FB_PATH   = `egtph/kafala_istilam_${FB_SECRET}`;
+const FB_URL    = `${FB_BASE}/${FB_PATH}.json`;
+const FB_SAVEDAT_URL = `${FB_BASE}/${FB_PATH}/savedAt.json`;
+const FB_SSE_URL = `${FB_BASE}/${FB_PATH}/savedAt.json`;
+
+const LS_KEY = "egtph_kafala_istilam_v1";
+
+/* ---------- State ---------- */
+let DB = {
+  projects: {},   // id -> project object
+  tombstones: {}, // id -> deletedAt (_mod ms)
+  savedAt: 0
+};
+let lastKnownSavedAt = 0;
+let myLastPushTime = 0;
+let currentFilter = "all";
+let editingId = null;
+let deletingId = null;
+let lastSyncStartedReadOK = false;
+
+/* ---------- Timestamp generator: strictly increasing, ms precision ---------- */
+let __lastTs = 0;
+function nextMod(){
+  let t = Date.now() + (performance.now() % 1) / 1000;
+  if (t <= __lastTs) t = __lastTs + 0.001;
+  __lastTs = t;
+  return t;
+}
+
+/* ---------- Future timestamp guard ---------- */
+function sanitizeMod(mod){
+  const now = Date.now();
+  if (typeof mod !== "number" || isNaN(mod)) return 0;
+  if (mod > now + 2*60*1000) return 0; // أكثر من دقيقتين بالمستقبل => اعتبره صفر (ساعة جهاز مغلوطة)
+  return mod;
+}
+
+/* ---------- Local persistence ---------- */
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      DB.projects = parsed.projects || {};
+      DB.tombstones = parsed.tombstones || {};
+      DB.savedAt = parsed.savedAt || 0;
+      lastKnownSavedAt = DB.savedAt;
+    }
+  }catch(e){ console.error("loadLocal error", e); }
+}
+function saveLocal(){
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify(DB));
+  }catch(e){ console.error("saveLocal error", e); }
+}
+
+/* ---------- UUID-ish unique id (time + random, never max+1) ---------- */
+function genId(){
+  return 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,9);
+}
+
+/* ---------- بيانات أولية (Seed) — تُدمج مرة واحدة فقط، تحترم شواهد الحذف ---------- */
+const SEED_FLAG_KEY = "egtph_kafala_seed_v1_done";
+function injectSeedDataIfNeeded(){
+  if(localStorage.getItem(SEED_FLAG_KEY)) return; // حُقنت من قبل، لا تكرار
+
+  const seedProjects = [
+    {
+      name: "شبكة التطهير حي سي يوسف إسلام الشطر 02",
+      commune: "سنجاس",
+      marketNum: "05/2025",
+      amount: 22693300.00,
+      dateProv: "2025-12-14"
+    },
+    {
+      name: "معالجة النقاط السوداء لشبكة الصرف الصحي بوادي سلي مركز، حي الحرية وحي سيدي جيلالي بلزرق",
+      commune: "وادي سلي",
+      marketNum: "04/2025",
+      amount: 2586584.00,
+      dateProv: "2025-07-08"
+    },
+    {
+      name: "تجديد جزء من شبكة التطهير بقراوش حي الحرية",
+      commune: "وادي سلي",
+      marketNum: "02/2025",
+      amount: 19858244.00,
+      dateProv: "2025-11-27"
+    },
+    {
+      name: "تجديد جزء من قناة التوزيع الرئيسية المزاودية وأولاد الكاف",
+      commune: "الصبحة",
+      marketNum: "",
+      amount: 9697577.40,
+      dateProv: "2025-11-06"
+    },
+    {
+      name: "تجديد شبكة التطهير بحي السقاسيق - الشطر الثاني",
+      commune: "وادي الفضة",
+      marketNum: "14/2025",
+      amount: 27239992.50,
+      dateProv: "2026-01-06"
+    },
+    {
+      name: "توسعة شبكة التطهير بحي سليم 01 الشطر 01",
+      commune: "وادي سلي",
+      marketNum: "",
+      amount: 27807563.00,
+      dateProv: "2025-11-17"
+    },
+    {
+      name: "توسيع شبكة التطهير بالسعداوية",
+      commune: "الهرانفة",
+      marketNum: "11/2025",
+      amount: 21299215.00,
+      dateProv: "2025-11-04"
+    },
+    {
+      name: "تجديد وتوسيع شبكة المياه الصالحة للشرب - حي الزاوية (حصة 03)",
+      commune: "الصبحة",
+      marketNum: "",
+      amount: 6689347.00,
+      dateProv: "2025-11-13"
+    },
+    {
+      name: "إنجاز شبكة الصرف الصحي لبقعة الخضاورية - الشطر 01",
+      commune: "أم الدروع",
+      marketNum: "13/2025",
+      amount: 14039025.00,
+      dateProv: "2026-05-19"
+    }
+  ];
+
+  seedProjects.forEach(sp => {
+    const id = genId();
+    DB.projects[id] = {
+      id,
+      name: sp.name,
+      commune: sp.commune,
+      marketNum: sp.marketNum,
+      amount: sp.amount,
+      dateProv: sp.dateProv,
+      dateFinal: addOneYear(sp.dateProv),
+      finallyReceived: false,
+      guaranteeReturned: false,
+      _mod: nextMod()
+    };
+  });
+
+  localStorage.setItem(SEED_FLAG_KEY, "1");
+  saveLocal();
+}
+
+/* ---------- ترقية تصحيحية: تصحيح بيانات مشروع كانت خاطئة في إصدار سابق من السيد ---------- */
+const FIX_FLAG_KEY = "egtph_kafala_fix_v2_done";
+function applyDataFixIfNeeded(){
+  if(localStorage.getItem(FIX_FLAG_KEY)) return; // طُبّق التصحيح من قبل
+  let changed = false;
+
+  const OLD_WRONG_NAME = "تجديد وتوسيع شبكة التطهير حي الحرية وحي سيدي جيلالي بلزرق";
+  Object.keys(DB.projects).forEach(id => {
+    const p = DB.projects[id];
+    if(p && p.name === OLD_WRONG_NAME){
+      p.name = "معالجة النقاط السوداء لشبكة الصرف الصحي بوادي سلي مركز، حي الحرية وحي سيدي جيلالي بلزرق";
+      p.marketNum = "04/2025";
+      p.amount = 2586584.00;
+      p.dateProv = "2025-07-08";
+      p.dateFinal = addOneYear(p.dateProv);
+      p._mod = nextMod();
+      changed = true;
+    }
+  });
+
+  localStorage.setItem(FIX_FLAG_KEY, "1");
+  if(changed) saveLocal();
+}
+
+/* ---------- Date helpers ---------- */
+function parseDateOnly(str){
+  // "YYYY-MM-DD" -> Date at local midnight
+  if(!str) return null;
+  const [y,m,d] = str.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+function fmtDate(d){
+  if(!d) return "—";
+  const dt = (d instanceof Date) ? d : parseDateOnly(d);
+  if(!dt || isNaN(dt.getTime())) return "—";
+  return dt.toLocaleDateString('ar-DZ', {year:'numeric', month:'2-digit', day:'2-digit'});
+}
+function addOneYear(dateStr){
+  const d = parseDateOnly(dateStr);
+  if(!d) return null;
+  const targetYear = d.getFullYear()+1;
+  const targetMonth = d.getMonth();
+  const targetDay = d.getDate();
+  // حالة 29 فبراير في سنة كبيسة: السنة التالية ليست بالضرورة كبيسة => نثبّت على 28 فبراير
+  const daysInTargetMonth = new Date(targetYear, targetMonth+1, 0).getDate();
+  const safeDay = Math.min(targetDay, daysInTargetMonth);
+  const result = new Date(targetYear, targetMonth, safeDay);
+  return toISODate(result);
+}
+function toISODate(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function daysBetween(a,b){
+  const MS = 24*60*60*1000;
+  return Math.round((b - a)/MS);
+}
+
+/* ---------- Status computation ---------- */
+function computeStatus(p){
+  if(p.guaranteeReturned && p.finallyReceived) return "closed";
+  const today = new Date(); today.setHours(0,0,0,0);
+  const finalDate = parseDateOnly(p.dateFinal);
+  if(!finalDate) return "far";
+  const diff = daysBetween(today, finalDate); // عدد الأيام المتبقية (سالب = فات الموعد)
+  if(diff < 0) return "late";
+  if(diff === 0) return "ontime";
+  if(diff <= 30) return "soon";
+  return "far";
+}
+const STATUS_LABEL = {late:"متأخر", soon:"قريب", ontime:"في موعده", far:"بعيد", closed:"مغلق"};
+
+/* ---------- صياغة "كم بقي" بصيغة أشهر وأيام ---------- */
+function fmtRemaining(diffDays){
+  if(diffDays === null || diffDays === undefined) return "—";
+  if(diffDays < 0){
+    const overdue = Math.abs(diffDays);
+    const months = Math.floor(overdue / 30);
+    const days = overdue % 30;
+    if(months === 0) return `متأخر بـ ${days} يوم`;
+    if(days === 0) return `متأخر بـ ${months} شهر`;
+    return `متأخر بـ ${months} شهر و ${days} يوم`;
+  }
+  if(diffDays === 0) return "اليوم";
+  const months = Math.floor(diffDays / 30);
+  const days = diffDays % 30;
+  if(months === 0) return `باقي ${days} يوم`;
+  if(days === 0) return `باقي ${months} شهر`;
+  return `باقي ${months} شهر و ${days} يوم`;
+}
+
+/* ---------- Money format ---------- */
+function fmtMoney(n){
+  if(isNaN(n)) n = 0;
+  return Number(n).toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2}) + " دج";
+}
+
+/* =====================================================================
+   RENDER
+   ===================================================================== */
+function getAllActiveProjects(){
+  return Object.values(DB.projects).filter(p => !DB.tombstones[p.id]);
+}
+
+function render(){
+  renderStats();
+  renderList();
+}
+
+function renderStats(){
+  const all = getAllActiveProjects();
+  const counts = {late:0, soon:0, ontime:0, far:0, closed:0};
+  all.forEach(p => counts[computeStatus(p)]++);
+  const bar = document.getElementById('statsBar');
+  bar.innerHTML = `
+    <div class="stat"><b>${all.length}</b><span>إجمالي المشاريع</span></div>
+    <div class="stat late"><b>${counts.late}</b><span>متأخر</span></div>
+    <div class="stat soon"><b>${counts.soon}</b><span>قريب</span></div>
+    <div class="stat ontime"><b>${counts.ontime}</b><span>في موعده</span></div>
+  `;
+
+  // تحديث عدّاد كل فلتر داخل شريط الفلاتر نفسه (مثلاً "متأخر (3)")
+  const filterLabels = {all: "الكل", late:"متأخر", soon:"قريب", ontime:"في موعده", closed:"مغلق"};
+  const filterCounts = {all: all.length, late:counts.late, soon:counts.soon, ontime:counts.ontime, closed:counts.closed};
+  document.querySelectorAll('#filterBar .pill').forEach(pill=>{
+    const key = pill.dataset.filter;
+    if(filterLabels[key] !== undefined){
+      pill.textContent = `${filterLabels[key]} (${filterCounts[key]})`;
+    }
+  });
+}
+
+function renderList(){
+  const root = document.getElementById('listRoot');
+  let all = getAllActiveProjects();
+
+  if(currentFilter !== "all"){
+    all = all.filter(p => computeStatus(p) === currentFilter);
+  }
+
+  if(all.length === 0){
+    root.innerHTML = `<div class="empty-state">
+      <span class="e-icon">🏗️</span>
+      ${Object.keys(DB.projects).length===0 ? 'لا توجد مشاريع بعد. اضغط + لإضافة أول مشروع.' : 'لا توجد مشاريع مطابقة لهذا الفلتر.'}
+    </div>`;
+    return;
+  }
+
+  // ترتيب: من الأقرب تاريخ استلام نهائي إلى الأبعد
+  all.sort((a,b) => {
+    const da = parseDateOnly(a.dateFinal);
+    const db = parseDateOnly(b.dateFinal);
+    if(!da && !db) return 0;
+    if(!da) return 1;
+    if(!db) return -1;
+    return da - db;
+  });
+
+  // تجميع بالسنة (سنة تاريخ الاستلام النهائي)
+  const groups = {};
+  all.forEach(p => {
+    const d = parseDateOnly(p.dateFinal);
+    const year = d ? d.getFullYear() : "غير محدد";
+    if(!groups[year]) groups[year] = [];
+    groups[year].push(p);
+  });
+
+  const years = Object.keys(groups).sort((a,b) => {
+    if(a==="غير محدد") return 1;
+    if(b==="غير محدد") return -1;
+    return Number(a) - Number(b);
+  });
+
+  let html = "";
+  years.forEach(year => {
+    html += `<div class="year-group"><h3 class="year-title">سنة ${year}</h3>`;
+    groups[year].forEach(p => { html += renderCard(p); });
+    html += `</div>`;
+  });
+  root.innerHTML = html;
+
+  // attach events
+  root.querySelectorAll('[data-edit]').forEach(el=>{
+    el.addEventListener('click', ()=> openEditForm(el.dataset.edit));
+  });
+  root.querySelectorAll('[data-delete]').forEach(el=>{
+    el.addEventListener('click', ()=> openDeleteConfirm(el.dataset.delete));
+  });
+  root.querySelectorAll('[data-toggle]').forEach(el=>{
+    el.addEventListener('change', (e)=> toggleField(el.dataset.toggle, el.dataset.field, e.target.checked));
+  });
+}
+
+function renderCard(p){
+  const status = computeStatus(p);
+  const dProv = parseDateOnly(p.dateProv);
+  const dFinal = parseDateOnly(p.dateFinal);
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  let pct = 0;
+  if(dProv && dFinal){
+    const total = daysBetween(dProv, dFinal);
+    const elapsed = daysBetween(dProv, today);
+    pct = total > 0 ? Math.min(100, Math.max(0, (elapsed/total)*100)) : 100;
+  }
+
+  const diffDays = dFinal ? daysBetween(today, dFinal) : null;
+  let subText = "";
+  if(status === "closed") subText = "تم استرجاع الكفالة والاستلام النهائي";
+  else subText = fmtRemaining(diffDays);
+
+  return `
+  <div class="proj-card status-${status}">
+    <div class="proj-top">
+      <div>
+        <p class="proj-name">${escapeHtml(p.name||'مشروع بدون اسم')}</p>
+        <p class="proj-sub">${escapeHtml(p.commune||'')}${p.marketNum ? ' · صفقة رقم '+escapeHtml(p.marketNum) : ''}</p>
+      </div>
+      ${status === "far" ? '' : `<span class="badge ${status}">${STATUS_LABEL[status]}</span>`}
+    </div>
+
+    <table class="info-table">
+      <tr>
+        <td><b>مبلغ الصفقة</b><span>${fmtMoney(p.amount)}</span></td>
+        <td><b>الكفالة البنكية (5%)</b><span class="gold">${fmtMoney(p.amount*0.05)}</span></td>
+      </tr>
+      <tr>
+        <td><b>تاريخ الاستلام المؤقت</b><span>${fmtDate(p.dateProv)}</span></td>
+        <td><b>تاريخ الاستلام النهائي</b><span>${fmtDate(p.dateFinal)}</span></td>
+      </tr>
+    </table>
+    <div class="remaining-row"><b>كم بقي</b><span>${escapeHtml(subText)}</span></div>
+
+    <div class="timeline">
+      <div class="timeline-fill" style="width:${pct}%"></div>
+    </div>
+    <div class="timeline-dates">
+      <span>استلام مؤقت</span>
+      <span>استلام نهائي</span>
+    </div>
+
+    <div class="proj-actions">
+      <label class="check-pill ${p.finallyReceived?'done':''}">
+        <input type="checkbox" data-toggle="${p.id}" data-field="finallyReceived" ${p.finallyReceived?'checked':''}>
+        تم الاستلام النهائي
+      </label>
+      <label class="check-pill ${p.guaranteeReturned?'done':''}">
+        <input type="checkbox" data-toggle="${p.id}" data-field="guaranteeReturned" ${p.guaranteeReturned?'checked':''}>
+        تم استرجاع الكفالة
+      </label>
+    </div>
+
+    <div class="row-btns">
+      <button class="icon-btn" data-edit="${p.id}">تعديل</button>
+      <button class="icon-btn danger" data-delete="${p.id}">حذف</button>
+    </div>
+  </div>`;
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+/* =====================================================================
+   FORM (Add / Edit)
+   ===================================================================== */
+const formOverlay = document.getElementById('formOverlay');
+const deleteOverlay = document.getElementById('deleteOverlay');
+
+document.getElementById('fabAdd').addEventListener('click', ()=> openAddForm());
+document.getElementById('formClose').addEventListener('click', closeForm);
+document.getElementById('deleteClose').addEventListener('click', closeDeleteConfirm);
+document.getElementById('deleteCancelBtn').addEventListener('click', closeDeleteConfirm);
+formOverlay.addEventListener('click', (e)=>{ if(e.target===formOverlay) closeForm(); });
+deleteOverlay.addEventListener('click', (e)=>{ if(e.target===deleteOverlay) closeDeleteConfirm(); });
+
+/* ---------- نافذة البلديات: تجميع تلقائي حسب اسم البلدية، أبجدي أو حسب الأعوام ---------- */
+const communesOverlay = document.getElementById('communesOverlay');
+let communesSortMode = "alpha";
+let expandedCommuneKey = null; // مفتاح البلدية المفتوحة حالياً (toggle واحد في كل مرة)
+
+document.getElementById('communesBtn').addEventListener('click', ()=>{
+  expandedCommuneKey = null;
+  renderCommunesOverview();
+  communesOverlay.classList.add('show');
+});
+document.getElementById('communesClose').addEventListener('click', ()=> communesOverlay.classList.remove('show'));
+communesOverlay.addEventListener('click', (e)=>{ if(e.target===communesOverlay) communesOverlay.classList.remove('show'); });
+
+document.getElementById('communesSortBar').addEventListener('click', (e)=>{
+  const pill = e.target.closest('.pill');
+  if(!pill) return;
+  document.querySelectorAll('#communesSortBar .pill').forEach(p=>p.classList.remove('active'));
+  pill.classList.add('active');
+  communesSortMode = pill.dataset.sort;
+  expandedCommuneKey = null;
+  renderCommunesOverview();
+});
+
+function groupProjectsByCommune(projects){
+  const groups = {};
+  projects.forEach(p => {
+    const c = (p.commune || "غير محدد").trim() || "غير محدد";
+    if(!groups[c]) groups[c] = [];
+    groups[c].push(p);
+  });
+  return groups;
+}
+
+function renderCommuneRow(name, key, projects){
+  const isOpen = expandedCommuneKey === key;
+  const cardsHtml = isOpen ? projects.map(p => renderCard(p)).join('') : '';
+  return `
+    <div class="commune-row" data-commune-key="${escapeHtml(key)}">
+      <span class="c-name">${escapeHtml(name)}</span>
+      <span class="c-count">${projects.length}</span>
+    </div>
+    ${isOpen ? `<div class="commune-cards">${cardsHtml}</div>` : ''}
+  `;
+}
+
+function renderCommunesOverview(){
+  const all = getAllActiveProjects();
+  const container = document.getElementById('communesList');
+
+  if(all.length === 0){
+    container.innerHTML = `<div class="empty-state"><span class="e-icon">🏛️</span>لا توجد مشاريع بعد لتصنيفها حسب البلدية.</div>`;
+    return;
+  }
+
+  if(communesSortMode === "alpha"){
+    const byCommune = groupProjectsByCommune(all);
+    const names = Object.keys(byCommune).sort((a,b) => a.localeCompare(b, 'ar'));
+    container.innerHTML = names.map(name => renderCommuneRow(name, name, byCommune[name])).join('');
+  } else {
+    // تجميع حسب السنة (سنة الاستلام النهائي)، وداخل كل سنة حسب البلدية
+    const byYear = {};
+    all.forEach(p => {
+      const d = parseDateOnly(p.dateFinal);
+      const year = d ? d.getFullYear() : "غير محدد";
+      const c = (p.commune || "غير محدد").trim() || "غير محدد";
+      if(!byYear[year]) byYear[year] = {};
+      if(!byYear[year][c]) byYear[year][c] = [];
+      byYear[year][c].push(p);
+    });
+    const years = Object.keys(byYear).sort((a,b) => {
+      if(a==="غير محدد") return 1;
+      if(b==="غير محدد") return -1;
+      return Number(a) - Number(b);
+    });
+    container.innerHTML = years.map(year => {
+      const communes = byYear[year];
+      const names = Object.keys(communes).sort((a,b) => a.localeCompare(b, 'ar'));
+      return `
+        <div class="commune-year-title">سنة ${year}</div>
+        ${names.map(name => renderCommuneRow(name, `${year}__${name}`, communes[name])).join('')}
+      `;
+    }).join('');
+  }
+
+  // ربط النقر بالتوسيع/الانكماش
+  container.querySelectorAll('.commune-row').forEach(row => {
+    row.addEventListener('click', ()=>{
+      const key = row.dataset.communeKey;
+      expandedCommuneKey = (expandedCommuneKey === key) ? null : key;
+      renderCommunesOverview();
+    });
+  });
+
+  // ربط أزرار التعديل/الحذف/الخانات داخل البطاقات المفتوحة (نفس منطق القائمة الرئيسية)
+  container.querySelectorAll('[data-edit]').forEach(el=>{
+    el.addEventListener('click', (e)=>{ e.stopPropagation(); openEditForm(el.dataset.edit); });
+  });
+  container.querySelectorAll('[data-delete]').forEach(el=>{
+    el.addEventListener('click', (e)=>{ e.stopPropagation(); openDeleteConfirm(el.dataset.delete); });
+  });
+  container.querySelectorAll('[data-toggle]').forEach(el=>{
+    el.addEventListener('click', (e)=> e.stopPropagation());
+    el.addEventListener('change', (e)=> toggleField(el.dataset.toggle, el.dataset.field, e.target.checked));
+  });
+}
+
+function openAddForm(){
+  editingId = null;
+  document.getElementById('formTitle').textContent = "إضافة مشروع";
+  document.getElementById('f_name').value = "";
+  document.getElementById('f_commune').value = "";
+  document.getElementById('f_marketNum').value = "";
+  document.getElementById('f_amount').value = "";
+  document.getElementById('f_dateProv').value = "";
+  document.getElementById('f_dateFinal').value = "";
+  updateGuaranteePreview();
+  formOverlay.classList.add('show');
+}
+function openEditForm(id){
+  const p = DB.projects[id];
+  if(!p) return;
+  editingId = id;
+  document.getElementById('formTitle').textContent = "تعديل المشروع";
+  document.getElementById('f_name').value = p.name||"";
+  document.getElementById('f_commune').value = p.commune||"";
+  document.getElementById('f_marketNum').value = p.marketNum||"";
+  document.getElementById('f_amount').value = p.amount||"";
+  document.getElementById('f_dateProv').value = p.dateProv||"";
+  document.getElementById('f_dateFinal').value = p.dateFinal||"";
+  updateGuaranteePreview();
+  formOverlay.classList.add('show');
+}
+function closeForm(){
+  formOverlay.classList.remove('show');
+  editingId = null;
+}
+
+document.getElementById('f_amount').addEventListener('input', updateGuaranteePreview);
+document.getElementById('f_dateProv').addEventListener('change', ()=>{
+  const dp = document.getElementById('f_dateProv').value;
+  document.getElementById('f_dateFinal').value = dp ? addOneYear(dp) : "";
+});
+function updateGuaranteePreview(){
+  const amount = parseFloat(document.getElementById('f_amount').value) || 0;
+  document.getElementById('guaranteePreview').textContent = fmtMoney(amount*0.05);
+}
+
+/* ---------- حفظ مشترك: يُستعمل عند الضغط على "حفظ المشروع" وأيضاً عند الخروج من أي خانة ---------- */
+function commitFormToProject(opts){
+  opts = opts || {};
+  const name = document.getElementById('f_name').value.trim();
+  const commune = document.getElementById('f_commune').value.trim();
+  const marketNum = document.getElementById('f_marketNum').value.trim();
+  const amount = parseFloat(document.getElementById('f_amount').value) || 0;
+  const dateProv = document.getElementById('f_dateProv').value;
+  const dateFinal = document.getElementById('f_dateFinal').value || (dateProv ? addOneYear(dateProv) : "");
+
+  // الحفظ الصامت (عند الخروج من خانة) يحتاج الحد الأدنى: اسم + تاريخ مؤقت، وإلا لا يحفظ بعد (المشروع لم يكتمل بعد)
+  if(!name || !dateProv){
+    if(opts.silent) return false;
+    alert("أدخل اسم المشروع وتاريخ الاستلام المؤقت على الأقل");
+    return false;
+  }
+
+  // إذا كانت أول مرة (لا يوجد editingId)، نخصص له id ثابت طوال جلسة فتح النموذج هذه
+  if(!editingId) editingId = genId();
+  const existing = DB.projects[editingId] || {};
+  DB.projects[editingId] = {
+    id: editingId,
+    name, commune, marketNum, amount,
+    dateProv, dateFinal,
+    finallyReceived: existing.finallyReceived || false,
+    guaranteeReturned: existing.guaranteeReturned || false,
+    _mod: nextMod()
+  };
+  saveLocal();
+  if(!opts.silent) render();
+  pushToCloud();
+  return true;
+}
+
+document.getElementById('saveProjectBtn').addEventListener('click', ()=>{
+  const ok = commitFormToProject({silent:false});
+  if(ok){
+    render();
+    closeForm();
+  }
+});
+
+/* الحفظ الفوري عند الخروج من أي خانة داخل نموذج إضافة/تعديل مشروع */
+['f_name','f_commune','f_marketNum','f_amount','f_dateProv','f_dateFinal'].forEach(fieldId=>{
+  document.getElementById(fieldId).addEventListener('blur', ()=>{
+    if(formOverlay.classList.contains('show')){
+      commitFormToProject({silent:true});
+    }
+  });
+});
+
+/* ---------- Toggle checkboxes ---------- */
+function toggleField(id, field, value){
+  const p = DB.projects[id];
+  if(!p) return;
+  p[field] = value;
+  p._mod = nextMod();
+  saveLocal();
+  render();
+  pushToCloud();
+}
+
+/* ---------- Delete (tombstone) ---------- */
+function openDeleteConfirm(id){
+  deletingId = id;
+  deleteOverlay.classList.add('show');
+}
+function closeDeleteConfirm(){
+  deleteOverlay.classList.remove('show');
+  deletingId = null;
+}
+document.getElementById('deleteConfirmBtn').addEventListener('click', ()=>{
+  if(!deletingId) return;
+  const mod = nextMod();
+  delete DB.projects[deletingId];
+  DB.tombstones[deletingId] = mod;
+  saveLocal();
+  render();
+  closeDeleteConfirm();
+  pushToCloud();
+});
+
+/* ---------- Filters ---------- */
+document.getElementById('filterBar').addEventListener('click', (e)=>{
+  const pill = e.target.closest('.pill');
+  if(!pill) return;
+  document.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
+  pill.classList.add('active');
+  currentFilter = pill.dataset.filter;
+  renderList();
+});
+
+/* =====================================================================
+   CLOUD SYNC — Firebase Realtime Database REST + SSE
+   منطق: الأحدث يغلب بالـ _mod، الدمج بالـ id، tombstones لا تُلغى أبداً
+   ===================================================================== */
+const syncDot = document.getElementById('syncDot');
+function setSyncState(state){
+  syncDot.className = 'sync-dot ' + state;
+}
+
+let isUserBusy = false; // حارس: لا نعيد البناء فوق حقل يكتب فيه المستخدم حالياً
+document.addEventListener('focusin', (e)=>{
+  if(e.target.matches('input, textarea')) isUserBusy = true;
+});
+document.addEventListener('focusout', (e)=>{
+  if(e.target.matches('input, textarea')) isUserBusy = false;
+});
+
+function mergeRemote(remote){
+  if(!remote) return false;
+  let changed = false;
+
+  const remoteProjects = remote.projects || {};
+  const remoteTombstones = remote.tombstones || {};
+
+  // 1) دمج tombstones أولاً (حارس مزدوج: قبل الدمج)
+  Object.keys(remoteTombstones).forEach(id => {
+    const remoteDel = sanitizeMod(remoteTombstones[id]);
+    const localDel = DB.tombstones[id] || 0;
+    if(remoteDel > localDel){
+      DB.tombstones[id] = remoteDel;
+      changed = true;
+    }
+    if(DB.tombstones[id] && DB.projects[id]){
+      // إذا كان موجود محلياً لكنه محذوف بشاهد أحدث من السجل المحلي نفسه
+      const localProjMod = DB.projects[id]._mod || 0;
+      if(DB.tombstones[id] >= localProjMod){
+        delete DB.projects[id];
+        changed = true;
+      }
+    }
+  });
+
+  // 2) دمج المشاريع: الأحدث _mod يغلب، بالـ id — لكن الحذف مطلق ولا يُنقض أبداً
+  Object.keys(remoteProjects).forEach(id => {
+    const remoteP = remoteProjects[id];
+    if(!remoteP) return;
+    // حارس مزدوج (قبل الدمج): إذا سُجّل حذف لهذا المعرف من أي جهاز، لا يُقبل أي إحياء له مهما كان _mod
+    if(DB.tombstones[id] !== undefined) return;
+
+    const remoteMod = sanitizeMod(remoteP._mod);
+    const localP = DB.projects[id];
+    if(!localP || remoteMod > sanitizeMod(localP._mod)){
+      DB.projects[id] = remoteP;
+      changed = true;
+    }
+  });
+
+  // 3) حارس مزدوج (بعد الدمج): أي مشروع له شاهد حذف يُطرَح فوراً بشكل مطلق
+  Object.keys(DB.tombstones).forEach(id => {
+    if(DB.projects[id]){
+      delete DB.projects[id];
+      changed = true;
+    }
+  });
+
+  return changed;
+}
+
+async function pullFromCloud(){
+  setSyncState('busy');
+  try{
+    const res = await fetch(FB_URL, {cache:'no-store'});
+    if(!res.ok) throw new Error('read failed: ' + res.status);
+    const remote = await res.json();
+    lastSyncStartedReadOK = true;
+
+    if(remote){
+      const changed = mergeRemote(remote);
+      lastKnownSavedAt = remote.savedAt || lastKnownSavedAt;
+      if(changed){
+        saveLocal();
+        if(!isUserBusy) render();
+      }
+    }
+    setSyncState('ok');
+    return true;
+  }catch(e){
+    console.error('pullFromCloud error', e);
+    setSyncState('err');
+    lastSyncStartedReadOK = false;
+    return false;
+  }
+}
+
+async function pushToCloud(){
+  // حارس المسح الكارثي: لا نرفع أبداً قبل قراءة ناجحة واحدة في الجلسة
+  if(!lastSyncStartedReadOK){
+    const ok = await pullFromCloud();
+    if(!ok){
+      console.warn('Push aborted: no successful read yet this session.');
+      return;
+    }
+  }
+  setSyncState('busy');
+  try{
+    const savedAt = nextMod();
+    const payload = {
+      projects: DB.projects,
+      tombstones: DB.tombstones,
+      savedAt
+    };
+    const res = await fetch(FB_URL, {
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok) throw new Error('write failed: ' + res.status);
+    myLastPushTime = savedAt;
+    lastKnownSavedAt = savedAt;
+    DB.savedAt = savedAt;
+    saveLocal();
+    setSyncState('ok');
+  }catch(e){
+    console.error('pushToCloud error', e);
+    setSyncState('err');
+  }
+}
+
+/* ---------- SSE: مزامنة لحظية عبر مراقبة savedAt فقط ---------- */
+let sseSource = null;
+let sseReconnectTimer = null;
+
+function startSSE(){
+  if(sseSource){ try{ sseSource.close(); }catch(e){} }
+  try{
+    sseSource = new EventSource(FB_SSE_URL);
+    sseSource.addEventListener('put', (e)=>{
+      try{
+        const data = JSON.parse(e.data);
+        const newSavedAt = data.data;
+        if(typeof newSavedAt === 'number' && newSavedAt !== myLastPushTime && newSavedAt > lastKnownSavedAt){
+          lastKnownSavedAt = newSavedAt;
+          pullFromCloud();
+        }
+      }catch(err){ /* ignore parse errors on keep-alive */ }
+    });
+    sseSource.onerror = ()=>{
+      try{ sseSource.close(); }catch(e){}
+      clearTimeout(sseReconnectTimer);
+      sseReconnectTimer = setTimeout(startSSE, 8000);
+    };
+  }catch(e){
+    console.warn('SSE غير متاح في هذه البيئة، سيعمل البرنامج بالفحص الدوري كبديل.', e);
+    clearTimeout(sseReconnectTimer);
+    sseReconnectTimer = setTimeout(startSSE, 8000);
+  }
+}
+
+/* فحص دوري خفيف كخطة بديلة لـ SSE */
+setInterval(()=>{
+  if(!isUserBusy) pullFromCloud();
+}, 15000);
+
+window.addEventListener('beforeunload', ()=>{
+  saveLocal();
+});
+
+/* =====================================================================
+   INIT
+   ===================================================================== */
+async function init(){
+  loadLocal();
+  injectSeedDataIfNeeded();
+  applyDataFixIfNeeded();
+  render();
+  await pullFromCloud();
+  applyDataFixIfNeeded();
+  render();
+  pushToCloud(); // يرفع بيانات السيد/التصحيحات (إن وُجدت لأول مرة) ليراها باقي أجهزتك أيضاً
+  startSSE();
+}
+init();
+</script>
+</body>
+</html>
