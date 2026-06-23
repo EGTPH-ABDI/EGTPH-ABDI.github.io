@@ -8,9 +8,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#ffffff;
-  --card:#ffffff;
-  --card2:#f7f5f0;
+  --bg:#faf6ee;
+  --card:#faf6ee;
+  --card2:#faf6ee;
   --gold:#b08d4f;
   --gold-soft:#8a6c38;
   --text:#1f2421;
@@ -39,7 +39,7 @@ header{
   padding:22px 16px 18px;
   text-align:center;
   border-bottom:1px solid var(--line);
-  background:#ffffff;
+  background:var(--bg);
   position:relative;
 }
 .brand{
@@ -158,6 +158,7 @@ header{
 .proj-card.status-ontime::before{background:var(--green);}
 .proj-card.status-far::before{background:var(--gray);}
 .proj-card.status-closed::before{background:var(--text-dim);}
+.proj-card.status-incomplete::before{background:var(--red);}
 
 .proj-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
 .proj-name{font-size:17.5px;color:var(--text);font-weight:600;margin:0 0 2px;}
@@ -174,6 +175,7 @@ header{
 .badge.soon{background:rgba(154,107,16,0.14);color:var(--amber);}
 .badge.ontime{background:rgba(63,122,87,0.14);color:var(--green);}
 .badge.closed{background:rgba(107,117,112,0.12);color:var(--text-dim);}
+.badge.incomplete{background:rgba(168,69,58,0.14);color:var(--red);font-weight:700;}
 
 /* جدول المعلومات: مبلغ الصفقة ↔ الكفالة، تاريخ مؤقت ↔ تاريخ نهائي */
 .info-table{
@@ -402,7 +404,7 @@ header{
   padding:12px 10px 2px;
   border:1px dashed var(--line);
   border-radius:10px;
-  background:#fbfaf6;
+  background:#ffffff;
 }
 
 .advanced-actions{
@@ -433,6 +435,7 @@ header{
   <div class="pill" data-filter="soon">قريب</div>
   <div class="pill" data-filter="ontime">في موعده</div>
   <div class="pill" data-filter="closed">مغلق</div>
+  <div class="pill" data-filter="incomplete">غير مكتمل</div>
 </div>
 
 <div id="listRoot"></div>
@@ -472,6 +475,7 @@ header{
       <input type="date" id="f_dateFinal" readonly style="opacity:.75">
     </div>
 
+    <p id="formValidationMsg" style="color:var(--red);font-size:13.5px;margin:0 0 10px;display:none;text-align:center;"></p>
     <button class="save-btn" id="saveProjectBtn">حفظ المشروع</button>
   </div>
 </div>
@@ -522,6 +526,21 @@ header{
    تخزين محلي دائم: localStorage
    مزامنة سحابية: Firebase Realtime Database (REST + SSE)
    ===================================================================== */
+
+/* ---------- حارس أخطاء عام: لو حدث خطأ غير متوقع في أي مكان، نظهره بوضوح بدل أن "لا يحدث شيء" بصمت ---------- */
+window.addEventListener('error', (e)=>{
+  console.error('Unhandled error:', e.message, e.filename, e.lineno);
+  try{
+    let banner = document.getElementById('jsErrorBanner');
+    if(!banner){
+      banner = document.createElement('div');
+      banner.id = 'jsErrorBanner';
+      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#a8453a;color:#fff;padding:10px 14px;font-size:13px;z-index:9999;text-align:center;direction:rtl;';
+      document.body.prepend(banner);
+    }
+    banner.textContent = 'حدث خطأ غير متوقع في البرنامج: ' + e.message + ' — جرّب إعادة تحميل الصفحة. إن استمر الخطأ، أرسل لقطة شاشة لهذه الرسالة.';
+  }catch(err){ /* لا شيء أكثر يمكن فعله إن فشل حتى عرض رسالة الخطأ */ }
+});
 
 /* ---------- Firebase config (مسار سري خاص بهذا البرنامج فقط) ---------- */
 const FB_BASE   = "https://egtph-reception-default-rtdb.europe-west1.firebasedatabase.app";
@@ -783,6 +802,8 @@ function daysBetween(a,b){
 /* ---------- Status computation ---------- */
 function computeStatus(p){
   if(p.guaranteeReturned && p.finallyReceived) return "closed";
+  // الشرطان الحاسمان للحساب الزمني: مبلغ الصفقة + تاريخ الاستلام المؤقت. بدونهما لا يُحسب أي تصنيف زمني.
+  if(!p.dateProv || !p.amount) return "incomplete";
   const today = new Date(); today.setHours(0,0,0,0);
   const finalDate = parseDateOnly(p.dateFinal);
   if(!finalDate) return "far";
@@ -792,7 +813,17 @@ function computeStatus(p){
   if(diff <= 30) return "soon";
   return "far";
 }
-const STATUS_LABEL = {late:"متأخر", soon:"قريب", ontime:"في موعده", far:"بعيد", closed:"مغلق"};
+const STATUS_LABEL = {late:"متأخر", soon:"قريب", ontime:"في موعده", far:"بعيد", closed:"مغلق", incomplete:"غير مكتمل"};
+
+/* ---------- فحص النقص: علم مستقل يعمل بالتوازي مع الحالة الزمنية (لا يعطّلها إن توفر الشرطان الحاسمان) ---------- */
+function isProjectIncomplete(p){
+  if(!p.name || !p.name.trim()) return true;
+  if(!p.commune || !p.commune.trim()) return true;
+  if(!p.marketNum || !p.marketNum.trim()) return true;
+  if(!p.amount) return true;
+  if(!p.dateProv) return true;
+  return false;
+}
 
 /* ---------- صياغة "كم بقي" بصيغة أشهر وأيام ---------- */
 function fmtRemaining(diffDays){
@@ -833,8 +864,11 @@ function render(){
 
 function renderStats(){
   const all = getAllActiveProjects();
-  const counts = {late:0, soon:0, ontime:0, far:0, closed:0};
-  all.forEach(p => counts[computeStatus(p)]++);
+  const counts = {late:0, soon:0, ontime:0, far:0, closed:0, incomplete:0};
+  all.forEach(p => {
+    counts[computeStatus(p)]++;
+    if(isProjectIncomplete(p)) counts.incomplete++; // عدّ مستقل: قد يتراكب مع حالة زمنية طبيعية
+  });
   const bar = document.getElementById('statsBar');
   bar.innerHTML = `
     <div class="stat"><b>${all.length}</b><span>إجمالي المشاريع</span></div>
@@ -844,8 +878,8 @@ function renderStats(){
   `;
 
   // تحديث عدّاد كل فلتر داخل شريط الفلاتر نفسه (مثلاً "متأخر (3)")
-  const filterLabels = {all: "الكل", late:"متأخر", soon:"قريب", ontime:"في موعده", closed:"مغلق"};
-  const filterCounts = {all: all.length, late:counts.late, soon:counts.soon, ontime:counts.ontime, closed:counts.closed};
+  const filterLabels = {all: "الكل", late:"متأخر", soon:"قريب", ontime:"في موعده", closed:"مغلق", incomplete:"غير مكتمل"};
+  const filterCounts = {all: all.length, late:counts.late, soon:counts.soon, ontime:counts.ontime, closed:counts.closed, incomplete:counts.incomplete};
   document.querySelectorAll('#filterBar .pill').forEach(pill=>{
     const key = pill.dataset.filter;
     if(filterLabels[key] !== undefined){
@@ -858,7 +892,9 @@ function renderList(){
   const root = document.getElementById('listRoot');
   let all = getAllActiveProjects();
 
-  if(currentFilter !== "all"){
+  if(currentFilter === "incomplete"){
+    all = all.filter(p => isProjectIncomplete(p));
+  } else if(currentFilter !== "all"){
     all = all.filter(p => computeStatus(p) === currentFilter);
   }
 
@@ -917,6 +953,7 @@ function renderList(){
 
 function renderCard(p){
   const status = computeStatus(p);
+  const incomplete = isProjectIncomplete(p);
   const dProv = parseDateOnly(p.dateProv);
   const dFinal = parseDateOnly(p.dateFinal);
   const today = new Date(); today.setHours(0,0,0,0);
@@ -931,7 +968,11 @@ function renderCard(p){
   const diffDays = dFinal ? daysBetween(today, dFinal) : null;
   let subText = "";
   if(status === "closed") subText = "تم استرجاع الكفالة والاستلام النهائي";
+  else if(status === "incomplete") subText = "أدخل مبلغ الصفقة وتاريخ الاستلام المؤقت لحساب الموعد النهائي";
   else subText = fmtRemaining(diffDays);
+
+  // الشارة الزمنية تظهر فقط إن لم تكن الحالة "incomplete" (لأن "incomplete" نفسها سُتعرض كشارة منفصلة أدناه) ولم تكن "far"
+  const showTimeBadge = (status !== "far" && status !== "incomplete");
 
   return `
   <div class="proj-card status-${status}">
@@ -940,7 +981,10 @@ function renderCard(p){
         <p class="proj-name">${escapeHtml(p.name||'مشروع بدون اسم')}</p>
         <p class="proj-sub">${escapeHtml(p.commune||'')}${p.marketNum ? ' · صفقة رقم '+escapeHtml(p.marketNum) : ''}</p>
       </div>
-      ${status === "far" ? '' : `<span class="badge ${status}">${STATUS_LABEL[status]}</span>`}
+      <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;">
+        ${showTimeBadge ? `<span class="badge ${status}">${STATUS_LABEL[status]}</span>` : (status === "incomplete" ? `<span class="badge incomplete">${STATUS_LABEL.incomplete}</span>` : '')}
+        ${(incomplete && status !== "incomplete") ? `<span class="badge incomplete">غير مكتمل</span>` : ''}
+      </div>
     </div>
 
     <table class="info-table">
@@ -1178,6 +1222,7 @@ function openAddForm(){
   document.getElementById('f_amount').value = "";
   document.getElementById('f_dateProv').value = "";
   document.getElementById('f_dateFinal').value = "";
+  document.getElementById('formValidationMsg').style.display = "none";
   updateGuaranteePreview();
   formOverlay.classList.add('show');
 }
@@ -1192,6 +1237,7 @@ function openEditForm(id){
   document.getElementById('f_amount').value = p.amount||"";
   document.getElementById('f_dateProv').value = p.dateProv||"";
   document.getElementById('f_dateFinal').value = p.dateFinal||"";
+  document.getElementById('formValidationMsg').style.display = "none";
   updateGuaranteePreview();
   formOverlay.classList.add('show');
 }
@@ -1219,13 +1265,17 @@ function commitFormToProject(opts){
   const amount = parseFloat(document.getElementById('f_amount').value) || 0;
   const dateProv = document.getElementById('f_dateProv').value;
   const dateFinal = document.getElementById('f_dateFinal').value || (dateProv ? addOneYear(dateProv) : "");
+  const msgEl = document.getElementById('formValidationMsg');
 
-  // الحفظ الصامت (عند الخروج من خانة) يحتاج الحد الأدنى: اسم + تاريخ مؤقت، وإلا لا يحفظ بعد (المشروع لم يكتمل بعد)
-  if(!name || !dateProv){
+  // الاسم وحده إلزامي للحفظ؛ التاريخ اختياري ويمكن إضافته/تعديله لاحقاً (المشروع يبقى "بانتظار التاريخ" حتى ذلك الحين)
+  if(!name){
     if(opts.silent) return false;
-    alert("أدخل اسم المشروع وتاريخ الاستلام المؤقت على الأقل");
+    const msg = "أدخل اسم المشروع على الأقل";
+    if(msgEl){ msgEl.textContent = msg; msgEl.style.display = "block"; }
+    alert(msg);
     return false;
   }
+  if(msgEl){ msgEl.style.display = "none"; }
 
   // إذا كانت أول مرة (لا يوجد editingId)، نخصص له id ثابت طوال جلسة فتح النموذج هذه
   if(!editingId) editingId = genId();
