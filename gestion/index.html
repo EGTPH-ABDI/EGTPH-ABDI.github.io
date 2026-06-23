@@ -1,4 +1,5 @@
 <html lang="ar" dir="rtl"><head>
+<script src="../egtph-auth.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -5434,8 +5435,16 @@ const FB_URL    = 'https://egtph-abdi-youssouf-islam-default-rtdb.europe-west1.f
 // ── كلمة السر السرية (مدمجة في البرنامج — البيانات تُخزَّن في مسار سري لا يمكن تخمينه) ──
 const FB_SECRET = 'EGTPH-Chlef-2026-x7Kq94RvTzM3pWd8';
 const FB_BASE   = '/egtph_gp_v13_' + FB_SECRET;
-const FB_NODE   = FB_BASE + '.json';
+function FB_NODE_FN(){ return FB_BASE + '.json' + EGTPHAuth.authParam('gestion'); }
 const FB_TIMEOUT = 15000;
+// ── حماية حقيقية: تسجيل دخول بكلمة سر (مرة واحدة لكل جهاز)، الرمز يتجدد وحده ──
+// كلمة السر لا تُكتب هنا أبداً — تُكتب من المستخدم في النافذة التي تظهر.
+EGTPHAuth.init({
+  appId:   'gestion',
+  apiKey:  'AIzaSyBqMfhLqRm-GWR4HgPkLH-erCFg8EsrLcA', // Web API Key — Firebase Console → Project settings
+  email:   'abdiyoucefislam@gmail.com',                // إيميل المستخدم المسجَّل في Firebase Authentication
+  onReady: function(){ try{ if(typeof fbAutoTick==='function') fbAutoTick(); }catch(e){} }
+});
 // جلب مرن (مهلة + لا تخزين مؤقت + إعادة محاولة عند فشل الشبكة) — يحل «تعذّر الاتصال/Load failed» على الأيفون
 async function fbFetch(url, opts, tries){
   opts = opts || {}; tries = (tries==null)?3:tries; let lastErr=null;
@@ -5509,7 +5518,7 @@ const _gzOK = typeof CompressionStream !== 'undefined' && typeof DecompressionSt
 
 // ── جلب وفك البيانات من السحابة (يدعم المضغوط وغير المضغوط) ──
 async function fbFetchData() {
-  const r = await fbFetch(FB_URL + FB_NODE);
+  const r = await fbFetch(FB_URL + FB_NODE_FN());
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const raw = await r.json();
   if (!raw) return null;
@@ -5529,7 +5538,7 @@ async function fbDeleteCloudData(){
   if(!navigator.onLine){T('لا يوجد اتصال بالإنترنت','error');return;}
   try{
     fbStatus('sync','جارٍ المسح...');
-    const r=await fbFetch(FB_URL+FB_NODE,{method:'DELETE'});
+    const r=await fbFetch(FB_URL+FB_NODE_FN(),{method:'DELETE'});
     if(!r.ok)throw new Error('HTTP '+r.status);
     _fbLastHash='';_fbDirty=false;
     fbStatus('off','تم مسح بيانات السحابة');
@@ -5591,7 +5600,7 @@ async function fbPush(silent, _force) {
     } else {
       body = JSON.stringify(data);
     }
-    const r = await fbFetch(FB_URL + FB_NODE, {
+    const r = await fbFetch(FB_URL + FB_NODE_FN(), {
       method:'PUT', headers:{'Content-Type':'application/json'}, body
     });
     if (!r.ok) throw new Error('HTTP '+r.status);
@@ -5704,7 +5713,7 @@ async function fbAutoTick() {
   // فحص خفيف: هل السحابة أحدث؟ (~30 بايت)
   let remoteNewer = false;
   try {
-    const r = await fbFetch(FB_URL + FB_BASE + '/savedAt.json');
+    const r = await fbFetch(FB_URL + FB_BASE + '/savedAt.json' + EGTPHAuth.authParam('gestion'));
     if (r.ok) {
       const remoteTS = await r.json();
       _cloudSynced = true; // قرأنا حالة السحابة بنجاح → الرفع آمن
@@ -5750,7 +5759,7 @@ function fbStartStream() {
   if (_sse) { try { _sse.close(); } catch(e){} _sse = null; }
   if (!navigator.onLine) return;
   try {
-    _sse = new EventSource(FB_URL + FB_BASE + '/savedAt.json');
+    _sse = new EventSource(FB_URL + FB_BASE + '/savedAt.json' + EGTPHAuth.authParam('gestion'));
     _sse.addEventListener('put', _sseOnChange);
     _sse.addEventListener('patch', _sseOnChange);
     _sse.onerror = () => {
@@ -5781,7 +5790,7 @@ function fbToggleAuto(chk) {
 async function fbStartupCheck() {
   if (!navigator.onLine) { fbStatus('off','غير متصل'); return; }
   try {
-    const r = await fbFetch(FB_URL + FB_BASE + '/savedAt.json');
+    const r = await fbFetch(FB_URL + FB_BASE + '/savedAt.json' + EGTPHAuth.authParam('gestion'));
     if (!r.ok) { fbStatus('err','تحقق من قواعد Firebase (HTTP '+r.status+')'); return; }
     const remoteTS = await r.json();
     _cloudSynced = true; // قرأنا حالة السحابة بنجاح → الرفع آمن هذه الجلسة
