@@ -656,6 +656,46 @@ function injectSeedDataIfNeeded(){
   saveLocal();
 }
 
+/* ---------- إزالة تكرار بالمحتوى: يحمي من حقن السيد عدة مرات من أجهزة/متصفحات مختلفة على نفس السحابة ---------- */
+function projectContentSignature(p){
+  return [
+    (p.name||'').trim(),
+    (p.marketNum||'').trim(),
+    Number(p.amount)||0,
+    (p.dateProv||'').trim()
+  ].join('||');
+}
+function dedupeProjectsByContent(){
+  const seenBySignature = {}; // signature -> id of the kept (oldest) project
+  let changed = false;
+  const tombstoneAdditions = {};
+
+  // نرتب بالـ _mod تصاعدياً لنحتفظ بالأقدم (الأصل) ونحذف الأحدث (النسخ المكررة)
+  const ids = Object.keys(DB.projects).sort((a,b) => (DB.projects[a]._mod||0) - (DB.projects[b]._mod||0));
+
+  ids.forEach(id => {
+    const p = DB.projects[id];
+    if(!p) return;
+    const sig = projectContentSignature(p);
+    if(seenBySignature[sig] === undefined){
+      seenBySignature[sig] = id; // أول ظهور (الأقدم) يبقى
+    } else {
+      // تكرار: نحذفه بشاهد حذف حقيقي ليختفي من كل الأجهزة المتزامنة أيضاً
+      tombstoneAdditions[id] = nextMod();
+      delete DB.projects[id];
+      changed = true;
+    }
+  });
+
+  if(changed){
+    Object.keys(tombstoneAdditions).forEach(id => {
+      DB.tombstones[id] = tombstoneAdditions[id];
+    });
+    saveLocal();
+  }
+  return changed;
+}
+
 /* ---------- ترقية تصحيحية: تصحيح بيانات مشروع كانت خاطئة في إصدار سابق من السيد ---------- */
 const FIX_FLAG_KEY = "egtph_kafala_fix_v2_done";
 function applyDataFixIfNeeded(){
@@ -1252,9 +1292,11 @@ async function pullFromCloud(){
     if(remote){
       const changed = mergeRemote(remote);
       lastKnownSavedAt = remote.savedAt || lastKnownSavedAt;
-      if(changed){
+      const dedupeChanged = dedupeProjectsByContent();
+      if(changed || dedupeChanged){
         saveLocal();
         if(!isUserBusy) render();
+        if(dedupeChanged) pushToCloud(); // ينشر التنظيف لباقي الأجهزة فوراً
       }
     }
     setSyncState('ok');
@@ -1351,7 +1393,7 @@ async function init(){
   await pullFromCloud();
   applyDataFixIfNeeded();
   render();
-  pushToCloud(); // يرفع بيانات السيد/التصحيحات (إن وُجدت لأول مرة) ليراها باقي أجهزتك أيضاً
+  pushToCloud(); // يرفع بيانات السيد/التصحيحات/إزالة التكرار ليراها باقي أجهزتك أيضاً
   startSSE();
 }
 init();
