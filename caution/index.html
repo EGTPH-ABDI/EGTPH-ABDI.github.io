@@ -80,6 +80,42 @@ header{
   cursor:pointer;
   line-height:1;
 }
+.search-bar{
+  padding:10px 12px 0;
+  position:relative;
+}
+.search-bar input{
+  width:100%;
+  background:var(--card2);
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:10px 36px 10px 13px;
+  font-size:14px;
+  color:var(--text);
+  font-family:inherit;
+}
+.search-bar input:focus{outline:none;border-color:var(--gold);background:#ffffff;}
+.search-clear{
+  position:absolute;
+  inset-inline-start:22px;
+  top:50%;
+  transform:translateY(-50%);
+  font-size:20px;
+  color:var(--text-dim);
+  cursor:pointer;
+  padding:0 6px;
+}
+.opening-alert{
+  margin:12px 12px 0;
+  padding:11px 14px;
+  background:rgba(168,69,58,0.1);
+  border:1px solid var(--red);
+  border-radius:10px;
+  color:var(--red);
+  font-size:13.5px;
+  font-weight:600;
+  text-align:center;
+}
 
 /* ===== Stats strip ===== */
 .stats{
@@ -90,19 +126,30 @@ header{
 }
 .stat{
   flex:1;
-  min-width:84px;
+  min-width:56px;
   background:var(--card2);
   border:1px solid var(--line);
-  border-radius:var(--radius);
-  padding:10px 8px;
+  border-radius:10px;
+  padding:6px 4px;
   text-align:center;
+  cursor:pointer;
+  transition:background .15s, border-color .15s;
 }
-.stat b{display:block;font-size:22px;color:var(--gold-soft);font-family:'Cinzel',sans-serif;}
-.stat span{font-size:12px;color:var(--text-dim);}
+.stat:active{background:#efe9da;}
+.stat.active{
+  background:var(--gold);
+  border-color:var(--gold);
+}
+.stat.active b{color:#ffffff;}
+.stat.active span{color:rgba(255,255,255,0.85);}
+.stat b{display:block;font-size:15px;color:var(--gold-soft);font-family:'Cinzel',sans-serif;}
+.stat span{font-size:9.5px;color:var(--text-dim);}
 .stat.late b{color:var(--red);}
 .stat.soon b{color:var(--amber);}
 .stat.ontime b{color:var(--green);}
 .stat.incomplete b{color:var(--red);}
+.stat.closed b{color:var(--text-dim);}
+.stat.active.late b, .stat.active.soon b, .stat.active.ontime b, .stat.active.incomplete b, .stat.active.closed b, .stat.active b{color:#ffffff !important;}
 
 /* ===== Filter pills ===== */
 .filters{
@@ -261,6 +308,7 @@ header{
   font-weight:600;
 }
 .row-btns{display:flex;gap:8px;margin-top:10px;}
+.last-edit-note{font-size:10.5px;color:var(--text-dim);margin:8px 0 0;text-align:center;}
 .icon-btn{
   border:1px solid var(--line);
   background:transparent;
@@ -420,25 +468,25 @@ header{
   .overlay{align-items:center;}
 }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
 <header>
   <div class="sync-dot" id="syncDot" title="حالة المزامنة"></div>
   <button class="communes-btn" id="communesBtn" title="عرض البلديات">🏛️</button>
+  <button class="communes-btn" id="searchBtn" title="بحث" style="inset-inline-end:60px;">🔍</button>
   <p class="brand">EGTPH<small>الاستلام النهائي والكفالة البنكية</small></p>
 </header>
 
-<div class="stats" id="statsBar"></div>
-
-<div class="filters" id="filterBar">
-  <div class="pill active" data-filter="all">الكل</div>
-  <div class="pill" data-filter="late">متأخر</div>
-  <div class="pill" data-filter="soon">قريب</div>
-  <div class="pill" data-filter="ontime">في موعده</div>
-  <div class="pill" data-filter="closed">مغلق</div>
-  <div class="pill" data-filter="incomplete">غير مكتمل</div>
+<div class="search-bar" id="searchBar" style="display:none;">
+  <input type="text" id="searchInput" placeholder="بحث بالاسم، البلدية، أو رقم الصفقة...">
+  <span class="search-clear" id="searchClear">&times;</span>
 </div>
+
+<div id="openingAlertBanner" style="display:none;"></div>
+
+<div class="stats" id="statsBar"></div>
 
 <div id="listRoot"></div>
 
@@ -476,6 +524,10 @@ header{
       <label>تاريخ الاستلام النهائي (محسوب تلقائياً: +سنة)</label>
       <input type="date" id="f_dateFinal" readonly style="opacity:.75">
     </div>
+    <div class="field">
+      <label>ملاحظات (اختياري)</label>
+      <textarea id="f_notes" rows="3" style="width:100%;background:var(--card2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:12px 13px;font-size:14.5px;font-family:inherit;resize:vertical;" placeholder="مثلاً: في انتظار توقيع المحضر من البلدية..."></textarea>
+    </div>
 
     <p id="formValidationMsg" style="color:var(--red);font-size:13.5px;margin:0 0 10px;display:none;text-align:center;"></p>
     <button class="save-btn" id="saveProjectBtn">حفظ المشروع</button>
@@ -505,6 +557,11 @@ header{
     <div id="communesList"></div>
 
     <div class="advanced-actions">
+      <p style="font-size:13px;color:var(--text-dim);margin:0 0 10px;">تصدير القائمة الحالية (تطبَّق عليها فلاتر الحالة والبحث النشطة حالياً)</p>
+      <div style="display:flex;gap:8px;margin-bottom:18px;">
+        <button class="icon-btn" id="exportPdfBtn" style="flex:1;">📄 تصدير PDF</button>
+        <button class="icon-btn" id="exportExcelBtn" style="flex:1;">📊 تصدير Excel</button>
+      </div>
       <button class="icon-btn danger" id="resetCloudBtn" style="width:100%;">تصفير السحابة فقط (إعادة رفع بياناتي الحالية)</button>
     </div>
   </div>
@@ -563,6 +620,7 @@ let DB = {
 let lastKnownSavedAt = 0;
 let myLastPushTime = 0;
 let currentFilter = "all";
+let searchQuery = "";
 let editingId = null;
 let deletingId = null;
 let lastSyncStartedReadOK = false;
@@ -877,23 +935,29 @@ function renderStats(){
     if(counts[st] !== undefined) counts[st]++;
     if(isProjectIncomplete(p)) incompleteCount++; // عدّ مستقل بالكامل، لا يتراكم مع computeStatus
   });
-  const bar = document.getElementById('statsBar');
-  bar.innerHTML = `
-    <div class="stat"><b>${all.length}</b><span>إجمالي المشاريع</span></div>
-    <div class="stat late"><b>${counts.late}</b><span>متأخر</span></div>
-    <div class="stat soon"><b>${counts.soon}</b><span>قريب</span></div>
-    <div class="stat ontime"><b>${counts.ontime}</b><span>في موعده</span></div>
-    <div class="stat incomplete"><b>${incompleteCount}</b><span>غير مكتمل</span></div>
-  `;
 
-  // تحديث عدّاد كل فلتر داخل شريط الفلاتر نفسه (مثلاً "متأخر (3)")
-  const filterLabels = {all: "الكل", late:"متأخر", soon:"قريب", ontime:"في موعده", closed:"مغلق", incomplete:"غير مكتمل"};
-  const filterCounts = {all: all.length, late:counts.late, soon:counts.soon, ontime:counts.ontime, closed:counts.closed, incomplete:incompleteCount};
-  document.querySelectorAll('#filterBar .pill').forEach(pill=>{
-    const key = pill.dataset.filter;
-    if(filterLabels[key] !== undefined){
-      pill.textContent = `${filterLabels[key]} (${filterCounts[key]})`;
-    }
+  const cards = [
+    {key:'all',        label:'إجمالي المشاريع', count: all.length,      cls:''},
+    {key:'late',       label:'متأخر',           count: counts.late,     cls:'late'},
+    {key:'soon',       label:'قريب',            count: counts.soon,     cls:'soon'},
+    {key:'ontime',     label:'في موعده',        count: counts.ontime,   cls:'ontime'},
+    {key:'incomplete', label:'غير مكتمل',       count: incompleteCount, cls:'incomplete'},
+    {key:'closed',     label:'مغلق',            count: counts.closed,   cls:'closed'}
+  ];
+
+  const bar = document.getElementById('statsBar');
+  bar.innerHTML = cards.map(c => `
+    <div class="stat ${c.cls} ${currentFilter===c.key ? 'active' : ''}" data-filter="${c.key}">
+      <b>${c.count}</b><span>${c.label}</span>
+    </div>
+  `).join('');
+
+  bar.querySelectorAll('.stat').forEach(card=>{
+    card.addEventListener('click', ()=>{
+      currentFilter = card.dataset.filter;
+      renderStats();
+      renderList();
+    });
   });
 }
 
@@ -907,10 +971,22 @@ function renderList(){
     all = all.filter(p => computeStatus(p) === currentFilter);
   }
 
+  if(searchQuery.trim()){
+    const q = searchQuery.trim().toLowerCase();
+    all = all.filter(p =>
+      (p.name||'').toLowerCase().includes(q) ||
+      (p.commune||'').toLowerCase().includes(q) ||
+      (p.marketNum||'').toLowerCase().includes(q)
+    );
+  }
+
   if(all.length === 0){
+    const msg = searchQuery.trim()
+      ? 'لا توجد نتائج مطابقة للبحث.'
+      : (Object.keys(DB.projects).length===0 ? 'لا توجد مشاريع بعد. اضغط + لإضافة أول مشروع.' : 'لا توجد مشاريع مطابقة لهذا الفلتر.');
     root.innerHTML = `<div class="empty-state">
       <span class="e-icon">🏗️</span>
-      ${Object.keys(DB.projects).length===0 ? 'لا توجد مشاريع بعد. اضغط + لإضافة أول مشروع.' : 'لا توجد مشاريع مطابقة لهذا الفلتر.'}
+      ${msg}
     </div>`;
     return;
   }
@@ -955,9 +1031,41 @@ function renderList(){
   root.querySelectorAll('[data-delete]').forEach(el=>{
     el.addEventListener('click', ()=> openDeleteConfirm(el.dataset.delete));
   });
+  root.querySelectorAll('[data-share]').forEach(el=>{
+    el.addEventListener('click', ()=> shareProject(el.dataset.share));
+  });
   root.querySelectorAll('[data-toggle]').forEach(el=>{
     el.addEventListener('change', (e)=> toggleField(el.dataset.toggle, el.dataset.field, e.target.checked));
   });
+}
+
+/* ---------- مشاركة: ينسخ/يشارك ملخصاً نصياً جاهزاً للمشروع ---------- */
+async function shareProject(id){
+  const p = DB.projects[id];
+  if(!p) return;
+  const status = computeStatus(p);
+  const text = [
+    `مشروع: ${p.name||'—'}`,
+    p.commune ? `البلدية: ${p.commune}` : null,
+    p.marketNum ? `رقم الصفقة: ${p.marketNum}` : null,
+    `مبلغ الصفقة: ${fmtMoney(p.amount)}`,
+    `الكفالة البنكية (5%): ${fmtMoney((p.amount||0)*0.05)}`,
+    `تاريخ الاستلام المؤقت: ${fmtDate(p.dateProv)}`,
+    `تاريخ الاستلام النهائي: ${fmtDate(p.dateFinal)}`,
+    `الحالة: ${STATUS_LABEL[status]||''}`,
+    p.notes ? `ملاحظات: ${p.notes}` : null
+  ].filter(Boolean).join('\n');
+
+  if(navigator.share){
+    try{ await navigator.share({title: p.name||'مشروع EGTPH', text}); return; }
+    catch(e){ /* المستخدم ألغى المشاركة أو فشلت، نكمل بالنسخ كخطة بديلة */ }
+  }
+  try{
+    await navigator.clipboard.writeText(text);
+    alert('تم نسخ ملخص المشروع. تقدر تلصقه في واتساب أو أي تطبيق آخر.');
+  }catch(e){
+    alert(text); // خطة بديلة أخيرة: عرض النص مباشرة لو فشل كل شيء
+  }
 }
 
 function renderCard(p){
@@ -1029,8 +1137,13 @@ function renderCard(p){
       </label>
     </div>
 
+    ${p.notes ? `<div class="remaining-row" style="margin-top:8px;"><b>ملاحظات</b><span style="font-weight:500;">${escapeHtml(p.notes)}</span></div>` : ''}
+
+    ${p.lastEditNote ? `<p class="last-edit-note">آخر تحديث: ${escapeHtml(p.lastEditNote)}</p>` : ''}
+
     <div class="row-btns">
       <button class="icon-btn" data-edit="${p.id}">تعديل</button>
+      <button class="icon-btn" data-share="${p.id}">مشاركة</button>
       <button class="icon-btn danger" data-delete="${p.id}">حذف</button>
     </div>
   </div>`;
@@ -1067,6 +1180,26 @@ document.getElementById('communesBtn').addEventListener('click', ()=>{
 document.getElementById('communesClose').addEventListener('click', ()=> communesOverlay.classList.remove('show'));
 communesOverlay.addEventListener('click', (e)=>{ if(e.target===communesOverlay) communesOverlay.classList.remove('show'); });
 
+/* ---------- شريط البحث: يظهر/يختفي بزر 🔍، يفلتر بالاسم/البلدية/رقم الصفقة ---------- */
+const searchBar = document.getElementById('searchBar');
+const searchInput = document.getElementById('searchInput');
+document.getElementById('searchBtn').addEventListener('click', ()=>{
+  const isHidden = searchBar.style.display === "none";
+  searchBar.style.display = isHidden ? "block" : "none";
+  if(isHidden) searchInput.focus();
+  else { searchQuery = ""; searchInput.value = ""; renderList(); }
+});
+searchInput.addEventListener('input', ()=>{
+  searchQuery = searchInput.value;
+  renderList();
+});
+document.getElementById('searchClear').addEventListener('click', ()=>{
+  searchQuery = "";
+  searchInput.value = "";
+  renderList();
+  searchInput.focus();
+});
+
 /* ---------- تصفير السحابة فقط: لا يلمس DB.projects المحلية إطلاقاً، فقط يمسح السحابة ثم يرفع الحالة المحلية الحالية ---------- */
 const resetCloudOverlay = document.getElementById('resetCloudOverlay');
 document.getElementById('resetCloudBtn').addEventListener('click', ()=>{
@@ -1088,6 +1221,110 @@ function applyResetCloudButtonState(){
   }
 }
 applyResetCloudButtonState();
+
+/* ---------- تصدير: يصدّر القائمة المفلترة حالياً (نفس فلتر الحالة + البحث النشطين) ---------- */
+function getFilteredProjectsForExport(){
+  let all = getAllActiveProjects();
+  if(currentFilter === "incomplete"){
+    all = all.filter(p => isProjectIncomplete(p));
+  } else if(currentFilter !== "all"){
+    all = all.filter(p => computeStatus(p) === currentFilter);
+  }
+  if(searchQuery.trim()){
+    const q = searchQuery.trim().toLowerCase();
+    all = all.filter(p =>
+      (p.name||'').toLowerCase().includes(q) ||
+      (p.commune||'').toLowerCase().includes(q) ||
+      (p.marketNum||'').toLowerCase().includes(q)
+    );
+  }
+  all.sort((a,b) => {
+    const da = parseDateOnly(a.dateFinal);
+    const db = parseDateOnly(b.dateFinal);
+    if(!da && !db) return 0;
+    if(!da) return 1;
+    if(!db) return -1;
+    return da - db;
+  });
+  return all;
+}
+
+document.getElementById('exportExcelBtn').addEventListener('click', ()=>{
+  const projects = getFilteredProjectsForExport();
+  if(projects.length === 0){ alert('لا توجد مشاريع لتصديرها بالفلتر الحالي.'); return; }
+
+  const rows = projects.map(p => ({
+    "اسم المشروع": p.name||'',
+    "البلدية": p.commune||'',
+    "رقم الصفقة": p.marketNum||'',
+    "مبلغ الصفقة (دج)": p.amount||0,
+    "الكفالة البنكية 5% (دج)": (p.amount||0)*0.05,
+    "تاريخ الاستلام المؤقت": p.dateProv||'',
+    "تاريخ الاستلام النهائي": p.dateFinal||'',
+    "تم الاستلام النهائي": p.finallyReceived ? "نعم" : "لا",
+    "تم استرجاع الكفالة": p.guaranteeReturned ? "نعم" : "لا",
+    "الحالة": STATUS_LABEL[computeStatus(p)] || ''
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "المشاريع");
+  const dateStr = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `EGTPH_مشاريع_${dateStr}.xlsx`);
+});
+
+document.getElementById('exportPdfBtn').addEventListener('click', ()=>{
+  const projects = getFilteredProjectsForExport();
+  if(projects.length === 0){ alert('لا توجد مشاريع لتصديرها بالفلتر الحالي.'); return; }
+
+  const rowsHtml = projects.map(p => `
+    <tr>
+      <td>${escapeHtml(p.name||'')}</td>
+      <td>${escapeHtml(p.commune||'')}</td>
+      <td>${escapeHtml(p.marketNum||'')}</td>
+      <td>${fmtMoney(p.amount)}</td>
+      <td>${fmtMoney((p.amount||0)*0.05)}</td>
+      <td>${fmtDate(p.dateProv)}</td>
+      <td>${fmtDate(p.dateFinal)}</td>
+      <td>${STATUS_LABEL[computeStatus(p)] || ''}</td>
+    </tr>
+  `).join('');
+
+  const printWindow = window.open('', '_blank');
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <title>EGTPH - تقرير المشاريع</title>
+      <style>
+        body{font-family:'IBM Plex Sans Arabic', Tahoma, sans-serif; padding:20px; color:#1f2421;}
+        h1{color:#8a6c38; font-size:20px; margin-bottom:4px;}
+        p.sub{color:#666; font-size:12px; margin-top:0; margin-bottom:18px;}
+        table{width:100%; border-collapse:collapse; font-size:11px;}
+        th, td{border:1px solid #ccc; padding:6px 8px; text-align:right;}
+        th{background:#b08d4f; color:#fff;}
+        tr:nth-child(even){background:#f7f5f0;}
+      </style>
+    </head>
+    <body>
+      <h1>EGTPH — تقرير المشاريع (الاستلام النهائي والكفالة البنكية)</h1>
+      <p class="sub">تاريخ التصدير: ${new Date().toLocaleDateString('ar-DZ')} — عدد المشاريع: ${projects.length}</p>
+      <table>
+        <thead>
+          <tr>
+            <th>اسم المشروع</th><th>البلدية</th><th>رقم الصفقة</th><th>مبلغ الصفقة</th>
+            <th>الكفالة 5%</th><th>استلام مؤقت</th><th>استلام نهائي</th><th>الحالة</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.onload = ()=>{ printWindow.print(); };
+});
 
 document.getElementById('resetCloudConfirmBtn').addEventListener('click', async ()=>{
   const confirmBtn = document.getElementById('resetCloudConfirmBtn');
@@ -1218,6 +1455,9 @@ function renderCommunesOverview(){
   container.querySelectorAll('[data-delete]').forEach(el=>{
     el.addEventListener('click', (e)=>{ e.stopPropagation(); openDeleteConfirm(el.dataset.delete); });
   });
+  container.querySelectorAll('[data-share]').forEach(el=>{
+    el.addEventListener('click', (e)=>{ e.stopPropagation(); shareProject(el.dataset.share); });
+  });
   container.querySelectorAll('[data-toggle]').forEach(el=>{
     el.addEventListener('click', (e)=> e.stopPropagation());
     el.addEventListener('change', (e)=> toggleField(el.dataset.toggle, el.dataset.field, e.target.checked));
@@ -1233,6 +1473,7 @@ function openAddForm(){
   document.getElementById('f_amount').value = "";
   document.getElementById('f_dateProv').value = "";
   document.getElementById('f_dateFinal').value = "";
+  document.getElementById('f_notes').value = "";
   document.getElementById('formValidationMsg').style.display = "none";
   updateGuaranteePreview();
   formOverlay.classList.add('show');
@@ -1248,6 +1489,7 @@ function openEditForm(id){
   document.getElementById('f_amount').value = p.amount||"";
   document.getElementById('f_dateProv').value = p.dateProv||"";
   document.getElementById('f_dateFinal').value = p.dateFinal||"";
+  document.getElementById('f_notes').value = p.notes||"";
   document.getElementById('formValidationMsg').style.display = "none";
   updateGuaranteePreview();
   formOverlay.classList.add('show');
@@ -1276,6 +1518,7 @@ function commitFormToProject(opts){
   const amount = parseFloat(document.getElementById('f_amount').value) || 0;
   const dateProv = document.getElementById('f_dateProv').value;
   const dateFinal = document.getElementById('f_dateFinal').value || (dateProv ? addOneYear(dateProv) : "");
+  const notes = document.getElementById('f_notes').value.trim();
   const msgEl = document.getElementById('formValidationMsg');
 
   // الاسم وحده إلزامي للحفظ؛ التاريخ اختياري ويمكن إضافته/تعديله لاحقاً (المشروع يبقى "بانتظار التاريخ" حتى ذلك الحين)
@@ -1294,9 +1537,10 @@ function commitFormToProject(opts){
   DB.projects[editingId] = {
     id: editingId,
     name, commune, marketNum, amount,
-    dateProv, dateFinal,
+    dateProv, dateFinal, notes,
     finallyReceived: existing.finallyReceived || false,
     guaranteeReturned: existing.guaranteeReturned || false,
+    lastEditNote: `${existing.id ? 'تعديل بيانات المشروع' : 'إنشاء المشروع'} — ${new Date().toLocaleString('ar-DZ')}`,
     _mod: nextMod()
   };
   saveLocal();
@@ -1314,7 +1558,7 @@ document.getElementById('saveProjectBtn').addEventListener('click', ()=>{
 });
 
 /* الحفظ الفوري عند الخروج من أي خانة داخل نموذج إضافة/تعديل مشروع */
-['f_name','f_commune','f_marketNum','f_amount','f_dateProv','f_dateFinal'].forEach(fieldId=>{
+['f_name','f_commune','f_marketNum','f_amount','f_dateProv','f_dateFinal','f_notes'].forEach(fieldId=>{
   document.getElementById(fieldId).addEventListener('blur', ()=>{
     if(formOverlay.classList.contains('show')){
       commitFormToProject({silent:true});
@@ -1328,6 +1572,8 @@ function toggleField(id, field, value){
   if(!p) return;
   p[field] = value;
   p._mod = nextMod();
+  const fieldLabels = {finallyReceived:"تم الاستلام النهائي", guaranteeReturned:"تم استرجاع الكفالة"};
+  p.lastEditNote = `${fieldLabels[field]||field}: ${value ? 'فُعِّل' : 'أُلغي'} — ${new Date().toLocaleString('ar-DZ')}`;
   saveLocal();
   render();
   pushToCloud();
@@ -1351,16 +1597,6 @@ document.getElementById('deleteConfirmBtn').addEventListener('click', ()=>{
   render();
   closeDeleteConfirm();
   pushToCloud();
-});
-
-/* ---------- Filters ---------- */
-document.getElementById('filterBar').addEventListener('click', (e)=>{
-  const pill = e.target.closest('.pill');
-  if(!pill) return;
-  document.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
-  pill.classList.add('active');
-  currentFilter = pill.dataset.filter;
-  renderList();
 });
 
 /* =====================================================================
@@ -1546,9 +1782,36 @@ async function init(){
   applyDataFixIfNeeded();
   dedupeProjectsByContent(); // طبقة حماية إضافية: ينظف أي تكرار قديم وصل من محاولات سابقة
   render();
+  showOpeningAlertIfNeeded();
   pushToCloud(); // يرفع بيانات السيد (إن حُقنت)/التصحيحات/إزالة التكرار ليراها باقي أجهزتك أيضاً
   startSSE();
 }
+
+/* ---------- تنبيه عند فتح البرنامج: يلفت النظر فوراً لوجود مشاريع متأخرة أو غير مكتملة ---------- */
+function showOpeningAlertIfNeeded(){
+  const all = getAllActiveProjects();
+  const lateCount = all.filter(p => computeStatus(p) === "late").length;
+  const incompleteCount = all.filter(p => isProjectIncomplete(p)).length;
+
+  if(lateCount === 0 && incompleteCount === 0) return;
+
+  const parts = [];
+  if(lateCount > 0) parts.push(`${lateCount} مشروع متأخر`);
+  if(incompleteCount > 0) parts.push(`${incompleteCount} مشروع غير مكتمل`);
+
+  const banner = document.getElementById('openingAlertBanner');
+  banner.className = 'opening-alert';
+  banner.style.display = 'block';
+  banner.style.cursor = 'pointer';
+  banner.textContent = `⚠️ عندك ${parts.join(' و ')}. اضغط هنا للمراجعة.`;
+  banner.onclick = ()=>{
+    currentFilter = lateCount > 0 ? "late" : "incomplete";
+    renderStats();
+    renderList();
+    banner.style.display = 'none';
+  };
+}
+
 init();
 </script>
 </body>
