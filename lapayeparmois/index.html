@@ -3745,6 +3745,112 @@ function printPrintWorkerSelect(){
   document.body.appendChild(el);
 }
 
+
+// ══════════════════════════════════════════════════════
+//  ADMIN / SETTINGS RENDER + ACTIONS  (تمت إضافتها لإصلاح خطأ renderAdmin)
+// ══════════════════════════════════════════════════════
+function _safeTxt(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+function renderAdmin(){
+  try{
+    if(!DB.settings)DB.settings={};
+    if(!Array.isArray(DB.settings.holidays))DB.settings.holidays=[];
+
+    const mult=+(DB.settings.mult||1.5);
+    const multDisp=document.getElementById('multDisp');
+    if(multDisp)multDisp.textContent='×'+mult;
+    const newMult=document.getElementById('newMult');
+    if(newMult)newMult.value=mult;
+
+    const lastBackupDate=document.getElementById('lastBackupDate');
+    if(lastBackupDate)lastBackupDate.textContent='آخر نسخة: '+(DB.settings.lastBackup||'لا توجد نسخة بعد');
+
+    const backupSel=document.querySelector('#page-admin select[onchange*="backupInterval"]');
+    if(backupSel)backupSel.value=String(DB.settings.backupInterval||7);
+
+    const payday=document.getElementById('paydayAlertChk');
+    if(payday)payday.checked=DB.settings.paydayAlert!==false;
+
+    const userInp=document.getElementById('userNameInp');
+    if(userInp)userInp.value=DB.settings.userName||'';
+    const userDisp=document.getElementById('userNameDisplay');
+    if(userDisp)userDisp.textContent='الحالي: '+(DB.settings.userName||'مستخدم');
+
+    const tax=+(DB.settings.bonTax||0);
+    const taxInp=document.getElementById('bonTaxInp');
+    if(taxInp)taxInp.value=tax;
+    const taxDisp=document.getElementById('bonTaxDisplay');
+    if(taxDisp)taxDisp.textContent=tax>0?('خصم '+tax+'% من كل مكافأة'):'لا يوجد خصم حالياً';
+
+    const h=document.getElementById('holidayList');
+    if(h){
+      const list=DB.settings.holidays||[];
+      h.innerHTML=list.length?list.map((d,i)=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px">
+          <span>📅 ${_safeTxt(isoToD(d)||d)}</span>
+          <button class="db" onclick="removeHoliday(${i})">🗑</button>
+        </div>`).join(''):'<div style="color:var(--gray);font-size:11px">لا توجد عطل مضافة</div>';
+    }
+
+    const audit=document.getElementById('auditList');
+    if(audit){
+      const rows=(DB.auditLog||[]).slice(0,30);
+      audit.innerHTML=rows.length?rows.map((a,i)=>`
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px;gap:10px">
+          <span>${i+1}. <b>${_safeTxt(a.user||'مستخدم')}</b> — ${_safeTxt(a.action||'')}</span>
+          <span style="color:var(--gray);white-space:nowrap;font-size:10px">${_safeTxt(a.time||'')}</span>
+        </div>`).join(''):'<div style="color:var(--gray);font-size:11px">لا توجد عمليات مسجلة</div>';
+    }
+
+    try{updateThemeUI&&updateThemeUI();}catch(e){}
+    try{cloudConfigLoad&&cloudConfigLoad();}catch(e){}
+  }catch(e){
+    console.error('renderAdmin error',e);
+    try{toast('⚠️ خطأ في عرض الإعدادات',true);}catch(_e){}
+  }
+}
+
+function applyMult(){
+  const v=+(document.getElementById('newMult')?.value||0);
+  if(!v||v<1||v>5){toast('❌ معامل غير صالح',true);return;}
+  DB.settings.mult=v;
+  DB.settings.hoursMultiplier=v;
+  audit('تعديل معامل الساعات الإضافية إلى ×'+v);
+  saveDB();renderAdmin();
+  try{renderHrs&&renderHrs();}catch(e){}
+  toast('✅ تم تطبيق المعامل ×'+v);
+}
+function quickMult(v){
+  if(!DB.settings)DB.settings={};
+  DB.settings.mult=+v;
+  DB.settings.hoursMultiplier=+v;
+  audit('تعديل معامل الساعات الإضافية إلى ×'+v);
+  saveDB();renderAdmin();
+  try{renderHrs&&renderHrs();}catch(e){}
+  toast('✅ تم تطبيق المعامل ×'+v);
+}
+function saveUserName(){
+  const v=(document.getElementById('userNameInp')?.value||'').trim();
+  if(!v){toast('❌ أدخل اسم المستخدم',true);return;}
+  DB.settings.userName=v;
+  audit('تعديل اسم المستخدم');
+  saveDB();renderAdmin();toast('✅ تم حفظ اسم المستخدم');
+}
+function saveBonTax(){
+  const v=+(document.getElementById('bonTaxInp')?.value||0);
+  if(v<0||v>100){toast('❌ نسبة غير صالحة',true);return;}
+  DB.settings.bonTax=v;
+  audit('تعديل ضريبة المكافآت إلى '+v+'%');
+  saveDB();renderAdmin();toast('✅ تم تطبيق ضريبة المكافآت');
+}
+function askReset(){
+  if(!confirm('هل تريد مسح كل بيانات البرنامج من هذا الجهاز؟'))return;
+  const pass=prompt('أدخل كلمة تأكيد الحذف:');
+  if(pass!==(DB.settings.deletePass||'admin123')){toast('❌ كلمة التأكيد خاطئة',true);return;}
+  try{localStorage.removeItem('egtph_payroll_db_v32');localStorage.removeItem('egtph_payroll_db_v22');}catch(e){}
+  if(confirm('تم مسح التخزين المحلي. هل تريد إعادة تحميل الصفحة الآن؟'))location.reload();
+}
+
 function showPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nv').forEach(n=>n.classList.remove('active'));
