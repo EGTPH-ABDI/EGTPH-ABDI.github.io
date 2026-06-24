@@ -681,6 +681,41 @@ const FLEET_TEMPLATES={
   generic_car:{cat:'custom',label:'سيارة مخصصة',type:'car',unit:'km',eng:'محرك غير محدد',engine:'',engInt:10000,items:'car',sourceLevel:'custom',note:'برنامج وقائي عام؛ OEM بالـVIN.'}
 };
 
+
+// ══════ مكتبة القوالب من السحابة (اختياري) ══════
+let _cloudFleetLibraryTried=false;
+function mergeFleetLibrary(lib){
+  try{
+    if(!lib)return;
+    if(Array.isArray(lib.cats)){
+      lib.cats.forEach(c=>{ if(Array.isArray(c)&&c[0]&&!FLEET_CATS.some(x=>x[0]===c[0])) FLEET_CATS.push(c); });
+    }
+    if(lib.templates&&typeof lib.templates==='object'){
+      Object.keys(lib.templates).forEach(k=>{
+        const t=lib.templates[k];
+        if(t&&t.cat&&t.label){ FLEET_TEMPLATES[k]=Object.assign({sourceLevel:'cloud',note:'قالب محمّل من السحابة'},t); }
+      });
+    }
+  }catch(e){ console.warn('mergeFleetLibrary',e); }
+}
+async function loadFleetLibraryCloud(force){
+  if(_cloudFleetLibraryTried&&!force)return false;
+  _cloudFleetLibraryTried=true;
+  try{
+    if(typeof FB_URL==='undefined'||typeof FB_BASE==='undefined'||!navigator.onLine)return false;
+    const auth=(typeof EGTPHAuth!=='undefined'&&EGTPHAuth.authParam)?EGTPHAuth.authParam('service'):'';
+    const r=await fetch(FB_URL+FB_BASE+'/fleetLibrary.json'+auth,{cache:'no-store'});
+    if(!r.ok)return false;
+    const lib=await r.json();
+    mergeFleetLibrary(lib);
+    return true;
+  }catch(e){ console.warn('loadFleetLibraryCloud',e); return false; }
+}
+function populateAddLibrary(catValue){
+  const cat=document.getElementById('addCat');
+  if(cat){ cat.innerHTML=FLEET_CATS.map(c=>'<option value="'+c[0]+'">'+c[1]+'</option>').join(''); if(catValue)cat.value=catValue; }
+  setAddCat(cat&&cat.value?cat.value:'truck');
+}
 function itemsFor(mc){if(mc.items)return mc.items; if(mc.templateKey){const t=FLEET_TEMPLATES[mc.templateKey]; if(t&&t.items==='car')return GENERIC_CAR_ITEMS; if(t&&t.items==='lightTruck')return GENERIC_LIGHT_TRUCK_ITEMS;} return mc.type==='truck'?TRK_ITEMS:mc.type==='jmc'?JMC_ITEMS:mc.type==='loader'?LOAD_ITEMS:mc.type==='jcb'?JCB_ITEMS:(mc.type==='car'?GENERIC_CAR_ITEMS:(mc.type==='truck2'?GENERIC_LIGHT_TRUCK_ITEMS:(mc.type==='exc2'?GENERIC_MACHINE_ITEMS:EXC_ITEMS)));}
 function oilsFor(mc){if(mc.oils)return mc.oils; return mc.type==='truck'?TRK_OILS:mc.type==='jmc'?JMC_OILS:mc.type==='loader'?LOAD_OILS:mc.type==='jcb'?JCB_OILS:(mc.type==='car'||mc.type==='truck2'||mc.type==='exc2'?GENERIC_OILS:EXC_OILS);}
 function renderOilGuide(){
@@ -1380,7 +1415,7 @@ function doPrint(){
 
 function openAdd(){initAddLibrary();document.getElementById('addName').value='';document.getElementById('addVin').value='';document.getElementById('addRead').value='';const vr=document.getElementById('vinResult');if(vr)vr.textContent='';document.getElementById('addOverlay').classList.add('show');}
 function closeAdd(){document.getElementById('addOverlay').classList.remove('show');setTimeout(flushDeferredRender,50);}
-function initAddLibrary(){const cat=document.getElementById('addCat');if(cat&&!cat.options.length){cat.innerHTML=FLEET_CATS.map(c=>'<option value="'+c[0]+'">'+c[1]+'</option>').join('');}setAddCat(cat&&cat.value?cat.value:'truck');}
+function initAddLibrary(){const cat=document.getElementById('addCat');const current=cat&&cat.value?cat.value:'truck';populateAddLibrary(current);loadFleetLibraryCloud(false).then(ok=>{if(ok)populateAddLibrary(document.getElementById('addCat')&&document.getElementById('addCat').value?document.getElementById('addCat').value:current);});}
 function setAddCat(cat){const sel=document.getElementById('addTpl');const arr=Object.entries(FLEET_TEMPLATES).filter(([k,t])=>t.cat===cat);sel.innerHTML=arr.map(([k,t])=>'<option value="'+k+'">'+t.label+'</option>').join('');pickTemplate(sel.value);}
 function pickTemplate(key){addType=key;const t=FLEET_TEMPLATES[key]||FLEET_TEMPLATES.generic_truck;document.getElementById('addReadLbl').textContent=(t.unit==='h')?'عدّاد الساعات الحالي (h)':'العدّاد الحالي (km)';document.getElementById('tplNote').innerHTML='📌 '+esc(t.note||'')+'<br><b>درجة المصدر:</b> '+(t.sourceLevel==='official'?'موثّق/رسمي':t.sourceLevel==='vin_required'?'يلزم VIN/Serial لتأكيد OEM':'احتياطي آمن');}
 function pickType(t){const map={truck:'shacman_f2000',jmc:'jmc_4x2',exc:'hyundai_hx220',loader:'foton_fl936',jcb:'jcb_3cx'};pickTemplate(map[t]||t);}
