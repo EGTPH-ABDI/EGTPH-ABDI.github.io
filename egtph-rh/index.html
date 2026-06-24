@@ -1,1 +1,2159 @@
-x
+<!DOCTYPE html>
+<html lang="fr" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>EGTPH – Gestion RH</title>
+<!-- PDF.js and Tesseract.js are lazy-loaded only when a document is read. -->
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Tajawal:wght@400;500;700&display=swap');
+:root{
+  --g:#C8960C;--g2:#e8b422;--dk:#171726;--dkr:#0e0e18;--cd:#1c1c33;--cd2:#23233f;
+  --br:#33335a;--tx:#ececf5;--mt:#9494b8;--ok:#27ae60;--er:#e74c3c;--wa:#f39c12;--in:#3498db;
+  --sb:230px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html[dir="rtl"]{--sb:230px}
+body{font-family:'Cairo','Tajawal',sans-serif;background:var(--dkr);color:var(--tx);min-height:100vh;overflow-x:hidden;font-size:13px}
+button,input,select,textarea{font-family:inherit}
+/* SIDEBAR */
+#sb{position:fixed;inset-inline-start:0;top:0;width:var(--sb);height:100vh;background:var(--dk);border-inline-end:1px solid var(--br);display:flex;flex-direction:column;z-index:100;transition:width .25s;overflow-y:auto;overflow-x:hidden}
+#sb.col{width:56px}
+.sbl{padding:14px;border-bottom:1px solid var(--br);display:flex;align-items:center;gap:9px;flex-shrink:0}
+.sbl .li{font-size:24px;flex-shrink:0}
+.sbl .lt{overflow:hidden;white-space:nowrap}
+.sbl .lt h2{font-size:13px;color:var(--g);font-weight:900;letter-spacing:.5px}
+.sbl .lt p{font-size:9px;color:var(--mt)}
+#sb.col .lt,#sb.col .nl{display:none}
+.ns{padding:3px 0}
+.nl{font-size:9px;color:var(--mt);text-transform:uppercase;letter-spacing:1px;padding:8px 14px 3px;white-space:nowrap;overflow:hidden}
+.ni{display:flex;align-items:center;gap:11px;padding:9px 14px;cursor:pointer;transition:all .15s;color:var(--mt);font-size:12.5px;white-space:nowrap;border-inline-start:3px solid transparent}
+.ni:hover{color:var(--tx);background:rgba(200,150,12,.08)}
+.ni.on{color:var(--g);background:rgba(200,150,12,.14);border-inline-start-color:var(--g)}
+.ni .i{font-size:16px;flex-shrink:0;width:20px;text-align:center}
+#sb.col .ni .lbl{display:none}
+#tg{margin-top:auto;padding:13px;border-top:1px solid var(--br);cursor:pointer;text-align:center;color:var(--mt);font-size:18px}
+#tg:hover{color:var(--g)}
+/* MAIN */
+#mn{margin-inline-start:var(--sb);transition:margin .25s;min-height:100vh;display:flex;flex-direction:column}
+#mn.ex{margin-inline-start:56px}
+#topb{background:var(--dk);border-bottom:1px solid var(--br);padding:11px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;gap:10px}
+#topb h1{font-size:15px;color:var(--g);font-weight:700}
+.tbr{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.btp{background:rgba(200,150,12,.14);border:1px solid var(--g);color:var(--g);padding:6px 13px;border-radius:7px;cursor:pointer;font-size:12px;transition:all .15s;white-space:nowrap}
+.btp:hover{background:var(--g);color:#000}
+.btp.solid{background:var(--g);color:#000;font-weight:700}
+.btp.gray{background:transparent;border-color:var(--br);color:var(--mt)}
+.btp.gray:hover{border-color:var(--g);color:var(--g);background:transparent}
+.btp.danger{border-color:var(--er);color:var(--er);background:rgba(231,76,60,.08)}
+.btp.danger:hover{background:var(--er);color:#fff}
+#langbtn{font-weight:700}
+#ct{padding:18px;flex:1;max-width:1300px;width:100%}
+/* PAGES */
+.pg{display:none;animation:fade .3s}.pg.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+/* CARD */
+.card{background:var(--cd);border:1px solid var(--br);border-radius:12px;padding:16px;margin-bottom:16px}
+.ctit{font-size:14px;color:var(--g);font-weight:700;margin-bottom:13px;display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap}
+.ctit .t{display:flex;align-items:center;gap:8px}
+/* STATS */
+.sg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+.sc{background:linear-gradient(135deg,var(--cd),var(--cd2));border:1px solid var(--br);border-radius:12px;padding:16px;position:relative;overflow:hidden}
+.sc::after{content:"";position:absolute;inset-inline-end:-10px;top:-10px;width:60px;height:60px;background:radial-gradient(circle,rgba(200,150,12,.16),transparent 70%);border-radius:50%}
+.sc .ico{font-size:22px;margin-bottom:6px}
+.sc .num{font-size:24px;font-weight:900;color:var(--g)}
+.sc .lab{font-size:11px;color:var(--mt);margin-top:2px}
+/* FORM */
+.frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.fl{display:flex;flex-direction:column;gap:4px}
+.fl label{font-size:11px;color:var(--mt);font-weight:600}
+.fl input,.fl select,.fl textarea{background:var(--dkr);border:1px solid var(--br);border-radius:7px;padding:8px 10px;color:var(--tx);font-size:12.5px;width:100%}
+.fl input:focus,.fl select:focus,.fl textarea:focus{outline:none;border-color:var(--g)}
+.fl textarea{resize:vertical;min-height:60px}
+.fl.full{grid-column:1/-1}
+/* TABLE */
+.tw{overflow-x:auto;border-radius:8px;border:1px solid var(--br)}
+table.dt{width:100%;border-collapse:collapse;font-size:12px;min-width:600px}
+table.dt th{background:var(--cd2);color:var(--g);padding:9px 8px;text-align:start;font-weight:700;font-size:11px;white-space:nowrap;border-bottom:2px solid var(--br)}
+table.dt td{padding:8px;border-bottom:1px solid var(--br);color:var(--tx)}
+table.dt tr:hover td{background:rgba(200,150,12,.05)}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+.badge.ok{background:rgba(39,174,96,.18);color:#2ecc71}
+.badge.off{background:rgba(231,76,60,.18);color:#e74c3c}
+.act{display:flex;gap:5px}
+.ib{background:none;border:1px solid var(--br);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:13px;color:var(--mt);transition:all .15s}
+.ib:hover{border-color:var(--g);color:var(--g)}
+.ib.del:hover{border-color:var(--er);color:var(--er)}
+/* MODAL */
+.mo{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:flex-start;justify-content:center;z-index:200;padding:24px 12px;overflow-y:auto}
+.mo.on{display:flex}
+.mc{background:var(--cd);border:1px solid var(--br);border-radius:14px;padding:20px;width:100%;max-width:640px;margin:auto}
+.mc h3{color:var(--g);font-size:16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.mc .x{cursor:pointer;color:var(--mt);font-size:22px;line-height:1}
+.mft{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+/* CHIPS / column toggles */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:flex;align-items:center;gap:6px;background:var(--dkr);border:1px solid var(--br);border-radius:20px;padding:5px 12px;cursor:pointer;font-size:11.5px;color:var(--mt);user-select:none}
+.chip.on{border-color:var(--g);color:var(--g);background:rgba(200,150,12,.1)}
+.chip input{accent-color:var(--g)}
+.lned,.lnpick{cursor:pointer;outline:none}
+@media screen{.lned{border-bottom:1px dotted #1a2a52 !important}.lnpick{border-bottom:1px dashed #C8960C !important;background:rgba(200,150,12,.06)}.lnpick:hover{background:rgba(200,150,12,.16)}}
+/* TOAST */
+#tc{position:fixed;bottom:18px;inset-inline-end:18px;z-index:500;display:flex;flex-direction:column;gap:8px}
+.tst{background:var(--cd);border:1px solid var(--br);border-inline-start:4px solid var(--ok);padding:11px 16px;border-radius:8px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.4);animation:slin .3s}
+.tst.er{border-inline-start-color:var(--er)}.tst.wa{border-inline-start-color:var(--wa)}
+@keyframes slin{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+.hint{font-size:11px;color:var(--mt);margin-top:4px;line-height:1.5}
+.tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.tab{padding:7px 14px;border-radius:8px;border:1px solid var(--br);background:transparent;color:var(--mt);cursor:pointer;font-size:12px}
+.tab.on{border-color:var(--g);color:var(--g);background:rgba(200,150,12,.1)}
+.editable{cursor:text}
+.editable:focus{outline:2px solid var(--g);background:rgba(200,150,12,.06)}
+/* DOC PREVIEW (screen) */
+.docwrap{background:#555;padding:16px;border-radius:8px;overflow-x:auto}
+.doc{background:#fff;color:#1a1a1a;width:210mm;min-height:297mm;margin:0 auto;padding:0;box-shadow:0 4px 20px rgba(0,0,0,.5);font-family:'Cairo',sans-serif;position:relative;display:flex;flex-direction:column}
+.doc-pad{padding:9mm 16mm 0;display:flex;flex-direction:column;flex:1 0 auto}
+.doc-body{flex:1 0 auto}
+/* Pro letterhead */
+.lh{display:flex;align-items:stretch;background:#1a2a52;color:#fff;border-bottom:4px solid #C8960C}
+.lh .lh-logo{flex:0 0 26%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:5mm 3mm;border-inline-end:1px solid rgba(255,255,255,.15)}
+.lh .lh-logo svg{width:24mm;height:24mm}
+.lh .lh-logo .lt{font-size:8pt;font-weight:900;letter-spacing:2px;color:#C8960C;margin-top:2mm}
+.lh .lh-mid{flex:1;padding:5mm 4mm}
+.lh .lh-mid .l1{font-size:8.5pt;font-weight:700;letter-spacing:1px;color:#e8b422;line-height:1.4;text-transform:uppercase}
+.lh .lh-mid .l2{font-size:20pt;font-weight:900;color:#fff;margin-top:1mm;letter-spacing:1px}
+.lh .lh-mid .l3{font-size:9.5pt;color:#cdd5e8;margin-top:1mm}
+.lh .lh-side{flex:0 0 30%;padding:5mm 4mm;font-size:8.2pt;line-height:1.7;color:#dfe4f0;border-inline-start:1px solid rgba(255,255,255,.15)}
+.lh .lh-side b{color:#fff}
+.lh-band{background:#eef0f5;color:#33415e;font-size:8.5pt;padding:2.5mm 16mm;display:flex;gap:14px;flex-wrap:wrap;border-bottom:1px solid #d4d8e2}
+.lh-band b{color:#1a2a52}
+/* doc footer band */
+.doc-fband{background:#1a2a52;color:#cdd5e8;font-size:8pt;padding:3.5mm 16mm;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:4px solid #C8960C;margin-top:auto}
+.doc-fband .mid{color:#e8b422;font-weight:700;text-align:center}
+.doc-fband b{color:#fff}
+.doc *{box-sizing:border-box}
+/* FIREBASE REAL-TIME SYNC */
+.sync-state{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--br);border-radius:999px;padding:5px 9px;font-size:11px;color:var(--mt);white-space:nowrap}
+.sync-state::before{content:"";width:8px;height:8px;border-radius:50%;background:#9494b8;display:inline-block}
+.sync-state.ok{color:#7be0a4;border-color:rgba(39,174,96,.55);background:rgba(39,174,96,.10)}.sync-state.ok::before{background:#2ecc71}
+.sync-state.syncing{color:#f5c869;border-color:rgba(243,156,18,.55);background:rgba(243,156,18,.10)}.sync-state.syncing::before{background:#f39c12}
+.sync-state.off{color:#f08b83;border-color:rgba(231,76,60,.55);background:rgba(231,76,60,.10)}.sync-state.off::before{background:#e74c3c}
+.sync-key{font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--g2);overflow-wrap:anywhere;white-space:pre-wrap;background:var(--dkr);border:1px solid var(--br);padding:9px;border-radius:7px;user-select:all}
+.sync-auth-note{font-size:11px;color:var(--mt);margin:8px 0 0;line-height:1.55}
+/* OCR / SCANNED DOCUMENTS */
+.btp:disabled{opacity:.5;cursor:not-allowed;filter:grayscale(.2)}
+.scan-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+.scan-selected{margin-top:12px;border:1px solid var(--br);border-radius:10px;padding:10px;background:rgba(255,255,255,.025)}
+.scan-meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.scan-thumb{width:72px;height:72px;border:1px solid var(--br);border-radius:8px;object-fit:cover;background:var(--dkr)}
+.scan-file{font-size:12px;color:var(--tx);overflow-wrap:anywhere}
+.scan-file small{display:block;color:var(--mt);margin-top:2px}
+.doc-store{padding:10px;border:1px dashed var(--br);border-radius:8px;background:rgba(200,150,12,.04)}
+.doc-store-info{font-size:11.5px;color:var(--mt);min-height:18px}
+.doc-store-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.ocr-text{max-height:190px;overflow:auto;white-space:pre-wrap;background:var(--dkr);border:1px solid var(--br);padding:10px;border-radius:7px;color:var(--mt);font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+[hidden]{display:none!important}
+/* PROGRESS */
+.prog{height:8px;background:var(--dkr);border-radius:6px;overflow:hidden;margin-top:8px}
+.prog>div{height:100%;background:var(--g);width:0;transition:width .3s}
+@media(max-width:760px){
+  #sb{width:56px}#sb .lt,#sb .nl,#sb .ni .lbl{display:none}
+  #mn{margin-inline-start:56px}
+  #ct{padding:12px}
+  .doc{width:100%}
+  .lh .lh-mid .l2{font-size:15pt}
+  .lh-band,.doc-fband,.doc-pad{padding-inline:8mm}
+}
+/* ============ PRINT ============ */
+@page{size:A4 portrait;margin:0}
+@media print{
+  html,body{background:#fff;width:210mm}
+  #sb,#topb,.noprint{display:none!important}
+  #mn{margin:0!important}
+  #ct{padding:0;max-width:none}
+  .pg{display:none!important}.pg.on{display:block!important}
+  .card,.docwrap{background:none!important;border:none;padding:0;box-shadow:none;margin:0}
+  .doc{width:210mm!important;min-height:296mm;box-shadow:none;margin:0;color:#000}
+  .doc-pad{padding-top:6mm}
+  .printArea,.printArea *{visibility:visible}
+  .lh,.lh-band,.doc-fband{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<!-- SIDEBAR -->
+<div id="sb">
+  <div class="sbl"><span class="li" style="display:inline-flex"><svg viewBox="0 0 100 100" width="26" height="26" style="background:#1a2a52;border-radius:6px;padding:2px"><g stroke="#e8b422" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"><line x1="44" y1="20" x2="44" y2="82"/><line x1="52" y1="20" x2="52" y2="82"/><path d="M30 90 L66 90 M36 90 L48 82 L60 90"/><line x1="48" y1="20" x2="90" y2="20"/><path d="M40 8 L48 20 L56 8 Z"/><line x1="48" y1="8" x2="84" y2="20"/><line x1="48" y1="20" x2="26" y2="20"/><line x1="48" y1="8" x2="30" y2="20"/><rect x="20" y="20" width="9" height="7" fill="#e8b422"/><line x1="82" y1="20" x2="82" y2="39"/></g></svg></span><div class="lt"><h2>EGTPH</h2><p data-t="brand_sub">Gestion RH</p></div></div>
+  <div class="ns"><div class="nl" data-t="nav_main">Principal</div>
+    <div class="ni on" onclick="sp('db',this)"><span class="i">📊</span><span class="lbl" data-t="nav_db">Tableau de Bord</span></div>
+  </div>
+  <div class="ns"><div class="nl" data-t="nav_emp">Personnel</div>
+    <div class="ni" onclick="sp('wk',this)"><span class="i">👷</span><span class="lbl" data-t="nav_wk">Travailleurs</span></div>
+    <div class="ni" onclick="sp('ln',this)"><span class="i">📑</span><span class="lbl" data-t="nav_ln">Liste Nominative</span></div>
+    <div class="ni" onclick="sp('im',this)"><span class="i">📥</span><span class="lbl" data-t="nav_im">Import CNAS</span></div>
+    <div class="ni" onclick="sp('cg',this)"><span class="i">🗓️</span><span class="lbl" data-t="nav_cg">Congés / Absences</span></div>
+  </div>
+  <div class="ns"><div class="nl" data-t="nav_doc">Documents</div>
+    <div class="ni" onclick="sp('pay',this)"><span class="i">💰</span><span class="lbl" data-t="nav_pay">Bulletin de Paie</span></div>
+    <div class="ni" onclick="sp('att',this)"><span class="i">📄</span><span class="lbl" data-t="nav_att">Attestations</span></div>
+    <div class="ni" onclick="sp('cnt',this)"><span class="i">📝</span><span class="lbl" data-t="nav_cnt">Contrats</span></div>
+  </div>
+  <div class="ns"><div class="nl" data-t="nav_track">Suivi</div>
+    <div class="ni" onclick="sp('av',this)"><span class="i">💳</span><span class="lbl" data-t="nav_av">Avances / Dettes</span></div>
+    <div class="ni" onclick="sp('st',this)"><span class="i">⚙️</span><span class="lbl" data-t="nav_st">Paramètres</span></div>
+  </div>
+  <div id="tg" onclick="toggleSb()">⬅️</div>
+</div>
+
+<!-- MAIN -->
+<div id="mn">
+  <div id="topb">
+    <h1 id="ptitle">📊 Tableau de Bord</h1>
+    <div class="tbr">
+      <span class="sync-state syncing" id="syncState" aria-live="polite">☁️ Synchronisation…</span>
+      <button class="btp" id="langbtn" onclick="toggleLang()">🌐 العربية</button>
+      <button class="btp gray" onclick="saveAll()" data-t="btn_save">💾 Sauvegarder</button>
+    </div>
+  </div>
+  <div id="ct">
+
+    <!-- DASHBOARD -->
+    <div class="pg on" id="pg-db">
+      <div class="sg" id="dbStats"></div>
+      <div class="card"><div class="ctit"><span class="t" data-t="db_recent">👥 Derniers travailleurs</span></div>
+        <div class="tw"><table class="dt" id="dbTbl"></table></div>
+      </div>
+    </div>
+
+    <!-- TRAVAILLEURS -->
+    <div class="pg" id="pg-wk">
+      <div class="card">
+        <div class="ctit"><span class="t" data-t="wk_title">👷 Liste des Travailleurs</span>
+          <button class="btp solid" onclick="openWorker()" data-t="wk_add">➕ Ajouter</button></div>
+        <div class="tw"><table class="dt" id="wkTbl"></table></div>
+      </div>
+    </div>
+
+    <!-- LISTE NOMINATIVE -->
+    <div class="pg" id="pg-ln">
+      <div class="card noprint">
+        <div class="ctit"><span class="t" data-t="ln_opts">🧩 Options d'affichage & d'impression</span>
+          <button class="btp solid" onclick="printArea('lnDoc')" data-t="btn_print">🖨️ Imprimer</button></div>
+        <p class="hint" data-t="ln_hint">Cochez les colonnes à afficher. Vous pouvez aussi modifier les cellules directement dans le tableau (double-clic).</p>
+        <div class="chips" id="lnCols" style="margin-top:10px"></div>
+        <div class="frm" style="margin-top:12px">
+          <div class="fl"><label data-t="ln_filter">Filtre</label>
+            <select id="lnFilter" onchange="renderLN()"><option value="ACTIF" data-t="f_active">Actifs</option><option value="ALL" data-t="f_all">Tous</option><option value="INACTIF" data-t="f_inactive">Inactifs</option></select></div>
+          <div class="fl"><label data-t="ln_expfmt">Affichage ancienneté</label>
+            <select id="lnExpFmt" onchange="setExpFmt(this.value)">
+              <option value="ym" data-t="ef_ym">Années + mois</option>
+              <option value="ymd" data-t="ef_ymd">Années + mois + jours</option>
+              <option value="days" data-t="ef_days">Jours (total)</option>
+              <option value="months" data-t="ef_months">Mois (total)</option></select></div>
+          <div class="fl"><label data-t="ln_orient">Orientation impression</label>
+            <select id="lnOrient" onchange="renderLN()"><option value="portrait">Portrait</option><option value="landscape" data-t="o_land">Paysage</option></select></div>
+        </div>
+      </div>
+      <div class="docwrap"><div class="doc printArea" id="lnDoc"></div></div>
+    </div>
+
+    <!-- IMPORT CNAS -->
+    <div class="pg" id="pg-im">
+      <div class="card">
+        <div class="ctit"><span class="t" data-t="im_title">📥 Import Attestation d'Affiliation CNAS</span></div>
+        <p class="hint" data-t="im_hint">Photographiez ou joignez une attestation CNAS. Le programme lit le document localement, vous laisse contrôler les données puis classe le scan dans le dossier du travailleur.</p>
+
+        <div class="frm" style="margin-top:12px">
+          <div class="fl"><label data-t="im_lang">Langue du document</label>
+            <select id="imLang">
+              <option value="fra" data-t="im_lang_fr">Français</option>
+              <option value="ara" data-t="im_lang_ar">العربية</option>
+              <option value="fra+ara" data-t="im_lang_bi">Français + العربية</option>
+            </select>
+          </div>
+          <div class="fl"><label data-t="im_scan_type">Type accepté</label>
+            <input value="JPG, PNG, WEBP ou PDF (1re page)" readonly>
+          </div>
+        </div>
+
+        <div id="imDrop" style="margin-top:12px;border:2px dashed var(--br);border-radius:12px;padding:26px;text-align:center">
+          <div style="font-size:32px">📄</div>
+          <p style="margin-top:8px" data-t="im_drop">Prenez une photo ou choisissez un fichier PDF/image</p>
+          <div class="scan-actions">
+            <button class="btp solid" type="button" id="imCameraBtn" data-t="im_camera">📷 Prendre une photo</button>
+            <button class="btp gray" type="button" id="imFileBtn" data-t="im_choosefile">📁 Choisir un fichier</button>
+          </div>
+          <input type="file" id="imCamera" accept="image/*" capture="environment" style="display:none">
+          <input type="file" id="imFile" accept="application/pdf,image/jpeg,image/png,image/webp" style="display:none">
+        </div>
+
+        <div class="scan-selected" id="imSelected" hidden>
+          <div class="scan-meta">
+            <img class="scan-thumb" id="imPreview" alt="">
+            <div class="scan-file"><b id="imFileName"></b><small id="imFileMeta"></small></div>
+          </div>
+          <div class="scan-actions" style="justify-content:flex-start">
+            <button class="btp solid" type="button" id="imReadBtn" disabled data-t="im_read">🔎 Lire et remplir</button>
+            <button class="btp gray" type="button" id="imClearBtn" data-t="im_remove">Retirer</button>
+          </div>
+        </div>
+
+        <div class="prog" id="imProg" style="display:none"><div></div></div>
+        <p class="hint" id="imMsg" aria-live="polite"></p>
+        <details id="imOcrDetails" style="display:none;margin-top:10px">
+          <summary data-t="im_ocr_text">Texte lu (contrôle)</summary>
+          <div class="ocr-text" id="imOcrText"></div>
+        </details>
+
+        <div id="imForm" style="display:none;margin-top:14px">
+          <div class="frm">
+            <div class="fl"><label data-t="f_nom">Nom</label><input id="imN" autocomplete="family-name"></div>
+            <div class="fl"><label data-t="f_prenom">Prénom</label><input id="imP" autocomplete="given-name"></div>
+            <div class="fl"><label>N° SS CNAS</label><input id="imSS" inputmode="numeric"></div>
+            <div class="fl"><label data-t="f_af">N° Affiliation</label><input id="imAC" inputmode="numeric"></div>
+            <div class="fl"><label data-t="f_dd">Date de naissance</label><input id="imDD" type="date"></div>
+            <div class="fl"><label data-t="f_li">Lieu de naissance</label><input id="imLI"></div>
+            <div class="fl"><label data-t="f_et">Date d'entrée</label><input id="imET" type="date"></div>
+            <div class="fl"><label data-t="f_poste">Poste</label><select id="imFN"></select></div>
+            <div class="fl full"><label data-t="f_adr">Adresse</label><input id="imAD" autocomplete="street-address"></div>
+          </div>
+          <div class="mft">
+            <button class="btp gray" type="button" onclick="cancelImport()" data-t="btn_cancel">Annuler</button>
+            <button class="btp solid" type="button" onclick="saveImport()" data-t="im_save">💾 Enregistrer dans le dossier travailleur</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONGES -->
+    <div class="pg" id="pg-cg">
+      <div class="card">
+        <div class="ctit"><span class="t" data-t="cg_title">🗓️ Congés & Absences</span>
+          <button class="btp solid" onclick="openCg()" data-t="cg_add">➕ Ajouter</button></div>
+        <div class="tw"><table class="dt" id="cgTbl"></table></div>
+      </div>
+    </div>
+
+    <!-- BULLETIN -->
+    <div class="pg" id="pg-pay">
+      <div class="card noprint">
+        <div class="ctit"><span class="t" data-t="pay_title">💰 Bulletin de Paie</span>
+          <button class="btp solid" onclick="printArea('payDoc')" data-t="btn_print">🖨️ Imprimer</button></div>
+        <div class="frm">
+          <div class="fl"><label data-t="f_worker">Travailleur</label><select id="pW" onchange="onPayWorker()"></select></div>
+          <div class="fl"><label data-t="doc_poste_over">Poste (modifiable)</label><select id="pPoste" onchange="calcPay()"></select></div>
+          <div class="fl"><label data-t="f_month">Mois / Année</label><input id="pMois" type="month" onchange="calcPay()"></div>
+          <div class="fl"><label data-t="f_days">Jours travaillés</label><input id="pJ" type="number" value="22" min="0" max="31" onchange="calcPay()"></div>
+          <div class="fl"><label data-t="f_prime">Prime imposable (DA)</label><input id="pPrime" type="number" value="0" onchange="calcPay()"></div>
+          <div class="fl"><label data-t="f_iep">I.E.P / Ancienneté (DA)</label><input id="pIEP" type="number" value="0" onchange="calcPay()"></div>
+          <div class="fl"><label data-t="f_ifsp">I.F.S.P (DA)</label><input id="pIFSP" type="number" value="0" onchange="calcPay()"></div>
+          <div class="fl"><label data-t="f_panier">Panier / jour (DA)</label><input id="pPan" type="number" value="0" onchange="calcPay()"><span class="hint" data-t="pay_panier_hint">Exonéré jusqu'à 160 DA/j</span></div>
+          <div class="fl"><label data-t="f_advance">Avance / Retenue (DA)</label><input id="pAv" type="number" value="0" onchange="calcPay()"></div>
+          <div class="fl"><label data-t="f_children">Enfants à charge</label><input id="pEnf" type="number" value="0" onchange="calcPay()"></div>
+        </div>
+        <p class="hint" data-t="pay_disp" style="margin-top:10px">Informations à afficher sur le bulletin :</p>
+        <div class="chips" id="payChips" style="margin-top:6px"></div>
+        <p class="hint" data-t="pay_print" style="margin-top:8px">Sections à imprimer :</p>
+        <div class="chips" id="paySecChips" style="margin-top:6px"></div>
+      </div>
+      <div class="docwrap"><div class="doc printArea" id="payDoc"></div></div>
+    </div>
+
+    <!-- ATTESTATIONS / DOCUMENTS -->
+    <div class="pg" id="pg-att">
+      <div class="card noprint">
+        <div class="ctit"><span class="t" data-t="att_title">📄 Attestations</span>
+          <button class="btp solid" onclick="printArea('attDoc')" data-t="btn_print">🖨️ Imprimer</button></div>
+        <div class="frm">
+          <div class="fl"><label data-t="f_worker">Travailleur</label><select id="aW" onchange="onAttWorker()"></select></div>
+          <div class="fl"><label data-t="att_type">Type</label>
+            <select id="aT" onchange="onAttType()">
+              <option value="travail" data-t="att_t_travail">Attestation de travail</option>
+              <option value="salaire" data-t="att_t_salaire">Attestation de salaire</option>
+              <option value="certtravail" data-t="att_t_certtravail">Certificat de travail</option>
+              <option value="cessation" data-t="att_t_cessation">Certificat de cessation</option>
+              <option value="ordremission" data-t="att_t_ordremission">Ordre de mission</option>
+              <option value="conge" data-t="att_t_conge">Titre de congé</option></select></div>
+          <div class="fl"><label data-t="doc_poste_over">Poste (modifiable)</label><select id="aPoste" onchange="calcAtt()"></select></div>
+          <div class="fl"><label data-t="att_dest">Destinataire (optionnel)</label><input id="aDest" oninput="calcAtt()"></div>
+          <div class="fl"><label data-t="f_ref">Référence</label><input id="aRef" oninput="calcAtt()"></div>
+        </div>
+        <!-- mission fields -->
+        <div class="frm" id="aMissionBox" style="display:none;margin-top:4px">
+          <div class="fl"><label data-t="doc_dest_lieu">Destination</label><input id="aMDest" oninput="calcAtt()"></div>
+          <div class="fl full"><label data-t="doc_objet">Objet</label><input id="aMObj" oninput="calcAtt()"></div>
+          <div class="fl"><label data-t="doc_du">Du</label><input id="aMFrom" type="date" onchange="calcAtt()"></div>
+          <div class="fl"><label data-t="doc_au">Au</label><input id="aMTo" type="date" onchange="calcAtt()"></div>
+          <div class="fl"><label data-t="doc_moyen">Moyen de transport</label><input id="aMMoy" oninput="calcAtt()"></div>
+        </div>
+        <!-- congé fields -->
+        <div class="frm" id="aCongeBox" style="display:none;margin-top:4px">
+          <div class="fl"><label data-t="cg_type">Type</label>
+            <select id="aCType" onchange="calcAtt()"><option value="annuel" data-t="cg_t_annuel">Congé annuel</option><option value="excep" data-t="cg_t_excep">Congé exceptionnel</option><option value="ss" data-t="cg_t_ss">Congé sans solde</option></select></div>
+          <div class="fl"><label data-t="doc_du">Du</label><input id="aCFrom" type="date" onchange="calcAtt()"></div>
+          <div class="fl"><label data-t="doc_au">Au</label><input id="aCTo" type="date" onchange="calcAtt()"></div>
+          <div class="fl"><label data-t="doc_reprise">Date de reprise</label><input id="aCBack" type="date" onchange="calcAtt()"></div>
+          <div class="fl full"><label data-t="doc_motif">Motif</label><input id="aCMotif" oninput="calcAtt()"></div>
+        </div>
+        <!-- cessation / certificate end-date field -->
+        <div class="frm" id="aCessationBox" style="display:none;margin-top:4px">
+          <div class="fl"><label data-t="doc_enddate">Date de fin de relation</label><input id="aEndDate" type="date" onchange="calcAtt()"></div>
+        </div>
+        <p class="hint" data-t="pay_print" style="margin-top:10px">Sections à imprimer :</p>
+        <div class="chips" id="attSecChips" style="margin-top:6px"></div>
+      </div>
+      <div class="docwrap"><div class="doc printArea" id="attDoc"></div></div>
+    </div>
+
+    <!-- CONTRATS -->
+    <div class="pg" id="pg-cnt">
+      <div class="card noprint">
+        <div class="ctit"><span class="t" data-t="cnt_title">📝 Contrat de Travail</span>
+          <button class="btp solid" onclick="printArea('cntDoc')" data-t="btn_print">🖨️ Imprimer</button></div>
+        <div class="frm">
+          <div class="fl"><label data-t="f_worker">Travailleur</label><select id="cW" onchange="calcCnt()"></select></div>
+          <div class="fl"><label data-t="cnt_type">Type de contrat</label>
+            <select id="cT" onchange="calcCnt()"><option value="CDI">CDI</option><option value="CDD">CDD</option></select></div>
+          <div class="fl"><label data-t="cnt_duree">Durée (CDD, mois)</label><input id="cD" type="number" value="6" onchange="calcCnt()"></div>
+          <div class="fl"><label data-t="cnt_essai">Période d'essai (mois)</label><input id="cE" type="number" value="3" onchange="calcCnt()"></div>
+          <div class="fl"><label data-t="doc_poste_over">Poste (modifiable)</label><select id="cPoste" onchange="calcCnt()"></select></div>
+        </div>
+        <p class="hint" data-t="pay_print" style="margin-top:10px">Sections à imprimer :</p>
+        <div class="chips" id="cntSecChips" style="margin-top:6px"></div>
+      </div>
+      <div class="docwrap"><div class="doc printArea" id="cntDoc"></div></div>
+    </div>
+
+    <!-- AVANCES -->
+    <div class="pg" id="pg-av">
+      <div class="card">
+        <div class="ctit"><span class="t" data-t="av_title">💳 Avances & Dettes</span>
+          <button class="btp solid" onclick="openAv()" data-t="av_add">➕ Ajouter</button></div>
+        <div class="tw"><table class="dt" id="avTbl"></table></div>
+      </div>
+    </div>
+
+    <!-- PARAMETRES -->
+    <div class="pg" id="pg-st">
+      <div class="card">
+        <div class="ctit"><span class="t" data-t="st_company">🏢 Informations entreprise</span></div>
+        <div class="frm">
+          <div class="fl full"><label data-t="st_rs_fr">Raison sociale (FR)</label><input id="stRsFr"></div>
+          <div class="fl full"><label data-t="st_rs_ar">Raison sociale (AR)</label><input id="stRsAr"></div>
+          <div class="fl"><label data-t="st_gerant">Gérant</label><input id="stGerant"></div>
+          <div class="fl"><label data-t="st_tel">Téléphone</label><input id="stTel"></div>
+          <div class="fl full"><label data-t="st_addr_fr">Adresse (FR)</label><input id="stAddrFr"></div>
+          <div class="fl full"><label data-t="st_addr_ar">Adresse (AR)</label><input id="stAddrAr"></div>
+          <div class="fl"><label data-t="st_wilaya">Wilaya / Agence CNAS</label><input id="stWilaya"></div>
+        </div>
+        <p class="hint" data-t="st_logo_hint" style="margin-top:10px">Le logo (grue EGTPH) est intégré automatiquement à l'en-tête de tous les documents.</p>
+      </div>
+      <div class="card">
+        <div class="ctit"><span class="t" data-t="st_contact">📞 Coordonnées & identifiants légaux</span></div>
+        <div class="frm">
+          <div class="fl"><label>RC</label><input id="stRC"></div>
+          <div class="fl"><label>NIF</label><input id="stNIF"></div>
+          <div class="fl"><label data-t="st_nis">NIS</label><input id="stNIS"></div>
+          <div class="fl"><label data-t="st_nin">NIN</label><input id="stNIN"></div>
+          <div class="fl"><label data-t="st_cnasnum">N° immatriculation CNAS</label><input id="stCnasNum"></div>
+          <div class="fl full"><label data-t="st_cnassect">Secteur / Agence CNAS</label><input id="stCnasSect"></div>
+        </div>
+        <div class="mft"><button class="btp solid" onclick="saveSettings()" data-t="btn_save_apply">💾 Enregistrer</button></div>
+      </div>
+      <div class="card">
+        <div class="ctit"><span class="t" data-t="st_display">🧮 Affichage & ancienneté</span></div>
+        <div class="frm">
+          <div class="fl"><label data-t="exp_fmt">Format d'ancienneté</label>
+            <select id="stExpFmt">
+              <option value="ym" data-t="ef_ym">Années + mois</option>
+              <option value="ymd" data-t="ef_ymd">Années + mois + jours</option>
+              <option value="days" data-t="ef_days">Jours (total)</option>
+              <option value="months" data-t="ef_months">Mois (total)</option></select></div>
+        </div>
+        <p class="hint" style="margin-top:8px">Ce format s'applique partout : tableau de bord, listes, attestations et contrats.</p>
+        <div class="mft"><button class="btp solid" onclick="saveSettings()" data-t="btn_save_apply">💾 Enregistrer</button></div>
+      </div>
+      <div class="card">
+        <div class="ctit"><span class="t" data-t="st_payroll">💵 Paramètres de paie</span></div>
+        <div class="frm">
+          <div class="fl"><label data-t="st_salbase">Salaire de base (DA)</label><input id="stSalBase" type="number"></div>
+          <div class="fl"><label data-t="st_cotis">Cotisation CNAS salarié (%)</label><input id="stCotis" type="number" step="0.5"></div>
+          <div class="fl"><label data-t="st_jref">Jours de référence / mois</label><input id="stJref" type="number" value="22"></div>
+          <div class="fl"><label data-t="st_snmg">SNMG (DA)</label><input id="stSnmg" type="number" value="20000"></div>
+          <div class="fl"><label data-t="st_panier">Panier / jour par défaut (DA)</label><input id="stPanier" type="number" min="0" value="0"></div>
+          <div class="fl"><label data-t="st_pancap">Plafond panier non soumis / jour (DA)</label><input id="stPanierCap" type="number" min="0" value="160"></div>
+          <div class="fl"><label data-t="st_alloc">Allocation / enfant (DA)</label><input id="stAlloc" type="number" min="0" value="300"></div>
+        </div>
+        <p class="hint" data-t="st_payroll_hint">Ces valeurs sont appliquées automatiquement à chaque nouveau travailleur et au bulletin de paie. Vous pouvez aussi les modifier individuellement par travailleur.</p>
+        <div class="mft"><button class="btp solid" onclick="saveSettings()" data-t="btn_save_apply">💾 Enregistrer</button></div>
+      </div>
+      <div class="card">
+        <div class="ctit"><span class="t" data-t="st_data">🗄️ Données</span></div>
+        <p class="hint" data-t="st_doc_backup">Les scans CNAS restent dans le navigateur et ne sont pas inclus dans l'export JSON.</p>
+        <div class="doc-store" style="margin:12px 0">
+          <div class="ctit" style="margin-bottom:6px"><span class="t">☁️ <span id="syncTitleText">Synchronisation Firebase</span></span><span class="sync-state syncing" id="syncStateSettings">Synchronisation…</span></div>
+          <p class="hint" id="syncHint">Connexion en temps réel avec horodatage en millisecondes. Les suppressions sont archivées comme tombstones et ne sont jamais recréées par un appareil ancien.</p>
+          <div class="sync-key" id="syncPathKey"></div>
+          <p class="sync-auth-note" id="syncAuthNote"></p>
+          <div class="frm" style="margin-top:10px" id="syncAuthForm">
+            <div class="fl"><label data-t="sync_email">Email Firebase</label><input id="fbAuthEmail" type="email" autocomplete="username" inputmode="email" placeholder="email@exemple.com"></div>
+            <div class="fl"><label data-t="sync_password">Mot de passe Firebase</label><input id="fbAuthPassword" type="password" autocomplete="current-password" placeholder="••••••••"></div>
+          </div>
+          <div class="mft" style="justify-content:flex-start;margin-top:10px">
+            <button class="btp solid" type="button" onclick="firebaseSignIn()" id="fbLoginBtn" data-t="sync_login">🔐 Se connecter</button>
+            <button class="btp gray" type="button" onclick="firebaseSignOut()" id="fbLogoutBtn" data-t="sync_logout">🚪 Se déconnecter</button>
+            <button class="btp solid" type="button" onclick="syncNow(true)">☁️ Synchroniser maintenant</button>
+            <button class="btp gray" type="button" onclick="copySyncPathKey()">📋 Copier la clé</button>
+            <button class="btp gray" type="button" onclick="copyFirebaseRootPath()">📋 Copier le chemin</button>
+          </div>
+        </div>
+        <div class="mft" style="justify-content:flex-start">
+          <button class="btp gray" onclick="exportData()" data-t="st_export">⬇️ Exporter (JSON)</button>
+          <button class="btp gray" onclick="document.getElementById('impData').click()" data-t="st_import">⬆️ Importer (JSON)</button>
+          <input type="file" id="impData" accept="application/json" style="display:none">
+          <button class="btp danger" onclick="resetData()" data-t="st_reset">🗑️ Réinitialiser</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL WORKER -->
+<div class="mo" id="mWk"><div class="mc">
+  <h3><span id="mWkTit">➕</span><span class="x" onclick="closeM('mWk')">✕</span></h3>
+  <div class="frm">
+    <div class="fl"><label data-t="f_nom">Nom</label><input id="wN"></div>
+    <div class="fl"><label data-t="f_prenom">Prénom</label><input id="wP"></div>
+    <div class="fl"><label data-t="f_dd">Date de naissance</label><input id="wDD" type="date"></div>
+    <div class="fl"><label data-t="f_li">Lieu de naissance</label><input id="wLI"></div>
+    <div class="fl"><label data-t="f_et">Date d'entrée</label><input id="wET" type="date"></div>
+    <div class="fl"><label>N° SS CNAS</label><input id="wSS"></div>
+    <div class="fl"><label data-t="f_ac">N° Affiliation</label><input id="wAC"></div>
+    <div class="fl"><label data-t="f_poste">Poste</label><select id="wFN"></select></div>
+    <div class="fl" id="wFNautreBox" style="display:none"><label data-t="f_poste_other">Préciser le poste</label><input id="wFNautre"></div>
+    <div class="fl"><label data-t="f_diplome">Diplôme</label><select id="wDP"></select></div>
+    <div class="fl" id="wDPautreBox" style="display:none"><label data-t="f_diplome_other">Préciser le diplôme</label><input id="wDPautre"></div>
+    <div class="fl"><label data-t="f_expmode">Expérience</label><select id="wEXM"><option value="auto" data-t="exp_auto">Auto (depuis date d'entrée)</option><option value="manuel" data-t="exp_manual">Manuel</option></select></div>
+    <div class="fl" id="wEXVbox" style="display:none"><label data-t="f_expval">Valeur expérience</label><input id="wEXV" placeholder="ex: 5 ans 3 mois"></div>
+    <div class="fl"><label data-t="f_sit">Situation familiale</label><select id="wSI"><option value="" data-t="sit_unknown">Non renseigné</option><option value="M" data-t="sit_m">Marié(e)</option><option value="C" data-t="sit_c">Célibataire</option></select></div>
+    <div class="fl"><label data-t="f_children">Enfants à charge</label><input id="wEN" type="number" value="0"></div>
+    <div class="fl"><label data-t="st_salbase">Salaire de base (DA)</label><input id="wSL" type="number"></div>
+    <div class="fl"><label data-t="f_status">Statut</label><select id="wST"><option value="ACTIF" data-t="s_active">Actif</option><option value="INACTIF" data-t="s_inactive">Inactif</option></select></div>
+    <div class="fl"><label data-t="f_af">Wilaya / Agence</label><input id="wAF"></div>
+    <div class="fl full"><label data-t="f_adr">Adresse</label><input id="wAD"></div>
+    <div class="fl full"><label data-t="f_notes">Notes</label><textarea id="wNT"></textarea></div>
+    <div class="fl full doc-store" id="wCnasDocBox">
+      <label data-t="doc_cnas">📎 Attestation CNAS scannée</label>
+      <div class="doc-store-info" id="wCnasDocInfo"></div>
+      <div class="doc-store-actions">
+        <button class="btp gray" type="button" id="wCnasAddBtn" onclick="$('wCnasFile').click()" data-t="doc_replace">📎 Joindre / remplacer</button>
+        <button class="btp gray" type="button" id="wCnasOpenBtn" onclick="viewWorkerCnasDoc()" disabled data-t="doc_open">👁️ Ouvrir</button>
+        <button class="btp danger" type="button" id="wCnasDelBtn" onclick="deleteWorkerCnasDoc()" disabled data-t="doc_remove">🗑️ Retirer</button>
+        <input type="file" id="wCnasFile" accept="application/pdf,image/jpeg,image/png,image/webp" style="display:none">
+      </div>
+    </div>
+  </div>
+  <div class="mft"><button class="btp gray" onclick="closeM('mWk')" data-t="btn_cancel">Annuler</button>
+    <button class="btp solid" onclick="saveWorker()" data-t="btn_save_w">💾 Enregistrer</button></div>
+</div></div>
+
+<!-- MODAL CONGE -->
+<div class="mo" id="mCg"><div class="mc">
+  <h3><span data-t="cg_add">➕</span><span class="x" onclick="closeM('mCg')">✕</span></h3>
+  <div class="frm">
+    <div class="fl"><label data-t="f_worker">Travailleur</label><select id="cgW"></select></div>
+    <div class="fl"><label data-t="cg_type">Type</label><select id="cgT"><option value="conge" data-t="cg_t_conge">Congé</option><option value="absence" data-t="cg_t_abs">Absence</option><option value="maladie" data-t="cg_t_mal">Maladie</option></select></div>
+    <div class="fl"><label data-t="cg_from">Du</label><input id="cgDB" type="date"></div>
+    <div class="fl"><label data-t="cg_to">Au</label><input id="cgFN" type="date"></div>
+    <div class="fl full"><label data-t="f_notes">Motif</label><input id="cgMO"></div>
+  </div>
+  <div class="mft"><button class="btp gray" onclick="closeM('mCg')" data-t="btn_cancel">Annuler</button>
+    <button class="btp solid" onclick="saveCg()" data-t="btn_save">💾</button></div>
+</div></div>
+
+<!-- MODAL AVANCE -->
+<div class="mo" id="mAv"><div class="mc">
+  <h3><span data-t="av_add">➕</span><span class="x" onclick="closeM('mAv')">✕</span></h3>
+  <div class="frm">
+    <div class="fl"><label data-t="f_worker">Travailleur</label><select id="avW"></select></div>
+    <div class="fl"><label data-t="av_amount">Montant (DA)</label><input id="avM" type="number"></div>
+    <div class="fl"><label data-t="av_date">Date</label><input id="avD" type="date"></div>
+    <div class="fl"><label data-t="av_type">Type</label><select id="avT"><option value="avance" data-t="av_t_av">Avance</option><option value="remb" data-t="av_t_rb">Remboursement</option></select></div>
+    <div class="fl full"><label data-t="f_notes">Note</label><input id="avNote"></div>
+  </div>
+  <div class="mft"><button class="btp gray" onclick="closeM('mAv')" data-t="btn_cancel">Annuler</button>
+    <button class="btp solid" onclick="saveAv()" data-t="btn_save">💾</button></div>
+</div></div>
+
+<div id="tc"></div>
+<script>
+/* ============================================================
+   EGTPH – Gestion RH v2  (bilingue FR/AR, single-file)
+   ============================================================ */
+if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}
+
+/* ---------- i18n ---------- */
+let LANG = localStorage.getItem('egtph_lang') || 'fr';
+const I18N = {
+ fr:{
+  brand_sub:"Gestion RH", nav_main:"Principal", nav_db:"Tableau de Bord", nav_emp:"Personnel",
+  nav_wk:"Travailleurs", nav_ln:"Liste Nominative", nav_im:"Import CNAS", nav_cg:"Congés / Absences",
+  nav_doc:"Documents", nav_pay:"Bulletin de Paie", nav_att:"Attestations", nav_cnt:"Contrats",
+  nav_track:"Suivi", nav_av:"Avances / Dettes", nav_st:"Paramètres",
+  btn_save:"💾 Sauvegarder", btn_print:"🖨️ Imprimer", btn_cancel:"Annuler", btn_save_w:"💾 Enregistrer",
+  btn_save_apply:"💾 Enregistrer", btn_save_:"💾",
+  db_recent:"👥 Derniers travailleurs",
+  wk_title:"👷 Liste des Travailleurs", wk_add:"➕ Ajouter",
+  ln_opts:"🧩 Options d'affichage & d'impression",
+  ln_hint:"Cochez les colonnes à afficher. Double-cliquez une cellule (nom, dates…) pour la modifier ; cliquez sur Poste / Diplôme / Situation pour choisir dans une liste.",
+  ln_pick_hint:"Cliquez pour choisir",
+  ln_filter:"Filtre", ln_orient:"Orientation impression", o_land:"Paysage",
+  f_active:"Actifs", f_all:"Tous", f_inactive:"Inactifs",
+  im_title:"📥 Import Attestation d'Affiliation CNAS",
+  im_hint:"Photographiez ou joignez une attestation CNAS. La lecture OCR est effectuée localement, puis vous contrôlez les données avant l'enregistrement dans le dossier du travailleur.",
+  im_drop:"Prenez une photo ou choisissez un fichier PDF/image", im_save:"💾 Enregistrer dans le dossier travailleur",
+  im_lang:"Langue du document", im_lang_fr:"Français", im_lang_ar:"العربية", im_lang_bi:"Français + العربية",
+  im_scan_type:"Type accepté", im_camera:"📷 Prendre une photo", im_choosefile:"📁 Choisir un fichier",
+  im_read:"🔎 Lire et remplir", im_remove:"Retirer", im_ocr_text:"Texte lu (contrôle)",
+  im_no_file:"⚠️ Choisissez d'abord une photo ou un fichier.", im_bad_file:"⚠️ Format non pris en charge. Utilisez JPG, PNG, WEBP ou PDF.",
+  im_file_limit:"⚠️ Le fichier est trop volumineux. Limite : 12 Mo.", im_ocr_empty:"⚠️ Aucun texte exploitable n'a été détecté. Complétez les champs manuellement.",
+  im_duplicate:"⚠️ Un travailleur avec le même N° SS ou N° d'affiliation existe déjà.", im_duplicate_update:"Un dossier correspondant existe déjà. Mettre à jour ce dossier et remplacer son scan CNAS ?",
+  ocr_loading:"Chargement du moteur OCR…", ocr_reading:"Lecture du document (OCR) en cours…", ocr_done:"✅ Lecture terminée — vérifiez puis enregistrez.", ocr_fail:"⚠️ Lecture impossible. Vérifiez Internet, l'image et la langue puis réessayez.",
+  doc_cnas:"📎 Attestation CNAS scannée", doc_cnas_none:"Aucun scan CNAS enregistré.", doc_cnas_pending:"Enregistrez d'abord le travailleur avant de joindre un scan.",
+  doc_open:"👁️ Ouvrir", doc_replace:"📎 Joindre / remplacer", doc_remove:"🗑️ Retirer", doc_saved:"✅ Scan classé dans le dossier du travailleur.",
+  doc_save_fail:"⚠️ Les données du travailleur sont enregistrées, mais le scan n'a pas pu être conservé.", doc_delete_confirm:"Retirer ce scan CNAS du dossier du travailleur ?",
+  msg_invalid_range:"⚠️ La date de fin doit être postérieure ou égale à la date de début.", msg_storage:"⚠️ Enregistrement local impossible. Vérifiez l'espace disponible du navigateur.",
+  doc_enddate:"Date de fin de relation", doc_enddate_required:"⚠️ Saisissez la date de fin de relation avant d'imprimer ce document.",
+  col_balance:"Solde",
+  cg_title:"🗓️ Congés & Absences", cg_add:"➕ Ajouter",
+  pay_title:"💰 Bulletin de Paie", att_title:"📄 Attestations", cnt_title:"📝 Contrat de Travail",
+  av_title:"💳 Avances & Dettes", av_add:"➕ Ajouter",
+  st_company:"🏢 Informations entreprise", st_rs_fr:"Raison sociale (FR)", st_rs_ar:"Raison sociale (AR)",
+  st_gerant:"Gérant", st_wilaya:"Wilaya / Agence CNAS", st_addr_fr:"Adresse (FR)", st_addr_ar:"Adresse (AR)",
+  st_payroll:"💵 Paramètres de paie", st_salbase:"Salaire de base (DA)", st_cotis:"Cotisation CNAS salarié (%)",
+  st_jref:"Jours de référence / mois", st_snmg:"SNMG (DA)", st_panier:"Panier / jour par défaut (DA)", st_pancap:"Plafond panier non soumis / jour (DA)", st_alloc:"Allocation / enfant (DA)",
+  st_payroll_hint:"Ces valeurs sont appliquées automatiquement à chaque nouveau travailleur et au bulletin. Modifiables aussi par travailleur.",
+  st_data:"🗄️ Données", st_export:"⬇️ Exporter (JSON)", st_import:"⬆️ Importer (JSON)", st_reset:"🗑️ Réinitialiser", st_doc_backup:"Les images/PDF CNAS restent uniquement dans ce navigateur. Les champs validés et extraits (N° SS, affiliation, identité, adresse, etc.) sont synchronisés avec le dossier du travailleur.", sync_email:"Email Firebase", sync_password:"Mot de passe Firebase", sync_login:"🔐 Se connecter", sync_logout:"🚪 Se déconnecter", sync_auth_required:"Connectez-vous avec le compte Firebase propriétaire pour activer la synchronisation sécurisée.", sync_auth_ok:"Connecté au compte Firebase autorisé.", sync_auth_wrong:"Ce compte Firebase n'est pas autorisé pour ce dossier RH.", sync_auth_missing:"Email et mot de passe Firebase requis.", sync_login_error:"Connexion Firebase impossible. Vérifiez vos identifiants.",
+  f_nom:"Nom", f_prenom:"Prénom", f_dd:"Date de naissance", f_li:"Lieu de naissance", f_et:"Date d'entrée",
+  f_ac:"N° Affiliation", f_poste:"Poste", f_poste_other:"Préciser le poste", f_diplome:"Diplôme",
+  f_diplome_other:"Préciser le diplôme", f_expmode:"Expérience", exp_auto:"Auto (depuis date d'entrée)",
+  exp_manual:"Manuel", f_expval:"Valeur expérience", f_sit:"Situation familiale", sit_m:"Marié(e)", sit_c:"Célibataire", sit_unknown:"Non renseigné",
+  f_children:"Enfants à charge", f_status:"Statut", s_active:"Actif", s_inactive:"Inactif",
+  f_af:"Wilaya / Agence", f_adr:"Adresse", f_notes:"Notes", f_worker:"Travailleur", f_month:"Mois / Année",
+  f_days:"Jours travaillés", f_panier:"Panier / jour (DA)", f_advance:"Avance / Retenue (DA)", f_ref:"Référence",
+  att_type:"Type", att_t_travail:"Attestation de travail", att_t_salaire:"Attestation de salaire",
+  att_t_cessation:"Certificat de cessation", att_dest:"Destinataire (optionnel)",
+  cnt_type:"Type de contrat", cnt_duree:"Durée (CDD, mois)", cnt_essai:"Période d'essai (mois)",
+  cg_type:"Type", cg_t_conge:"Congé", cg_t_abs:"Absence", cg_t_mal:"Maladie", cg_from:"Du", cg_to:"Au",
+  av_amount:"Montant (DA)", av_date:"Date", av_type:"Type", av_t_av:"Avance", av_t_rb:"Remboursement",
+  // dashboard / table
+  s_total:"Travailleurs", s_active2:"Actifs", s_mass:"Masse salariale (base)", s_avg_exp:"Ancienneté moy.",
+  col_no:"N°", col_exp:"Expérience", actions:"Actions",
+  t_no_data:"Aucune donnée.",
+  // documents
+  doc_listtitle:"LISTE NOMINATIVE DU PERSONNEL", doc_effectif:"Effectif",
+  doc_le:"le", workers_u:"travailleur(s)",
+  bul_title:"BULLETIN DE PAIE", bul_period:"Période", bul_matricule:"Matricule",
+  bul_poste:"Poste", bul_designation:"Désignation", bul_base:"Base", bul_rate:"Taux", bul_gain:"Gains", bul_ret:"Retenues",
+  bul_salbase:"Salaire de base", bul_panier:"Indemnité de panier", bul_jours:"Jours travaillés",
+  bul_brut:"Salaire brut", bul_cnas:"Cotisation CNAS", bul_irg:"I.R.G.", bul_avance:"Avance / Retenue",
+  bul_totg:"Total des gains", bul_totr:"Total des retenues", bul_net:"NET À PAYER",
+  bul_arrete:"Arrêté le présent bulletin de paie à la somme nette de", bul_employe:"Salarié", bul_paydate:"Payé le",
+  bul_code:"Code", bul_nbase:"Nb / Base", bul_iep:"I.E.P (Exp. professionnelle)", bul_ifsp:"I.F.S.P", bul_secsoc:"Retenue Séc. Sociale (CNAS)", bul_salbrut:"Salaire brut (base CNAS)", bul_totimp:"Total imposable IRG",
+  f_iep:"I.E.P / Ancienneté (DA)", f_ifsp:"I.F.S.P (DA)",
+  att_t1:"ATTESTATION DE TRAVAIL", att_t2:"ATTESTATION DE SALAIRE", att_t3:"CERTIFICAT DE CESSATION DE TRAVAIL",
+  cnt_t1:"CONTRAT DE TRAVAIL", sign_gerant:"Le Gérant", sign_stamp:"Signature et cachet de l'entreprise",
+  doc_chlef:"Chlef",
+  // seniority formats
+  exp_fmt:"Format d'ancienneté", ln_expfmt:"Affichage ancienneté",
+  ef_ym:"Années + mois", ef_ymd:"Années + mois + jours", ef_days:"Jours (total)", ef_months:"Mois (total)",
+  unit_an:"an", unit_ans:"ans", unit_mois:"mois", unit_jour:"jour", unit_jours:"jours",
+  // contact / settings
+  st_contact:"📞 Coordonnées & identifiants légaux", st_tel:"Téléphone", st_nis:"NIS",
+  st_nin:"NIN", st_cnasnum:"N° immatriculation CNAS", st_cnassect:"Secteur / Agence CNAS",
+  st_display:"🧮 Affichage & ancienneté", st_logo_hint:"Le logo (grue EGTPH) est intégré automatiquement à l'en-tête de tous les documents.",
+  // document blocks
+  doc_recrut:"Date de recrutement", doc_jusqua:"Jusqu'au", doc_cejour:"À ce jour",
+  doc_anciennete:"Ancienneté", doc_conforme:"Document conforme — Loi 90-11",
+  doc_fait:"Fait à", col_naissance:"Date & lieu de naissance",
+  // payslip extras
+  f_prime:"Prime imposable (DA)", pay_panier_hint:"La part au-delà du plafond paramétré est ajoutée à l'assiette de calcul.",
+  pay_disp:"Informations à afficher :", pay_print:"Sections à imprimer :",
+  bul_prime:"Prime / Indemnité imposable", bul_alloc:"Allocations familiales",
+  bul_entree:"Date d'entrée", bul_anc:"Ancienneté", bul_sit:"Situation familiale",
+  bul_snmg_warn:"⚠️ Salaire inférieur au SNMG (20 000 DA)",
+  sec_ident:"Bloc identité", sec_alloc:"Allocations", sec_band:"Bandeau légal (NIS/NIN/CNAS)",
+  sec_sign:"Signature & cachet", sec_fband:"Pied de page", sec_recap:"Tableau récapitulatif", sec_ref:"Ligne référence",
+  // documents généraux
+  doc_poste_over:"Poste (modifiable)", doc_objet:"Objet", doc_dest_lieu:"Destination",
+  doc_du:"Du", doc_au:"Au", doc_moyen:"Moyen de transport", doc_nbjours:"Nombre de jours",
+  doc_reprise:"Date de reprise", doc_motif:"Motif",
+  att_t_certtravail:"Certificat de travail", att_t_ordremission:"Ordre de mission", att_t_conge:"Titre de congé",
+  cnt_t2:"CONTRAT DE TRAVAIL À DURÉE DÉTERMINÉE (CDD)", cnt_t3:"CONTRAT DE TRAVAIL À DURÉE INDÉTERMINÉE (CDI)",
+  cg_t_annuel:"Congé annuel", cg_t_excep:"Congé exceptionnel", cg_t_ss:"Congé sans solde",
+  msg_saved:"✅ Enregistré avec succès", msg_wsaved:"✅ Travailleur enregistré",
+  msg_namereq:"⚠️ Nom et Prénom obligatoires", msg_del:"Supprimer cet élément ?",
+  msg_reset:"⚠️ Effacer TOUTES les données ? Action irréversible.",
+  msg_choose:"-- Choisir --", msg_no_worker:"Sélectionnez un travailleur",
+ },
+ ar:{
+  brand_sub:"تسيير الموارد البشرية", nav_main:"الرئيسية", nav_db:"لوحة القيادة", nav_emp:"المستخدمون",
+  nav_wk:"العمّال", nav_ln:"القائمة الإسمية", nav_im:"استيراد CNAS", nav_cg:"العطل / الغيابات",
+  nav_doc:"الوثائق", nav_pay:"كشف الراتب", nav_att:"الشهادات", nav_cnt:"العقود",
+  nav_track:"المتابعة", nav_av:"التسبيقات / الديون", nav_st:"الإعدادات",
+  btn_save:"💾 حفظ", btn_print:"🖨️ طباعة", btn_cancel:"إلغاء", btn_save_w:"💾 حفظ",
+  btn_save_apply:"💾 حفظ", btn_save_:"💾",
+  db_recent:"👥 آخر العمّال",
+  wk_title:"👷 قائمة العمّال", wk_add:"➕ إضافة",
+  ln_opts:"🧩 خيارات العرض والطباعة",
+  ln_hint:"اختر الأعمدة التي تريد إظهارها. انقر مرّتين على خانة (الاسم، التواريخ…) لتعديلها؛ وانقر على المنصب / الشهادة / الحالة العائلية لاختيارها من قائمة.",
+  ln_pick_hint:"انقر للاختيار",
+  ln_filter:"التصفية", ln_orient:"اتجاه الطباعة", o_land:"أفقي",
+  f_active:"النشطون", f_all:"الكل", f_inactive:"غير النشطين",
+  im_title:"📥 استيراد شهادة الانتساب CNAS",
+  im_hint:"صوّر أو أرفق شهادة انتساب CNAS. تتم القراءة الضوئية محليًا، ثم راجع البيانات قبل حفظها داخل ملف العامل.",
+  im_drop:"التقط صورة أو اختر ملف PDF/صورة", im_save:"💾 حفظ داخل ملف العامل",
+  im_lang:"لغة الوثيقة", im_lang_fr:"الفرنسية", im_lang_ar:"العربية", im_lang_bi:"الفرنسية + العربية",
+  im_scan_type:"النوع المقبول", im_camera:"📷 التقاط صورة", im_choosefile:"📁 اختيار ملف",
+  im_read:"🔎 قراءة وملء", im_remove:"إزالة", im_ocr_text:"النص المقروء (للمراجعة)",
+  im_no_file:"⚠️ اختر صورة أو ملفًا أولاً.", im_bad_file:"⚠️ صيغة غير مدعومة. استعمل JPG أو PNG أو WEBP أو PDF.",
+  im_file_limit:"⚠️ الملف كبير جدًا. الحد الأقصى: 12 ميغابايت.", im_ocr_empty:"⚠️ لم يتم العثور على نص قابل للاستعمال. أكمل الخانات يدويًا.",
+  im_duplicate:"⚠️ يوجد عامل مسجل بنفس رقم الضمان أو رقم الانتساب.", im_duplicate_update:"يوجد ملف عامل مطابق. هل تريد تحديثه واستبدال نسخة CNAS المحفوظة؟",
+  ocr_loading:"جارٍ تحميل محرك القراءة…", ocr_reading:"جارٍ قراءة الوثيقة (OCR)…", ocr_done:"✅ تمّت القراءة — تحقّق ثم احفظ.", ocr_fail:"⚠️ تعذّرت القراءة. تحقّق من الإنترنت والصورة واللغة ثم أعد المحاولة.",
+  doc_cnas:"📎 نسخة شهادة انتساب CNAS", doc_cnas_none:"لا توجد نسخة CNAS محفوظة.", doc_cnas_pending:"احفظ العامل أولاً قبل إرفاق النسخة.",
+  doc_open:"👁️ فتح", doc_replace:"📎 إرفاق / استبدال", doc_remove:"🗑️ إزالة", doc_saved:"✅ تم حفظ النسخة داخل ملف العامل.",
+  doc_save_fail:"⚠️ تم حفظ بيانات العامل لكن تعذر حفظ النسخة.", doc_delete_confirm:"هل تريد إزالة نسخة CNAS من ملف العامل؟",
+  msg_invalid_range:"⚠️ يجب أن يكون تاريخ النهاية بعد أو مساويًا لتاريخ البداية.", msg_storage:"⚠️ تعذر الحفظ محليًا. تحقق من مساحة المتصفح.",
+  doc_enddate:"تاريخ نهاية العلاقة", doc_enddate_required:"⚠️ أدخل تاريخ نهاية العلاقة قبل طباعة هذه الوثيقة.",
+  col_balance:"الرصيد",
+  cg_title:"🗓️ العطل والغيابات", cg_add:"➕ إضافة",
+  pay_title:"💰 كشف الراتب", att_title:"📄 الشهادات", cnt_title:"📝 عقد العمل",
+  av_title:"💳 التسبيقات والديون", av_add:"➕ إضافة",
+  st_company:"🏢 معلومات المؤسسة", st_rs_fr:"التسمية (بالفرنسية)", st_rs_ar:"التسمية (بالعربية)",
+  st_gerant:"المسيّر", st_wilaya:"الولاية / وكالة CNAS", st_addr_fr:"العنوان (بالفرنسية)", st_addr_ar:"العنوان (بالعربية)",
+  st_payroll:"💵 إعدادات الأجور", st_salbase:"الأجر القاعدي (دج)", st_cotis:"اشتراك CNAS للأجير (%)",
+  st_jref:"أيام العمل المرجعية / شهر", st_snmg:"الأجر الأدنى المضمون (دج)", st_panier:"سلّة / يوم افتراضيًا (دج)", st_pancap:"سقف منحة السلة غير الخاضع / يوم (دج)", st_alloc:"منحة / طفل (دج)",
+  st_payroll_hint:"تُطبّق هذه القيم تلقائيًا على كل عامل جديد وعلى كشف الراتب. ويمكن تعديلها أيضًا لكل عامل على حدة.",
+  st_data:"🗄️ البيانات", st_export:"⬇️ تصدير (JSON)", st_import:"⬆️ استيراد (JSON)", st_reset:"🗑️ إعادة التهيئة", st_doc_backup:"صور وملفات PDF الخاصة بـ CNAS تبقى داخل هذا المتصفح فقط. المعلومات المؤكدة والمستخرجة منها (رقم CNAS، الانتساب، الهوية، العنوان، إلخ) تُزامَن مع ملف العامل.", sync_email:"بريد Firebase الإلكتروني", sync_password:"كلمة مرور Firebase", sync_login:"🔐 تسجيل الدخول", sync_logout:"🚪 تسجيل الخروج", sync_auth_required:"سجّل الدخول بحساب Firebase المالك لتفعيل المزامنة الآمنة.", sync_auth_ok:"تم الاتصال بحساب Firebase المسموح.", sync_auth_wrong:"حساب Firebase هذا غير مسموح له بالدخول إلى ملف الموارد البشرية.", sync_auth_missing:"بريد Firebase وكلمة المرور مطلوبان.", sync_login_error:"تعذر الاتصال بـ Firebase. تحقق من بيانات الدخول.",
+  f_nom:"اللقب", f_prenom:"الاسم", f_dd:"تاريخ الميلاد", f_li:"مكان الميلاد", f_et:"تاريخ التوظيف",
+  f_ac:"رقم الانتساب", f_poste:"المنصب", f_poste_other:"حدّد المنصب", f_diplome:"الشهادة",
+  f_diplome_other:"حدّد الشهادة", f_expmode:"الخبرة", exp_auto:"تلقائي (من تاريخ التوظيف)",
+  exp_manual:"يدوي", f_expval:"قيمة الخبرة", f_sit:"الحالة العائلية", sit_m:"متزوج(ة)", sit_c:"أعزب", sit_unknown:"غير محدد",
+  f_children:"الأبناء المكفولون", f_status:"الحالة", s_active:"نشط", s_inactive:"غير نشط",
+  f_af:"الولاية / الوكالة", f_adr:"العنوان", f_notes:"ملاحظات", f_worker:"العامل", f_month:"الشهر / السنة",
+  f_days:"أيام العمل", f_panier:"منحة السلّة / يوم (دج)", f_advance:"تسبيق / اقتطاع (دج)", f_ref:"المرجع",
+  att_type:"النوع", att_t_travail:"شهادة عمل", att_t_salaire:"شهادة راتب",
+  att_t_cessation:"شهادة نهاية عمل", att_dest:"الجهة الموجّهة إليها (اختياري)",
+  cnt_type:"نوع العقد", cnt_duree:"المدّة (CDD، أشهر)", cnt_essai:"فترة التجربة (أشهر)",
+  cg_type:"النوع", cg_t_conge:"عطلة", cg_t_abs:"غياب", cg_t_mal:"مرض", cg_from:"من", cg_to:"إلى",
+  av_amount:"المبلغ (دج)", av_date:"التاريخ", av_type:"النوع", av_t_av:"تسبيق", av_t_rb:"تسديد",
+  s_total:"العمّال", s_active2:"النشطون", s_mass:"الكتلة الأجرية (قاعدي)", s_avg_exp:"متوسط الأقدمية",
+  col_no:"الرقم", col_exp:"الخبرة", actions:"إجراءات",
+  t_no_data:"لا توجد بيانات.",
+  doc_listtitle:"القائمة الإسمية للمستخدمين", doc_effectif:"العدد",
+  doc_le:"في", workers_u:"عامل/عمّال",
+  bul_title:"كشف الراتب", bul_period:"الفترة", bul_matricule:"رقم التسجيل",
+  bul_poste:"المنصب", bul_designation:"البيان", bul_base:"الأساس", bul_rate:"النسبة", bul_gain:"الأجور", bul_ret:"الاقتطاعات",
+  bul_salbase:"الأجر القاعدي", bul_panier:"منحة السلّة", bul_jours:"أيام العمل",
+  bul_brut:"الأجر الإجمالي", bul_cnas:"اشتراك CNAS", bul_irg:"الضريبة على الدخل IRG", bul_avance:"تسبيق / اقتطاع",
+  bul_totg:"مجموع الأجور", bul_totr:"مجموع الاقتطاعات", bul_net:"الصافي للدفع",
+  bul_arrete:"حُرّر كشف الراتب هذا بمبلغ صافٍ قدره", bul_employe:"الأجير", bul_paydate:"تاريخ الدفع",
+  bul_code:"الرمز", bul_nbase:"العدد / الوعاء", bul_iep:"علاوة الخبرة المهنية", bul_ifsp:"تعويض الخدمة الدائمة IFSP", bul_secsoc:"اقتطاع الضمان الاجتماعي (CNAS)", bul_salbrut:"الأجر الإجمالي (وعاء CNAS)", bul_totimp:"إجمالي الخاضع للضريبة IRG",
+  f_iep:"علاوة الخبرة / الأقدمية (دج)", f_ifsp:"تعويض الخدمة الدائمة (دج)",
+  att_t1:"شهادة عمل", att_t2:"شهادة راتب", att_t3:"شهادة نهاية عمل",
+  cnt_t1:"عقد عمل", sign_gerant:"المسيّر", sign_stamp:"إمضاء وختم المؤسسة",
+  doc_chlef:"الشلف",
+  // seniority formats
+  exp_fmt:"صيغة الأقدمية", ln_expfmt:"عرض الأقدمية",
+  ef_ym:"سنوات + أشهر", ef_ymd:"سنوات + أشهر + أيام", ef_days:"الأيام (المجموع)", ef_months:"الأشهر (المجموع)",
+  unit_an:"سنة", unit_ans:"سنوات", unit_mois:"أشهر", unit_jour:"يوم", unit_jours:"يوم",
+  // contact / settings
+  st_contact:"📞 معلومات الاتصال والمعرّفات القانونية", st_tel:"الهاتف", st_nis:"NIS",
+  st_nin:"NIN", st_cnasnum:"رقم التسجيل CNAS", st_cnassect:"القطاع / وكالة CNAS",
+  st_display:"🧮 العرض والأقدمية", st_logo_hint:"يُدرَج شعار المؤسسة (رافعة EGTPH) تلقائيًا في ترويسة جميع الوثائق.",
+  // document blocks
+  doc_recrut:"تاريخ التوظيف", doc_jusqua:"إلى غاية", doc_cejour:"إلى يومنا هذا",
+  doc_anciennete:"الأقدمية", doc_conforme:"وثيقة مطابقة — القانون 90-11",
+  doc_fait:"حُرّر بـ", col_naissance:"تاريخ ومكان الميلاد",
+  f_prime:"منحة خاضعة (دج)", pay_panier_hint:"الجزء الذي يتجاوز السقف المضبوط يُضاف إلى وعاء الحساب.",
+  pay_disp:"المعلومات التي تظهر :", pay_print:"الأقسام المطبوعة :",
+  bul_prime:"منحة / تعويض خاضع", bul_alloc:"المنح العائلية",
+  bul_entree:"تاريخ التوظيف", bul_anc:"الأقدمية", bul_sit:"الحالة العائلية",
+  bul_snmg_warn:"⚠️ الأجر أقل من الأجر الأدنى المضمون (20 000 دج)",
+  sec_ident:"خانة الهوية", sec_alloc:"المنح", sec_band:"الشريط القانوني (NIS/NIN/CNAS)",
+  sec_sign:"الإمضاء والختم", sec_fband:"تذييل الصفحة", sec_recap:"الجدول الإجمالي", sec_ref:"سطر المرجع",
+  doc_poste_over:"المنصب (قابل للتعديل)", doc_objet:"الموضوع", doc_dest_lieu:"الوجهة",
+  doc_du:"من", doc_au:"إلى", doc_moyen:"وسيلة النقل", doc_nbjours:"عدد الأيام",
+  doc_reprise:"تاريخ الاستئناف", doc_motif:"السبب",
+  att_t_certtravail:"شهادة عمل (نهاية علاقة)", att_t_ordremission:"أمر بمهمة", att_t_conge:"رخصة عطلة",
+  cnt_t2:"عقد عمل محدّد المدّة (CDD)", cnt_t3:"عقد عمل غير محدّد المدّة (CDI)",
+  cg_t_annuel:"عطلة سنوية", cg_t_excep:"عطلة استثنائية", cg_t_ss:"عطلة بدون أجر",
+  msg_saved:"✅ تمّ الحفظ بنجاح", msg_wsaved:"✅ تمّ حفظ العامل",
+  msg_namereq:"⚠️ اللقب والاسم إجباريان", msg_del:"حذف هذا العنصر؟",
+  msg_reset:"⚠️ مسح كل البيانات؟ لا يمكن التراجع.",
+  msg_choose:"-- اختر --", msg_no_worker:"اختر عاملاً",
+ }
+};
+function t(k){return (I18N[LANG] && I18N[LANG][k]) || (I18N.fr[k]) || k;}
+
+/* ---------- Postes & Diplômes (bilingues) ---------- */
+const POSTES=[
+ {k:'ing_hydro_p',fr:'Ingénieur en hydraulique',ar:'مهندس في الري'},
+ {k:'tech_hydro_p',fr:'Technicien / TS supérieur en hydraulique',ar:'تقني / تقني سامٍ في الري'},
+ {k:'topo_sup',fr:'TS / TS supérieur en topographie',ar:'تقني / تقني سامٍ في الطوبوغرافيا'},
+ {k:'fusionneur',fr:'Fusionneur PEHD',ar:'لاحم أنابيب PEHD'},
+ {k:'chef_chantier',fr:'Chef de chantier',ar:'رئيس الورشة'},
+ {k:'conducteur_engin',fr:"Conducteur d'engins",ar:'سائق آليات'},
+ {k:'chauffeur',fr:'Chauffeur',ar:'سائق'},
+ {k:'macon',fr:'Maçon',ar:'بنّاء'},
+ {k:'conducteur',fr:'Conducteur de travaux',ar:'مدير الأشغال'},
+ {k:'chef_equipe',fr:"Chef d'équipe",ar:'رئيس الفريق'},
+ {k:'ingenieur',fr:'Ingénieur',ar:'مهندس'},
+ {k:'technicien',fr:'Technicien',ar:'تقني'},
+ {k:'tech_sup',fr:'Technicien supérieur',ar:'تقني سامٍ'},
+ {k:'topographe',fr:'Topographe',ar:'طوبوغرافي'},
+ {k:'manoeuvre',fr:'Manœuvre',ar:'عامل'},
+ {k:'ferrailleur',fr:'Ferrailleur',ar:'حدّاد تسليح'},
+ {k:'coffreur',fr:'Coffreur',ar:'نجّار قوالب'},
+ {k:'soudeur',fr:'Soudeur',ar:'لحّام'},
+ {k:'magasinier',fr:'Magasinier',ar:'أمين المخزن'},
+ {k:'secretaire',fr:'Secrétaire',ar:'كاتب(ة)'},
+ {k:'comptable',fr:'Comptable',ar:'محاسب'},
+ {k:'resp_achat',fr:"Responsable Achat",ar:'مسؤول المشتريات'},
+ {k:'gerant',fr:'Gérant',ar:'المسيّر'},
+ {k:'__autre',fr:'Autre…',ar:'أخرى…'}
+];
+const DIPLOMES=[
+ {k:'sans',fr:'Sans diplôme',ar:'بدون شهادة'},
+ {k:'master_hydro',fr:'Master en Hydraulique',ar:'ماستر في الري'},
+ {k:'licence_hydro',fr:'Licence en Hydraulique',ar:'ليسانس في الري'},
+ {k:'techsup_topo',fr:'TS en Topographie',ar:'تقني سامٍ في الطوبوغرافيا'},
+ {k:'pehd',fr:'Diplôme de soudeur PEHD',ar:'شهادة لحام PEHD'},
+ {k:'ing_hydro',fr:"Ingénieur d'État en Hydraulique",ar:'مهندس دولة في الري'},
+ {k:'tech_hydro',fr:'Technicien en Hydraulique',ar:'تقني في الري'},
+ {k:'techsup_hydro',fr:'Technicien supérieur en Hydraulique',ar:'تقني سامٍ في الري'},
+ {k:'tech_topo',fr:'Technicien en Topographie',ar:'تقني في الطوبوغرافيا'},
+ {k:'master_gc',fr:'Master en Génie Civil',ar:'ماستر في الهندسة المدنية'},
+ {k:'licence_gc',fr:'Licence en Génie Civil',ar:'ليسانس في الهندسة المدنية'},
+ {k:'tech_gc',fr:'Technicien en Génie Civil',ar:'تقني في الهندسة المدنية'},
+ {k:'cap',fr:'CAP',ar:'شهادة الكفاءة المهنية'},
+ {k:'bep',fr:'BEP',ar:'شهادة التعليم المهني'},
+ {k:'__autre',fr:'Autre…',ar:'أخرى…'}
+];
+function posteLabel(w){if(!w.fn)return'';if(w.fn==='__autre')return w.fnx||'';const p=POSTES.find(x=>x.k===w.fn);return p?p[LANG]:w.fn;}
+function diplomeLabel(w){if(!w.dp||w.dp==='sans')return'';if(w.dp==='__autre')return w.dpx||'';const d=DIPLOMES.find(x=>x.k===w.dp);return d?d[LANG]:w.dp;}
+
+/* ---------- DATA ---------- */
+const DBK='egtph_rh_v2';
+const DEF_SET={
+  rsFr:"Entreprise des Grands Travaux Publics et Hydrauliques – EGTPH – ABDI YOUSSOUF ISLAM",
+  rsAr:"مؤسسة الأشغال العمومية الكبرى والري – EGTPH – عبدي يوسف إسلام",
+  gerant:"ABDI YOUSSOUF ISLAM", rc:"02/00-4566908 A15", nif:"19202010500619",
+  nis:"1 992 0201 05006 48", nin:"109920029050060008", tel:"027-49-50-82",
+  cnasNum:"02349390/48", cnasSect:"Secteur BTP — Wilaya de Chlef",
+  wilaya:"CHLEF", addrFr:"Environs de Zemala ancienne N°B1, Chlef", addrAr:"بالقرب من زمالة القديمة رقم B1، الشلف",
+  salBase:24000, cotis:9, jref:22, snmg:20000, panierJour:0, panierExoCap:160, allocEnfant:300, expFmt:'ym',
+  refAtt:1, refCnt:1,
+  payDisp:{poste:true,et:true,anc:true,sit:true,ss:true,af:false,alloc:true},
+  secs:{
+    pay:{ident:true,band:true,sign:true,fband:true},
+    att:{recap:true,ref:true,band:true,sign:true,fband:true},
+    cnt:{band:true,sign:true,fband:true},
+    doc:{band:true,sign:true,fband:true,ref:true}
+  },
+  lnCols:{no:true,nom:true,prenom:true,dd:true,li:true,et:true,ss:true,poste:true,diplome:true,exp:true,sit:false,sal:false}
+};
+let S={workers:[],conges:[],avances:[],settings:Object.assign({},DEF_SET)};
+const W0=[
+ {id:'w1',N:'BAHI',P:'ABDELDJEBBAR',dd:'1979-01-22',li:'BOUKADIR',ss:'7902070398/38',ac:'00207',et:'2020-10-20',fn:'manoeuvre',dp:'sans',ad:'COMMUNE DE OUED SLY CHLEF',af:'CHLEF',si:'M',en:0,st:'ACTIF'},
+ {id:'w2',N:'ABDI',P:'MOHAMMED AMIN',dd:'1986-05-08',li:'CHLEF',ss:'8618140066/43',ac:'01814',et:'2021-07-25',fn:'__autre',fnx:'Gérant & Resp. Achat',dp:'sans',ad:'HAY HASSANIA CHLEF',af:'CHLEF',si:'M',en:0,st:'ACTIF'},
+ {id:'w3',N:'BOUHDJER',P:'AHMED',dd:'1992-05-24',li:'CHLEF',ss:'9223540019/47',ac:'02354',et:'2022-07-01',fn:'manoeuvre',dp:'sans',ad:'HAY EL SAADA CHLEF',af:'CHLEF',si:'M',en:0,st:'ACTIF'},
+ {id:'w4',N:'AZZI',P:'DJILALI',dd:'1981-12-13',li:'OUED SLY',ss:'8129420029/46',ac:'02942',et:'2022-09-21',fn:'macon',dp:'sans',ad:'HAY EL SAADA CHLEF',af:'CHLEF',si:'M',en:0,st:'ACTIF'},
+ {id:'w5',N:'SAIAH',P:'ISMAIL',dd:'1993-12-06',li:'SOBHA',ss:'9326250037/46',ac:'02625',et:'2023-10-01',fn:'manoeuvre',dp:'sans',ad:'HAY HASSANIA N147 CHLEF',af:'CHLEF',si:'M',en:0,st:'ACTIF'},
+ {id:'w6',N:'OUAZANE',P:'HASSIBA',dd:'1991-11-15',li:'OULED BEN AEK',ss:'9104410169/45',ac:'00441',et:'2024-06-11',fn:'secretaire',dp:'sans',ad:'OULED BEN ABDELKADER CHLEF',af:'CHLEF',si:'C',en:0,st:'ACTIF'},
+ {id:'w7',N:'AZZI',P:'ABDELKADER',dd:'1979-02-24',li:'BOUKADIR',ss:'7904990082/27',ac:'00499',et:'2025-02-01',fn:'manoeuvre',dp:'sans',ad:'BOUKADIR OUED SLY CHLEF',af:'CHLEF',si:'M',en:0,st:'ACTIF'},
+ {id:'w8',N:'BOUHEDIBA',P:'MOUSTAFA',dd:'1986-02-09',li:'SOBHA',ss:'8602250336/51',ac:'00225',et:'2025-02-01',fn:'manoeuvre',dp:'sans',ad:'HAY SAADA CHLEF',af:'CHLEF',si:'M',en:0,st:'ACTIF'},
+ {id:'w9',N:'ELHADJ',P:'MOHAMED',dd:'1992-01-01',li:'OULED BEN AEK',ss:'9201800345/46',ac:'00180',et:'2025-02-01',fn:'manoeuvre',dp:'sans',ad:'HAY EL SAADA CHLEF',af:'CHLEF',si:'M',en:0,st:'ACTIF'},
+ {id:'w10',N:'ZENATI',P:'FETHI',dd:'1993-11-21',li:'CHLEF',ss:'9346820019/35',ac:'04682',et:'2025-02-05',fn:'manoeuvre',dp:'sans',ad:'HAY EL NASR CHLEF',af:'CHLEF',si:'M',en:0,st:'ACTIF'},
+ {id:'w11',N:'GACEM',P:'FARID',dd:'1984-12-29',li:'OUED RHIOU',ss:'8430780013/46',ac:'03078',et:'2025-09-20',fn:'manoeuvre',dp:'sans',ad:'CHLEF',af:'CHLEF',si:'M',en:0,st:'ACTIF'},
+ {id:'w12',N:'TALEB',P:'BRAHIM',dd:'1985-07-21',li:'OUED SLY',ss:'8504120204/64',ac:'00412',et:'2025-11-13',fn:'manoeuvre',dp:'sans',ad:'HAY MENDARINE N8 OUED SLY',af:'CHLEF',si:'M',en:0,st:'ACTIF'},
+ {id:'w13',N:'BENYAMINA',P:'BADREDDINE',dd:'1984-09-01',li:'CHLEF',ss:'8437110022/57',ac:'03711',et:'2026-01-02',fn:'manoeuvre',dp:'sans',ad:'HAY LALA AOUDA CHLEF',af:'CHLEF',si:'M',en:0,st:'ACTIF'},
+ {id:'w14',N:'MAACHOU',P:'FETHI',dd:'1985-07-26',li:'AIN DEFLA',ss:'8502880171/36',ac:'00288',et:'2026-02-01',fn:'manoeuvre',dp:'sans',ad:'HAY EL HASSANIA CHLEF',af:'CHLEF',si:'M',en:0,st:'ACTIF'},
+ {id:'w15',N:'DERNANE',P:'AHMED',dd:'1986-01-14',li:'BENI LAHCENE',ss:'8600060741/55',ac:'00006',et:'2026-02-15',fn:'manoeuvre',dp:'sans',ad:'OUED SLY',af:'CHLEF',si:'M',en:0,st:'ACTIF'},
+ {id:'w16',N:'ZERROUKI',P:'ISMAIL',dd:'1994-01-01',li:'SOBHA',ss:'9400070515/58',ac:'00007',et:'2026-03-15',fn:'manoeuvre',dp:'sans',ad:'OUED SLY CENTRE',af:'CHLEF',si:'M',en:0,st:'ACTIF'}
+];
+let HAD_LOCAL_DATA=false;
+function makeId(prefix){
+  const seed=(window.crypto&&crypto.getRandomValues)?Array.from(crypto.getRandomValues(new Uint32Array(2))).map(n=>n.toString(36)).join(''):Math.random().toString(36).slice(2);
+  return String(prefix||'id')+'_'+Date.now().toString(36)+'_'+seed;
+}
+function normalizeDataIds(){
+  if(!Array.isArray(S.workers))S.workers=[];
+  if(!Array.isArray(S.conges))S.conges=[];
+  if(!Array.isArray(S.avances))S.avances=[];
+  const normalize=(list,prefix)=>{
+    const seen=new Set();
+    list.forEach(item=>{
+      if(!item||typeof item!=='object')return;
+      let id=String(item.id||'');
+      if(!id||seen.has(id)){id=makeId(prefix);item.id=id;}
+      seen.add(id);
+    });
+  };
+  normalize(S.workers,'w');normalize(S.conges,'cg');normalize(S.avances,'av');
+}
+function hydrateSettings(os){
+  const cfg=Object.assign({},DEF_SET,os||{});
+  cfg.lnCols=Object.assign({},DEF_SET.lnCols,(os&&os.lnCols)||{});
+  cfg.payDisp=Object.assign({},DEF_SET.payDisp,(os&&os.payDisp)||{});
+  cfg.secs=Object.assign({},DEF_SET.secs);
+  Object.keys(DEF_SET.secs).forEach(k=>{cfg.secs[k]=Object.assign({},DEF_SET.secs[k],((os&&os.secs)||{})[k]||{});});
+  return cfg;
+}
+function hydrateState(o){
+  const raw=o&&typeof o==='object'?o:{};
+  S={workers:Array.isArray(raw.workers)?raw.workers:[],conges:Array.isArray(raw.conges)?raw.conges:[],avances:Array.isArray(raw.avances)?raw.avances:[],settings:hydrateSettings(raw.settings||{})};
+  normalizeDataIds();sortW();
+}
+function loadD(){
+  let raw=null;
+  try{raw=localStorage.getItem(DBK);HAD_LOCAL_DATA=!!raw;if(raw)hydrateState(JSON.parse(raw));}
+  catch(e){console.warn(e);HAD_LOCAL_DATA=false;hydrateState({});}
+  if(!HAD_LOCAL_DATA){
+    S.workers=JSON.parse(JSON.stringify(W0));S.workers.forEach(w=>{w.sl=S.settings.salBase;});normalizeDataIds();sortW();
+  }
+}
+function saveAll(silent,opts){
+  opts=opts||{};
+  try{
+    normalizeDataIds();
+    localStorage.setItem(DBK,JSON.stringify(S));
+    if(!silent)toast(t('msg_saved'),'ok');
+    if(!opts.noSync&&typeof queueCloudSync==='function')queueCloudSync();
+  }catch(e){console.error(e);toast(t('msg_storage'),'er');}
+}
+function sortW(){
+  const ts=w=>{const v=Date.parse((w&&w.et)||'2100-01-01');return Number.isFinite(v)?v:Date.parse('2100-01-01');};
+  S.workers.sort((a,b)=>ts(a)-ts(b));S.workers.forEach((w,i)=>w.rk=i+1);
+}
+
+/* ---------- LOCAL SCANNED DOCUMENTS (IndexedDB, not LocalStorage) ---------- */
+const DOC_DB='egtph_rh_documents_v1',DOC_STORE='documents';
+let docDbPromise=null, pendingImport={file:null,ocrText:'',confidence:0};
+function openDocDb(){
+  if(!('indexedDB' in window))return Promise.reject(new Error('IndexedDB unavailable'));
+  if(docDbPromise)return docDbPromise;
+  docDbPromise=new Promise((resolve,reject)=>{
+    const req=indexedDB.open(DOC_DB,1);
+    req.onupgradeneeded=()=>{
+      const db=req.result;
+      const store=db.objectStoreNames.contains(DOC_STORE)?req.transaction.objectStore(DOC_STORE):db.createObjectStore(DOC_STORE,{keyPath:'id'});
+      if(!store.indexNames.contains('workerId'))store.createIndex('workerId','workerId',{unique:false});
+    };
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error||new Error('IndexedDB error'));
+  });
+  return docDbPromise.catch(e=>{docDbPromise=null;throw e;});
+}
+function docId(workerId,kind='cnas'){return kind+':'+workerId;}
+async function getWorkerDoc(workerId,kind='cnas'){
+  const db=await openDocDb();
+  return new Promise((resolve,reject)=>{
+    const q=db.transaction(DOC_STORE,'readonly').objectStore(DOC_STORE).get(docId(workerId,kind));
+    q.onsuccess=()=>resolve(q.result||null);q.onerror=()=>reject(q.error);
+  });
+}
+async function putWorkerDoc(workerId,kind,file,extra={}){
+  const db=await openDocDb();
+  const record={id:docId(workerId,kind),workerId,kind,name:file.name||('scan-'+kind),type:file.type||'application/octet-stream',
+    size:Number(file.size)||0,updatedAt:new Date().toISOString(),blob:file,ocrText:extra.ocrText||'',confidence:extra.confidence||0};
+  await new Promise((resolve,reject)=>{
+    const q=db.transaction(DOC_STORE,'readwrite').objectStore(DOC_STORE).put(record);
+    q.onsuccess=()=>resolve();q.onerror=()=>reject(q.error);
+  });
+  return record;
+}
+async function deleteWorkerDoc(workerId,kind='cnas'){
+  const db=await openDocDb();
+  await new Promise((resolve,reject)=>{
+    const q=db.transaction(DOC_STORE,'readwrite').objectStore(DOC_STORE).delete(docId(workerId,kind));
+    q.onsuccess=()=>resolve();q.onerror=()=>reject(q.error);
+  });
+}
+async function deleteAllWorkerDocs(workerId){
+  const db=await openDocDb();
+  await new Promise((resolve,reject)=>{
+    const tx=db.transaction(DOC_STORE,'readwrite'),idx=tx.objectStore(DOC_STORE).index('workerId'),q=idx.openCursor(IDBKeyRange.only(workerId));
+    q.onerror=()=>reject(q.error);q.onsuccess=e=>{const cur=e.target.result;if(cur){cur.delete();cur.continue();}else resolve();};
+  });
+}
+async function clearAllDocs(){
+  try{
+    const db=await openDocDb();
+    await new Promise((resolve,reject)=>{const q=db.transaction(DOC_STORE,'readwrite').objectStore(DOC_STORE).clear();q.onsuccess=()=>resolve();q.onerror=()=>reject(q.error);});
+  }catch(e){console.warn(e);}
+}
+function fileSize(n){return (Number(n||0)/1024/1024).toLocaleString('fr-DZ',{maximumFractionDigits:1})+' Mo';}
+async function refreshWorkerCnasDoc(){
+  const info=$('wCnasDocInfo'),add=$('wCnasAddBtn'),open=$('wCnasOpenBtn'),del=$('wCnasDelBtn');
+  if(!info||!add||!open||!del)return;
+  if(!editW){info.textContent=t('doc_cnas_pending');add.disabled=true;open.disabled=true;del.disabled=true;return;}
+  add.disabled=false;open.disabled=true;del.disabled=true;info.textContent=t('doc_cnas_none');
+  try{
+    const doc=await getWorkerDoc(editW,'cnas');
+    if(doc){info.textContent=doc.name+' — '+fileSize(doc.size);open.disabled=false;del.disabled=false;}
+  }catch(e){console.warn(e);info.textContent=t('doc_save_fail');}
+}
+async function onWorkerDocSelected(file){
+  if(!file)return;
+  if(!editW){toast(t('doc_cnas_pending'),'wa');return;}
+  try{
+    validateImportFile(file);
+    await putWorkerDoc(editW,'cnas',file);
+    await refreshWorkerCnasDoc();toast(t('doc_saved'));
+  }catch(e){console.error(e);toast(e&&e.message?e.message:t('doc_save_fail'),'er');}
+}
+async function viewWorkerCnasDoc(){
+  if(!editW)return;
+  try{
+    const doc=await getWorkerDoc(editW,'cnas');if(!doc||!doc.blob){toast(t('doc_cnas_none'),'wa');return;}
+    const url=URL.createObjectURL(doc.blob);window.open(url,'_blank','noopener');setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(e){console.error(e);toast(t('doc_save_fail'),'er');}
+}
+async function deleteWorkerCnasDoc(){
+  if(!editW||!confirm(t('doc_delete_confirm')))return;
+  try{await deleteWorkerDoc(editW,'cnas');await refreshWorkerCnasDoc();toast(t('msg_saved'));}
+  catch(e){console.error(e);toast(t('doc_save_fail'),'er');}
+}
+
+/* ---------- helpers ---------- */
+function toast(m,ty='ok'){const c=document.getElementById('tc'),d=document.createElement('div');d.className='tst '+ty;d.textContent=m;c.appendChild(d);setTimeout(()=>d.remove(),3500);}
+function oM(id){document.getElementById(id).classList.add('on');}
+function closeM(id){document.getElementById(id).classList.remove('on');}
+function $(id){return document.getElementById(id);}
+function fd(d){
+  if(!d)return'';
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d));
+  const x=m?new Date(+m[1],+m[2]-1,+m[3]):new Date(d);
+  return isNaN(x)?d:x.toLocaleDateString('fr-DZ');
+}
+function fn2(n){return Number(n||0).toLocaleString('fr-DZ',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function fm(n){return fn2(n)+' DA';}
+function tod(){const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function isValidRange(a,b){return !a||!b||new Date(b)>=new Date(a);}
+function expData(w){
+  // returns {y, m, dRem, totalDays, totalMonths}
+  if(!w.et)return null;
+  const d0=new Date(w.et), d1=new Date();
+  if(isNaN(d0))return null;
+  const totalDays=Math.max(0,Math.floor((d1-d0)/86400000));
+  let y=d1.getFullYear()-d0.getFullYear();
+  let m=d1.getMonth()-d0.getMonth();
+  let dRem=d1.getDate()-d0.getDate();
+  if(dRem<0){m--;const pm=new Date(d1.getFullYear(),d1.getMonth(),0).getDate();dRem+=pm;}
+  if(m<0){y--;m+=12;}
+  if(y<0){y=0;m=0;dRem=0;}
+  return {y,m,dRem,totalDays,totalMonths:y*12+m};
+}
+function calcExp(w,fmt){
+  if(w.exm==='manuel'&&w.exv)return w.exv;
+  const e=expData(w); if(!e)return '–';
+  fmt=fmt||S.settings.expFmt||'ym';
+  const G=LANG==='ar';
+  const an=n=>n+' '+(n>1?t('unit_ans'):t('unit_an'));
+  const mo=n=>n+' '+t('unit_mois');
+  const jo=n=>n+' '+(n>1?t('unit_jours'):t('unit_jour'));
+  if(fmt==='days')  return jo(e.totalDays);
+  if(fmt==='months')return mo(e.totalMonths);
+  // build years + months (+days)
+  let parts=[];
+  if(e.y>0)parts.push(an(e.y));
+  if(e.m>0)parts.push(mo(e.m));
+  if(fmt==='ymd'&&e.dRem>0)parts.push(jo(e.dRem));
+  if(!parts.length)parts.push(fmt==='ymd'?jo(e.totalDays):mo(0));
+  return parts.join(G?' و':' ');
+}
+function genRef(type){return String(Math.max(1,parseInt(S.settings[type],10)||1)).padStart(2,'0')+'/'+new Date().getFullYear();}
+function moisLabel(ym){if(!ym)return'';const[y,m]=ym.split('-');const MF=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];const MA=['جانفي','فيفري','مارس','أفريل','ماي','جوان','جويلية','أوت','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];const i=parseInt(m)-1;return (LANG==='ar'?MA[i]:MF[i])+' '+y;}
+
+/* ---------- NAV / LANG ---------- */
+function sp(p,el){
+  document.querySelectorAll('.pg').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.ni').forEach(x=>x.classList.remove('on'));
+  const page=$('pg-'+p);if(!page)return;
+  page.classList.add('on');
+  if(el)el.classList.add('on');
+  const titles={db:'📊 '+t('nav_db'),wk:t('wk_title'),ln:t('nav_ln'),im:t('im_title'),cg:t('cg_title'),pay:t('pay_title'),att:t('att_title'),cnt:t('cnt_title'),av:t('av_title'),st:'⚙️ '+t('nav_st')};
+  $('ptitle').textContent=titles[p]||'';
+  if(p==='db')renderDB();if(p==='wk')renderWk();if(p==='ln')renderLN();
+  if(p==='cg')renderCg();if(p==='av')renderAv();if(p==='st')fillSettings();
+  if(p==='pay'){fillWorkerSelect('pW');if(!$('pMois').value)$('pMois').value=tod().slice(0,7);calcPay();}
+  if(p==='att'){fillWorkerSelect('aW');buildPosteOverride();if(!$('aRef').value)$('aRef').value=genRef('refAtt');onAttType();}
+  if(p==='cnt'){fillWorkerSelect('cW');buildCntPoste();calcCnt();}
+}
+function toggleSb(){$('sb').classList.toggle('col');$('mn').classList.toggle('ex');}
+function toggleLang(){LANG=LANG==='fr'?'ar':'fr';localStorage.setItem('egtph_lang',LANG);applyLang();}
+function applyLang(){
+  document.documentElement.lang=LANG;document.documentElement.dir=LANG==='ar'?'rtl':'ltr';
+  $('langbtn').textContent=LANG==='fr'?'🌐 العربية':'🌐 Français';
+  document.querySelectorAll('[data-t]').forEach(el=>{el.textContent=t(el.getAttribute('data-t'));});
+  buildPosteSelects();buildLnChips();
+  // refresh active page
+  const cur=document.querySelector('.pg.on');if(cur){const id=cur.id.replace('pg-','');
+    if(id==='db')renderDB();else if(id==='wk')renderWk();else if(id==='ln')renderLN();
+    else if(id==='cg')renderCg();else if(id==='av')renderAv();else if(id==='st')fillSettings();
+    else if(id==='pay'){fillWorkerSelect('pW');calcPay();}else if(id==='att'){fillWorkerSelect('aW');buildPosteOverride();calcAtt();}
+    else if(id==='cnt'){fillWorkerSelect('cW');buildCntPoste();calcCnt();}
+    const titles={db:'📊 '+t('nav_db'),wk:t('wk_title'),ln:t('nav_ln'),im:t('im_title'),cg:t('cg_title'),pay:t('pay_title'),att:t('att_title'),cnt:t('cnt_title'),av:t('av_title'),st:'⚙️ '+t('nav_st')};
+    $('ptitle').textContent=titles[id]||'';
+  }
+  if(fbReady)setSyncStatus('ok');else setSyncStatus('connecting');
+}
+function fillWorkerSelect(id){const s=$(id);if(!s)return;const v=s.value;s.innerHTML='<option value="">'+t('msg_choose')+'</option>';
+  S.workers.forEach(w=>{const o=document.createElement('option');o.value=w.id;o.textContent='#'+w.rk+' – '+w.N+' '+w.P;s.appendChild(o);});if(v)s.value=v;}
+function fillWorkerSelectAll(id){const s=$(id);if(!s)return;s.innerHTML='';S.workers.forEach(w=>{const o=document.createElement('option');o.value=w.id;o.textContent=w.N+' '+w.P;s.appendChild(o);});}
+
+/* ---------- DASHBOARD ---------- */
+function renderDB(){
+  const tot=S.workers.length, act=S.workers.filter(w=>w.st==='ACTIF').length;
+  const mass=S.workers.filter(w=>w.st==='ACTIF').reduce((s,w)=>s+(+w.sl||0),0);
+  let totM=0,n=0;S.workers.forEach(w=>{if(w.et){const d=new Date(w.et);totM+=(new Date()-d)/(1000*3600*24*30.4);n++;}});
+  const avg=n?(totM/n/12).toFixed(1):0;
+  $('dbStats').innerHTML=[
+    ['👷',tot,t('s_total')],['✅',act,t('s_active2')],['💰',fn2(mass)+' DA',t('s_mass')],['📅',avg+(LANG==='ar'?' سنة':' ans'),t('s_avg_exp')]
+  ].map(c=>'<div class="sc"><div class="ico">'+c[0]+'</div><div class="num">'+c[1]+'</div><div class="lab">'+c[2]+'</div></div>').join('');
+  const rows=S.workers.slice(-8).reverse();
+  $('dbTbl').innerHTML='<thead><tr><th>'+t('col_no')+'</th><th>'+t('f_nom')+'</th><th>'+t('f_prenom')+'</th><th>'+t('f_poste')+'</th><th>'+t('col_exp')+'</th><th>'+t('f_status')+'</th></tr></thead><tbody>'+
+   (rows.length?rows.map(w=>'<tr><td>'+w.rk+'</td><td>'+esc(w.N)+'</td><td>'+esc(w.P)+'</td><td>'+esc(posteLabel(w))+'</td><td>'+esc(calcExp(w))+'</td><td><span class="badge '+(w.st==='ACTIF'?'ok">'+t('s_active'):'off">'+t('s_inactive'))+'</span></td></tr>').join(''):'<tr><td colspan="6" style="text-align:center;color:var(--mt)">'+t('t_no_data')+'</td></tr>')+'</tbody>';
+}
+
+/* ---------- POSTE / DIPLOME selects ---------- */
+function buildPosteSelects(){
+  const wsel=$('wFN');if(wsel){const v=wsel.value;wsel.innerHTML=POSTES.map(p=>'<option value="'+p.k+'">'+esc(p[LANG])+'</option>').join('');wsel.value=v||'manoeuvre';}
+  const imsel=$('imFN');if(imsel){const v=imsel.value;imsel.innerHTML='<option value="">'+esc(t('msg_choose'))+'</option>'+POSTES.map(p=>'<option value="'+p.k+'">'+esc(p[LANG])+'</option>').join('');imsel.value=v||'';}
+  const dsel=$('wDP');if(dsel){const v=dsel.value;dsel.innerHTML=DIPLOMES.map(p=>'<option value="'+p.k+'">'+esc(p[LANG])+'</option>').join('');if(v)dsel.value=v;}
+}
+function onPosteChange(){$('wFNautreBox').style.display=$('wFN').value==='__autre'?'':'none';}
+function onDiplomeChange(){$('wDPautreBox').style.display=$('wDP').value==='__autre'?'':'none';}
+function onExpModeChange(){$('wEXVbox').style.display=$('wEXM').value==='manuel'?'':'none';}
+
+/* ---------- WORKERS ---------- */
+let editW=null;
+function renderWk(){
+  $('wkTbl').innerHTML='<thead><tr><th>'+t('col_no')+'</th><th>'+t('f_nom')+'</th><th>'+t('f_prenom')+'</th><th>'+t('col_naissance')+'</th><th>'+t('f_et')+'</th><th>'+t('f_poste')+'</th><th>'+t('f_diplome')+'</th><th>N° SS</th><th>'+t('f_af')+'</th><th>'+t('col_exp')+'</th><th>'+t('f_status')+'</th><th>'+t('actions')+'</th></tr></thead><tbody>'+
+   (S.workers.length?S.workers.map(w=>'<tr><td>'+w.rk+'</td><td><b>'+esc(w.N)+'</b></td><td>'+esc(w.P)+'</td><td>'+esc(fd(w.dd))+(w.li?'<br><span style="color:var(--mt)">'+esc(w.li)+'</span>':'')+'</td><td>'+esc(fd(w.et))+'</td><td>'+esc(posteLabel(w))+'</td><td>'+esc(diplomeLabel(w)||'–')+'</td><td>'+esc(w.ss||'')+'</td><td>'+esc(w.af||'')+'</td><td>'+esc(calcExp(w))+'</td><td><span class="badge '+(w.st==='ACTIF'?'ok">'+t('s_active'):'off">'+t('s_inactive'))+'</span></td><td><div class="act"><button class="ib" onclick="editWorker(\''+w.id+'\')">✏️</button><button class="ib del" onclick="delWorker(\''+w.id+'\')">🗑️</button></div></td></tr>').join(''):'<tr><td colspan="12" style="text-align:center;color:var(--mt)">'+t('t_no_data')+'</td></tr>')+'</tbody>';
+}
+function openWorker(){
+  editW=null;$('mWkTit').textContent=t('wk_add');
+  ['wN','wP','wDD','wLI','wSS','wAC','wET','wAD','wNT','wFNautre','wDPautre','wEXV'].forEach(id=>{if($(id))$(id).value='';});
+  buildPosteSelects();
+  $('wFN').value='manoeuvre';$('wDP').value='sans';$('wEXM').value='auto';$('wSI').value='';$('wST').value='ACTIF';
+  $('wEN').value=0;$('wSL').value=S.settings.salBase;$('wAF').value=S.settings.wilaya;
+  onPosteChange();onDiplomeChange();onExpModeChange();oM('mWk');refreshWorkerCnasDoc();
+}
+function editWorker(id){
+  const w=S.workers.find(x=>x.id===id);if(!w)return;editW=id;$('mWkTit').textContent='✏️ '+w.N+' '+w.P;buildPosteSelects();
+  const set=(k,v)=>{if($(k))$(k).value=v==null?'':v;};
+  set('wN',w.N);set('wP',w.P);set('wDD',w.dd);set('wLI',w.li);set('wSS',w.ss);set('wAC',w.ac);set('wET',w.et);
+  set('wFN',w.fn||'manoeuvre');set('wFNautre',w.fnx);set('wDP',w.dp||'sans');set('wDPautre',w.dpx);
+  set('wEXM',w.exm||'auto');set('wEXV',w.exv);set('wSI',w.si||'');set('wEN',w.en||0);set('wSL',w.sl||S.settings.salBase);
+  set('wST',w.st||'ACTIF');set('wAF',w.af||S.settings.wilaya);set('wAD',w.ad);set('wNT',w.nt);
+  onPosteChange();onDiplomeChange();onExpModeChange();oM('mWk');refreshWorkerCnasDoc();
+}
+function saveWorker(){
+  const g=k=>($(k)?.value||'').trim();
+  if(!g('wN')||!g('wP')){toast(t('msg_namereq'),'er');return;}
+  const enteredSS=normalizeSS(g('wSS')),enteredAC=g('wAC').replace(/\D/g,'');
+  const duplicate=S.workers.find(x=>x.id!==editW&&((enteredSS&&normalizeSS(x.ss)===enteredSS)||(enteredAC&&String(x.ac||'').replace(/\D/g,'')===enteredAC)));
+  if(duplicate){toast(LANG==='ar'?'⚠️ يوجد عامل آخر بنفس رقم CNAS أو رقم الانتساب.':'⚠️ Un autre travailleur possède déjà ce N° CNAS ou N° d’affiliation.','er');return;}
+  const w={id:editW||makeId('w'),N:g('wN').toUpperCase(),P:g('wP').toUpperCase(),dd:g('wDD'),li:g('wLI').toUpperCase(),
+    ss:g('wSS'),ac:g('wAC'),et:g('wET'),fn:g('wFN'),fnx:g('wFNautre'),dp:g('wDP'),dpx:g('wDPautre'),
+    exm:g('wEXM'),exv:g('wEXV'),si:g('wSI'),en:parseInt(g('wEN'))||0,sl:parseFloat(g('wSL'))||S.settings.salBase,
+    st:g('wST'),af:g('wAF')||S.settings.wilaya,ad:g('wAD'),nt:g('wNT')};
+  if(editW){const i=S.workers.findIndex(x=>x.id===editW);S.workers[i]={...S.workers[i],...w};}else S.workers.push(w);
+  sortW();saveAll(true);closeM('mWk');renderWk();toast(t('msg_wsaved'));
+}
+async function delWorker(id){
+  if(!confirm(t('msg_del')))return;
+  S.workers=S.workers.filter(x=>x.id!==id);
+  S.conges=S.conges.filter(x=>x.wid!==id);
+  S.avances=S.avances.filter(x=>x.wid!==id);
+  try{await deleteAllWorkerDocs(id);}catch(e){console.warn(e);}
+  sortW();saveAll(true);renderWk();renderDB();
+}
+
+/* ---------- LISTE NOMINATIVE ---------- */
+const LN_DEF=[
+ {k:'no',t:'col_no'},{k:'nom',t:'f_nom'},{k:'prenom',t:'f_prenom'},{k:'dd',t:'f_dd'},{k:'li',t:'f_li'},
+ {k:'et',t:'f_et'},{k:'ss',t:'col_ss'},{k:'poste',t:'f_poste'},{k:'diplome',t:'f_diplome'},
+ {k:'exp',t:'col_exp'},{k:'sit',t:'f_sit'},{k:'sal',t:'st_salbase'}
+];
+function lnColLabel(k){if(k==='ss')return 'N° SS CNAS';return t(LN_DEF.find(c=>c.k===k).t);}
+function buildLnChips(){
+  const c=$('lnCols');if(!c)return;
+  c.innerHTML=LN_DEF.map(col=>'<label class="chip '+(S.settings.lnCols[col.k]?'on':'')+'"><input type="checkbox" '+(S.settings.lnCols[col.k]?'checked':'')+' onchange="toggleLnCol(\''+col.k+'\',this)">'+esc(lnColLabel(col.k))+'</label>').join('');
+}
+function toggleLnCol(k,el){S.settings.lnCols[k]=el.checked;el.parentElement.classList.toggle('on',el.checked);saveAll(true);renderLN();}
+function lnCellValue(w,k){
+  switch(k){case'no':return w.rk;case'nom':return w.N;case'prenom':return w.P;case'dd':return fd(w.dd);
+   case'li':return w.li;case'et':return fd(w.et);case'ss':return w.ss;case'poste':return posteLabel(w);
+   case'diplome':return diplomeLabel(w)||'—';case'exp':return calcExp(w);case'sit':return w.si==='M'?t('sit_m'):(w.si==='C'?t('sit_c'):t('sit_unknown'));
+   case'sal':return fn2(w.sl)+' DA';}return'';
+}
+function setExpFmt(v){S.settings.expFmt=v;saveAll(true);
+  const cur=document.querySelector('.pg.on');const id=cur?cur.id.replace('pg-',''):'';
+  if(id==='ln')renderLN();else if(id==='wk')renderWk();else if(id==='db')renderDB();
+}
+function renderLN(){
+  buildLnChips();
+  if($('lnExpFmt'))$('lnExpFmt').value=S.settings.expFmt||'ym';
+  const filt=$('lnFilter')?$('lnFilter').value:'ACTIF';
+  let list=S.workers.slice();if(filt!=='ALL')list=list.filter(w=>w.st===filt);
+  list.forEach((w,i)=>w._ln=i+1);
+  const cols=LN_DEF.filter(c=>S.settings.lnCols[c.k]);
+  const land=$('lnOrient')&&$('lnOrient').value==='landscape';
+  const st=S.settings;
+  const head=cols.map(c=>'<th>'+esc(lnColLabel(c.k))+'</th>').join('');
+  const body=list.map(w=>'<tr>'+cols.map(c=>{
+     const editable=['nom','prenom','dd','li','et','ss','exp'].includes(c.k);
+     const pick=['poste','diplome','sit'].includes(c.k);
+     const val=c.k==='no'?w._ln:lnCellValue(w,c.k);
+     if(editable)return '<td class="lned" contenteditable="true" data-id="'+w.id+'" data-k="'+c.k+'" onblur="lnEdit(this)">'+esc(val)+'</td>';
+     if(pick)return '<td class="lnpick" data-id="'+w.id+'" data-k="'+c.k+'" onclick="lnPick(this)" title="'+esc(t('ln_pick_hint'))+'">'+esc(val)+'</td>';
+     return '<td>'+esc(val)+'</td>';
+  }).join('')+'</tr>').join('');
+  $('lnDoc').innerHTML=docHeader()+
+   '<h2 style="text-align:center;font-size:19pt;color:#1a2a52;font-weight:900;margin:6mm 0 1mm;letter-spacing:.5px">'+t('doc_listtitle')+'</h2>'+
+   '<p style="text-align:center;font-size:11pt;color:#555;margin-bottom:5mm">'+esc(st.wilaya)+', '+t('doc_le')+' '+fd(tod())+' — '+t('doc_effectif')+' : '+list.length+' '+t('workers_u')+'</p>'+
+   '<table style="width:100%;border-collapse:collapse;font-size:'+(cols.length>8?'9.5pt':'11pt')+'">'+
+   '<thead><tr style="background:#1a2a52;color:#fff">'+head.replace(/<th>/g,'<th style="border:1px solid #1a2a52;padding:5px 6px;font-weight:700">')+'</tr></thead>'+
+   '<tbody>'+body.replace(/<td/g,'<td style="border:1px solid #999;padding:4px 6px;color:#000"').replace(/<tr>/g,'<tr style="background:#fff">')+'</tbody></table>'+
+   docFooter(true);
+  $('lnDoc').style.width=land?'297mm':'210mm';
+}
+function lnEdit(td){
+  const w=S.workers.find(x=>x.id===td.dataset.id);if(!w)return;const k=td.dataset.k,v=td.textContent.trim();
+  if(k==='nom')w.N=v.toUpperCase();else if(k==='prenom')w.P=v.toUpperCase();else if(k==='li')w.li=v;
+  else if(k==='ss')w.ss=v;else if(k==='exp'){w.exm='manuel';w.exv=v;}
+  else if(k==='dd'||k==='et'){const p=v.split('/');if(p.length===3)w[k==='dd'?'dd':'et']=p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0');}
+  saveAll(true);
+}
+function lnPick(td){
+  if(td.querySelector('select'))return;
+  const w=S.workers.find(x=>x.id===td.dataset.id);if(!w)return;
+  const k=td.dataset.k;
+  const list=k==='poste'?POSTES:(k==='diplome'?DIPLOMES:[{k:'',fr:t('sit_unknown'),ar:t('sit_unknown')},{k:'M',fr:t('sit_m'),ar:t('sit_m')},{k:'C',fr:t('sit_c'),ar:t('sit_c')}]);
+  const cur=k==='poste'?w.fn:(k==='diplome'?w.dp:w.si);
+  const sel=document.createElement('select');
+  sel.style.cssText='font:inherit;max-width:100%;padding:2px';
+  sel.innerHTML=list.map(p=>'<option value="'+p.k+'">'+esc(k==='sit'?p.fr:p[LANG])+'</option>').join('');
+  sel.value=cur||list[0].k;
+  let done=false;
+  const commit=()=>{if(done)return;done=true;const v=sel.value;if(k==='poste')w.fn=v;else if(k==='diplome')w.dp=v;else w.si=v;saveAll(true);renderLN();};
+  sel.onchange=commit;sel.onblur=commit;
+  td.textContent='';td.appendChild(sel);sel.focus();
+}
+function renderCg(){
+  $('cgTbl').innerHTML='<thead><tr><th>'+t('f_worker')+'</th><th>'+t('cg_type')+'</th><th>'+t('cg_from')+'</th><th>'+t('cg_to')+'</th><th>'+t('f_notes')+'</th><th>'+t('actions')+'</th></tr></thead><tbody>'+
+   (S.conges.length?S.conges.map((c,i)=>{const w=S.workers.find(x=>x.id===c.wid);const tn={conge:t('cg_t_conge'),absence:t('cg_t_abs'),maladie:t('cg_t_mal')}[c.tp]||c.tp;
+   return '<tr><td>'+(w?esc(w.N+' '+w.P):'—')+'</td><td>'+tn+'</td><td>'+fd(c.db)+'</td><td>'+fd(c.fn)+'</td><td>'+esc(c.mo||'')+'</td><td><button class="ib del" onclick="delCg(\''+esc(c.id)+'\')">🗑️</button></td></tr>';}).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--mt)">'+t('t_no_data')+'</td></tr>')+'</tbody>';
+}
+function openCg(){fillWorkerSelectAll('cgW');$('cgDB').value=tod();$('cgFN').value=tod();$('cgMO').value='';oM('mCg');}
+function saveCg(){
+  const o={id:makeId('cg'),wid:$('cgW').value,tp:$('cgT').value,db:$('cgDB').value,fn:$('cgFN').value,mo:$('cgMO').value};
+  if(!o.wid||!o.db||!o.fn){toast(t('msg_namereq'),'er');return;}
+  if(!isValidRange(o.db,o.fn)){toast(t('msg_invalid_range'),'er');return;}
+  S.conges.push(o);saveAll(true);closeM('mCg');renderCg();toast(t('msg_saved'));
+}
+function delCg(id){if(!confirm(t('msg_del')))return;S.conges=S.conges.filter(x=>x.id!==id);saveAll(true);renderCg();}
+
+/* ---------- AVANCES ---------- */
+function advanceBalance(workerId){
+  return S.avances.filter(a=>a.wid===workerId).reduce((sum,a)=>sum+(a.tp==='remb'?-Number(a.m||0):Number(a.m||0)),0);
+}
+function renderAv(){
+  $('avTbl').innerHTML='<thead><tr><th>'+t('f_worker')+'</th><th>'+t('av_type')+'</th><th>'+t('av_amount')+'</th><th>'+t('col_balance')+'</th><th>'+t('av_date')+'</th><th>'+t('f_notes')+'</th><th>'+t('actions')+'</th></tr></thead><tbody>'+
+   (S.avances.length?S.avances.map((a,i)=>{const w=S.workers.find(x=>x.id===a.wid),bal=advanceBalance(a.wid),tn=a.tp==='avance'?t('av_t_av'):t('av_t_rb');
+   return '<tr><td>'+(w?esc(w.N+' '+w.P):'—')+'</td><td>'+tn+'</td><td>'+fm(a.m)+'</td><td><b style="color:'+(bal>0?'#f39c12':'#2ecc71')+'">'+fm(bal)+'</b></td><td>'+fd(a.d)+'</td><td>'+esc(a.note||'')+'</td><td><button class="ib del" onclick="delAv(\''+esc(a.id)+'\')">🗑️</button></td></tr>';}).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--mt)">'+t('t_no_data')+'</td></tr>')+'</tbody>';
+}
+function openAv(){fillWorkerSelectAll('avW');$('avM').value='';$('avD').value=tod();$('avNote').value='';oM('mAv');}
+function saveAv(){
+  const o={id:makeId('av'),wid:$('avW').value,m:parseFloat($('avM').value),d:$('avD').value,tp:$('avT').value,note:$('avNote').value};
+  if(!o.wid||!Number.isFinite(o.m)||o.m<=0||!o.d){toast(t('msg_namereq'),'er');return;}
+  S.avances.push(o);saveAll(true);closeM('mAv');renderAv();toast(t('msg_saved'));
+}
+function delAv(id){if(!confirm(t('msg_del')))return;S.avances=S.avances.filter(x=>x.id!==id);saveAll(true);renderAv();}
+
+/* ---------- SETTINGS ---------- */
+function fillSettings(){const s=S.settings;const set=(k,v)=>{if($(k))$(k).value=v;};
+  set('stRsFr',s.rsFr);set('stRsAr',s.rsAr);set('stGerant',s.gerant);set('stRC',s.rc);set('stNIF',s.nif);
+  set('stNIS',s.nis);set('stNIN',s.nin);set('stTel',s.tel);set('stCnasNum',s.cnasNum);set('stCnasSect',s.cnasSect);
+  set('stWilaya',s.wilaya);set('stAddrFr',s.addrFr);set('stAddrAr',s.addrAr);
+  set('stSalBase',s.salBase);set('stCotis',s.cotis);set('stJref',s.jref);
+  set('stSnmg',s.snmg);set('stPanier',s.panierJour);set('stPanierCap',s.panierExoCap==null?160:s.panierExoCap);set('stAlloc',s.allocEnfant);
+  set('stExpFmt',s.expFmt||'ym');
+}
+function saveSettings(){const g=k=>($(k)?$(k).value:'');
+  Object.assign(S.settings,{rsFr:g('stRsFr'),rsAr:g('stRsAr'),gerant:g('stGerant'),rc:g('stRC'),nif:g('stNIF'),
+   nis:g('stNIS'),nin:g('stNIN'),tel:g('stTel'),cnasNum:g('stCnasNum'),cnasSect:g('stCnasSect'),
+   wilaya:g('stWilaya'),addrFr:g('stAddrFr'),addrAr:g('stAddrAr'),expFmt:g('stExpFmt')||'ym',
+   salBase:parseFloat(g('stSalBase'))||24000,cotis:parseFloat(g('stCotis'))||9,jref:parseInt(g('stJref'))||22,
+   snmg:parseFloat(g('stSnmg'))||20000,
+   panierJour:Math.max(0,parseFloat(g('stPanier'))||0),
+   panierExoCap:Math.max(0,Number.isFinite(parseFloat(g('stPanierCap')))?parseFloat(g('stPanierCap')):160),
+   allocEnfant:Math.max(0,parseFloat(g('stAlloc'))||0)});
+  saveAll();
+}
+function exportData(){
+  const b=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+  const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='egtph_rh_'+tod()+'.json';a.click();
+  setTimeout(()=>URL.revokeObjectURL(u),1000);
+}
+async function resetData(){
+  if(!confirm(t('msg_reset')))return;
+  await clearAllDocs();
+  S={workers:[],conges:[],avances:[],settings:hydrateSettings({})};
+  saveAll(true);
+  if(typeof syncNow==='function')await syncNow(true);
+  location.reload();
+}
+
+/* ---------- DOCUMENT TEMPLATE ---------- */
+function logoSVG(){
+  return '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="EGTPH">'+
+   '<g stroke="#e8b422" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">'+
+   '<line x1="44" y1="20" x2="44" y2="82"/><line x1="52" y1="20" x2="52" y2="82"/>'+
+   '<path d="M44 31 L52 39 M52 31 L44 39 M44 47 L52 55 M52 47 L44 55 M44 63 L52 71 M52 63 L44 71"/>'+
+   '<path d="M30 90 L66 90 M36 90 L48 82 L60 90 M48 82 L48 90"/>'+
+   '<line x1="48" y1="20" x2="90" y2="20"/><line x1="52" y1="26" x2="88" y2="21"/>'+
+   '<path d="M40 8 L48 20 L56 8 Z"/><line x1="48" y1="8" x2="84" y2="20"/>'+
+   '<line x1="48" y1="20" x2="26" y2="20"/><line x1="48" y1="8" x2="30" y2="20"/>'+
+   '<rect x="20" y="20" width="9" height="7" fill="#e8b422"/>'+
+   '<line x1="82" y1="20" x2="82" y2="39"/><path d="M79 39 a3.2 3.2 0 1 0 6 0"/>'+
+   '</g></svg>';
+}
+function docHeader(D){
+  D=D||{};
+  const s=S.settings, G=LANG==='ar';
+  const rs=G?s.rsAr:s.rsFr, addr=G?s.addrAr:s.addrFr;
+  const descr=esc((rs.split('–')[0]||'').trim());
+  const gerLabel=G?'المسيّر':'Gérant';
+  return ''+
+   '<div class="lh">'+
+     '<div class="lh-logo">'+logoSVG()+'<div class="lt">EGTPH</div></div>'+
+     '<div class="lh-mid">'+
+       '<div class="l1">'+descr+'</div>'+
+       '<div class="l2">EGTPH</div>'+
+       '<div class="l3">'+esc(s.gerant)+' — '+gerLabel+'</div>'+
+     '</div>'+
+     '<div class="lh-side">'+
+       '📍 '+esc(addr)+'<br>📞 '+esc(s.tel||'')+'<br>'+
+       '<b>RC :</b> '+esc(s.rc)+'<br><b>NIF :</b> '+esc(s.nif)+
+     '</div>'+
+   '</div>'+
+   (D.band===false?'':
+   '<div class="lh-band">'+
+     '<span><b>NIS :</b> '+esc(s.nis||'')+'</span>'+
+     '<span><b>NIN :</b> '+esc(s.nin||'')+'</span>'+
+     '<span><b>N° CNAS :</b> '+esc(s.cnasNum||'')+' — '+esc(s.cnasSect||'')+'</span>'+
+   '</div>')+
+   '<div class="doc-pad"><div class="doc-body">';
+}
+function docFband(){
+  const s=S.settings, G=LANG==='ar';
+  return '<div class="doc-fband">'+
+     '<span><b>EGTPH</b> — RC : '+esc(s.rc)+' — NIF : '+esc(s.nif)+'</span>'+
+     '<span class="mid">'+t('doc_conforme')+'</span>'+
+     '<span>📞 '+esc(s.tel||'')+' — '+esc(s.wilaya)+', '+(G?'الجزائر':'Algérie')+'</span>'+
+   '</div>';
+}
+// close doc-body, insert signature inside doc-pad, close doc-pad, add band (per flags D)
+function docClose(signHtml,D){ D=D||{}; return '</div>'+(D.sign===false?'':signHtml)+'</div>'+(D.fband===false?'':docFband()); }
+function signBlock(compact){
+  const s=S.settings, G=LANG==='ar', sigH=compact?'18mm':'24mm';
+  return '<div style="margin-top:'+(compact?'7mm':'12mm')+';display:flex;justify-content:'+(G?'flex-start':'flex-end')+'">'+
+     '<div style="text-align:center;min-width:64mm">'+
+       '<p style="font-size:11pt;font-weight:700;color:#1a2a52">'+t('doc_fait')+' '+esc(s.wilaya)+', '+t('doc_le')+' '+fd(tod())+'</p>'+
+       '<p style="font-size:11.5pt;font-weight:700;color:#1a2a52;margin-top:3mm">'+t('sign_gerant')+'</p>'+
+       '<p style="font-size:10.5pt;color:#333;margin-top:1mm">'+esc(s.gerant)+'</p>'+
+       '<div style="height:'+sigH+';margin-top:2mm;border:1px dashed #aab;border-radius:6px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:2mm">'+
+         '<span style="font-size:8.5pt;color:#99a;font-style:italic">'+t('sign_stamp')+'</span>'+
+       '</div>'+
+     '</div>'+
+   '</div>';
+}
+function docFooter(compact,D){ return docClose(signBlock(compact),D); }
+function docFooterBand(){ return docClose(''); }
+function dwrap(html,w){return '<div style="font-size:12.5pt;line-height:1.95;color:#15151f;text-align:'+(LANG==='ar'?'right':'justify')+'">'+html+'</div>';}
+/* ---- print-section & display toggles (user controls what shows / prints) ---- */
+const SEC_DEFS={
+  pay:[{k:'ident',t:'sec_ident'},{k:'band',t:'sec_band'},{k:'sign',t:'sec_sign'},{k:'fband',t:'sec_fband'}],
+  att:[{k:'recap',t:'sec_recap'},{k:'ref',t:'sec_ref'},{k:'band',t:'sec_band'},{k:'sign',t:'sec_sign'},{k:'fband',t:'sec_fband'}],
+  cnt:[{k:'band',t:'sec_band'},{k:'sign',t:'sec_sign'},{k:'fband',t:'sec_fband'}],
+  doc:[{k:'ref',t:'sec_ref'},{k:'band',t:'sec_band'},{k:'sign',t:'sec_sign'},{k:'fband',t:'sec_fband'}]
+};
+const PAYDISP_DEFS=[{k:'poste',t:'f_poste'},{k:'et',t:'bul_entree'},{k:'anc',t:'bul_anc'},{k:'sit',t:'bul_sit'},{k:'ss',t:'bul_matricule'},{k:'af',t:'f_af'},{k:'alloc',t:'sec_alloc'}];
+function chipsHtml(defs,cfg,handler){return defs.map(d=>'<label class="chip '+(cfg[d.k]?'on':'')+'"><input type="checkbox" '+(cfg[d.k]?'checked':'')+' onchange="'+handler+'(\''+d.k+'\',this)">'+esc(t(d.t))+'</label>').join('');}
+function buildSecChips(containerId,page){const c=$(containerId);if(!c)return;c.dataset.page=page;c.innerHTML=(SEC_DEFS[page]||[]).map(d=>'<label class="chip '+(S.settings.secs[page][d.k]?'on':'')+'"><input type="checkbox" '+(S.settings.secs[page][d.k]?'checked':'')+' onchange="toggleSec(\''+page+'\',\''+d.k+'\',this)">'+esc(t(d.t))+'</label>').join('');}
+function toggleSec(page,k,el){S.settings.secs[page][k]=el.checked;el.parentElement.classList.toggle('on',el.checked);saveAll(true);rerenderCurrent();}
+function buildPayDisp(){const c=$('payChips');if(!c)return;c.innerHTML=chipsHtml(PAYDISP_DEFS,S.settings.payDisp,'togglePayDisp');}
+function togglePayDisp(k,el){S.settings.payDisp[k]=el.checked;el.parentElement.classList.toggle('on',el.checked);saveAll(true);calcPay();}
+function rerenderCurrent(){const cur=document.querySelector('.pg.on');if(!cur)return;const id=cur.id.replace('pg-','');
+  if(id==='pay')calcPay();else if(id==='att')calcAtt();else if(id==='cnt')calcCnt();else if(id==='ln')renderLN();}
+
+/* ---------- BULLETIN DE PAIE ---------- */
+/* IRG mensuel (salarié ordinaire) : arrondi à la dizaine, exonération ≤ 30 000 DA,
+   abattement 40 % borné à 1 000–1 500 DA, puis second abattement 30 001–35 000 DA. */
+function calcIRG(imp,profile='standard'){
+  imp=Math.floor((+imp||0)/10)*10;
+  if(imp<=30000)return 0;
+  const T=[[20000,0],[40000,.23],[80000,.27],[160000,.30],[320000,.33],[Infinity,.35]];
+  let gross=0,prev=0;
+  for(const[cap,rate]of T){if(imp>prev){gross+=(Math.min(imp,cap)-prev)*rate;prev=cap;}else break;}
+  let irg=gross-Math.min(1500,Math.max(1000,gross*0.40));
+  if(profile==='handicap_or_retired'&&imp<=42500)irg=irg*(93/61)-(81213/41);
+  else if(imp<=35000)irg=irg*(137/51)-(27925/8);
+  return parseFloat(Math.max(0,irg).toFixed(2));
+}
+function calcBul(w,o){
+  o=o||{};
+  const s=S.settings, REF=s.jref||22, base=+w.sl||s.salBase;
+  const j=Math.max(0,o.j||0), prime=+o.prime||0, iep=+o.iep||0, ifsp=+o.ifsp||0, panJ=Math.max(0,+o.panJ||0), avance=+o.avance||0, enf=o.enf!=null?o.enf:(w.en||0);
+  const salB=j>=REF?base:parseFloat((base/REF*j).toFixed(2));
+  const panCap=Math.max(0,Number(s.panierExoCap==null?160:s.panierExoCap));
+  const pan=parseFloat((panJ*j).toFixed(2));
+  const panExo=parseFloat((Math.min(panJ,panCap)*j).toFixed(2));
+  const panSujet=parseFloat((Math.max(0,panJ-panCap)*j).toFixed(2));
+  const cotisable=parseFloat((salB+prime+iep+ifsp+panSujet).toFixed(2));
+  const cnas=parseFloat((cotisable*((s.cotis||9)/100)).toFixed(2));
+  const imp=parseFloat((cotisable-cnas).toFixed(2));
+  const irg=calcIRG(imp);
+  const alloc=parseFloat(((s.allocEnfant||0)*enf).toFixed(2));
+  const totG=parseFloat((salB+prime+iep+ifsp+pan+alloc).toFixed(2));
+  const totR=parseFloat((cnas+irg+avance).toFixed(2));
+  const net=parseFloat((totG-totR).toFixed(2));
+  return{base,salB,prime,iep,ifsp,cotisable,cnas,pan,panJ,panCap,panExo,panSujet,alloc,imp,irg,totG,totR,net,avance,j,REF,enf,snmgWarn:base<(s.snmg||20000)};
+}
+function buildPostePay(reset){
+  const sel=$('pPoste');if(!sel)return;const cur=sel.value;
+  sel.innerHTML=POSTES.filter(p=>p.k!=='__autre').map(p=>'<option value="'+p.k+'">'+esc(p[LANG])+'</option>').join('');
+  const w=S.workers.find(x=>x.id===($('pW')?$('pW').value:''));
+  sel.value=(reset?'':cur)||(w&&w.fn&&w.fn!=='__autre'?w.fn:'manoeuvre');
+}
+function postePay(w){const k=$('pPoste')?$('pPoste').value:'';const p=POSTES.find(x=>x.k===k);return p?p[LANG]:posteLabel(w);}
+function onPayWorker(){
+  buildPostePay(true);
+  const w=S.workers.find(x=>x.id===($('pW')?$('pW').value:''));if(w&&$('pEnf'))$('pEnf').value=Math.max(0,parseInt(w.en)||0);
+  calcPay();
+}
+function calcPay(){
+  buildPayDisp(); buildSecChips('paySecChips','pay'); buildPostePay();
+  const w=S.workers.find(x=>x.id===$('pW').value);
+  if(!w){$('payDoc').innerHTML='<p style="color:#888;padding:20px;text-align:center">'+t('msg_no_worker')+'</p>';return;}
+  const s=S.settings;
+  // auto-fill panier from settings default if field left at 0/empty and a default exists
+  if($('pPan') && (!$('pPan').value || $('pPan').value==='0') && s.panierJour){$('pPan').value=s.panierJour;}
+  const j=parseInt($('pJ').value)||0,prime=parseFloat($('pPrime').value)||0,iep=parseFloat($('pIEP').value)||0,ifsp=parseFloat($('pIFSP').value)||0,pan=parseFloat($('pPan').value)||0,av=parseFloat($('pAv').value)||0;
+  const enfRaw=$('pEnf').value,enf=enfRaw===''?(parseInt(w.en)||0):Math.max(0,parseInt(enfRaw)||0);
+  const c=calcBul(w,{j,prime,iep,ifsp,panJ:pan,avance:av,enf}), dp=s.payDisp, sec=s.secs.pay, G=LANG==='ar';
+  const row=(d,b,r,g,re)=>'<tr><td style="border:1px solid #bbb;padding:5px 8px">'+d+'</td><td style="border:1px solid #bbb;padding:5px 8px;text-align:center">'+(b||'')+'</td><td style="border:1px solid #bbb;padding:5px 8px;text-align:center">'+(r||'')+'</td><td style="border:1px solid #bbb;padding:5px 8px;text-align:'+(G?'left':'right')+'">'+(g||'')+'</td><td style="border:1px solid #bbb;padding:5px 8px;text-align:'+(G?'left':'right')+'">'+(re||'')+'</td></tr>';
+  // identification cells (controlled by payDisp)
+  const cell=(lab,val)=>'<td style="border:1px solid #ccc;padding:5px 8px;background:#f3f5fa;white-space:nowrap"><b>'+lab+'</b></td><td style="border:1px solid #ccc;padding:5px 8px">'+val+'</td>';
+  let cells=[cell(t('f_nom'),esc(w.N+' '+w.P))];
+  if(dp.poste)cells.push(cell(t('bul_poste'),esc(postePay(w))));
+  if(dp.ss)cells.push(cell(t('bul_matricule'),esc(w.ss||'')));
+  if(dp.et)cells.push(cell(t('bul_entree'),fd(w.et)));
+  if(dp.anc)cells.push(cell(t('bul_anc'),esc(calcExp(w))));
+  if(dp.sit)cells.push(cell(t('bul_sit'),w.si==='M'?t('sit_m'):(w.si==='C'?t('sit_c'):t('sit_unknown'))));
+  if(dp.af)cells.push(cell(t('f_af'),esc(w.af||'')));
+  cells.push(cell(t('bul_jours'),c.j+' / '+c.REF));
+  let identRows='';for(let i=0;i<cells.length;i+=2){identRows+='<tr>'+cells[i]+(cells[i+1]||'<td colspan="2" style="border:1px solid #ccc"></td>')+'</tr>';}
+  const identTable=sec.ident?('<table style="width:100%;border-collapse:collapse;font-size:10.5pt;margin-bottom:5mm">'+identRows+'</table>'):'';
+  // ---- tableau des rubriques (format codifié professionnel) ----
+  const rc=(code,lib,nb,taux,gain,ret)=>'<tr>'+
+    '<td style="border:1px solid #bbb;padding:5px 6px;text-align:center;font-weight:700;color:#1a2a52">'+code+'</td>'+
+    '<td style="border:1px solid #bbb;padding:5px 8px;font-weight:600">'+lib+'</td>'+
+    '<td style="border:1px solid #bbb;padding:5px 8px;text-align:center">'+(nb||'—')+'</td>'+
+    '<td style="border:1px solid #bbb;padding:5px 8px;text-align:center">'+(taux||'—')+'</td>'+
+    '<td style="border:1px solid #bbb;padding:5px 8px;text-align:'+(G?'left':'right')+';color:#0a6b2e">'+(gain||'—')+'</td>'+
+    '<td style="border:1px solid #bbb;padding:5px 8px;text-align:'+(G?'left':'right')+';color:#b00">'+(ret||'—')+'</td></tr>';
+  const lignes=
+    rc('30',t('bul_salbase'),c.j+'/'+c.REF,'',fn2(c.salB),'')+
+    (c.iep?rc('261',t('bul_iep'),'','',fn2(c.iep),''):'')+
+    (c.ifsp?rc('271',t('bul_ifsp'),'','',fn2(c.ifsp),''):'')+
+    (c.prime?rc('290',t('bul_prime'),'','',fn2(c.prime),''):'')+
+    rc('763',t('bul_salbrut'),fn2(c.cotisable),'','','')+
+    rc('510',t('bul_secsoc'),fn2(c.cotisable),(s.cotis||9)+' %','',fn2(c.cnas))+
+    rc('652',t('bul_totimp'),fn2(c.imp),'','','')+
+    rc('660',t('bul_irg'),'','','',fn2(c.irg))+
+    (c.pan?rc('522',t('bul_panier'),c.j,fn2(c.panJ),fn2(c.pan),''):'')+
+    (dp.alloc&&c.alloc?rc('651',t('bul_alloc'),c.enf,fn2(s.allocEnfant),fn2(c.alloc),''):'')+
+    (c.avance?rc('524',t('bul_avance'),'','','',fn2(c.avance)):'');
+  const totRow='<tr style="background:#eef0f5;font-weight:800">'+
+    '<td colspan="2" style="border:1px solid #999;padding:6px 8px">'+t('bul_jours')+' : '+c.j+' / '+c.REF+'</td>'+
+    '<td colspan="2" style="border:1px solid #999;padding:6px;text-align:center">'+t('bul_totg')+' / '+t('bul_totr')+'</td>'+
+    '<td style="border:1px solid #999;padding:6px;text-align:'+(G?'left':'right')+';color:#0a6b2e">'+fn2(c.totG)+'</td>'+
+    '<td style="border:1px solid #999;padding:6px;text-align:'+(G?'left':'right')+';color:#b00">'+fn2(c.totR)+'</td></tr>';
+  $('payDoc').innerHTML=docHeader(sec)+
+   '<div style="border-top:3px solid #1a2a52;border-bottom:3px solid #1a2a52;padding:3mm 0;margin:6mm 0 5mm">'+
+     '<h2 style="text-align:center;font-size:19pt;color:#1a2a52;font-weight:900;letter-spacing:1px">'+t('bul_title')+'</h2>'+
+     '<p style="text-align:center;font-size:11pt;color:#444;margin-top:1mm">'+t('bul_period')+' : <b>'+moisLabel($('pMois').value)+'</b></p></div>'+
+   (c.snmgWarn?'<p style="color:#b00;font-weight:700;font-size:10.5pt;margin-bottom:3mm">'+t('bul_snmg_warn')+'</p>':'')+
+   identTable+
+   '<table style="width:100%;border-collapse:collapse;font-size:10.5pt">'+
+     '<thead><tr style="background:#1a2a52;color:#fff">'+
+       '<th style="border:1px solid #1a2a52;padding:6px">'+t('bul_code')+'</th>'+
+       '<th style="border:1px solid #1a2a52;padding:6px;text-align:'+(G?'right':'left')+'">'+t('bul_designation')+'</th>'+
+       '<th style="border:1px solid #1a2a52;padding:6px">'+t('bul_nbase')+'</th>'+
+       '<th style="border:1px solid #1a2a52;padding:6px">'+t('bul_rate')+'</th>'+
+       '<th style="border:1px solid #1a2a52;padding:6px">'+t('bul_gain')+'</th>'+
+       '<th style="border:1px solid #1a2a52;padding:6px">'+t('bul_ret')+'</th></tr></thead><tbody>'+
+     lignes+totRow+
+     '</tbody></table>'+
+   '<div style="margin-top:5mm;background:#1a2a52;color:#fff;padding:9px 16px;border-radius:6px;display:flex;justify-content:space-between;font-size:14pt;font-weight:900"><span>'+t('bul_net')+'</span><span>'+fm(c.net)+'</span></div>'+
+   '<p style="margin-top:4mm;font-size:11pt;color:#222;text-align:'+(G?'right':'left')+'">'+t('bul_arrete')+' : <b>'+fm(c.net)+'</b>.</p>'+
+   docFooter(true,sec);
+}
+
+/* ---------- ATTESTATIONS / DOCUMENTS ---------- */
+function buildPosteOverride(){
+  const sel=$('aPoste');if(!sel)return;const cur=sel.value;
+  sel.innerHTML=POSTES.filter(p=>p.k!=='__autre').map(p=>'<option value="'+p.k+'">'+esc(p[LANG])+'</option>').join('');
+  const w=S.workers.find(x=>x.id===($('aW')?$('aW').value:''));
+  sel.value=cur||(w&&w.fn!=='__autre'?w.fn:'manoeuvre');
+}
+function onAttWorker(){buildPosteOverride();onAttType();}
+function onAttType(){
+  const ty=$('aT')?$('aT').value:'';
+  $('aMissionBox').style.display=ty==='ordremission'?'':'none';
+  $('aCongeBox').style.display=ty==='conge'?'':'none';
+  $('aCessationBox').style.display=(ty==='certtravail'||ty==='cessation')?'':'none';
+  calcAtt();
+}
+function attPoste(w){const k=$('aPoste')?$('aPoste').value:'';const p=POSTES.find(x=>x.k===k);return p?p[LANG]:posteLabel(w);}
+function nbDays(a,b){if(!a||!b)return 0;const d=Math.round((new Date(b)-new Date(a))/86400000)+1;return d>0?d:0;}
+function calcAtt(){
+  buildSecChips('attSecChips','att');
+  const w=S.workers.find(x=>x.id===$('aW').value);
+  if(!w){$('attDoc').innerHTML='<p style="color:#888;padding:20px;text-align:center">'+t('msg_no_worker')+'</p>';return;}
+  const ty=$('aT').value, dest=($('aDest').value||'').trim(), ref=$('aRef').value, s=S.settings, sec=s.secs.att, G=LANG==='ar';
+  const endDate=$('aEndDate')?$('aEndDate').value:'';
+  const invalidDoc=(message)=>{$('attDoc').innerHTML='<p style="color:#b00;padding:20px;text-align:center;font-weight:700">'+esc(message)+'</p>';};
+  if((ty==='certtravail'||ty==='cessation')&&!endDate){invalidDoc(t('doc_enddate_required'));return;}
+  const poste=esc(attPoste(w)), exp=calcExp(w), ger=esc(s.gerant);
+  const nom='<b>'+esc(w.N+' '+w.P)+'</b>';
+  let title=t('att_t1'), body='', extra='', closeTxt='';
+  const aff=G?'المعني(ة) منتسب(ة) إلى الصندوق الوطني للتأمينات الاجتماعية للعمّال الأجراء (CNAS) تحت رقم التسجيل : <b>'+esc(w.ss||'')+'</b>.'
+            :"L'intéressé(e) est affilié(e) à la CNAS sous le numéro d'immatriculation : <b>"+esc(w.ss||'')+"</b>.";
+  const recap='<table style="border-collapse:collapse;margin:6mm 0;font-size:11.5pt">'+
+      '<thead><tr style="background:#1a2a52;color:#fff">'+
+        '<th style="border:1px solid #1a2a52;padding:5px 14px">'+t('doc_recrut')+'</th>'+
+        '<th style="border:1px solid #1a2a52;padding:5px 14px">'+t('doc_jusqua')+'</th>'+
+        '<th style="border:1px solid #1a2a52;padding:5px 14px">'+t('doc_anciennete')+'</th></tr></thead>'+
+      '<tbody><tr style="font-weight:700;text-align:center">'+
+        '<td style="border:1px solid #999;padding:5px 14px">'+fd(w.et)+'</td>'+
+        '<td style="border:1px solid #999;padding:5px 14px;color:#1a2a52">'+t('doc_cejour')+'</td>'+
+        '<td style="border:1px solid #999;padding:5px 14px;color:#1a2a52">'+esc(exp)+'</td></tr></tbody></table>';
+  const intro=G?'أنا الموقّع أدناه، '+ger+'، المسيّر للمؤسسة، أشهد بأنّ السيّد(ة) ':"Je soussigné, <b>"+ger+"</b>, Gérant de l'entreprise, ";
+  if(ty==='travail'){
+    title=t('att_t1');
+    body=G?intro+nom+'، المولود(ة) بتاريخ '+fd(w.dd)+' بـ'+esc(w.li||'')+'، يشتغل(تشتغل) ضمن مؤسستنا بصفة <b>'+poste+'</b> منذ '+fd(w.et)+'، أي بأقدمية قدرها <b>'+esc(exp)+'</b>.'
+            :intro+"atteste que M./Mme "+nom+", né(e) le "+fd(w.dd)+" à "+esc(w.li||'')+", exerce au sein de notre entreprise en qualité de <b>"+poste+"</b> depuis le "+fd(w.et)+", soit une ancienneté de <b>"+esc(exp)+"</b>.";
+    if(sec.recap)extra=recap+'<p>'+aff+'</p>';
+    closeTxt=G?(dest?'سُلّمت هذه الشهادة بناءً على طلب المعني(ة) لتقديمها لدى <b>'+esc(dest)+'</b>، للاستعمال فيما يخوّله القانون.':'سُلّمت هذه الشهادة بناءً على طلب المعني(ة) لاستعمالها فيما يخوّله القانون.')
+              :(dest?"La présente attestation est délivrée à la demande de l'intéressé(e) pour servir et valoir ce que de droit, notamment auprès de : <b>"+esc(dest)+"</b>.":"La présente attestation est délivrée à la demande de l'intéressé(e) pour servir et valoir ce que de droit.");
+  }else if(ty==='salaire'){
+    title=t('att_t2');
+    body=G?intro+nom+'، الموظّف(ة) بصفة <b>'+poste+'</b> منذ '+fd(w.et)+'، يتقاضى(تتقاضى) أجرًا قاعديًا شهريًا قدره <b>'+fm(w.sl||s.salBase)+'</b>.'
+            :intro+"atteste que M./Mme "+nom+", employé(e) en qualité de <b>"+poste+"</b> depuis le "+fd(w.et)+", perçoit un salaire de base mensuel de <b>"+fm(w.sl||s.salBase)+"</b>.";
+    closeTxt=G?'سُلّمت هذه الشهادة لاستعمالها فيما يخوّله القانون.':"La présente attestation est délivrée pour servir et valoir ce que de droit.";
+  }else if(ty==='certtravail'){
+    title=t('att_t_certtravail');
+    body=G?intro+'قد اشتغل(ت) ضمن مؤسستنا بصفة <b>'+poste+'</b> خلال الفترة الممتدّة من '+fd(w.et)+' إلى '+fd(endDate)+'، وأنّ المعني(ة) غادر(ت) المؤسسة وهو(ي) حرّ(ة) من كلّ التزام.'
+            :intro+"certifie que M./Mme "+nom+" a été employé(e) au sein de notre entreprise en qualité de <b>"+poste+"</b> durant la période du "+fd(w.et)+" au "+fd(endDate)+", et qu'il/elle nous quitte libre de tout engagement.";
+    if(sec.recap)extra='<p>'+aff+'</p>';
+    closeTxt=G?'سُلّمت هذه الشهادة للمعني(ة) للاستعمال فيما يخوّله القانون.':"Le présent certificat est délivré à l'intéressé(e) pour servir et valoir ce que de droit.";
+  }else if(ty==='cessation'){
+    title=t('att_t3');
+    body=G?intro+'قد أنهى(ت) علاقته(ا) بالعمل مع مؤسستنا بتاريخ '+fd(endDate)+'، بعد أن شغل(ت) منصب <b>'+poste+'</b> منذ '+fd(w.et)+'.'
+            :intro+"atteste que M./Mme "+nom+" a cessé toute relation de travail avec notre entreprise à la date du "+fd(endDate)+", après avoir occupé le poste de <b>"+poste+"</b> depuis le "+fd(w.et)+".";
+    closeTxt=G?'سُلّمت هذه الشهادة للمعني(ة) للاستعمال فيما يخوّله القانون.':"Le présent certificat est délivré à l'intéressé(e) pour servir et valoir ce que de droit.";
+  }else if(ty==='ordremission'){
+    title=t('att_t_ordremission');
+    const mdest=esc(($('aMDest').value||'').trim()), mobj=esc(($('aMObj').value||'').trim()), mfrom=$('aMFrom').value, mto=$('aMTo').value, mmoy=esc(($('aMMoy').value||'').trim());
+    if(!isValidRange(mfrom,mto)){invalidDoc(t('msg_invalid_range'));return;}
+    const nd=nbDays(mfrom,mto);
+    body=G?intro+'يكلّف السيّد(ة) '+nom+'، الشاغل(ة) لمنصب <b>'+poste+'</b>، بأداء مهمّة لفائدة المؤسسة'+(mobj?' تتعلّق بـ <b>'+mobj+'</b>':'')+(mdest?' بـ <b>'+mdest+'</b>':'')+(mfrom?' خلال الفترة من '+fd(mfrom)+(mto?' إلى '+fd(mto)+(nd?' ('+nd+' '+t('unit_jours')+')':''):''):'')+(mmoy?'، باستعمال وسيلة النقل : <b>'+mmoy+'</b>':'')+'.'
+            :"Par le présent ordre de mission, M./Mme "+nom+", occupant le poste de <b>"+poste+"</b>, est chargé(e) d'effectuer une mission pour le compte de l'entreprise"+(mobj?" ayant pour objet : <b>"+mobj+"</b>":"")+(mdest?", à destination de <b>"+mdest+"</b>":"")+(mfrom?", durant la période du "+fd(mfrom)+(mto?" au "+fd(mto)+(nd?" ("+nd+" "+t('unit_jours')+")":""):""):"")+(mmoy?", par moyen de transport : <b>"+mmoy+"</b>":"")+".";
+    closeTxt=G?'يُطلب من كلّ السلطات المدنية والعسكرية تسهيل مهمّة المعني(ة).':"Les autorités civiles et militaires sont priées de faciliter la mission de l'intéressé(e).";
+  }else if(ty==='conge'){
+    title=t('att_t_conge');
+    const ctype=$('aCType').value, cfrom=$('aCFrom').value, cto=$('aCTo').value, cback=$('aCBack').value, cmotif=esc(($('aCMotif').value||'').trim());
+    if(!isValidRange(cfrom,cto)){invalidDoc(t('msg_invalid_range'));return;}
+    const nd=nbDays(cfrom,cto);
+    const tlab={annuel:t('cg_t_annuel'),excep:t('cg_t_excep'),ss:t('cg_t_ss')}[ctype];
+    body=G?intro+'تأذن المؤسسة للسيّد(ة) '+nom+'، الشاغل(ة) لمنصب <b>'+poste+'</b>، بالاستفادة من <b>'+tlab+'</b>'+(cfrom?' خلال الفترة من '+fd(cfrom)+(cto?' إلى '+fd(cto):''):'')+(nd?' أي مدّة <b>'+nd+' '+t('unit_jours')+'</b>':'')+(cback?'، على أن يلتحق(تلتحق) بمنصبه(ا) بتاريخ <b>'+fd(cback)+'</b>':'')+(cmotif?'. السبب : '+cmotif:'')+'.'
+            :intro+"autorise M./Mme "+nom+", occupant le poste de <b>"+poste+"</b>, à bénéficier d'un <b>"+tlab+"</b>"+(cfrom?" durant la période du "+fd(cfrom)+(cto?" au "+fd(cto):""):"")+(nd?", soit une durée de <b>"+nd+" "+t('unit_jours')+"</b>":"")+(cback?", avec reprise de service le <b>"+fd(cback)+"</b>":"")+(cmotif?". Motif : "+cmotif:"")+".";
+    closeTxt=G?'حُرّر هذا السند للاستعمال فيما يخوّله القانون.':"Le présent titre est délivré pour servir et valoir ce que de droit.";
+  }
+  const refLine=sec.ref?('<div style="display:flex;justify-content:space-between;align-items:center;font-size:11pt;color:#444;margin-top:2mm">'+
+     '<span>'+esc(s.wilaya)+' — '+fd(tod())+'</span>'+
+     (ref?'<span style="font-weight:700;color:#1a2a52">'+t('f_ref')+' N° '+esc(ref)+'</span>':'')+'</div>'):'';
+  $('attDoc').innerHTML=docHeader(sec)+
+   refLine+
+   '<div style="border-top:3px solid #1a2a52;border-bottom:3px solid #1a2a52;padding:3.5mm 0;margin:6mm 0 7mm">'+
+     '<h2 style="text-align:center;font-size:21pt;color:#1a2a52;font-weight:900;letter-spacing:2px">'+title+'</h2></div>'+
+   dwrap('<p>'+body+'</p>'+extra+'<p style="margin-top:4mm">'+closeTxt+'</p>')+
+   docFooter(false,sec);
+}
+
+/* ---------- CONTRAT ---------- */
+function buildCntPoste(){const sel=$('cPoste');if(!sel)return;const cur=sel.value;
+  sel.innerHTML=POSTES.filter(p=>p.k!=='__autre').map(p=>'<option value="'+p.k+'">'+esc(p[LANG])+'</option>').join('');
+  const w=S.workers.find(x=>x.id===($('cW')?$('cW').value:''));sel.value=cur||(w&&w.fn!=='__autre'?w.fn:'manoeuvre');}
+function cntPoste(w){const k=$('cPoste')?$('cPoste').value:'';const p=POSTES.find(x=>x.k===k);return p?p[LANG]:posteLabel(w);}
+function calcCnt(){
+  buildSecChips('cntSecChips','cnt');
+  const w=S.workers.find(x=>x.id===$('cW').value);
+  if(!w){$('cntDoc').innerHTML='<p style="color:#888;padding:20px;text-align:center">'+t('msg_no_worker')+'</p>';return;}
+  const ty=$('cT').value, dur=parseInt($('cD').value)||6, ess=parseInt($('cE').value)||3, s=S.settings, sec=s.secs.cnt;
+  const poste=esc(cntPoste(w)), ger=esc(s.gerant), rs=esc(LANG==='ar'?s.rsAr:s.rsFr);
+  const G=LANG==='ar', sal=fm(w.sl||s.salBase);
+  let n=0; const art=(txt)=>{n++;return '<p style="margin-top:3.5mm;text-align:'+(G?'right':'justify')+'"><b>'+(G?'المادة ':'Article ')+n.toString().padStart(2,'0')+(G?' : ':' : ')+'</b>'+txt+'</p>';};
+  const title=ty==='CDI'?t('cnt_t3'):t('cnt_t2');
+  let body='';
+  if(G){
+    body='<p>بين الموقّعين أدناه :</p>'+
+     '<p>المؤسسة <b>'+rs+'</b>، الكائن مقرّها بـ '+esc(s.addrAr)+'، المسجّلة بالسجل التجاري رقم '+esc(s.rc)+'، ممثّلةً بمسيّرها السيّد <b>'+ger+'</b>، المشار إليها فيما يلي بـ «المُشغّل» — من جهة،</p>'+
+     '<p>والسيّد(ة) <b>'+esc(w.N+' '+w.P)+'</b>، المولود(ة) بتاريخ '+fd(w.dd)+' بـ'+esc(w.li||'')+'، الحامل(ة) لرقم الضمان الاجتماعي '+esc(w.ss||'')+'، القاطن(ة) بـ '+esc(w.ad||'')+'، المشار إليه(ا) فيما يلي بـ «الأجير» — من جهة أخرى.</p>'+
+     '<p style="margin-top:3mm">تمّ الاتفاق على ما يلي :</p>'+
+     art('يُوظَّف الأجير لدى المُشغّل بصفة <b>'+poste+'</b> ابتداءً من '+fd(w.et)+'، ويلتزم بأداء المهامّ الموكلة إليه بكلّ كفاءة وإخلاص.')+
+     art('يُبرَم هذا العقد '+(ty==='CDI'?'لمدّة غير محدّدة (CDI).':'لمدّة محدّدة (CDD) قدرها <b>'+dur+'</b> أشهر، قابلة للتجديد وفق ما يسمح به القانون 90-11. ينتهي العقد بقوّة القانون عند انقضاء مدّته دون حاجة إلى إشعار مسبق أو تعويض.'))+
+     art('تُحدَّد فترة التجربة بـ <b>'+ess+'</b> '+(ess>1?'أشهر':'شهر')+'، يمكن خلالها لأيّ من الطرفين إنهاء العقد دون إشعار مسبق ودون تعويض.')+
+     art('يتقاضى الأجير أجرًا قاعديًا شهريًا قدره <b>'+sal+'</b>، تُقتطع منه الاشتراكات الاجتماعية (CNAS) والضريبة على الدخل (IRG) المعمول بها قانونًا.')+
+     art('المدّة القانونية للعمل محدّدة بـ <b>40 ساعة</b> أسبوعيًا موزّعة حسب برنامج المؤسسة؛ ويلتزم الأجير بالتوقيت المعمول به وبأداء الساعات الإضافية عند الاقتضاء وفق التنظيم الساري.')+
+     art('يخضع الأجير لمكان العمل وللورشات التي تحدّدها المؤسسة، ويقبل التنقّل بين مختلف مواقع نشاطها حسب متطلّبات المصلحة.')+
+     art('يلتزم الأجير باحترام النظام الداخلي للمؤسسة وتعليمات رؤسائه، وقواعد الانضباط والأمن والوقاية الصحية في الورشات، تحت طائلة العقوبات التأديبية.')+
+     art('يلتزم الأجير بالمحافظة على عتاد ووسائل المؤسسة وحسن استعمالها، ويتحمّل مسؤوليته عن كلّ إتلاف ناتج عن إهمال أو خطأ جسيم.')+
+     art('يلتزم الأجير بالسرّية التامّة تجاه كلّ المعلومات والوثائق المتعلّقة بنشاط المؤسسة وزبائنها، أثناء سريان العقد وبعد انتهائه.')+
+     art('يستفيد الأجير من العطلة السنوية المدفوعة الأجر بمعدّل يومين ونصف عن كلّ شهر عمل، طبقًا للتشريع المعمول به.')+
+     art('يُعدّ الغياب غير المبرّر أو التخلّي عن المنصب خطأً جسيمًا يخوّل للمُشغّل فسخ العقد دون تعويض، طبقًا لأحكام المادتين 73 وما يليها من القانون 90-11.')+
+     art('في حالة الإنهاء المسبق للعقد من طرف الأجير، يلتزم هذا الأخير باحترام مهلة إشعار مسبق قدرها '+(ty==='CDI'?'شهر واحد':'15 يومًا')+'، تحت طائلة تحمّل التعويضات الناتجة عن ذلك.')+
+     art('يخضع هذا العقد لأحكام القانون 90-11 المؤرّخ في 21 أفريل 1990 المتعلّق بعلاقات العمل والنصوص المتمّمة له؛ وكلّ نزاع يُعرض ودّيًا ثمّ على الجهة القضائية المختصّة بـ '+esc(s.wilaya)+'.')+
+     art('حُرّر هذا العقد من نسختين أصليّتين، تسلّم نسخة لكلّ طرف.');
+  }else{
+    body="<p>Entre les soussignés :</p>"+
+     "<p>L'entreprise <b>"+rs+"</b>, sise à "+esc(s.addrFr)+", immatriculée au Registre du Commerce sous le n° "+esc(s.rc)+", représentée par son Gérant M. <b>"+ger+"</b>, ci-après dénommée « l'Employeur » — d'une part,</p>"+
+     "<p>Et M./Mme <b>"+esc(w.N+' '+w.P)+"</b>, né(e) le "+fd(w.dd)+" à "+esc(w.li||'')+", N° de sécurité sociale "+esc(w.ss||'')+", demeurant à "+esc(w.ad||'')+", ci-après dénommé(e) « le Salarié » — d'autre part.</p>"+
+     "<p style='margin-top:3mm'>Il a été convenu et arrêté ce qui suit :</p>"+
+     art("Le Salarié est engagé en qualité de <b>"+poste+"</b> à compter du "+fd(w.et)+", et s'engage à exécuter les tâches qui lui sont confiées avec compétence, diligence et loyauté.")+
+     art("Le présent contrat est conclu "+(ty==='CDI'?"pour une <b>durée indéterminée</b> (CDI).":"pour une <b>durée déterminée</b> (CDD) de <b>"+dur+" mois</b>, renouvelable dans les limites autorisées par la loi 90-11. Il prend fin de plein droit à l'échéance de son terme, sans préavis ni indemnité.")) +
+     art("La période d'essai est fixée à <b>"+ess+" mois</b>, durant laquelle chacune des parties peut rompre le contrat sans préavis ni indemnité.")+
+     art("Le Salarié perçoit un salaire de base mensuel de <b>"+sal+"</b>, soumis aux cotisations sociales (CNAS) et à l'impôt sur le revenu (IRG) en vigueur.")+
+     art("La durée légale de travail est fixée à <b>40 heures</b> par semaine, réparties selon le programme de l'entreprise ; le Salarié s'engage à respecter les horaires et à effectuer, le cas échéant, les heures supplémentaires conformément à la réglementation.")+
+     art("Le Salarié exerce sur le lieu de travail et les chantiers désignés par l'Employeur, et accepte sa mobilité entre les différents sites d'activité de l'entreprise selon les besoins du service.")+
+     art("Le Salarié est tenu de respecter le règlement intérieur, les instructions de sa hiérarchie ainsi que les règles de discipline, d'hygiène et de sécurité sur les chantiers, sous peine de sanctions disciplinaires.")+
+     art("Le Salarié veille à la bonne conservation et au bon usage du matériel et des moyens de l'entreprise ; il répond de tout dommage résultant d'une négligence ou d'une faute grave.")+
+     art("Le Salarié est tenu à une stricte obligation de confidentialité sur toutes les informations et documents relatifs à l'activité de l'entreprise et à ses clients, pendant l'exécution du contrat et après sa cessation.")+
+     art("Le Salarié bénéficie d'un congé annuel payé à raison de deux jours et demi par mois de travail, conformément à la législation en vigueur.")+
+     art("Toute absence injustifiée ou abandon de poste constitue une faute grave autorisant l'Employeur à rompre le contrat sans indemnité, conformément aux articles 73 et suivants de la loi 90-11.")+
+     art("En cas de rupture anticipée du contrat à l'initiative du Salarié, celui-ci est tenu de respecter un préavis de "+(ty==='CDI'?"un (1) mois":"quinze (15) jours")+", à défaut duquel il supportera les indemnités y afférentes.")+
+     art("Le présent contrat est régi par la loi 90-11 du 21 avril 1990 relative aux relations de travail et ses textes subséquents ; tout litige sera réglé à l'amiable puis, à défaut, devant la juridiction compétente de "+esc(s.wilaya)+".")+
+     art("Le présent contrat est établi en deux (2) exemplaires originaux, un pour chaque partie.");
+  }
+  $('cntDoc').innerHTML=docHeader(sec)+
+   '<div style="border-top:3px solid #1a2a52;border-bottom:3px solid #1a2a52;padding:3.5mm 0;margin:6mm 0 6mm">'+
+     '<h2 style="text-align:center;font-size:18pt;color:#1a2a52;font-weight:900;letter-spacing:.5px">'+title+'</h2></div>'+
+   dwrap(body)+
+   docClose('<div style="display:flex;justify-content:space-between;margin-top:12mm;font-size:11pt">'+
+     '<div style="text-align:center;min-width:60mm"><p style="font-weight:700;color:#1a2a52">'+(G?'الأجير':'Le Salarié')+'</p><p style="font-size:8.5pt;color:#888">'+(G?'(قُرئ وصودق عليه)':'(Lu et approuvé)')+'</p><div style="height:22mm;margin-top:1mm;border:1px dashed #aab;border-radius:6px"></div><p style="margin-top:1mm">'+esc(w.N+' '+w.P)+'</p></div>'+
+     '<div style="text-align:center;min-width:60mm"><p style="font-weight:700;color:#1a2a52">'+(G?'المسيّر':'Le Gérant')+'</p><p style="font-size:8.5pt;color:#888">&nbsp;</p><div style="height:22mm;margin-top:1mm;border:1px dashed #aab;border-radius:6px"></div><p style="margin-top:1mm">'+ger+'</p></div>'+
+   '</div>',sec);
+}
+
+/* ---------- PRINT ---------- */
+function printArea(id){
+  document.querySelectorAll('.printArea').forEach(e=>{if(e.id!==id)e.dataset.noprint='1';else delete e.dataset.noprint;});
+  let pageRule='';
+  if(id==='lnDoc' && $('lnOrient') && $('lnOrient').value==='landscape'){pageRule='@page{size:A4 landscape;margin:0}';}
+  const css=document.createElement('style');css.id='ptmp';
+  css.textContent=pageRule+'@media print{.printArea[data-noprint]{display:none!important}}';
+  document.head.appendChild(css);
+  window.print();
+  if(id==='attDoc'&&$('aRef')){
+    const current=$('aRef').value.trim(),expected=genRef('refAtt');
+    if(current===expected){S.settings.refAtt=(parseInt(S.settings.refAtt,10)||1)+1;saveAll(true);$('aRef').value=genRef('refAtt');calcAtt();}
+  }
+  setTimeout(()=>{const e=$('ptmp');if(e)e.remove();},500);
+}
+
+
+/* ---------- FIREBASE REAL-TIME SYNCHRONISATION ----------
+   The path key isolates this RH application. It is a namespace, not an authentication secret.
+   Each record is versioned in milliseconds; delete tombstones always win and are retained.
+*/
+const FIREBASE_CONFIG={
+  apiKey:"AIzaSyA7xH8pwmEjzIM98lE6C-GmK-cSrAvs9gc",
+  authDomain:"egtph-rh.firebaseapp.com",
+  projectId:"egtph-rh",
+  storageBucket:"egtph-rh.firebasestorage.app",
+  messagingSenderId:"1004672243317",
+  appId:"1:1004672243317:web:0bebec3d39f1a332274a3c",
+  measurementId:"G-BNKD45KYHV",
+  databaseURL:"https://egtph-rh-default-rtdb.europe-west1.firebasedatabase.app"
+};
+const FIREBASE_OWNER_UID="nUylq7tIQqZfTzir6IsPQOU9jKG3"; // UID fourni : à utiliser dans les règles Firebase si l’authentification est activée.
+const FIREBASE_PATH_KEY="rh_v3_MBInR2bhdTMRnHOL1ts1g187pZhstcz1VwtcHtjz8";
+const FIREBASE_ROOT_PATH="egtph-rh/"+FIREBASE_PATH_KEY;
+const SYNC_META_KEY="egtph_rh_sync_meta_v3";
+const SYNC_TYPES=['workers','conges','avances'];
+let fbApp=null,fbAuth=null,fbUser=null,fbDb=null,fbRef=null,fbOffset=0,fbReady=false,fbBusy=false,fbListenerAttached=false,fbTimer=null,fbLastError='',fbInitPromise=null;
+let fbApplying=false,fbLastSyncAt=0;
+function freshSyncMeta(){return {initialized:false,deviceId:makeId('device'),lastMs:0,records:{workers:{},conges:{},avances:{}},tombstones:{workers:{},conges:{},avances:{}},settings:{updatedAtMs:0,updatedBy:''},lastHashes:{workers:{},conges:{},avances:{},settings:''}};}
+function loadSyncMeta(){
+  try{const o=JSON.parse(localStorage.getItem(SYNC_META_KEY)||'null');if(!o||typeof o!=='object')return freshSyncMeta();
+    const d=freshSyncMeta();o.records=o.records||{};o.tombstones=o.tombstones||{};o.lastHashes=o.lastHashes||{};
+    SYNC_TYPES.forEach(k=>{d.records[k]=o.records[k]||{};d.tombstones[k]=o.tombstones[k]||{};d.lastHashes[k]=o.lastHashes[k]||{};});
+    d.initialized=!!o.initialized;d.deviceId=String(o.deviceId||d.deviceId);d.lastMs=Number(o.lastMs)||0;d.settings=o.settings||d.settings;d.lastHashes.settings=String(o.lastHashes.settings||'');return d;
+  }catch(e){return freshSyncMeta();}
+}
+let syncMeta=loadSyncMeta();
+function saveSyncMeta(){try{localStorage.setItem(SYNC_META_KEY,JSON.stringify(syncMeta));}catch(e){console.warn(e);}}
+function syncText(kind){
+  const ar=LANG==='ar';
+  const m={connecting:ar?'جارٍ الاتصال بالسحابة…':'Connexion Firebase…',ok:ar?'متزامن':'Synchronisé',saving:ar?'جارٍ حفظ التغييرات…':'Synchronisation…',offline:ar?'مزامنة غير متاحة':'Synchronisation indisponible',error:ar?'خطأ مزامنة':'Erreur de synchronisation'};
+  return m[kind]||m.connecting;
+}
+function updateFirebaseAuthUi(){
+  const logged=!!(fbUser&&fbUser.uid===FIREBASE_OWNER_UID),hasOther=!!(fbUser&&!logged),ar=LANG==='ar';
+  const note=$('syncAuthNote');if(note)note.textContent=logged?t('sync_auth_ok'):(hasOther?t('sync_auth_wrong'):t('sync_auth_required'));
+  const form=$('syncAuthForm');if(form)form.style.display=logged?'none':'';
+  const login=$('fbLoginBtn');if(login)login.style.display=logged?'none':'';
+  const logout=$('fbLogoutBtn');if(logout)logout.style.display=fbUser?'':'none';
+}
+function setSyncStatus(kind,detail){
+  const text=syncText(kind)+(detail?': '+detail:'');
+  ['syncState','syncStateSettings'].forEach(id=>{const el=$(id);if(el){el.className='sync-state '+(kind==='ok'?'ok':(kind==='connecting'||kind==='saving'?'syncing':'off'));el.textContent='☁️ '+text;el.title=text;}});
+  const key=$('syncPathKey');if(key){key.textContent=(LANG==='ar'?'مفتاح المسار':'Clé du chemin')+': '+FIREBASE_PATH_KEY+'\n'+(LANG==='ar'?'المسار الكامل':'Chemin complet')+': '+FIREBASE_ROOT_PATH;}
+  const hint=$('syncHint');if(hint){hint.textContent=LANG==='ar'?'مزامنة فورية عبر Firebase مع طابع زمني بالميلي ثانية. الحذف يُحفظ كسجل حذف دائم؛ صور CNAS تبقى محلية، والمعلومات المستخرجة فقط تُزامَن.':'Synchronisation Firebase en temps réel avec horodatage en millisecondes. Les suppressions sont des tombstones permanents ; les scans CNAS restent locaux et seules les informations extraites sont synchronisées.';}
+  const title=$('syncTitleText');if(title)title.textContent=LANG==='ar'?'مزامنة Firebase':'Synchronisation Firebase';
+  updateFirebaseAuthUi();
+}
+function loadRemoteScript(src){return new Promise((resolve,reject)=>{const found=[...document.scripts].some(x=>x.src===src);if(found){resolve();return;}const n=document.createElement('script');n.src=src;n.async=true;n.crossOrigin='anonymous';n.onload=()=>resolve();n.onerror=()=>reject(new Error('SDK Firebase indisponible'));document.head.appendChild(n);});}
+let firebaseSdkPromise=null;
+function ensureFirebaseSdk(){
+  if(window.firebase&&window.firebase.database&&window.firebase.auth)return Promise.resolve();
+  if(firebaseSdkPromise)return firebaseSdkPromise;
+  const base='https://www.gstatic.com/firebasejs/10.12.2/';
+  firebaseSdkPromise=loadRemoteScript(base+'firebase-app-compat.js')
+    .then(()=>loadRemoteScript(base+'firebase-auth-compat.js'))
+    .then(()=>loadRemoteScript(base+'firebase-database-compat.js'))
+    .then(()=>{if(!(window.firebase&&firebase.database&&firebase.auth))throw new Error('Firebase Auth/Database SDK absent');});
+  return firebaseSdkPromise;
+}
+async function ensureFirebaseApp(){
+  await ensureFirebaseSdk();
+  fbApp=(firebase.apps||[]).find(app=>app.name==='egtphRh')||firebase.initializeApp(FIREBASE_CONFIG,'egtphRh');
+  fbAuth=firebase.auth(fbApp);return fbApp;
+}
+function closeFirebaseListener(){if(fbRef&&fbListenerAttached){try{fbRef.off();}catch(e){console.warn(e);}fbListenerAttached=false;}fbReady=false;fbRef=null;fbDb=null;}
+async function getFirebaseUser(){
+  if(!fbAuth)return null;
+  if(fbAuth.currentUser)return fbAuth.currentUser;
+  return new Promise(resolve=>{let stop=null;const done=u=>{if(stop)stop();resolve(u||null);};stop=fbAuth.onAuthStateChanged(done,()=>done(null));});
+}
+async function firebaseSignIn(){
+  const email=String(($('fbAuthEmail')||{}).value||'').trim(),password=String(($('fbAuthPassword')||{}).value||'');
+  if(!email||!password){toast(t('sync_auth_missing'),'wa');return;}
+  try{
+    setSyncStatus('connecting');await ensureFirebaseApp();const result=await fbAuth.signInWithEmailAndPassword(email,password);fbUser=result.user||await getFirebaseUser();
+    if(!fbUser||fbUser.uid!==FIREBASE_OWNER_UID){try{await fbAuth.signOut();}catch(e){}fbUser=null;closeFirebaseListener();setSyncStatus('error',t('sync_auth_wrong'));toast(t('sync_auth_wrong'),'er');return;}
+    if($('fbAuthPassword'))$('fbAuthPassword').value='';await initCloudSync();toast(t('sync_auth_ok'));
+  }catch(e){console.error(e);fbUser=null;closeFirebaseListener();setSyncStatus('error',t('sync_login_error'));toast(t('sync_login_error'),'er');}
+}
+async function firebaseSignOut(){
+  try{if(fbAuth)await fbAuth.signOut();}catch(e){console.error(e);}fbUser=null;closeFirebaseListener();setSyncStatus('offline',t('sync_auth_required'));
+}
+function cleanClone(v){return JSON.parse(JSON.stringify(v));}
+function stableStringify(v){
+  if(v===null||typeof v!=='object')return JSON.stringify(v);
+  if(Array.isArray(v))return '['+v.map(stableStringify).join(',')+']';
+  return '{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stableStringify(v[k])).join(',')+'}';
+}
+function makeStamp(){
+  const now=Math.max(Math.floor(Date.now()+fbOffset),Number(syncMeta.lastMs||0)+1);
+  syncMeta.lastMs=now;return {updatedAtMs:now,updatedBy:syncMeta.deviceId};
+}
+function normalizeVersion(v){return {updatedAtMs:Number(v&&v.updatedAtMs)||0,updatedBy:String((v&&v.updatedBy)||'')};}
+function compareVersion(a,b){const x=normalizeVersion(a),y=normalizeVersion(b);if(x.updatedAtMs!==y.updatedAtMs)return x.updatedAtMs>y.updatedAtMs?1:-1;return x.updatedBy===y.updatedBy?0:(x.updatedBy>y.updatedBy?1:-1);}
+function recordMap(type){const out={};(S[type]||[]).forEach(x=>{if(x&&x.id)out[String(x.id)]=cleanClone(x);});return out;}
+function hydrateEnvelope(value){
+  const raw=value&&typeof value==='object'?value:{};
+  const e={schema:3,records:{workers:{},conges:{},avances:{}},tombstones:{workers:{},conges:{},avances:{}},settings:{data:cleanClone(S.settings),updatedAtMs:0,updatedBy:''}};
+  const rr=raw.records||{};const tt=raw.tombstones||{};
+  SYNC_TYPES.forEach(type=>{e.records[type]=(rr[type]&&typeof rr[type]==='object')?rr[type]:{};e.tombstones[type]=(tt[type]&&typeof tt[type]==='object')?tt[type]:{};});
+  if(raw.settings&&raw.settings.data)e.settings=raw.settings;
+  return e;
+}
+function prepareLocalEnvelope(){
+  normalizeDataIds();
+  const records={workers:{},conges:{},avances:{}};
+  SYNC_TYPES.forEach(type=>{
+    const current=recordMap(type),hashes={};
+    Object.keys(current).forEach(id=>{
+      const hash=stableStringify(current[id]);hashes[id]=hash;
+      if(syncMeta.tombstones[type][id])return; // a tombstone is permanent; stale data cannot revive it
+      if(!syncMeta.records[type][id]||syncMeta.lastHashes[type][id]!==hash)syncMeta.records[type][id]=makeStamp();
+      records[type][id]={data:current[id],...normalizeVersion(syncMeta.records[type][id])};
+    });
+    Object.keys(syncMeta.lastHashes[type]||{}).forEach(id=>{if(!(id in current)&&!syncMeta.tombstones[type][id]){const st=makeStamp();syncMeta.tombstones[type][id]={deletedAtMs:st.updatedAtMs,deletedBy:st.updatedBy};delete syncMeta.records[type][id];}});
+    syncMeta.lastHashes[type]=hashes;
+  });
+  const settingsData=cleanClone(S.settings),settingsHash=stableStringify(settingsData);
+  if(!syncMeta.settings||!syncMeta.settings.updatedAtMs||syncMeta.lastHashes.settings!==settingsHash)syncMeta.settings=makeStamp();
+  syncMeta.lastHashes.settings=settingsHash;saveSyncMeta();
+  return {schema:3,records,tombstones:cleanClone(syncMeta.tombstones),settings:{data:settingsData,...normalizeVersion(syncMeta.settings)}};
+}
+function mergeEnvelopes(remoteValue,localValue){
+  const remote=hydrateEnvelope(remoteValue),local=hydrateEnvelope(localValue);
+  const out={schema:3,records:{workers:{},conges:{},avances:{}},tombstones:{workers:{},conges:{},avances:{}},settings:null};
+  SYNC_TYPES.forEach(type=>{
+    const ids=new Set([...Object.keys(remote.records[type]),...Object.keys(local.records[type]),...Object.keys(remote.tombstones[type]),...Object.keys(local.tombstones[type])]);
+    ids.forEach(id=>{
+      const rt=remote.tombstones[type][id],lt=local.tombstones[type][id];
+      // Deletion is irrevocable for this id. Re-adding must use a fresh id.
+      if(rt||lt){out.tombstones[type][id]=compareVersion(lt,rt)>=0?(lt||rt):(rt||lt);return;}
+      const rr=remote.records[type][id],lr=local.records[type][id];
+      if(rr&&lr)out.records[type][id]=compareVersion(lr,rr)>=0?lr:rr;
+      else if(rr||lr)out.records[type][id]=rr||lr;
+    });
+  });
+  out.settings=compareVersion(local.settings,remote.settings)>=0?local.settings:remote.settings;
+  if(!out.settings||!out.settings.data)out.settings={data:cleanClone(S.settings),...makeStamp()};
+  return out;
+}
+function sameEnvelope(a,b){return stableStringify(hydrateEnvelope(a))===stableStringify(hydrateEnvelope(b));}
+function applyRemoteEnvelope(value){
+  const env=hydrateEnvelope(value);
+  const raw={workers:[],conges:[],avances:[],settings:env.settings&&env.settings.data?env.settings.data:S.settings};
+  SYNC_TYPES.forEach(type=>{raw[type]=Object.keys(env.records[type]).map(id=>cleanClone(env.records[type][id].data)).filter(Boolean);});
+  fbApplying=true;
+  try{hydrateState(raw);localStorage.setItem(DBK,JSON.stringify(S));
+    SYNC_TYPES.forEach(type=>{
+      syncMeta.records[type]={};syncMeta.tombstones[type]=env.tombstones[type]||{};syncMeta.lastHashes[type]={};
+      Object.keys(env.records[type]).forEach(id=>{const r=env.records[type][id];syncMeta.records[type][id]=normalizeVersion(r);syncMeta.lastHashes[type][id]=stableStringify(r.data);});
+    });
+    syncMeta.settings=normalizeVersion(env.settings);syncMeta.lastHashes.settings=stableStringify(S.settings);syncMeta.initialized=true;saveSyncMeta();
+  }finally{fbApplying=false;}
+  try{rerenderAfterCloudSync();}catch(e){console.warn(e);}
+}
+function rerenderAfterCloudSync(){
+  const cur=document.querySelector('.pg.on');const id=cur?cur.id.replace('pg-',''):'db';
+  if(id==='db')renderDB();else if(id==='wk')renderWk();else if(id==='ln')renderLN();else if(id==='cg')renderCg();else if(id==='av')renderAv();else if(id==='st')fillSettings();
+  else if(id==='pay'){fillWorkerSelect('pW');calcPay();}else if(id==='att'){fillWorkerSelect('aW');buildPosteOverride();calcAtt();}else if(id==='cnt'){fillWorkerSelect('cW');buildCntPoste();calcCnt();}
+}
+function queueCloudSync(immediate){
+  if(!fbReady||fbApplying)return;
+  clearTimeout(fbTimer);fbTimer=setTimeout(()=>syncNow(false),immediate?0:150);
+}
+async function syncNow(force){
+  if(!fbReady||!fbRef||!navigator.onLine){setSyncStatus('offline');return false;}
+  if(fbBusy)return false;
+  fbBusy=true;setSyncStatus('saving');
+  try{
+    const local=prepareLocalEnvelope();
+    const result=await fbRef.transaction(current=>mergeEnvelopes(current||{},local),undefined,false);
+    if(!result||!result.committed)throw new Error('Transaction Firebase non validée');
+    applyRemoteEnvelope(result.snapshot.val()||{});fbLastSyncAt=Date.now();fbLastError='';setSyncStatus('ok');return true;
+  }catch(e){console.error(e);fbLastError=e&&e.message?e.message:'';setSyncStatus('error',fbLastError);return false;}
+  finally{fbBusy=false;}
+}
+async function initCloudSync(){
+  if(fbInitPromise)return fbInitPromise;
+  fbInitPromise=(async()=>{
+  setSyncStatus('connecting');
+  try{
+    await ensureFirebaseApp();fbUser=await getFirebaseUser();
+    if(!fbUser){closeFirebaseListener();setSyncStatus('offline',t('sync_auth_required'));return false;}
+    if(fbUser.uid!==FIREBASE_OWNER_UID){closeFirebaseListener();setSyncStatus('error',t('sync_auth_wrong'));return false;}
+    fbDb=firebase.database(fbApp);fbRef=fbDb.ref(FIREBASE_ROOT_PATH);fbReady=true;
+    fbDb.ref('.info/serverTimeOffset').on('value',snap=>{fbOffset=Number(snap.val())||0;});
+    const first=await fbRef.once('value');const remote=first.val();
+    if(remote&&(!HAD_LOCAL_DATA||!syncMeta.initialized)){applyRemoteEnvelope(remote);}
+    else if(remote){
+      const local=prepareLocalEnvelope(),merged=mergeEnvelopes(remote,local);applyRemoteEnvelope(merged);
+      if(!sameEnvelope(remote,merged))await syncNow(true);
+    }else await syncNow(true);
+    if(!fbListenerAttached){
+      fbListenerAttached=true;fbRef.on('value',snap=>{
+        if(fbBusy||fbApplying)return;
+        const remote=snap.val();if(!remote){queueCloudSync(true);return;}
+        try{
+          const local=prepareLocalEnvelope(),merged=mergeEnvelopes(remote,local);
+          applyRemoteEnvelope(merged);
+          if(!sameEnvelope(remote,merged))queueCloudSync(true);else setSyncStatus('ok');
+        }catch(e){console.error(e);setSyncStatus('error',e.message||'');}
+      },e=>{console.error(e);setSyncStatus('error',e&&e.message?e.message:'');});
+    }
+    return true;
+  }catch(e){console.error(e);closeFirebaseListener();setSyncStatus('error',e&&e.message?e.message:'');return false;}
+  })();
+  try{return await fbInitPromise;}finally{fbInitPromise=null;}
+}
+async function copySyncPathKey(){
+  try{await navigator.clipboard.writeText(FIREBASE_PATH_KEY);toast(LANG==='ar'?'✅ تم نسخ مفتاح المسار.':'✅ Clé du chemin copiée.');}
+  catch(e){window.prompt(LANG==='ar'?'انسخ مفتاح المسار:':'Copiez la clé du chemin :',FIREBASE_PATH_KEY);}
+}
+async function copyFirebaseRootPath(){
+  try{await navigator.clipboard.writeText(FIREBASE_ROOT_PATH);toast(LANG==='ar'?'✅ تم نسخ المسار الكامل.':'✅ Chemin complet copié.');}
+  catch(e){window.prompt(LANG==='ar'?'انسخ المسار الكامل:':'Copiez le chemin complet :',FIREBASE_ROOT_PATH);}
+}
+window.addEventListener('online',()=>{if(fbReady)syncNow(true);else initCloudSync();});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&fbReady)syncNow(true);});
+
+/* ---------- IMPORT CNAS (OCR) ---------- */
+const OCR_MAX_FILE=12*1024*1024;
+let ocrReadyPromise=null,pdfReadyPromise=null;
+function setProg(p,msg){
+  const w=$('imProg');w.style.display=p>0?'block':'none';w.firstElementChild.style.width=Math.max(0,Math.min(100,p))+'%';
+  if(msg!=null)$('imMsg').textContent=msg;
+}
+function loadExternalScript(urls,isReady){
+  if(isReady())return Promise.resolve();
+  return new Promise((resolve,reject)=>{
+    let index=0;
+    const next=()=>{
+      if(isReady())return resolve();
+      if(index>=urls.length)return reject(new Error('library load failed'));
+      const src=urls[index++],node=document.createElement('script');
+      node.src=src;node.async=true;node.crossOrigin='anonymous';
+      node.onload=()=>isReady()?resolve():next();
+      node.onerror=next;document.head.appendChild(node);
+    };
+    next();
+  });
+}
+function ensurePdfJs(){
+  if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';return Promise.resolve();}
+  if(!pdfReadyPromise)pdfReadyPromise=loadExternalScript([
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+    'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js'
+  ],()=>!!window.pdfjsLib).then(()=>{pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}).catch(e=>{pdfReadyPromise=null;throw e;});
+  return pdfReadyPromise;
+}
+function ensureTesseract(){
+  if(window.Tesseract)return Promise.resolve();
+  if(!ocrReadyPromise)ocrReadyPromise=loadExternalScript([
+    'https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js',
+    'https://unpkg.com/tesseract.js@5.0.4/dist/tesseract.min.js'
+  ],()=>!!window.Tesseract).catch(e=>{ocrReadyPromise=null;throw e;});
+  return ocrReadyPromise;
+}
+async function ensureOcrAssets(file){
+  setProg(4,t('ocr_loading'));
+  await ensureTesseract();
+  if(file&&file.type==='application/pdf')await ensurePdfJs();
+}
+function validateImportFile(file){
+  if(!file)throw new Error(t('im_no_file'));
+  const allowed=file.type==='application/pdf'||['image/jpeg','image/png','image/webp'].includes(file.type);
+  if(!allowed)throw new Error(t('im_bad_file'));
+  if(file.size>OCR_MAX_FILE)throw new Error(t('im_file_limit'));
+}
+function previewUrlFor(file){
+  if(file.type==='application/pdf'){
+    return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90"><rect width="100%" height="100%" fill="#24243f"/><text x="45" y="53" text-anchor="middle" font-family="Arial" font-size="22" fill="#e8b422">PDF</text></svg>');
+  }
+  return URL.createObjectURL(file);
+}
+function clearImportFields(){
+  ['imN','imP','imSS','imAC','imDD','imLI','imET','imAD'].forEach(id=>{if($(id))$(id).value='';});
+  if($('imFN'))$('imFN').value='';
+}
+function revokeImportPreview(){
+  const img=$('imPreview'),url=img&&img.dataset.objecturl;
+  if(url){URL.revokeObjectURL(url);delete img.dataset.objecturl;}
+}
+function selectImportFile(file){
+  try{
+    validateImportFile(file);revokeImportPreview();clearImportFields();
+    pendingImport={file,ocrText:'',confidence:0};
+    const img=$('imPreview'),src=previewUrlFor(file);
+    img.src=src;img.alt=file.name||'scan';if(file.type!=='application/pdf')img.dataset.objecturl=src;
+    $('imFileName').textContent=file.name||'scan';
+    $('imFileMeta').textContent=(file.type==='application/pdf'?'PDF':'Image')+' — '+fileSize(file.size);
+    $('imSelected').hidden=false;$('imReadBtn').disabled=false;$('imForm').style.display='none';
+    $('imOcrDetails').style.display='none';$('imOcrText').textContent='';setProg(0,'');
+  }catch(e){console.error(e);toast(e.message||t('im_bad_file'),'er');}
+}
+function clearImportFile(keepFields=false){
+  revokeImportPreview();pendingImport={file:null,ocrText:'',confidence:0};
+  $('imCamera').value='';$('imFile').value='';$('imSelected').hidden=true;$('imReadBtn').disabled=true;
+  $('imOcrDetails').style.display='none';$('imOcrText').textContent='';setProg(0,'');
+  if(!keepFields){clearImportFields();$('imForm').style.display='none';}
+}
+function cancelImport(){clearImportFile();}
+async function fileToCanvas(file){
+  if(file.type==='application/pdf'){
+    await ensurePdfJs();const buf=await file.arrayBuffer(),pdf=await pdfjsLib.getDocument({data:buf}).promise,pg=await pdf.getPage(1);
+    const base=pg.getViewport({scale:1}),scale=Math.min(2.2,2200/Math.max(base.width,base.height));
+    const vp=pg.getViewport({scale:Math.max(1,scale)}),cv=document.createElement('canvas');cv.width=Math.round(vp.width);cv.height=Math.round(vp.height);
+    await pg.render({canvasContext:cv.getContext('2d',{willReadFrequently:true}),viewport:vp}).promise;return cv;
+  }
+  const url=URL.createObjectURL(file);
+  try{
+    const img=await new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=reject;i.src=url;});
+    const max=2400,ratio=Math.min(1,max/Math.max(img.naturalWidth||img.width,img.naturalHeight||img.height));
+    const cv=document.createElement('canvas');cv.width=Math.max(1,Math.round((img.naturalWidth||img.width)*ratio));cv.height=Math.max(1,Math.round((img.naturalHeight||img.height)*ratio));
+    cv.getContext('2d',{willReadFrequently:true}).drawImage(img,0,0,cv.width,cv.height);return cv;
+  }finally{URL.revokeObjectURL(url);}
+}
+function formatOcrDate(value){
+  const m=String(value||'').match(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\b|\b(\d{4})[\/.\-](\d{1,2})[\/.\-](\d{1,2})\b/);
+  if(!m)return'';
+  const y=m[3]||m[4],mo=m[2]||m[5],d=m[1]||m[6];
+  const date=new Date(+y,+mo-1,+d);
+  if(date.getFullYear()!=+y||date.getMonth()!=+mo-1||date.getDate()!=+d)return'';
+  return y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+}
+function normalizeSS(value){
+  const digits=String(value||'').replace(/\D/g,'');
+  return digits.length===12?digits.slice(0,10)+'/'+digits.slice(10):String(value||'').trim();
+}
+function firstMatch(text,patterns){
+  for(const p of patterns){const m=text.match(p);if(m&&m[1])return String(m[1]).replace(/\s+/g,' ').trim();}
+  return'';
+}
+function labelledDate(text,patterns){
+  for(const p of patterns){const m=text.match(p);if(m&&m[1]){const d=formatOcrDate(m[1]);if(d)return d;}}
+  return'';
+}
+function setImportedValue(id,value){if(value&&$(id))$(id).value=value;}
+function buildCnasExtract(file,values){
+  const v=values||{};
+  return {
+    schema:1,
+    source:'ocr',
+    extractedAt:new Date().toISOString(),
+    confidence:Math.round((Number(pendingImport.confidence)||0)*10)/10,
+    document:{name:String((file&&file.name)||'').slice(0,160),type:String((file&&file.type)||'').slice(0,80),size:Number((file&&file.size)||0),storedLocally:true,uploaded:false},
+    fields:{
+      N:String(v.N||'').toUpperCase(),P:String(v.P||'').toUpperCase(),ss:normalizeSS(v.ss||''),ac:String(v.ac||''),
+      dd:String(v.dd||''),li:String(v.li||'').toUpperCase(),ad:String(v.ad||''),et:String(v.et||''),fn:String(v.fn||'')
+    }
+  };
+}
+function parseAff(txt,confidence=0){
+  const raw=String(txt||'').replace(/\r/g,'').replace(/[ \t]+\n/g,'\n');
+  const ssMatch=raw.match(/\b(\d{10}\s*(?:[\/.\-]\s*)?\d{2})\b/);
+  const ss=normalizeSS(ssMatch?ssMatch[1]:'');
+  const ac=firstMatch(raw,[
+    /(?:n[°o]?\s*(?:d['’]?\s*)?affiliat(?:ion)?|affiliat(?:ion)?|رقم\s*الانتساب|انتساب)[^0-9]{0,24}(\d{4,8})/im
+  ]);
+  let nom=firstMatch(raw,[/^\s*(?:nom|اللقب)\s*[:\-]?\s*([^\n]{2,60})$/im]);
+  let prenom=firstMatch(raw,[/^\s*(?:pr[ée]nom|الاسم)\s*[:\-]?\s*([^\n]{2,60})$/im]);
+  const combined=firstMatch(raw,[/^\s*(?:nom\s*(?:et|&)\s*pr[ée]nom|nom\s+pr[ée]nom|الاسم\s*واللقب|اللقب\s*والاسم)\s*[:\-]?\s*([^\n]{3,80})$/im]);
+  if(combined&&(!nom||!prenom)){
+    const words=combined.trim().split(/\s+/);
+    if(words.length>1){if(!nom)nom=words.shift();if(!prenom)prenom=words.join(' ');}
+  }
+  const address=firstMatch(raw,[/^\s*(?:adresse|adr\.?|العنوان)\s*[:\-]?\s*([^\n]{4,100})$/im]);
+  const dd=labelledDate(raw,[
+    /(?:date\s+de\s+naissance|n[ée]e?\s+le|تاريخ\s+الميلاد)\s*[:\-]?\s*([0-9./-]{8,10})/im
+  ]);
+  const li=firstMatch(raw,[/(?:lieu\s+de\s+naissance|à|مكان\s+الميلاد)\s*[:\-]?\s*([^\n]{2,60})$/im]);
+  setImportedValue('imN',nom);setImportedValue('imP',prenom);setImportedValue('imSS',ss);setImportedValue('imAC',ac);
+  setImportedValue('imAD',address);setImportedValue('imDD',dd);setImportedValue('imLI',li);
+  $('imOcrText').textContent=raw;$('imOcrDetails').style.display=raw?'block':'none';
+  $('imForm').style.display='block';pendingImport.ocrText=raw;pendingImport.confidence=Number(confidence)||0;
+  if(!raw.trim())toast(t('im_ocr_empty'),'wa');
+}
+async function runImportOcr(){
+  const file=pendingImport.file;
+  try{
+    validateImportFile(file);$('imReadBtn').disabled=true;$('imForm').style.display='none';setProg(8,t('ocr_loading'));
+    await ensureOcrAssets(file);const cv=await fileToCanvas(file);setProg(35,t('ocr_reading'));
+    const lang=$('imLang').value||'fra';
+    const result=await Tesseract.recognize(cv,lang,{logger:m=>{
+      if(m.status==='recognizing text'||m.status==='loading language traineddata'||m.status==='initializing tesseract'){
+        setProg(35+Math.round((m.progress||0)*60),t('ocr_reading'));
+      }
+    }});
+    const ocr=result&&result.data?result.data:{};parseAff(ocr.text||'',ocr.confidence||0);setProg(100,t('ocr_done'));
+    setTimeout(()=>setProg(0,t('ocr_done')),900);
+  }catch(e){
+    console.error(e);setProg(0,t('ocr_fail'));$('imForm').style.display='block';
+  }finally{$('imReadBtn').disabled=!pendingImport.file;}
+}
+function findExistingImportedWorker(ss,ac){
+  const nss=normalizeSS(ss);
+  return S.workers.find(w=>(nss&&normalizeSS(w.ss)===nss)||(ac&&String(w.ac||'').replace(/\D/g,'')===String(ac).replace(/\D/g,'')))||null;
+}
+async function saveImport(){
+  const g=k=>($(k).value||'').trim();
+  if(!g('imN')||!g('imP')){toast(t('msg_namereq'),'er');return;}
+  const existing=findExistingImportedWorker(g('imSS'),g('imAC'));
+  const extractedValues={N:g('imN'),P:g('imP'),ss:g('imSS'),ac:g('imAC'),dd:g('imDD'),li:g('imLI'),et:g('imET'),fn:g('imFN'),ad:g('imAD')};
+  const cnasExtract=buildCnasExtract(pendingImport.file,extractedValues);
+  let w=existing;
+  if(existing){
+    if(!confirm(t('im_duplicate_update')))return;
+    const patch={N:g('imN').toUpperCase(),P:g('imP').toUpperCase(),cnasExtract};
+    [['ss','imSS'],['ac','imAC'],['dd','imDD'],['li','imLI'],['et','imET'],['fn','imFN'],['ad','imAD']].forEach(([k,id])=>{const v=g(id);if(v)patch[k]=k==='li'?v.toUpperCase():v;});
+    Object.assign(w,patch);
+  }else{
+    w={id:makeId('w'),N:g('imN').toUpperCase(),P:g('imP').toUpperCase(),ss:g('imSS'),ac:g('imAC'),dd:g('imDD'),li:g('imLI').toUpperCase(),
+      et:g('imET'),fn:g('imFN'),dp:'sans',si:'',en:0,sl:S.settings.salBase,ad:g('imAD'),af:S.settings.wilaya,st:'ACTIF',cnasExtract};
+    S.workers.push(w);
+  }
+  // saveAll pushes only S (including cnasExtract) to Firebase; the document Blob remains IndexedDB-only.
+  sortW();saveAll(true);
+  let docOk=true;
+  if(pendingImport.file){
+    try{await putWorkerDoc(w.id,'cnas',pendingImport.file,{ocrText:pendingImport.ocrText,confidence:pendingImport.confidence});}
+    catch(e){console.error(e);docOk=false;}
+  }
+  if(editW===w.id)refreshWorkerCnasDoc();
+  toast(docOk?t('msg_wsaved'):t('doc_save_fail'),docOk?'ok':'wa');
+  clearImportFile();renderDB();
+}
+
+/* ---------- INIT ---------- */
+function bindEvents(){
+  $('wFN').addEventListener('change',onPosteChange);
+  $('wDP').addEventListener('change',onDiplomeChange);
+  $('wEXM').addEventListener('change',onExpModeChange);
+  $('imCameraBtn').addEventListener('click',()=>$('imCamera').click());
+  $('imFileBtn').addEventListener('click',()=>$('imFile').click());
+  $('imCamera').addEventListener('change',e=>{if(e.target.files[0])selectImportFile(e.target.files[0]);});
+  $('imFile').addEventListener('change',e=>{if(e.target.files[0])selectImportFile(e.target.files[0]);});
+  $('imReadBtn').addEventListener('click',runImportOcr);
+  $('imClearBtn').addEventListener('click',()=>clearImportFile());
+  $('wCnasFile').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(f)await onWorkerDocSelected(f);});
+  const dz=$('imDrop');
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.style.borderColor='var(--g)';});
+  dz.addEventListener('dragleave',()=>dz.style.borderColor='var(--br)');
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.style.borderColor='var(--br)';if(e.dataTransfer.files[0])selectImportFile(e.dataTransfer.files[0]);});
+  $('impData').addEventListener('change',e=>{
+    const f=e.target.files[0];e.target.value='';if(!f)return;
+    const r=new FileReader();r.onload=()=>{
+      try{
+        const o=JSON.parse(r.result);
+        if(!o||!Array.isArray(o.workers)||!Array.isArray(o.conges)||!Array.isArray(o.avances))throw new Error('invalid data');
+        S=Object.assign({workers:[],conges:[],avances:[],settings:{}},o);
+        const os=o.settings||{};S.settings=Object.assign({},DEF_SET,os);
+        S.settings.lnCols=Object.assign({},DEF_SET.lnCols,os.lnCols||{});
+        S.settings.payDisp=Object.assign({},DEF_SET.payDisp,os.payDisp||{});
+        S.settings.secs=Object.assign({},DEF_SET.secs);Object.keys(DEF_SET.secs).forEach(k=>{S.settings.secs[k]=Object.assign({},DEF_SET.secs[k],(os.secs&&os.secs[k])||{});});
+        clearAllDocs().finally(()=>{normalizeDataIds();sortW();saveAll();location.reload();});
+      }catch(err){console.error(err);toast('JSON ?','er');}
+    };r.readAsText(f);
+  });
+}
+loadD();
+window.addEventListener('DOMContentLoaded',()=>{buildPosteSelects();bindEvents();applyLang();renderDB();setSyncStatus('connecting');initCloudSync();});
+</script>
+</body>
+</html>
