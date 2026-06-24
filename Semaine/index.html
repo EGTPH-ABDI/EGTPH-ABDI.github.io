@@ -418,28 +418,6 @@ table tbody tr:last-child td{border-bottom:none}
   backdrop-filter:none !important;
   -webkit-backdrop-filter:none !important;
 }
-
-/* === MOBILE MENU FIX iPhone === */
-@media(max-width:900px){
-  #mobileMenuBtn,
-  .mobile-menu-btn{
-    display:flex !important;
-    z-index:10050 !important;
-    pointer-events:auto !important;
-    touch-action:manipulation !important;
-    -webkit-tap-highlight-color:transparent !important;
-    cursor:pointer !important;
-  }
-  .sidebar{
-    z-index:10040 !important;
-    pointer-events:auto !important;
-  }
-  .sidebar.open{
-    width:260px !important;
-    padding:18px 0 !important;
-  }
-}
-
 </style>
 </head>
 <body>
@@ -456,7 +434,7 @@ table tbody tr:last-child td{border-bottom:none}
   </div>
 </div>
 
-<button id="mobileMenuBtn" class="mobile-menu-btn no-print" type="button" onclick="toggleSidebar(event)"><i class="fas fa-bars"></i></button>
+<button id="mobileMenuBtn" class="mobile-menu-btn no-print" type="button" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
 
 <!-- ===== SIDEBAR ===== -->
 <aside class="sidebar" id="sidebar">
@@ -2478,48 +2456,23 @@ function printViaIframe(bodyHTML){
     th,td{border:1px solid #333;padding:5px 6px;word-wrap:break-word;vertical-align:middle}
     tr{page-break-inside:avoid}
     @page{margin:10mm}
-  </style></head><body>${bodyHTML}<script>
-
-/* === MOBILE MENU FIX iPhone === */
-(function(){
-  window.toggleSidebar = function(ev){
-    if(ev && ev.preventDefault) ev.preventDefault();
-    if(ev && ev.stopPropagation) ev.stopPropagation();
-    var sidebar = document.getElementById('sidebar');
-    if(!sidebar) return false;
-    sidebar.classList.toggle('open');
-    return false;
-  };
-
-  function bindMobileMenu(){
-    var btn = document.getElementById('mobileMenuBtn') || document.querySelector('.mobile-menu-btn');
-    if(!btn || btn.__egtphMenuBound) return;
-    btn.__egtphMenuBound = true;
-    ['touchstart','pointerdown','click'].forEach(function(evt){
-      btn.addEventListener(evt, function(e){
-        window.toggleSidebar(e);
-      }, {passive:false});
-    });
-
-    document.querySelectorAll('.sidebar-nav a').forEach(function(a){
-      if(a.__egtphCloseBound) return;
-      a.__egtphCloseBound = true;
-      a.addEventListener('click', function(){
-        var sidebar = document.getElementById('sidebar');
-        if(window.innerWidth <= 900 && sidebar) sidebar.classList.remove('open');
-      });
-    });
+  
+/* === SAFE iPHONE MENU FIX ONLY - LOGIN UNTOUCHED === */
+@media(max-width:900px){
+  #mobileMenuBtn,.mobile-menu-btn{
+    display:flex!important;
+    z-index:99999!important;
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+    -webkit-tap-highlight-color:transparent!important;
   }
-
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', bindMobileMenu);
-  }else{
-    bindMobileMenu();
+  #sidebar.sidebar.open{
+    width:260px!important;
+    padding:18px 0!important;
   }
-})();
+}
 
-</script>
-</body></html>`);
+</style></head><body>${bodyHTML}</body></html>`);
   doc.close();
   const go=()=>{ try{ f.contentWindow.focus(); f.contentWindow.print(); }catch(e){ window.print(); }
     setTimeout(()=>{ const fr=document.getElementById('egtphPrintFrame'); if(fr) fr.remove(); }, 1500); };
