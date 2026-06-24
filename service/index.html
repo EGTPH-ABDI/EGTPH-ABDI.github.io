@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
+<script src="../egtph-auth.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#1c2436">
 <title>EGTPH · صيانة الأسطول</title>
@@ -1419,11 +1420,19 @@ function importData(input){const f=input.files&&input.files[0];if(!f){return;}co
 // FIREBASE CLOUD SYNC — المزامنة السحابية (نفس منطق GP)
 // ══════════════════════════════════════════
 const FB_URL    = 'https://egtph-service-default-rtdb.europe-west1.firebasedatabase.app';
-const FB_SECRET = 'EGTPH-svc-2026-TqD5lhS0qmRQgtl0oH0I7SXX'; // مفتاح المزامنة السرّي الجديد
+const FB_SECRET = 'EGTPH-svc2-2026-a3VF6JCQhvRTaYIemD9Lp9RR'; // مفتاح جديد — تم استبدال القديم
 // مسار مستقل تحت egtph/ — مغطّى أصلاً بقاعدة egtph/$key (لا تعديل في Firebase)
 const FB_BASE   = '/egtph/' + FB_SECRET; // البيانات في مسار سرّي — لا يصلها إلا من يملك المفتاح
-const FB_NODE   = FB_BASE + '.json';
+function FB_NODE_FN(){ return FB_BASE + '.json' + EGTPHAuth.authParam('service'); }
 const FB_SYNC_INTERVAL = 4000; // فحص دوري كل 4ث (شبه لحظي لاستقبال تعديلات الأجهزة الأخرى)
+// ── حماية حقيقية: تسجيل دخول بكلمة سر (مرة واحدة لكل جهاز)، الرمز يتجدد وحده ──
+// كلمة السر لا تُكتب هنا أبداً — تُكتب من المستخدم في النافذة التي تظهر.
+EGTPHAuth.init({
+  appId:   'service',
+  apiKey:  'AIzaSyA5fS3IgHJdrZIR3rJ97OJJvDQdT0XlKf4', // Web API Key — مشروع egtph-service
+  email:   'abdiyoucefislam@gmail.com',
+  onReady: function(){ try{ if(typeof fbAutoTick==='function') fbAutoTick(); }catch(e){} }
+});
 // قواعد قديمة يُرحَّل منها تلقائياً
 const _FB_OLD_URLS = ['https://egtph-abdi-youssouf-islam-default-rtdb.europe-west1.firebasedatabase.app'];
 
@@ -1527,7 +1536,7 @@ function _inflateRaw(input){
   return new Uint8Array(out);
 }
 async function fbFetchData(){
-  const r=await fetch(FB_URL+FB_NODE);
+  const r=await fetch(FB_URL+FB_NODE_FN());
   if(!r.ok) throw new Error('HTTP '+r.status);
   const raw=await r.json();
   if(!raw) return null;
@@ -1617,7 +1626,7 @@ async function fbPush(silent){
     let body;
     if(_gzOK){ const gz=await _gzB64(JSON.stringify(data)); body=JSON.stringify({app:'parc',version:3,savedAt:data.savedAt,gz}); }
     else body=JSON.stringify(data);
-    const r=await fetch(FB_URL+FB_NODE,{method:'PUT',headers:{'Content-Type':'application/json'},body});
+    const r=await fetch(FB_URL+FB_NODE_FN(),{method:'PUT',headers:{'Content-Type':'application/json'},body});
     if(!r.ok) throw new Error('HTTP '+r.status);
     _fbLastHash=h; _fbDirty=false; _fbSetTS(data.savedAt); _lastPushedSavedAt=data.savedAt;
     fbStatus('ok','آخر مزامنة: '+new Date(data.savedAt).toLocaleString('fr-DZ'));
@@ -1701,7 +1710,7 @@ async function fbAutoTick(){
   if(!fbAuto()||!navigator.onLine||_fbBusy) return;
   let remoteNewer=false;
   try{
-    const r=await fetch(FB_URL+FB_BASE+'/savedAt.json');
+    const r=await fetch(FB_URL+FB_BASE+'/savedAt.json'+EGTPHAuth.authParam('service'));
     if(r.ok){ const ts=await r.json(); _fbSynced=true; remoteNewer=!!(ts && ts>(fbLastTS()||'')); }
   }catch(e){ return; }
   if(remoteNewer){ await fbSync(true); return; }
@@ -1718,7 +1727,7 @@ function fbStartStream(){
   if(_sse){ try{ _sse.close(); }catch(e){} _sse=null; }
   if(!navigator.onLine) return;
   try{
-    _sse=new EventSource(FB_URL+FB_BASE+'/savedAt.json'+(typeof FB_AUTH!=='undefined'?FB_AUTH:''));
+    _sse=new EventSource(FB_URL+FB_BASE+'/savedAt.json'+EGTPHAuth.authParam('service'));
     _sse.addEventListener('put', _sseOnChange);
     _sse.addEventListener('patch', _sseOnChange);
     _sse.onerror=()=>{
@@ -1751,7 +1760,7 @@ async function fbStartupCheck(){
   if(!navigator.onLine){ fbStatus('off','غير متصل بالإنترنت'); return; }
   fbStatus('sync','جارٍ فحص السحابة…');
   try{
-    const r=await fetch(FB_URL+FB_BASE+'/savedAt.json');
+    const r=await fetch(FB_URL+FB_BASE+'/savedAt.json'+EGTPHAuth.authParam('service'));
     if(!r.ok){
       let hint='تحقّق من قواعد Firebase (HTTP '+r.status+')';
       if(r.status===401||r.status===403) hint='⛔ مرفوض — أضِف قاعدة المسار egtph_parc_v3_ في Firebase';
