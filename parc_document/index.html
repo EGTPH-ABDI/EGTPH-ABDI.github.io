@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<script src="../egtph-auth.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EGTPH — Matériel & Soumissions</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -330,6 +331,15 @@ const FB_URL="https://egtph-parc-default-rtdb.europe-west1.firebasedatabase.app"
 const FB_SECRET="EGTPH-mat-2026-CnucIO2DZnBAHqMitxm1Y86k";
 const FB_BASE="/egtph/"+FB_SECRET;          // البيانات الرئيسية (عتاد + إعدادات)
 const FB_IMG_BASE="/egtph/"+FB_SECRET+"_img"; // الصور — مسار مستقل خفيف (لا يُعاد رفعه إلا عند تغيّره)
+// ── حماية حقيقية: تسجيل دخول بكلمة سر (مرة واحدة لكل جهاز)، الرمز يتجدد وحده ──
+// كلمة السر لا تُكتب هنا أبداً — تُكتب من المستخدم في النافذة التي تظهر.
+function _fbAuthQS(){ return EGTPHAuth.authParam('parc_document'); }
+EGTPHAuth.init({
+  appId:   'parc_document',
+  apiKey:  'AIzaSyBf7NU7QPvS824duUE78uaXZuCzGdX6Grg', // Web API Key — مشروع egtph-parc
+  email:   'abdiyoucefislam@gmail.com',
+  onReady: function(){ try{ if(typeof cloudSync==='function') cloudSync(); }catch(e){} }
+});
 window._cloudDirty=false; window._cloudApplying=false;
 let _cloudBusy=false,_cloudSynced=false,_pushTimer=null;
 
@@ -378,7 +388,7 @@ function mergeCloud(remote){
   return changed;
 }
 async function fbFetchData(){
-  const r=await fetch(FB_URL+FB_BASE+".json",{cache:"no-store"});
+  const r=await fetch(FB_URL+FB_BASE+".json"+_fbAuthQS(),{cache:"no-store"});
   if(!r.ok)throw new Error("GET "+r.status);
   return await r.json();
 }
@@ -390,7 +400,7 @@ async function fbPush(){
   _cloudBusy=true;
   try{
     const body=JSON.stringify(fbBuildData());
-    const r=await fetch(FB_URL+FB_BASE+".json",{method:"PUT",headers:{"Content-Type":"application/json"},body});
+    const r=await fetch(FB_URL+FB_BASE+".json"+_fbAuthQS(),{method:"PUT",headers:{"Content-Type":"application/json"},body});
     if(!r.ok)throw new Error("PUT "+r.status);
     window._cloudDirty=false;
     _cloudBusy=false;return true;
@@ -425,14 +435,14 @@ function schedulePush(){
 function _imgKey(k){return String(k).replace(/[.$#\[\]\/]/g,"_");}
 async function fbPushImg(k,v){
   if(!navigator.onLine)return;
-  try{await fetch(FB_URL+FB_IMG_BASE+"/"+_imgKey(k)+".json",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(v)});}catch(e){}
+  try{await fetch(FB_URL+FB_IMG_BASE+"/"+_imgKey(k)+".json"+_fbAuthQS(),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(v)});}catch(e){}
 }
 async function fbDelImg(k){
   if(!navigator.onLine)return;
-  try{await fetch(FB_URL+FB_IMG_BASE+"/"+_imgKey(k)+".json",{method:"DELETE"});}catch(e){}
+  try{await fetch(FB_URL+FB_IMG_BASE+"/"+_imgKey(k)+".json"+_fbAuthQS(),{method:"DELETE"});}catch(e){}
 }
 async function fbFetchImg(k){
-  try{const r=await fetch(FB_URL+FB_IMG_BASE+"/"+_imgKey(k)+".json",{cache:"no-store"});if(!r.ok)return null;return await r.json();}catch(e){return null;}
+  try{const r=await fetch(FB_URL+FB_IMG_BASE+"/"+_imgKey(k)+".json"+_fbAuthQS(),{cache:"no-store"});if(!r.ok)return null;return await r.json();}catch(e){return null;}
 }
 // ── البثّ المباشر (SSE): يبثّ savedAt فقط (خفيف)؛ عند تغيّره يُزامِن فوراً ──
 let _sse=null,_sseRetry=null,_sseDeb=null;
@@ -441,7 +451,7 @@ function startCloudStream(){
   if(_sse){try{_sse.close();}catch(e){}_sse=null;}
   if(!navigator.onLine)return;
   try{
-    _sse=new EventSource(FB_URL+FB_BASE+"/savedAt.json");
+    _sse=new EventSource(FB_URL+FB_BASE+"/savedAt.json"+_fbAuthQS());
     const onCh=()=>{ if(_sseDeb)clearTimeout(_sseDeb); _sseDeb=setTimeout(()=>{ if(!_cloudBusy)cloudSync(); },300); };
     _sse.addEventListener("put",onCh);_sse.addEventListener("patch",onCh);
     _sse.onerror=()=>{ try{_sse.close();}catch(e){} _sse=null; if(_sseRetry)clearTimeout(_sseRetry); _sseRetry=setTimeout(startCloudStream,8000); };
