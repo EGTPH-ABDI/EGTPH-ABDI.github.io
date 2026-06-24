@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
+<script src="../egtph-auth.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
 <title>EGTPH | الاستلام النهائي والكفالة البنكية</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -606,6 +607,15 @@ const FB_BASE   = "https://egtph-reception-default-rtdb.europe-west1.firebasedat
 const FB_SECRET = "40cab858521b8d71856a60c0f258e483";
 const FB_PATH   = `egtph/kafala_istilam_${FB_SECRET}`;
 const FB_URL    = `${FB_BASE}/${FB_PATH}.json`;
+// ── حماية حقيقية: تسجيل دخول بكلمة سر (مرة واحدة لكل جهاز)، الرمز يتجدد وحده ──
+// كلمة السر لا تُكتب هنا أبداً — تُكتب من المستخدم في النافذة التي تظهر.
+function _fbAuthQS(){ return EGTPHAuth.authParam('caution'); }
+EGTPHAuth.init({
+  appId:   'caution',
+  apiKey:  'AIzaSyDBUQZn_jiHWQrbiQrdZDIne2OlhdrhS7E', // Web API Key — مشروع egtph-reception
+  email:   'abdiyoucefislam@gmail.com',
+  onReady: function(){ try{ if(typeof pullFromCloud==='function') pullFromCloud(); }catch(e){} }
+});
 const FB_SAVEDAT_URL = `${FB_BASE}/${FB_PATH}/savedAt.json`;
 const FB_SSE_URL = `${FB_BASE}/${FB_PATH}/savedAt.json`;
 
@@ -1334,7 +1344,7 @@ document.getElementById('resetCloudConfirmBtn').addEventListener('click', async 
   try{
     setSyncState('busy');
     // 1) مسح كامل للسحابة (لا يلمس DB.projects المحلية إطلاقاً)
-    const wipeRes = await fetch(FB_URL, {
+    const wipeRes = await fetch(FB_URL+_fbAuthQS(), {
       method:'PUT',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({projects:{}, tombstones:{}, savedAt: nextMod()})
@@ -1670,7 +1680,7 @@ function mergeRemote(remote){
 async function pullFromCloud(){
   setSyncState('busy');
   try{
-    const res = await fetch(FB_URL, {cache:'no-store'});
+    const res = await fetch(FB_URL+_fbAuthQS(), {cache:'no-store'});
     if(!res.ok) throw new Error('read failed: ' + res.status);
     const remote = await res.json();
     lastSyncStartedReadOK = true;
@@ -1714,7 +1724,7 @@ async function pushToCloud(){
       tombstones: DB.tombstones,
       savedAt
     };
-    const res = await fetch(FB_URL, {
+    const res = await fetch(FB_URL+_fbAuthQS(), {
       method:'PUT',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify(payload)
