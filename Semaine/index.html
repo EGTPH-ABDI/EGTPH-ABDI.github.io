@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
+<script src="../egtph-auth.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EGTPH - سجل الأجرة الأسبوعي</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -2622,11 +2623,19 @@ document.addEventListener('focusout',(ev)=>{
     }
   },200);
 });
+// ── حماية حقيقية: تسجيل دخول بكلمة سر (مرة واحدة لكل جهاز)، الرمز يتجدد وحده ──
+// كلمة السر لا تُكتب هنا أبداً — تُكتب من المستخدم في النافذة التي تظهر.
+EGTPHAuth.init({
+  appId:   'semaine',
+  apiKey:  'AIzaSyAnRqmYvW3g9b7ysQJQ9stVsdoEVgKFcxM', // Web API Key — مشروع egtph-semaine
+  email:   'abdiyoucefislam@gmail.com',
+  onReady: function(){ try{ if(typeof cloudSync==='function') cloudSync(false); }catch(e){} }
+});
 function _cloudCfg(){
   const url=(DB.settings.cloudUrl||_CLOUD_URL).trim().replace(/\/+$/,'');
   const k=(DB.settings.cloudKey||_CLOUD_KEY).trim();
   if(!url||!k||k.length<8)return null;
-  return{endpoint:url+'/egtph/'+encodeURIComponent(k.replace(/[.#$\[\]\/\s]/g,'_'))+'.json'};
+  return{endpoint:url+'/egtph/'+encodeURIComponent(k.replace(/[.#$\[\]\/\s]/g,'_'))+'.json'+EGTPHAuth.authParam('semaine')};
 }
 function _cloudStatus(t,c){const el=document.getElementById('cloud_status');if(el){el.textContent=t;el.style.color=c||'#888';}}
 function shareData(){
