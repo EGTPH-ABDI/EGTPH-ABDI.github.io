@@ -953,6 +953,7 @@ function migrateDB(){
     if(e.bonus===undefined)            e.bonus=0;
     if(e.debtDeduction===undefined)    e.debtDeduction=0;
     if(e.paidNow===undefined)          e.paidNow=null; // null = دُفع بالكامل تلقائياً؛ رقم = دُفع جزء فقط هذا الأسبوع
+    if(e.settlePending===undefined)    e.settlePending=0; // تسديد من الأجر المعلّق السابق — يُضاف إلى ما يُدفع فعلياً هذا الأسبوع
     if(e.extraHours===undefined)       e.extraHours=0;
     if(e.days===undefined)             e.days=0;
     if(!e.services)                    e.services=[];
@@ -1639,6 +1640,20 @@ function renderWeek(){
       ${remainingPay>0?`<span style="color:var(--danger);font-weight:800">متبقٍّ: ${money(remainingPay)} دج</span>`:''}
     </div>`;
 
+    // --- تسديد أجر معلّق من أسابيع سابقة (يُضاف لما يُدفع فعلياً هذا الأسبوع) ---
+    const pendingWage=DB.pendingWages?DB.pendingWages.find(x=>x.workerId===e.workerId):null;
+    const pendingRemaining=pendingWage?pendingWagesRemaining(pendingWage):0;
+    let settleHTML='';
+    if(pendingRemaining>0){
+      const settleNow=Math.min(num(e.settlePending), pendingRemaining);
+      const totalHandedToday=(e.paidNow??parts.net)+settleNow;
+      settleHTML=`<div class="meta-chip" style="border-color:var(--gold);background:var(--gold-soft)">
+        <span><i class="fas fa-clock"></i> أجر معلّق سابق: ${money(pendingRemaining)} دج</span>
+        <input type="number" min="0" max="${pendingRemaining}" step="100" placeholder="0" value="${e.settlePending||''}" oninput="updateWeekEntry('${e.id}','settlePending',this.value)" title="مبلغ من المعلّق تُسدّده الآن مع أجر هذا الأسبوع">
+        ${settleNow>0?`<span style="font-weight:800;color:var(--gold-dk)">الإجمالي المدفوع له اليوم: ${money(totalHandedToday)} دج</span>`:''}
+      </div>`;
+    }
+
     return `<div class="entry-card ${cls}">
       <div class="entry-head">
         <div class="flex gap-2" style="align-items:center;flex:1;flex-wrap:wrap">
@@ -1654,6 +1669,7 @@ function renderWeek(){
         <div class="meta-chip bonus"><i class="fas fa-gift"></i> مكافأة: <input type="number" min="0" value="${e.bonus||0}" oninput="updateWeekEntry('${e.id}','bonus',this.value)"></div>
         ${debtHTML}
         ${payHTML}
+        ${settleHTML}
         <div class="meta-chip"><i class="fas fa-note-sticky"></i> <input type="text" style="width:120px" placeholder="ملاحظة" value="${e.note||''}" oninput="updateWeekEntry('${e.id}','note',this.value)"></div>
         <button class="btn btn-danger btn-xs" onclick="removeWeekRow('${e.id}')"><i class="fas fa-trash"></i> حذف الصف</button>
       </div>
@@ -1734,6 +1750,7 @@ function updateWeekEntry(id,f,v){
   else if(f==='debtDeduction') e.debtDeduction=num(v);
   else if(f==='bonus') e.bonus=num(v);
   else if(f==='paidNow') e.paidNow=(v===''||v===null)?null:num(v);
+  else if(f==='settlePending') e.settlePending=num(v);
   else if(f==='manualHourlyRate') e.manualHourlyRate=num(v)||null;
   stampCW(e);
   saveDB(); renderWeekSummary();                 // حفظ + مزامنة فورية لكل ضغطة
@@ -1822,7 +1839,7 @@ function updateWeekExpense(id,f,v){
 function computeWeekTotals(){
   const cw=DB.currentWeek;
   let dailyCount=0,pieceCount=0;
-  let dailyTotal=0,pieceTotal=0,overtimeTotal=0,bonusTotal=0,deductionTotal=0,baseDailyTotal=0;
+  let dailyTotal=0,pieceTotal=0,overtimeTotal=0,bonusTotal=0,deductionTotal=0,baseDailyTotal=0,settledPendingTotal=0;
   cw.entries.forEach(e=>{
     const w=DB.workers.find(x=>x.id===e.workerId);
     if(!w) return;
@@ -1838,11 +1855,14 @@ function computeWeekTotals(){
     }
     bonusTotal+=p.bonus;
     deductionTotal+=p.deduction;
+    const pw=DB.pendingWages?DB.pendingWages.find(x=>x.workerId===e.workerId):null;
+    const pwRemaining=pw?pendingWagesRemaining(pw):0;
+    settledPendingTotal+=Math.min(num(e.settlePending), pwRemaining>0?pwRemaining:0);
   });
   const wagesTotal=dailyTotal+pieceTotal;
   const expensesTotal=(cw.expenses||[]).reduce((s,e)=>s+num(e.qty)*num(e.price),0);
-  return {dailyCount,pieceCount,dailyTotal,pieceTotal,wagesTotal,expensesTotal,
-    overtimeTotal,bonusTotal,deductionTotal,baseDailyTotal,grandTotal:wagesTotal+expensesTotal};
+  return {dailyCount,pieceCount,dailyTotal,pieceTotal,wagesTotal,expensesTotal,settledPendingTotal,
+    overtimeTotal,bonusTotal,deductionTotal,baseDailyTotal,grandTotal:wagesTotal+expensesTotal+settledPendingTotal};
 }
 function renderWeekSummary(){
   const t=computeWeekTotals();
@@ -1856,8 +1876,9 @@ function renderWeekSummary(){
     <div class="summary-box" style="background:var(--gold-soft);border-color:var(--gold)"><div class="lbl">⏱️ ساعات إضافية</div><div class="val" style="color:var(--gold)">${money(t.overtimeTotal)}</div></div>
     <div class="summary-box" style="background:var(--success-soft);border-color:var(--success)"><div class="lbl">🎁 مجموع المكافآت</div><div class="val" style="color:var(--success)">${money(t.bonusTotal)}</div></div>
     <div class="summary-box danger"><div class="lbl">⬇️ خصومات الديون</div><div class="val">${money(t.deductionTotal)}</div></div>
+    ${t.settledPendingTotal>0?`<div class="summary-box" style="background:var(--gold-soft);border-color:var(--gold)"><div class="lbl">⏱️ تسديد أجور معلّقة سابقة</div><div class="val" style="color:var(--gold-dk)">${money(t.settledPendingTotal)}</div></div>`:''}
     <div class="summary-box warning"><div class="lbl">🧾 مصاريف الأسبوع</div><div class="val">${money(t.expensesTotal)}</div></div>
-    <div class="summary-box primary" style="grid-column:1/-1"><div class="lbl" style="font-size:13px">💰 المجموع الكلي للأسبوع (أجور + مصاريف)</div><div class="val" style="font-size:24px">${money(t.grandTotal)} دج</div></div>`;
+    <div class="summary-box primary" style="grid-column:1/-1"><div class="lbl" style="font-size:13px">💰 المجموع الكلي للأسبوع (أجور + مصاريف${t.settledPendingTotal>0?' + معلّق مسدَّد':''})</div><div class="val" style="font-size:24px">${money(t.grandTotal)} دج</div></div>`;
 }
 
 /* ---- بدء أسبوع جديد (من شاشة idle) ---- */
@@ -1940,6 +1961,23 @@ function saveWeek(){
           if(actualPay>0){
             d.paid=Math.min(d.paid+actualPay, d.total);
             d.dates.push({date:new Date().toISOString(),amount:actualPay,type:'pay',weekStart:cw.startDate});d._mod=nextMod();
+          }
+        }
+      }
+    });
+  }
+  // تسديد الأجر المعلّق من أسابيع سابقة (يُسجَّل كدفعة على السجل، ويُضاف لمجموع المدفوع هذا الأسبوع)
+  if(!editingWeekId){
+    entriesWithTotals.forEach(e=>{
+      if(num(e.settlePending)>0){
+        const pw=DB.pendingWages.find(x=>x.workerId===e.workerId);
+        if(pw){
+          const remaining=pendingWagesRemaining(pw);
+          const actualSettle=Math.min(num(e.settlePending), remaining>0?remaining:0);
+          if(actualSettle>0){
+            pw.paid=num(pw.paid)+actualSettle;
+            pw.dates.push({date:new Date().toISOString(),amount:actualSettle,note:`تسديد مع أجر أسبوع ${formatDateAR(cw.startDate)}`,type:'pay'});
+            pw._mod=nextMod();
           }
         }
       }
@@ -2141,6 +2179,11 @@ function renderPendingWages(){
     const w=DB.workers.find(x=>x.id===pw.workerId);
     const rem=pendingWagesRemaining(pw);
     const last=pw.dates.slice(-1)[0];
+    const history=(pw.dates||[]).slice().reverse().map(d=>
+      `<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px dashed var(--border);font-size:12px">
+        <span>${d.type==='pay'?'💵 تسديد':'➕'} ${d.note||(d.type==='pay'?'تسديد':'إضافة')}</span>
+        <span style="white-space:nowrap;font-weight:700;color:${d.type==='pay'?'var(--success)':'var(--danger)'}">${d.type==='pay'?'-':'+'}${money(d.amount)} دج</span>
+      </div>`).join('');
     return `<tr class="${rem>0?'debt-row':''}">
       <td><b>${w?.name||'—'}</b></td>
       <td>${money(pw.total)} دج</td>
@@ -2148,7 +2191,12 @@ function renderPendingWages(){
       <td><span class="badge ${rem>0?'badge-debt':'badge-paid'}">${money(rem)} دج</span></td>
       <td>${last?formatDateAR(last.date):'—'}</td>
       <td>${rem>0?`<button class="btn btn-success btn-xs" onclick="settlePendingWage('${pw.id}')"><i class="fas fa-hand-holding-usd"></i> تسديد</button>`:''}</td>
-    </tr>`;
+    </tr>
+    <tr><td colspan="6" style="padding:0;border:0">
+      <details style="margin:0 8px 8px"><summary style="cursor:pointer;color:var(--text3);font-size:12px;padding:4px 0">📋 لماذا معلّق؟ — عرض التفاصيل (${pw.dates.length})</summary>
+        <div style="padding:6px 4px">${history}</div>
+      </details>
+    </td></tr>`;
   }).join('');
 }
 function settlePendingWage(pwId){
@@ -2804,14 +2852,17 @@ function mergeRemote(d){
     else if((x.dates||[]).length>(loc.dates||[]).length){loc.dates=x.dates;loc.total=x.total;loc.paid=x.paid;loc.installment=x.installment;added++;}
   });
   // 5) الأسبوع الحالي: سجل واحد — "الأحدث يغلب بالكامل" (يمنع خلط الهاتف/الحاسوب)
+  // ⚠️ لا تستبدله أبداً أثناء تعديل فعلي محلي (يكتب المستخدم الآن) — وإلا يُمحى تعديله بصمت
   try{
-    const rc=d.currentWeek;
-    const lm=+((DB.currentWeek&&DB.currentWeek._mod)||0), rm=+((rc&&rc._mod)||0);
-    if(rc&&rm>lm){
-      const nc=JSON.parse(JSON.stringify(rc));
-      if(Array.isArray(nc.entries))  nc.entries =nc.entries.filter(x=>!del.has(String(x.id)));
-      if(Array.isArray(nc.expenses)) nc.expenses=nc.expenses.filter(x=>!del.has(String(x.id)));
-      DB.currentWeek=nc;added++;
+    if(!isEditingNow()){
+      const rc=d.currentWeek;
+      const lm=+((DB.currentWeek&&DB.currentWeek._mod)||0), rm=+((rc&&rc._mod)||0);
+      if(rc&&rm>lm){
+        const nc=JSON.parse(JSON.stringify(rc));
+        if(Array.isArray(nc.entries))  nc.entries =nc.entries.filter(x=>!del.has(String(x.id)));
+        if(Array.isArray(nc.expenses)) nc.expenses=nc.expenses.filter(x=>!del.has(String(x.id)));
+        DB.currentWeek=nc;added++;
+      }
     }
   }catch(e){}
   if(!DB.company&&d.company)DB.company=d.company;
