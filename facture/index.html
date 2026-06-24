@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<script src="../egtph-auth.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Système EGTPH - Pro (v8)</title>
 <style>
@@ -901,10 +902,18 @@ function _factDel(id){
   if(id&&FACTDEL.indexOf(id)<0){FACTDEL.push(id);localStorage.setItem('egtp_fact_del',JSON.stringify(FACTDEL.slice(-300)));}
   if(id)_pushTomb([id]); // écrit le tombstone dans le nœud durable tout de suite
 }
-function _cloudEP(){return _CLOUD_URL+'/egtph/'+encodeURIComponent(_CLOUD_KEY)+'.json';}
+function _cloudEP(){return _CLOUD_URL+'/egtph/'+encodeURIComponent(_CLOUD_KEY)+'.json'+EGTPHAuth.authParam('facture');}
+// ── حماية حقيقية: نفس مشروع gestion بالضبط (egtph-abdi-youssouf-islam) — لا حاجة لخطوات جديدة في Firebase Console ──
+// كلمة السر لا تُكتب هنا أبداً — تُكتب من المستخدم في النافذة التي تظهر.
+EGTPHAuth.init({
+  appId:   'facture',
+  apiKey:  'AIzaSyBqMfhLqRm-GWR4HgPkLH-erCFg8EsrLcA', // Web API Key — مشروع egtph-abdi-youssouf-islam (نفس gestion)
+  email:   'abdiyoucefislam@gmail.com',
+  onReady: function(){ try{ if(typeof cloudSync==='function') cloudSync(false); }catch(e){} }
+});
 // Nœud SÉPARÉ pour les suppressions : écrit en PATCH (additif), jamais écrasé par un PUT complet.
-function _tombEP(){return _CLOUD_URL+'/egtph_del/'+encodeURIComponent(_CLOUD_KEY)+'.json';}
-function _tombEPcli(){return _CLOUD_URL+'/egtph_del_cli/'+encodeURIComponent(_CLOUD_KEY)+'.json';}
+function _tombEP(){return _CLOUD_URL+'/egtph_del/'+encodeURIComponent(_CLOUD_KEY)+'.json'+EGTPHAuth.authParam('facture');}
+function _tombEPcli(){return _CLOUD_URL+'/egtph_del_cli/'+encodeURIComponent(_CLOUD_KEY)+'.json'+EGTPHAuth.authParam('facture');}
 function _safeKey(id){return String(id).replace(/[.$#\[\]\/]/g,'_');}
 async function _pushTomb(ids,cliIds){
   try{
