@@ -1,5 +1,24 @@
 <html lang="ar" dir="rtl"><head>
 <script src="../egtph-auth.js"></script>
+<script>
+/* إصلاح وقائي: منع توقف البرنامج إذا تم استدعاء renderAdmin قبل تحميل كود الإعدادات */
+window.renderAdmin = window.renderAdmin || function(){
+  try{
+    var p=document.getElementById('page-admin');
+    if(!p) return;
+    var h=document.getElementById('holidayList');
+    if(h && window.DB){
+      if(!DB.settings) DB.settings={};
+      if(!Array.isArray(DB.settings.holidays)) DB.settings.holidays=[];
+      h.innerHTML = DB.settings.holidays.length ? DB.settings.holidays.map(function(d,i){
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px"><span>📅 '+d+'</span><button class="db" onclick="removeHoliday('+i+')">🗑</button></div>';
+      }).join('') : '<div style="color:var(--gray);font-size:11px">لا توجد عطل مضافة</div>';
+    }
+  }catch(e){console.error('renderAdmin fallback error',e);}
+};
+var renderAdmin = window.renderAdmin;
+</script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>EGTPH — سجل الأجور v32</title>
@@ -3747,7 +3766,7 @@ function printPrintWorkerSelect(){
 
 
 // ══════════════════════════════════════════════════════
-//  ADMIN / SETTINGS RENDER + ACTIONS  (تمت إضافتها لإصلاح خطأ renderAdmin)
+//  ADMIN / SETTINGS RENDER + ACTIONS  (إصلاح نهائي)
 // ══════════════════════════════════════════════════════
 function _safeTxt(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
@@ -3756,100 +3775,63 @@ function renderAdmin(){
     if(!DB.settings)DB.settings={};
     if(!Array.isArray(DB.settings.holidays))DB.settings.holidays=[];
 
-    const mult=+(DB.settings.mult||1.5);
-    const multDisp=document.getElementById('multDisp');
-    if(multDisp)multDisp.textContent='×'+mult;
-    const newMult=document.getElementById('newMult');
-    if(newMult)newMult.value=mult;
-
-    const lastBackupDate=document.getElementById('lastBackupDate');
-    if(lastBackupDate)lastBackupDate.textContent='آخر نسخة: '+(DB.settings.lastBackup||'لا توجد نسخة بعد');
-
-    const backupSel=document.querySelector('#page-admin select[onchange*="backupInterval"]');
-    if(backupSel)backupSel.value=String(DB.settings.backupInterval||7);
-
-    const payday=document.getElementById('paydayAlertChk');
-    if(payday)payday.checked=DB.settings.paydayAlert!==false;
-
-    const userInp=document.getElementById('userNameInp');
-    if(userInp)userInp.value=DB.settings.userName||'';
-    const userDisp=document.getElementById('userNameDisplay');
-    if(userDisp)userDisp.textContent='الحالي: '+(DB.settings.userName||'مستخدم');
-
+    const mult=+(DB.settings.mult||DB.settings.hoursMultiplier||1.5);
+    const multDisp=document.getElementById('multDisp'); if(multDisp)multDisp.textContent='×'+mult;
+    const newMult=document.getElementById('newMult'); if(newMult)newMult.value=mult;
+    const lastBackupDate=document.getElementById('lastBackupDate'); if(lastBackupDate)lastBackupDate.textContent='آخر نسخة: '+(DB.settings.lastBackup||'لا توجد نسخة بعد');
+    const backupSel=document.querySelector('#page-admin select[onchange*=backupInterval]'); if(backupSel)backupSel.value=String(DB.settings.backupInterval||7);
+    const payday=document.getElementById('paydayAlertChk'); if(payday)payday.checked=DB.settings.paydayAlert!==false;
+    const userInp=document.getElementById('userNameInp'); if(userInp)userInp.value=DB.settings.userName||'';
+    const userDisp=document.getElementById('userNameDisplay'); if(userDisp)userDisp.textContent='الحالي: '+(DB.settings.userName||'مستخدم');
     const tax=+(DB.settings.bonTax||0);
-    const taxInp=document.getElementById('bonTaxInp');
-    if(taxInp)taxInp.value=tax;
-    const taxDisp=document.getElementById('bonTaxDisplay');
-    if(taxDisp)taxDisp.textContent=tax>0?('خصم '+tax+'% من كل مكافأة'):'لا يوجد خصم حالياً';
-
+    const taxInp=document.getElementById('bonTaxInp'); if(taxInp)taxInp.value=tax;
+    const taxDisp=document.getElementById('bonTaxDisplay'); if(taxDisp)taxDisp.textContent=tax>0?('خصم '+tax+'% من كل مكافأة'):'لا يوجد خصم حالياً';
     const h=document.getElementById('holidayList');
     if(h){
       const list=DB.settings.holidays||[];
-      h.innerHTML=list.length?list.map((d,i)=>`
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px">
-          <span>📅 ${_safeTxt(isoToD(d)||d)}</span>
-          <button class="db" onclick="removeHoliday(${i})">🗑</button>
-        </div>`).join(''):'<div style="color:var(--gray);font-size:11px">لا توجد عطل مضافة</div>';
+      h.innerHTML=list.length?list.map((d,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px"><span>📅 ${_safeTxt((typeof isoToD==='function'?isoToD(d):d)||d)}</span><button class="db" onclick="removeHoliday(${i})">🗑</button></div>`).join(''):'<div style="color:var(--gray);font-size:11px">لا توجد عطل مضافة</div>';
     }
-
-    const audit=document.getElementById('auditList');
-    if(audit){
+    const auditBox=document.getElementById('auditList');
+    if(auditBox){
       const rows=(DB.auditLog||[]).slice(0,30);
-      audit.innerHTML=rows.length?rows.map((a,i)=>`
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px;gap:10px">
-          <span>${i+1}. <b>${_safeTxt(a.user||'مستخدم')}</b> — ${_safeTxt(a.action||'')}</span>
-          <span style="color:var(--gray);white-space:nowrap;font-size:10px">${_safeTxt(a.time||'')}</span>
-        </div>`).join(''):'<div style="color:var(--gray);font-size:11px">لا توجد عمليات مسجلة</div>';
+      auditBox.innerHTML=rows.length?rows.map((a,i)=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px;gap:10px"><span>${i+1}. <b>${_safeTxt(a.user||'مستخدم')}</b> — ${_safeTxt(a.action||'')}</span><span style="color:var(--gray);white-space:nowrap;font-size:10px">${_safeTxt(a.time||'')}</span></div>`).join(''):'<div style="color:var(--gray);font-size:11px">لا توجد عمليات مسجلة</div>';
     }
+  }catch(e){console.error('renderAdmin error',e); try{toast('⚠️ خطأ في عرض الإعدادات',true);}catch(_e){}}
+}
+window.renderAdmin=renderAdmin;
 
-    try{updateThemeUI&&updateThemeUI();}catch(e){}
-    try{cloudConfigLoad&&cloudConfigLoad();}catch(e){}
-  }catch(e){
-    console.error('renderAdmin error',e);
-    try{toast('⚠️ خطأ في عرض الإعدادات',true);}catch(_e){}
-  }
+
+// ══ FIX v34: توافق نافذة معامل الساعات الإضافية القديمة ══
+function openMultModal(){
+  try{
+    const cur=(DB&&DB.settings&&(DB.settings.mult||DB.settings.hoursMultiplier))||1.5;
+    const curEl=document.getElementById('mMult_cur'); if(curEl)curEl.textContent='×'+cur;
+    const inp=document.getElementById('mult_inp'); if(inp)inp.value=cur;
+    openModal('mMult');
+  }catch(e){console.error('openMultModal error',e); try{toast('⚠️ خطأ في فتح معامل الساعات',true)}catch(_e){}}
+}
+function saveMult(){
+  try{
+    const inp=document.getElementById('mult_inp')||document.getElementById('newMult');
+    const v=+(inp&&inp.value||0);
+    if(!v||v<1||v>5){toast('❌ معامل غير صالح',true);return;}
+    if(!DB.settings)DB.settings={};
+    DB.settings.mult=v; DB.settings.hoursMultiplier=v;
+    if(typeof audit==='function')audit('تعديل معامل الساعات الإضافية إلى ×'+v);
+    saveDB();
+    try{renderAdmin();}catch(_e){}
+    try{if(typeof renderHrs==='function')renderHrs();}catch(_e){}
+    const lbl=document.getElementById('multLbl'); if(lbl)lbl.textContent='×'+v;
+    closeModal('mMult');
+    toast('✅ تم تطبيق المعامل ×'+v);
+  }catch(e){console.error('saveMult error',e); try{toast('⚠️ خطأ في حفظ المعامل',true)}catch(_e){}}
 }
 
-function applyMult(){
-  const v=+(document.getElementById('newMult')?.value||0);
-  if(!v||v<1||v>5){toast('❌ معامل غير صالح',true);return;}
-  DB.settings.mult=v;
-  DB.settings.hoursMultiplier=v;
-  audit('تعديل معامل الساعات الإضافية إلى ×'+v);
-  saveDB();renderAdmin();
-  try{renderHrs&&renderHrs();}catch(e){}
-  toast('✅ تم تطبيق المعامل ×'+v);
-}
-function quickMult(v){
-  if(!DB.settings)DB.settings={};
-  DB.settings.mult=+v;
-  DB.settings.hoursMultiplier=+v;
-  audit('تعديل معامل الساعات الإضافية إلى ×'+v);
-  saveDB();renderAdmin();
-  try{renderHrs&&renderHrs();}catch(e){}
-  toast('✅ تم تطبيق المعامل ×'+v);
-}
-function saveUserName(){
-  const v=(document.getElementById('userNameInp')?.value||'').trim();
-  if(!v){toast('❌ أدخل اسم المستخدم',true);return;}
-  DB.settings.userName=v;
-  audit('تعديل اسم المستخدم');
-  saveDB();renderAdmin();toast('✅ تم حفظ اسم المستخدم');
-}
-function saveBonTax(){
-  const v=+(document.getElementById('bonTaxInp')?.value||0);
-  if(v<0||v>100){toast('❌ نسبة غير صالحة',true);return;}
-  DB.settings.bonTax=v;
-  audit('تعديل ضريبة المكافآت إلى '+v+'%');
-  saveDB();renderAdmin();toast('✅ تم تطبيق ضريبة المكافآت');
-}
-function askReset(){
-  if(!confirm('هل تريد مسح كل بيانات البرنامج من هذا الجهاز؟'))return;
-  const pass=prompt('أدخل كلمة تأكيد الحذف:');
-  if(pass!==(DB.settings.deletePass||'admin123')){toast('❌ كلمة التأكيد خاطئة',true);return;}
-  try{localStorage.removeItem('egtph_payroll_db_v32');localStorage.removeItem('egtph_payroll_db_v22');}catch(e){}
-  if(confirm('تم مسح التخزين المحلي. هل تريد إعادة تحميل الصفحة الآن؟'))location.reload();
-}
+function applyMult(){const v=+(document.getElementById('newMult')?.value||0); if(!v||v<1||v>5){toast('❌ معامل غير صالح',true);return;} DB.settings.mult=v;DB.settings.hoursMultiplier=v; if(typeof audit==='function')audit('تعديل معامل الساعات الإضافية إلى ×'+v); saveDB();renderAdmin(); try{if(typeof renderHrs==='function')renderHrs();}catch(e){} toast('✅ تم تطبيق المعامل ×'+v);}
+function quickMult(v){if(!DB.settings)DB.settings={}; DB.settings.mult=+v;DB.settings.hoursMultiplier=+v; if(typeof audit==='function')audit('تعديل معامل الساعات الإضافية إلى ×'+v); saveDB();renderAdmin(); try{if(typeof renderHrs==='function')renderHrs();}catch(e){} toast('✅ تم تطبيق المعامل ×'+v);}
+function saveUserName(){const v=(document.getElementById('userNameInp')?.value||'').trim(); if(!v){toast('❌ أدخل اسم المستخدم',true);return;} DB.settings.userName=v; if(typeof audit==='function')audit('تعديل اسم المستخدم'); saveDB();renderAdmin();toast('✅ تم حفظ اسم المستخدم');}
+function saveBonTax(){const v=+(document.getElementById('bonTaxInp')?.value||0); if(v<0||v>100){toast('❌ نسبة غير صالحة',true);return;} DB.settings.bonTax=v; if(typeof audit==='function')audit('تعديل ضريبة المكافآت إلى '+v+'%'); saveDB();renderAdmin();toast('✅ تم تطبيق ضريبة المكافآت');}
+function askReset(){if(!confirm('هل تريد مسح كل بيانات البرنامج من هذا الجهاز؟'))return; const pass=prompt('أدخل كلمة تأكيد الحذف:'); if(pass!==(DB.settings.deletePass||'admin123')){toast('❌ كلمة التأكيد خاطئة',true);return;} try{localStorage.removeItem('egtph_payroll_db_v32');localStorage.removeItem('egtph_payroll_db_v22');}catch(e){} if(confirm('تم مسح التخزين المحلي. هل تريد إعادة تحميل الصفحة الآن؟'))location.reload();}
 
 function showPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -3862,7 +3844,7 @@ function showPage(id){
     dashboard:renderDash,workers:renderWorkers,settlement:renderSettlement,salaries:renderSal,
     hours:renderHrs,absences:()=>{renderAbs();renderAbsSummary();},bonuses:renderBon,
     debts:renderDbt,summary:renderSum,annual:renderAnn,
-    ai:()=>{},alerts:renderAlerts,admin:renderAdmin,
+    ai:()=>{},alerts:renderAlerts,admin:(typeof renderAdmin==='function'?renderAdmin:function(){try{window.renderAdmin&&window.renderAdmin()}catch(e){console.error(e)}}),
     trash:renderTrash,search:initSearchPage,print:()=>{}
   };
   pages[id]?.();
