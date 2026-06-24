@@ -140,6 +140,26 @@ table.dt tr:hover td{background:rgba(200,150,12,.05)}
 .sync-state.off{color:#f08b83;border-color:rgba(231,76,60,.55);background:rgba(231,76,60,.10)}.sync-state.off::before{background:#e74c3c}
 .sync-key{font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--g2);overflow-wrap:anywhere;white-space:pre-wrap;background:var(--dkr);border:1px solid var(--br);padding:9px;border-radius:7px;user-select:all}
 .sync-auth-note{font-size:11px;color:var(--mt);margin:8px 0 0;line-height:1.55}
+
+/* FIREBASE LOGIN GATE */
+.auth-gate{position:fixed;inset:0;z-index:1200;display:none;align-items:center;justify-content:center;overflow:auto;padding:22px;background:radial-gradient(circle at 20% 15%,rgba(200,150,12,.18),transparent 34%),linear-gradient(145deg,rgba(9,9,18,.98),rgba(20,20,40,.98));backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.auth-gate.on{display:flex}
+.auth-card{width:min(100%,430px);background:linear-gradient(145deg,var(--cd),var(--dk));border:1px solid var(--br);border-top:3px solid var(--g);border-radius:18px;padding:26px;box-shadow:0 24px 70px rgba(0,0,0,.55);text-align:center}
+.auth-mark{width:62px;height:62px;border-radius:18px;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;background:rgba(200,150,12,.13);border:1px solid rgba(200,150,12,.5);font-size:30px}
+.auth-card h2{color:var(--g);font-size:21px;line-height:1.25;margin:0 0 7px;font-weight:900}
+.auth-card p{color:var(--mt);font-size:12.5px;line-height:1.65;margin:0}
+.auth-form{margin-top:18px;text-align:start}
+.auth-form .fl{margin-bottom:12px}
+.auth-submit{width:100%;min-height:43px;margin-top:4px}
+.auth-msg{min-height:22px;margin-top:13px!important;border-radius:8px;padding:7px 9px;background:rgba(52,152,219,.10);border:1px solid rgba(52,152,219,.28);color:#a9d9ff!important;font-size:11.5px!important}
+.auth-msg.er{background:rgba(231,76,60,.10);border-color:rgba(231,76,60,.42);color:#ffaba3!important}
+.auth-msg.ok{background:rgba(39,174,96,.10);border-color:rgba(39,174,96,.42);color:#9cedbe!important}
+.auth-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px;text-align:start}
+.auth-bottom small{color:var(--mt);font-size:10.5px;line-height:1.5}
+.auth-lang{background:transparent;border:1px solid var(--br);color:var(--mt);border-radius:7px;padding:6px 9px;cursor:pointer;font-size:11px;white-space:nowrap}
+.auth-lang:hover{color:var(--g);border-color:var(--g)}
+body.auth-locked{overflow:hidden}
+@media(max-width:480px){.auth-gate{padding:14px}.auth-card{padding:21px 17px;border-radius:15px}.auth-card h2{font-size:19px}}
 /* OCR / SCANNED DOCUMENTS */
 .btp:disabled{opacity:.5;cursor:not-allowed;filter:grayscale(.2)}
 .scan-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}
@@ -586,6 +606,26 @@ table.dt tr:hover td{background:rgba(200,150,12,.05)}
     <button class="btp solid" onclick="saveAv()" data-t="btn_save">💾</button></div>
 </div></div>
 
+
+<!-- PAGE-LEVEL FIREBASE LOGIN -->
+<div id="authGate" class="auth-gate on" role="dialog" aria-modal="true" aria-labelledby="authGateTitle" aria-describedby="authGateText">
+  <section class="auth-card">
+    <div class="auth-mark" aria-hidden="true">🔐</div>
+    <h2 id="authGateTitle" data-t="auth_title">EGTPH — Accès sécurisé</h2>
+    <p id="authGateText" data-t="auth_subtitle">Connectez-vous avec le compte Firebase autorisé pour ouvrir le dossier RH et activer la synchronisation.</p>
+    <form id="authGateForm" class="auth-form" autocomplete="on">
+      <div class="fl"><label for="authGateEmail" data-t="sync_email">Email Firebase</label><input id="authGateEmail" type="email" autocomplete="username" inputmode="email" required placeholder="email@exemple.com"></div>
+      <div class="fl"><label for="authGatePassword" data-t="sync_password">Mot de passe Firebase</label><input id="authGatePassword" type="password" autocomplete="current-password" required placeholder="••••••••"></div>
+      <button id="authGateSubmit" class="btp solid auth-submit" type="submit" data-t="sync_login">🔐 Se connecter</button>
+    </form>
+    <p id="authGateMsg" class="auth-msg" aria-live="polite"></p>
+    <div class="auth-bottom">
+      <small data-t="auth_local_note">Les scans CNAS restent uniquement sur cet appareil. Seules les données validées sont synchronisées.</small>
+      <button id="authLangBtn" class="auth-lang" type="button" onclick="toggleLang()">العربية</button>
+    </div>
+  </section>
+</div>
+
 <div id="tc"></div>
 <script>
 /* ============================================================
@@ -635,6 +675,7 @@ const I18N = {
   st_jref:"Jours de référence / mois", st_snmg:"SNMG (DA)", st_panier:"Panier / jour par défaut (DA)", st_pancap:"Plafond panier non soumis / jour (DA)", st_alloc:"Allocation / enfant (DA)",
   st_payroll_hint:"Ces valeurs sont appliquées automatiquement à chaque nouveau travailleur et au bulletin. Modifiables aussi par travailleur.",
   st_data:"🗄️ Données", st_export:"⬇️ Exporter (JSON)", st_import:"⬆️ Importer (JSON)", st_reset:"🗑️ Réinitialiser", st_doc_backup:"Les images/PDF CNAS restent uniquement dans ce navigateur. Les champs validés et extraits (N° SS, affiliation, identité, adresse, etc.) sont synchronisés avec le dossier du travailleur.", sync_email:"Email Firebase", sync_password:"Mot de passe Firebase", sync_login:"🔐 Se connecter", sync_logout:"🚪 Se déconnecter", sync_auth_required:"Connectez-vous avec le compte Firebase propriétaire pour activer la synchronisation sécurisée.", sync_auth_ok:"Connecté au compte Firebase autorisé.", sync_auth_wrong:"Ce compte Firebase n'est pas autorisé pour ce dossier RH.", sync_auth_missing:"Email et mot de passe Firebase requis.", sync_login_error:"Connexion Firebase impossible. Vérifiez vos identifiants.",
+  auth_title:"EGTPH — Accès sécurisé", auth_subtitle:"Connectez-vous avec le compte Firebase autorisé pour ouvrir le dossier RH et activer la synchronisation.", auth_local_note:"Les scans CNAS restent uniquement sur cet appareil. Seules les données validées sont synchronisées.", auth_loading:"Vérification de la session sécurisée…", auth_required:"Connectez-vous pour accéder au dossier RH.", auth_signed_out:"Session fermée. Connectez-vous pour continuer.", auth_authorized:"Connexion réussie. Ouverture du dossier RH…", auth_wrong_account:"Ce compte n'est pas autorisé pour ce dossier RH.", auth_bad_credentials:"Email ou mot de passe incorrect.", auth_network_error:"Connexion Firebase impossible. Vérifiez Internet et la configuration Firebase.", auth_wait:"Saisissez votre email et votre mot de passe Firebase.",
   f_nom:"Nom", f_prenom:"Prénom", f_dd:"Date de naissance", f_li:"Lieu de naissance", f_et:"Date d'entrée",
   f_ac:"N° Affiliation", f_poste:"Poste", f_poste_other:"Préciser le poste", f_diplome:"Diplôme",
   f_diplome_other:"Préciser le diplôme", f_expmode:"Expérience", exp_auto:"Auto (depuis date d'entrée)",
@@ -736,6 +777,7 @@ const I18N = {
   st_jref:"أيام العمل المرجعية / شهر", st_snmg:"الأجر الأدنى المضمون (دج)", st_panier:"سلّة / يوم افتراضيًا (دج)", st_pancap:"سقف منحة السلة غير الخاضع / يوم (دج)", st_alloc:"منحة / طفل (دج)",
   st_payroll_hint:"تُطبّق هذه القيم تلقائيًا على كل عامل جديد وعلى كشف الراتب. ويمكن تعديلها أيضًا لكل عامل على حدة.",
   st_data:"🗄️ البيانات", st_export:"⬇️ تصدير (JSON)", st_import:"⬆️ استيراد (JSON)", st_reset:"🗑️ إعادة التهيئة", st_doc_backup:"صور وملفات PDF الخاصة بـ CNAS تبقى داخل هذا المتصفح فقط. المعلومات المؤكدة والمستخرجة منها (رقم CNAS، الانتساب، الهوية، العنوان، إلخ) تُزامَن مع ملف العامل.", sync_email:"بريد Firebase الإلكتروني", sync_password:"كلمة مرور Firebase", sync_login:"🔐 تسجيل الدخول", sync_logout:"🚪 تسجيل الخروج", sync_auth_required:"سجّل الدخول بحساب Firebase المالك لتفعيل المزامنة الآمنة.", sync_auth_ok:"تم الاتصال بحساب Firebase المسموح.", sync_auth_wrong:"حساب Firebase هذا غير مسموح له بالدخول إلى ملف الموارد البشرية.", sync_auth_missing:"بريد Firebase وكلمة المرور مطلوبان.", sync_login_error:"تعذر الاتصال بـ Firebase. تحقق من بيانات الدخول.",
+  auth_title:"EGTPH — دخول آمن", auth_subtitle:"سجّل الدخول بحساب Firebase المسموح لفتح ملف الموارد البشرية وتفعيل المزامنة.", auth_local_note:"صور ووثائق CNAS تبقى في هذا الجهاز فقط. تتم مزامنة المعلومات المؤكدة فقط.", auth_loading:"جارٍ التحقق من الجلسة الآمنة…", auth_required:"سجّل الدخول للوصول إلى ملف الموارد البشرية.", auth_signed_out:"تم تسجيل الخروج. سجّل الدخول للمتابعة.", auth_authorized:"تم تسجيل الدخول. جارٍ فتح ملف الموارد البشرية…", auth_wrong_account:"هذا الحساب غير مسموح له بالدخول إلى ملف الموارد البشرية.", auth_bad_credentials:"البريد الإلكتروني أو كلمة المرور غير صحيحة.", auth_network_error:"تعذر الاتصال بـ Firebase. تحقق من الإنترنت وإعدادات Firebase.", auth_wait:"أدخل بريد Firebase الإلكتروني وكلمة المرور.",
   f_nom:"اللقب", f_prenom:"الاسم", f_dd:"تاريخ الميلاد", f_li:"مكان الميلاد", f_et:"تاريخ التوظيف",
   f_ac:"رقم الانتساب", f_poste:"المنصب", f_poste_other:"حدّد المنصب", f_diplome:"الشهادة",
   f_diplome_other:"حدّد الشهادة", f_expmode:"الخبرة", exp_auto:"تلقائي (من تاريخ التوظيف)",
@@ -1032,6 +1074,38 @@ function toast(m,ty='ok'){const c=document.getElementById('tc'),d=document.creat
 function oM(id){document.getElementById(id).classList.add('on');}
 function closeM(id){document.getElementById(id).classList.remove('on');}
 function $(id){return document.getElementById(id);}
+
+let authGateMessageKey='auth_loading',authGateMessageType='info';
+function setAppInteractionLocked(locked){
+  document.body.classList.toggle('auth-locked',!!locked);
+  ['sb','mn'].forEach(id=>{const el=$(id);if(!el)return;el.inert=!!locked;el.setAttribute('aria-hidden',locked?'true':'false');});
+}
+function updateAuthGateMessage(key,type='info'){
+  authGateMessageKey=key||'auth_wait';authGateMessageType=type;
+  const msg=$('authGateMsg');if(msg){msg.className='auth-msg'+(type==='error'?' er':type==='ok'?' ok':'');msg.textContent=t(authGateMessageKey);}
+}
+function showAuthGate(key='auth_required',type='info'){
+  const gate=$('authGate');if(gate){gate.classList.add('on');gate.setAttribute('aria-hidden','false');}
+  setAppInteractionLocked(true);updateAuthGateMessage(key,type);
+  const submit=$('authGateSubmit');if(submit)submit.disabled=false;
+  setTimeout(()=>{const f=$('authGateEmail');if(f)f.focus();},0);
+}
+function hideAuthGate(){
+  const gate=$('authGate');if(gate){gate.classList.remove('on');gate.setAttribute('aria-hidden','true');}
+  setAppInteractionLocked(false);updateAuthGateMessage('auth_authorized','ok');
+}
+function setAuthGateBusy(busy,key){
+  const form=$('authGateForm'),submit=$('authGateSubmit'),email=$('authGateEmail'),pass=$('authGatePassword');
+  if(form)form.setAttribute('aria-busy',busy?'true':'false');
+  [submit,email,pass].forEach(el=>{if(el)el.disabled=!!busy;});
+  if(key)updateAuthGateMessage(key,busy?'info':'error');
+}
+function firebaseErrorKey(e){
+  const code=String((e&&e.code)||'');
+  if(/wrong-password|user-not-found|invalid-credential|invalid-login-credentials/i.test(code))return'auth_bad_credentials';
+  if(/network-request-failed|timeout|unavailable/i.test(code))return'auth_network_error';
+  return'auth_network_error';
+}
 function fd(d){
   if(!d)return'';
   const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d));
@@ -1098,7 +1172,9 @@ function toggleLang(){LANG=LANG==='fr'?'ar':'fr';localStorage.setItem('egtph_lan
 function applyLang(){
   document.documentElement.lang=LANG;document.documentElement.dir=LANG==='ar'?'rtl':'ltr';
   $('langbtn').textContent=LANG==='fr'?'🌐 العربية':'🌐 Français';
+  const gateLang=$('authLangBtn');if(gateLang)gateLang.textContent=LANG==='fr'?'العربية':'Français';
   document.querySelectorAll('[data-t]').forEach(el=>{el.textContent=t(el.getAttribute('data-t'));});
+  updateAuthGateMessage(authGateMessageKey,authGateMessageType);
   buildPosteSelects();buildLnChips();
   // refresh active page
   const cur=document.querySelector('.pg.on');if(cur){const id=cur.id.replace('pg-','');
@@ -1109,7 +1185,7 @@ function applyLang(){
     const titles={db:'📊 '+t('nav_db'),wk:t('wk_title'),ln:t('nav_ln'),im:t('im_title'),cg:t('cg_title'),pay:t('pay_title'),att:t('att_title'),cnt:t('cnt_title'),av:t('av_title'),st:'⚙️ '+t('nav_st')};
     $('ptitle').textContent=titles[id]||'';
   }
-  if(fbReady)setSyncStatus('ok');else setSyncStatus('connecting');
+  setSyncStatus(currentSyncStatus,currentSyncDetail);
 }
 function fillWorkerSelect(id){const s=$(id);if(!s)return;const v=s.value;s.innerHTML='<option value="">'+t('msg_choose')+'</option>';
   S.workers.forEach(w=>{const o=document.createElement('option');o.value=w.id;o.textContent='#'+w.rk+' – '+w.N+' '+w.P;s.appendChild(o);});if(v)s.value=v;}
@@ -1704,7 +1780,7 @@ const FIREBASE_CONFIG={
   measurementId:"G-BNKD45KYHV",
   databaseURL:"https://egtph-rh-default-rtdb.europe-west1.firebasedatabase.app"
 };
-const FIREBASE_OWNER_UID="nUylq7tIQqZfTzir6IsPQOU9jKG3"; // UID fourni : à utiliser dans les règles Firebase si l’authentification est activée.
+const FIREBASE_OWNER_UID="7r9aplzpmYcWwC0U1Gy6GNBeKck1"; // UID fourni : à utiliser dans les règles Firebase si l’authentification est activée.
 const FIREBASE_PATH_KEY="rh_v3_MBInR2bhdTMRnHOL1ts1g187pZhstcz1VwtcHtjz8";
 const FIREBASE_ROOT_PATH="egtph-rh/"+FIREBASE_PATH_KEY;
 const SYNC_META_KEY="egtph_rh_sync_meta_v3";
@@ -1726,16 +1802,18 @@ function syncText(kind){
   const m={connecting:ar?'جارٍ الاتصال بالسحابة…':'Connexion Firebase…',ok:ar?'متزامن':'Synchronisé',saving:ar?'جارٍ حفظ التغييرات…':'Synchronisation…',offline:ar?'مزامنة غير متاحة':'Synchronisation indisponible',error:ar?'خطأ مزامنة':'Erreur de synchronisation'};
   return m[kind]||m.connecting;
 }
+let currentSyncStatus='connecting',currentSyncDetail='';
 function updateFirebaseAuthUi(){
-  const logged=!!(fbUser&&fbUser.uid===FIREBASE_OWNER_UID),hasOther=!!(fbUser&&!logged),ar=LANG==='ar';
+  const logged=!!(fbUser&&fbUser.uid===FIREBASE_OWNER_UID),hasOther=!!(fbUser&&!logged);
   const note=$('syncAuthNote');if(note)note.textContent=logged?t('sync_auth_ok'):(hasOther?t('sync_auth_wrong'):t('sync_auth_required'));
   const form=$('syncAuthForm');if(form)form.style.display=logged?'none':'';
   const login=$('fbLoginBtn');if(login)login.style.display=logged?'none':'';
   const logout=$('fbLogoutBtn');if(logout)logout.style.display=fbUser?'':'none';
 }
 function setSyncStatus(kind,detail){
-  const text=syncText(kind)+(detail?': '+detail:'');
-  ['syncState','syncStateSettings'].forEach(id=>{const el=$(id);if(el){el.className='sync-state '+(kind==='ok'?'ok':(kind==='connecting'||kind==='saving'?'syncing':'off'));el.textContent='☁️ '+text;el.title=text;}});
+  currentSyncStatus=kind||'connecting';currentSyncDetail=detail||'';
+  const text=syncText(currentSyncStatus)+(currentSyncDetail?': '+currentSyncDetail:'');
+  ['syncState','syncStateSettings'].forEach(id=>{const el=$(id);if(el){el.className='sync-state '+(currentSyncStatus==='ok'?'ok':(currentSyncStatus==='connecting'||currentSyncStatus==='saving'?'syncing':'off'));el.textContent='☁️ '+text;el.title=text;}});
   const key=$('syncPathKey');if(key){key.textContent=(LANG==='ar'?'مفتاح المسار':'Clé du chemin')+': '+FIREBASE_PATH_KEY+'\n'+(LANG==='ar'?'المسار الكامل':'Chemin complet')+': '+FIREBASE_ROOT_PATH;}
   const hint=$('syncHint');if(hint){hint.textContent=LANG==='ar'?'مزامنة فورية عبر Firebase مع طابع زمني بالميلي ثانية. الحذف يُحفظ كسجل حذف دائم؛ صور CNAS تبقى محلية، والمعلومات المستخرجة فقط تُزامَن.':'Synchronisation Firebase en temps réel avec horodatage en millisecondes. Les suppressions sont des tombstones permanents ; les scans CNAS restent locaux et seules les informations extraites sont synchronisées.';}
   const title=$('syncTitleText');if(title)title.textContent=LANG==='ar'?'مزامنة Firebase':'Synchronisation Firebase';
@@ -1764,17 +1842,47 @@ async function getFirebaseUser(){
   if(fbAuth.currentUser)return fbAuth.currentUser;
   return new Promise(resolve=>{let stop=null;const done=u=>{if(stop)stop();resolve(u||null);};stop=fbAuth.onAuthStateChanged(done,()=>done(null));});
 }
-async function firebaseSignIn(){
-  const email=String(($('fbAuthEmail')||{}).value||'').trim(),password=String(($('fbAuthPassword')||{}).value||'');
-  if(!email||!password){toast(t('sync_auth_missing'),'wa');return;}
+function getFirebaseCredentials(source){
+  const useGate=source==='gate';
+  const emailEl=$(useGate?'authGateEmail':'fbAuthEmail'),passEl=$(useGate?'authGatePassword':'fbAuthPassword');
+  return {email:String((emailEl||{}).value||'').trim(),password:String((passEl||{}).value||''),emailEl,passEl};
+}
+async function firebaseSignIn(source){
+  const fromGate=source==='gate',creds=getFirebaseCredentials(fromGate?'gate':'settings');
+  if(!creds.email||!creds.password){
+    if(fromGate){updateAuthGateMessage('auth_wait','error');}
+    else toast(t('sync_auth_missing'),'wa');
+    return false;
+  }
+  if(fromGate)setAuthGateBusy(true,'auth_loading');
   try{
-    setSyncStatus('connecting');await ensureFirebaseApp();const result=await fbAuth.signInWithEmailAndPassword(email,password);fbUser=result.user||await getFirebaseUser();
-    if(!fbUser||fbUser.uid!==FIREBASE_OWNER_UID){try{await fbAuth.signOut();}catch(e){}fbUser=null;closeFirebaseListener();setSyncStatus('error',t('sync_auth_wrong'));toast(t('sync_auth_wrong'),'er');return;}
-    if($('fbAuthPassword'))$('fbAuthPassword').value='';await initCloudSync();toast(t('sync_auth_ok'));
-  }catch(e){console.error(e);fbUser=null;closeFirebaseListener();setSyncStatus('error',t('sync_login_error'));toast(t('sync_login_error'),'er');}
+    setSyncStatus('connecting');await ensureFirebaseApp();
+    const result=await fbAuth.signInWithEmailAndPassword(creds.email,creds.password);fbUser=result.user||await getFirebaseUser();
+    if(!fbUser||fbUser.uid!==FIREBASE_OWNER_UID){
+      try{await fbAuth.signOut();}catch(e){}
+      fbUser=null;closeFirebaseListener();setSyncStatus('error',t('sync_auth_wrong'));
+      if(fromGate){setAuthGateBusy(false);showAuthGate('auth_wrong_account','error');}
+      else toast(t('sync_auth_wrong'),'er');
+      return false;
+    }
+    if(creds.passEl)creds.passEl.value='';
+    const ok=await initCloudSync();
+    if(!ok)throw new Error('cloud-init-failed');
+    if(fromGate){updateAuthGateMessage('auth_authorized','ok');setTimeout(hideAuthGate,180);}
+    toast(t('sync_auth_ok'));return true;
+  }catch(e){
+    console.error(e);fbUser=null;closeFirebaseListener();setSyncStatus('error',t('sync_login_error'));
+    const key=firebaseErrorKey(e);
+    if(fromGate){setAuthGateBusy(false);showAuthGate(key,'error');}
+    else toast(t('sync_login_error'),'er');
+    return false;
+  }finally{
+    if(fromGate){const submit=$('authGateSubmit');if(submit)submit.disabled=false;const email=$('authGateEmail'),pass=$('authGatePassword');if(email)email.disabled=false;if(pass)pass.disabled=false;}
+  }
 }
 async function firebaseSignOut(){
-  try{if(fbAuth)await fbAuth.signOut();}catch(e){console.error(e);}fbUser=null;closeFirebaseListener();setSyncStatus('offline',t('sync_auth_required'));
+  try{if(fbAuth)await fbAuth.signOut();}catch(e){console.error(e);}
+  fbUser=null;closeFirebaseListener();setSyncStatus('offline',t('sync_auth_required'));showAuthGate('auth_signed_out','info');
 }
 function cleanClone(v){return JSON.parse(JSON.stringify(v));}
 function stableStringify(v){
@@ -1876,8 +1984,8 @@ async function initCloudSync(){
   setSyncStatus('connecting');
   try{
     await ensureFirebaseApp();fbUser=await getFirebaseUser();
-    if(!fbUser){closeFirebaseListener();setSyncStatus('offline',t('sync_auth_required'));return false;}
-    if(fbUser.uid!==FIREBASE_OWNER_UID){closeFirebaseListener();setSyncStatus('error',t('sync_auth_wrong'));return false;}
+    if(!fbUser){closeFirebaseListener();setSyncStatus('offline',t('sync_auth_required'));showAuthGate('auth_required','info');return false;}
+    if(fbUser.uid!==FIREBASE_OWNER_UID){closeFirebaseListener();setSyncStatus('error',t('sync_auth_wrong'));showAuthGate('auth_wrong_account','error');return false;}
     fbDb=firebase.database(fbApp);fbRef=fbDb.ref(FIREBASE_ROOT_PATH);fbReady=true;
     fbDb.ref('.info/serverTimeOffset').on('value',snap=>{fbOffset=Number(snap.val())||0;});
     const first=await fbRef.once('value');const remote=first.val();
@@ -1897,8 +2005,8 @@ async function initCloudSync(){
         }catch(e){console.error(e);setSyncStatus('error',e.message||'');}
       },e=>{console.error(e);setSyncStatus('error',e&&e.message?e.message:'');});
     }
-    return true;
-  }catch(e){console.error(e);closeFirebaseListener();setSyncStatus('error',e&&e.message?e.message:'');return false;}
+    hideAuthGate();return true;
+  }catch(e){console.error(e);closeFirebaseListener();setSyncStatus('error',e&&e.message?e.message:'');showAuthGate('auth_network_error','error');return false;}
   })();
   try{return await fbInitPromise;}finally{fbInitPromise=null;}
 }
@@ -2122,6 +2230,8 @@ async function saveImport(){
 
 /* ---------- INIT ---------- */
 function bindEvents(){
+  const authForm=$('authGateForm');
+  if(authForm)authForm.addEventListener('submit',e=>{e.preventDefault();firebaseSignIn('gate');});
   $('wFN').addEventListener('change',onPosteChange);
   $('wDP').addEventListener('change',onDiplomeChange);
   $('wEXM').addEventListener('change',onExpModeChange);
@@ -2153,7 +2263,10 @@ function bindEvents(){
   });
 }
 loadD();
-window.addEventListener('DOMContentLoaded',()=>{buildPosteSelects();bindEvents();applyLang();renderDB();setSyncStatus('connecting');initCloudSync();});
+window.addEventListener('DOMContentLoaded',async()=>{
+  buildPosteSelects();bindEvents();showAuthGate('auth_loading','info');applyLang();renderDB();setSyncStatus('connecting');
+  await initCloudSync();
+});
 </script>
 </body>
 </html>
