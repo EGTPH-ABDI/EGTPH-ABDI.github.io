@@ -69,7 +69,9 @@ svg{display:block}
 .body-row{flex:1 1 auto;display:flex;min-height:0;position:relative}
 
 /* ---------- sidebar ---------- */
-.sidebar{flex:0 0 270px;display:flex;flex-direction:column;background:var(--bg-deep);border-inline-end:1px solid var(--line-dark);min-height:0}
+.sidebar{flex:0 0 270px;display:flex;flex-direction:column;background:var(--bg-deep);border-inline-end:1px solid var(--line-dark);min-height:0;transition:flex-basis .18s ease,opacity .18s ease}
+.shell.sidebar-collapsed .sidebar{flex:0 0 0;width:0;opacity:0;overflow:hidden;border-inline-end:0;pointer-events:none}
+.icon-btn.active{background:var(--accent);color:#1a0f06}
 .sidebar-search{flex:0 0 auto;padding:12px 12px 0}
 .sidebar-search input{width:100%;padding:9px 12px;border-radius:9px;border:1.3px solid var(--line-dark);background:var(--bg-elevate);
   font-family:inherit;font-size:.84rem;color:var(--text-onDark)}
@@ -266,6 +268,9 @@ svg{display:block}
       </button>
       <button class="icon-btn" id="openDirectBtn" aria-label="open in new tab" title="فتح في نافذة جديدة">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
+      </button>
+      <button class="icon-btn" id="fullscreenBtn" aria-label="toggle sidebar" aria-pressed="false" title="ملء الشاشة (إخفاء القائمة)">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
       </button>
     </span>
     <div class="topbar-actions">
@@ -498,6 +503,7 @@ var sidebar=document.getElementById('sidebar'),
     appTools=document.getElementById('appTools'),
     reloadBtn=document.getElementById('reloadBtn'),
     openDirectBtn=document.getElementById('openDirectBtn'),
+    fullscreenBtn=document.getElementById('fullscreenBtn'),
     welcome=document.getElementById('welcome'),
     welcomeCards=document.getElementById('welcomeCards'),
     loading=document.getElementById('loading'),
@@ -730,6 +736,17 @@ frame.addEventListener('load', function(){
 retryBtn.addEventListener('click', function(){ if(activeId) selectApp(activeId, {skipHistory:true}); });
 reloadBtn.addEventListener('click', function(){ if(activeId) selectApp(activeId, {skipHistory:true}); });
 openDirectBtn.addEventListener('click', function(){ if(activeId) window.open(getHref(activeId), '_blank', 'noopener'); });
+var FULLSCREEN_KEY='egtph_shell_fullscreen';
+function setFullscreen(on){
+  document.querySelector('.shell').classList.toggle('sidebar-collapsed', on);
+  fullscreenBtn.classList.toggle('active', on);
+  fullscreenBtn.setAttribute('aria-pressed', on?'true':'false');
+  try{ localStorage.setItem(FULLSCREEN_KEY, on?'1':'0'); }catch(e){}
+}
+fullscreenBtn.addEventListener('click', function(){
+  setFullscreen(!document.querySelector('.shell').classList.contains('sidebar-collapsed'));
+});
+try{ if(localStorage.getItem(FULLSCREEN_KEY)==='1') setFullscreen(true); }catch(e){}
 dashNav.addEventListener('click', function(){ showWelcome(); });
 dashNav.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); showWelcome(); } });
 
