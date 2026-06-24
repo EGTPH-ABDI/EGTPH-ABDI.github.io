@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<script src="../egtph-auth.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <title>Bon de Commande – EGTPH</title>
@@ -837,7 +838,15 @@ let _cloudBusy=false,_cloudStamp=localStorage.getItem('egtph_bons_stamp')||'';
 let _readOK=false; // hard guard: jamais de PUT avant un GET réussi de la session
 let _sse=null,_sseRetryTimer=null;
 
-function _cloudEP(){return _CLOUD_URL+'/egtph/'+encodeURIComponent(_CLOUD_KEY)+'.json';}
+function _cloudEP(){return _CLOUD_URL+'/egtph/'+encodeURIComponent(_CLOUD_KEY)+'.json'+EGTPHAuth.authParam('commande');}
+// ── حماية حقيقية: تسجيل دخول بكلمة سر (مرة واحدة لكل جهاز)، الرمز يتجدد وحده ──
+// كلمة السر لا تُكتب هنا أبداً — تُكتب من المستخدم في النافذة التي تظهر.
+EGTPHAuth.init({
+  appId:   'commande',
+  apiKey:  'AIzaSyA471hWJkoUr3__sWGwFB0DeNOSvoDcPKk', // Web API Key — مشروع egtph-commande
+  email:   'abdiyoucefislam@gmail.com',
+  onReady: function(){ try{ if(typeof cloudSync==='function') cloudSync(false); }catch(e){} }
+});
 function _setDot(t,title){const d=document.getElementById('cloudDot');if(d){d.textContent=t;if(title)d.title=title;}}
 
 // hygiène du timestamp: tout _mod > (maintenant + 2min) est traité comme 0 (montre déréglée)
@@ -927,7 +936,7 @@ async function cloudSync(manual){
 // ── Synchronisation en temps réel via SSE sur savedAt léger ──
 function _startSSE(){
   try{if(_sse){_sse.close();_sse=null;}}catch(e){}
-  const url=_CLOUD_URL+'/egtph/'+encodeURIComponent(_CLOUD_KEY)+'/syncedAt.json';
+  const url=_CLOUD_URL+'/egtph/'+encodeURIComponent(_CLOUD_KEY)+'/syncedAt.json'+EGTPHAuth.authParam('commande');
   try{
     _sse=new EventSource(url);
     _sse.onmessage=(ev)=>{
@@ -967,7 +976,7 @@ function nextFournMod(){
 }
 function loadFourns(){try{FOURNS=JSON.parse(localStorage.getItem('egtph_fourns')||'[]');}catch(e){FOURNS=[];}}
 function persistFourns(){localStorage.setItem('egtph_fourns',JSON.stringify(FOURNS));_fournDirty=true;}
-function _fournEP(){return _CLOUD_URL+'/egtph/'+encodeURIComponent(_FOURN_KEY)+'.json';}
+function _fournEP(){return _CLOUD_URL+'/egtph/'+encodeURIComponent(_FOURN_KEY)+'.json'+EGTPHAuth.authParam('commande');}
 
 // ajoute/maj un fournisseur si le nom n'existe pas déjà (insensible à la casse/espaces)
 function upsertFournisseur(nom){
@@ -1023,7 +1032,7 @@ async function fournSync(manual){
 
 function _startFournSSE(){
   try{if(_fournSSE){_fournSSE.close();_fournSSE=null;}}catch(e){}
-  const url=_CLOUD_URL+'/egtph/'+encodeURIComponent(_FOURN_KEY)+'/syncedAt.json';
+  const url=_CLOUD_URL+'/egtph/'+encodeURIComponent(_FOURN_KEY)+'/syncedAt.json'+EGTPHAuth.authParam('commande');
   try{
     _fournSSE=new EventSource(url);
     _fournSSE.onmessage=(ev)=>{
