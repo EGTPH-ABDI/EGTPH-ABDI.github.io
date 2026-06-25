@@ -2837,6 +2837,7 @@ function _applyDBData(d){
     (DB.absences[w.id]||[]).forEach(a=>{if(!a.hasOwnProperty('deductOpt'))a.deductOpt='now';});
     (DB.debts[w.id]||[]).forEach(dd=>{if(dd.installment!==undefined&&dd.inst===undefined)dd.inst=dd.installment;});
   });
+  try{normalizeLegacyAdvanceAccounting();}catch(e){console.error('normalizeLegacyAdvanceAccounting',e);}
   // تشغيل التحقق المزدوج بعد تحميل البيانات
   try{setTimeout(()=>{try{runDoubleVerification();}catch(e){}},200);}catch(e){}
 }
@@ -3270,10 +3271,15 @@ function cycleWindow(w,m,yr){
   const to=new Date(yr,m+1,entryDay,0,0,0,0);
   return{from,to};
 }
-function _toDate(s){
-  if(!s)return null;
-  if(s.includes('-')){const p=s.split('-');return new Date(+p[0],+p[1]-1,+p[2]);}
-  if(s.includes('/')){const p=s.split('/');return new Date(+p[2],+p[1]-1,+p[0]);}
+function _toDate(value){
+  if(!value)return null;
+  if(value instanceof Date && !isNaN(value))return new Date(value.getFullYear(),value.getMonth(),value.getDate());
+  const s=String(value).trim();
+  // Accept the first date when a field contains a range such as "23/05/2026 → 25/05/2026".
+  let m=s.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+  if(m){const d=new Date(+m[1],+m[2]-1,+m[3]);return isNaN(d)?null:d;}
+  m=s.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
+  if(m){const d=new Date(+m[3],+m[2]-1,+m[1]);return isNaN(d)?null:d;}
   return null;
 }
 function _inCycle(dateStr,win){
@@ -3281,6 +3287,164 @@ function _inCycle(dateStr,win){
   if(!d)return false;
   return d>=win.from && d<win.to;
 }
+function cycleAnchorForDate(w,dateValue){
+  const d=_toDate(dateValue)||new Date();
+  const entryDay=Math.min(+((w||{}).day)||1,28);
+  if(d.getDate()>=entryDay)return{m:d.getMonth(),yr:d.getFullYear()};
+  return{m:(d.getMonth()-1+12)%12,yr:d.getMonth()===0?d.getFullYear()-1:d.getFullYear()};
+}
+function absenceDate(a){return (a&&((a.from)||a.date))||'';}
+function absenceEntriesInCycle(wid,m,yr){
+  const w=getW(wid);if(!w)return[];
+  const win=cycleWindow(w,m,yr);
+  return (DB.absences[wid]||[]).filter(function(a){return _inCycle(absenceDate(a),win);});
+}
+function hourEntriesInCycle(wid,m,yr){
+  const w=getW(wid);if(!w)return[];
+  const win=cycleWindow(w,m,yr);
+  return (DB.hours[wid]||[]).filter(function(h){return _inCycle(h.date,win);});
+}
+function bonusEntriesInCycle(wid,m,yr){
+  const w=getW(wid);if(!w)return[];
+  const win=cycleWindow(w,m,yr),out=[];
+  Object.values(DB.bonuses[wid]||{}).forEach(function(arr){(arr||[]).forEach(function(b){if(_inCycle(b.date,win))out.push(b);});});
+  return out;
+}
+
+// ══════════════════════════════════════════════════════
+//  ADVANCE DEDUCTION HELPERS (v33)
+//  القاعدة المحاسبية المتفق عليها:
+//  - amount يبقى هو مبلغ التسبيق المحتسب على دورة الراتب.
+//  - أي قسط دين/غياب لا يُنشأ كتسبيق مستقل.
+//  - الخصم يُحفظ داخل نفس التسبيق في deductions ويظهر كملاحظة.
+//  - الصافي النقدي = amount - مجموع الخصومات.
+// ══════════════════════════════════════════════════════
+function advGross(e){return (e&&e._isInstDeduction)?0:(+((e||{}).amount)||0);}
+function advDedTotal(e){return ((e&&Array.isArray(e.deductions))?e.deductions:[]).reduce(function(s,d){return s+(+d.amount||0);},0);}
+function advNetPaid(e){return Math.max(0,(+((e||{}).amount)||0)-advDedTotal(e));}
+function advDedNote(e){
+  var ds=(e&&Array.isArray(e.deductions))?e.deductions:[];
+  if(!ds.length)return '';
+  return ds.map(function(d){
+    var lbl=d.type==='debt'?'قسط دين':(d.type==='absence'?'خصم غياب':'خصم');
+    return '−'+fmtN(+d.amount||0)+' دج '+lbl;
+  }).join(' | ');
+}
+function _appendNote(base,extra){base=(base||'').trim();return base?base+' — '+extra:extra;}
+function advDedCapacity(e){return Math.max(0,advGross(e)-advDedTotal(e));}
+function attachDeductionToAdvance(adv,ded){
+  if(!adv||!ded||!(+ded.amount>0))return false;
+  // A deduction is a part of the same advance; it cannot exceed the cash still available in it.
+  if((+ded.amount||0)>advDedCapacity(adv))return false;
+  adv.deductions=Array.isArray(adv.deductions)?adv.deductions:[];
+  var key=ded._instTag||ded.id||'';
+  if(key&&adv.deductions.some(function(x){return (x._instTag||x.id||'')===key;}))return false;
+  adv.deductions.push(Object.assign({},ded));
+  adv.netPaid=advNetPaid(adv);
+  // The visible note is rendered from deductions. Do not append calculated text to the user's own note.
+  return true;
+}
+function advanceEntriesInCycle(wid,m,yr){
+  var w=getW(wid);if(!w)return[];
+  var win=cycleWindow(w,m,yr),out=[];
+  Object.entries(DB.advances[wid]||{}).forEach(function(pair){
+    (pair[1]||[]).forEach(function(e){if(!_isInstAdv(e)&&_inCycle(e.date,win))out.push(e);});
+  });
+  return out;
+}
+function findAdvanceForDeduction(wid,m,yr,amount){
+  var out=advanceEntriesInCycle(wid,m,yr).slice();
+  out.sort(function(a,b){
+    var ta=(a.enteredAt?Date.parse(a.enteredAt):0)||0;
+    var tb=(b.enteredAt?Date.parse(b.enteredAt):0)||0;
+    if(tb!==ta)return tb-ta;
+    var da=(_toDate(a.realDate||a.date)||new Date(0)).getTime();
+    var db=(_toDate(b.realDate||b.date)||new Date(0)).getTime();
+    return db-da;
+  });
+  return out.find(function(a){return advDedCapacity(a)>=(+amount||0);})||null;
+}
+function _isInstallmentReturn(r){return !!(r&&(r._auto||r._instTag||r._instPayment||/^قسط/.test(String(r.note||''))));}
+function cleanupAdvanceLinkedReturns(wid,adv){
+  if(!adv)return 0;
+  var advId=String(adv.id||'');
+  var tags=new Set();
+  var absIds=new Set();
+  (adv.deductions||[]).forEach(function(d){
+    if(d._instTag)tags.add(String(d._instTag));
+    if(d.absenceId)absIds.add(String(d.absenceId));
+  });
+  // Reopen absences whose settlement came from this advance.
+  (DB.absences[wid]||[]).forEach(function(a){
+    if(String(a._advanceId||'')===advId||absIds.has(String(a.id))){
+      if(a.deductOpt!=='cancel'){
+        a.settled=false;delete a.settledDate;delete a.settleNote;delete a._advanceId;
+      }
+    }
+  });
+  var removed=0,debts=DB.debts[wid]||[];
+  for(var i=debts.length-1;i>=0;i--){
+    var r=debts[i];
+    var linked=r&&r.type==='return'&&(
+      String(r._advanceId||'')===advId ||
+      (r._instTag&&tags.has(String(r._instTag))) ||
+      (Array.isArray(r._advanceIds)&&r._advanceIds.map(String).includes(advId))
+    );
+    if(!linked)continue;
+    var debt=debts.find(function(x){return x.type==='debt'&&String(x.id)===String(r.debtId);});
+    if(debt&&debt.inst&&_isInstallmentReturn(r)&&(+debt.instPaid||0)>0)debt.instPaid=Math.max(0,(+debt.instPaid||0)-1);
+    if(r.id)_markDeleted(r.id);
+    debts.splice(i,1);removed++;
+  }
+  adv.deductions=[];
+  adv.netPaid=advGross(adv);
+  return removed;
+}
+function normalizeLegacyAdvanceAccounting(){
+  // ترحيل قيود الأقساط القديمة (_isInstDeduction) إلى خصومات داخل آخر تسبيق حقيقي.
+  // القيد القديم يبقى موجوداً للأرشيف، لكن advGross يتجاهله حتى لا يُحسب كتسبيق مستقل.
+  if(!DB||!DB.advances)return 0;
+  var changed=0;
+  (DB.workers||[]).forEach(function(w){
+    var wid=w.id, advObj=DB.advances[wid]||{};
+    Object.entries(advObj).forEach(function(pair){
+      var bucket=+pair[0];
+      (pair[1]||[]).forEach(function(a){
+        if(!a||!a._isInstDeduction||a._migratedToDeduction)return;
+        var tag=a._instTag||('legacy_'+a.id), d=_toDate(a.date)||new Date();
+        var yr=d.getFullYear();
+        var target=lastRealAdvanceInCycle(wid,bucket,yr);
+        if(!target)return;
+        var ok=attachDeductionToAdvance(target,{type:'debt',amount:+a.amount||0,date:a.date||todayStr(),debtId:a._debtId,_instTag:tag,note:a.note||'قسط دين قديم'});
+        if(ok){
+          var ret=(DB.debts[wid]||[]).find(function(r){return r.type==='return'&&r._instTag===tag;});
+          if(ret){ret._advanceId=target.id; if((ret.note||'').indexOf('خُصم من تسبيق')<0)ret.note=(ret.note?ret.note+' — ':'')+'خُصم من تسبيق '+fmtN(+target.amount||0);}
+          a._migratedToDeduction=true;
+          changed++;
+        }
+      });
+    });
+  });
+  return changed;
+}
+
+function lastRealAdvanceInCycle(wid,m,yr){
+  var out=advanceEntriesInCycle(wid,m,yr).slice();
+  out.sort(function(a,b){
+    var ta=(a.enteredAt?Date.parse(a.enteredAt):0)||0;
+    var tb=(b.enteredAt?Date.parse(b.enteredAt):0)||0;
+    if(tb!==ta)return tb-ta;
+    var da=(_toDate(a.realDate||a.date)||new Date(0)).getTime();
+    var db=(_toDate(b.realDate||b.date)||new Date(0)).getTime();
+    return db-da;
+  });
+  return out[0]||null;
+}
+function installmentDueInCycle(d,w,m,yr){
+  if(!d||d.type!=='debt'||!d.inst||(+d.instPaid||0)>=(+d.instCount||1)||!d.nextDue)return false;
+  return _inCycle(d.nextDue,cycleWindow(w,m,yr));
+}
+function _isInstAdv(e){return !!(e&&e._isInstDeduction);}
 // ── نص مدة الدورة: "20/05/2026 حتى 20/06/2026" ──
 function _dStr(d){return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();}
 function cycleRangeStr(w,m,yr){
@@ -3306,20 +3470,16 @@ function calcMonthStatus(wid,m,yr){
   // ── التسبيقات: كل القيود التي يقع تاريخها داخل نافذة الدورة ──
   let totAdv=0;
   Object.values(DB.advances[wid]||{}).forEach(arr=>{
-    (arr||[]).forEach(e=>{if(_inCycle(e.date,win))totAdv+=+e.amount||0;});
+    (arr||[]).forEach(e=>{if(_inCycle(e.date,win))totAdv+=advGross(e);});
   });
 
   // ── خصم الغيابات الفورية: حسب نافذة الدورة بالتاريخ ──
-  const totAbsNow=(DB.absences[wid]||[]).filter(a=>a.deductOpt==='now'&&_inCycle(a.date,win)).reduce((s,a)=>s+(+a.deduct||0),0);
+  const totAbsNow=absenceEntriesInCycle(wid,m,_yr).filter(a=>a.deductOpt==='now').reduce((s,a)=>s+(+a.deduct||0),0);
 
   // ── الأقساط: تُحسب للعرض فقط (خصم عند الصرف الفعلي) ──
   // لا تدخل في شرط "مسدد" — الأقساط هي ديون تُستقطع من الراتب وقت الدفع
   // الأقساط المستحقة ضمن نافذة الدورة (تاريخ الاستحقاق داخل [from, to))
-  const totInst=(DB.debts[wid]||[]).filter(d=>{
-    if(d.type!=='debt'||!d.inst||(+d.instPaid||0)>=(+d.instCount||1))return false;
-    const due=d.nextDue?new Date(d.nextDue+'T00:00:00'):null;
-    return due&&due>=win.from&&due<win.to;
-  }).reduce((s,d)=>s+(+d.instAmt||0),0);
+  const totInst=(DB.debts[wid]||[]).filter(function(d){return installmentDueInCycle(d,w,m,_yr);}).reduce((s,d)=>s+(+d.instAmt||0),0);
 
   // ── الصافي المستحق = راتب - غيابات فورية فقط ──
   // الأقساط لا تُطرح هنا — تُخصم عند الدفع الفعلي
@@ -3339,16 +3499,13 @@ function calcMonthStatus(wid,m,yr){
   const salaryPaidWithInst=(totAdv+totInst)>=netDue;
 
   // ── الساعات الإضافية (منفصلة) — حسب نافذة الدورة بالتاريخ ──
-  const hrsEntries=(DB.hours[wid]||[]).filter(h=>_inCycle(h.date,win));
+  const hrsEntries=hourEntriesInCycle(wid,m,_yr);
   const hrsTotal=hrsEntries.reduce((s,h)=>s+(+h.total||0),0);
   const hrsPaid=hrsEntries.filter(h=>h.paid).reduce((s,h)=>s+(+h.total||0),0);
   const hrsUnpaid=hrsTotal-hrsPaid;
 
   // ── المكافآت (منفصلة) — حسب نافذة الدورة بالتاريخ ──
-  let bonEntries=[];
-  Object.values(DB.bonuses[wid]||{}).forEach(arr=>{
-    (arr||[]).forEach(b=>{if(_inCycle(b.date,win))bonEntries.push(b);});
-  });
+  let bonEntries=bonusEntriesInCycle(wid,m,_yr);
   const bonTotal=bonEntries.reduce((s,b)=>s+(+b.net||+b.amount||0),0);
   const bonPaid=bonEntries.filter(b=>b.paid).reduce((s,b)=>s+(+b.net||+b.amount||0),0);
   const bonUnpaid=bonTotal-bonPaid;
@@ -3423,7 +3580,7 @@ function calcFinalSettlement(w){
   const unpaidBon=Object.values(DB.bonuses[w.id]||{}).flat().filter(b=>!b.paid).reduce((s,b)=>s+(+b.net||+b.amount||0),0);
 
   // 4. كل التسبيقات (كل الأشهر)
-  const totalAdv=Object.values(DB.advances[w.id]||{}).flat().reduce((s,a)=>s+(+a.amount||0),0);
+  const totalAdv=Object.values(DB.advances[w.id]||{}).flat().reduce((s,a)=>s+advGross(a),0);
 
   // 5. كل الغيابات المخصومة
   const totalAbs=(DB.absences[w.id]||[]).filter(a=>a.deductOpt!=='cancel').reduce((s,a)=>s+(+a.deduct||0),0);
@@ -3461,76 +3618,48 @@ function pendAbs(wid){
 //  2. يُسجّل في السجل ويحفظ
 // ══════════════════════════════════════════════════════
 function autoSettleOnAdvance(wid, m, yr){
-  const w=getW(wid);
-  if(!w)return false;
-  const ms=calcMonthStatus(wid,m,yr);
-  if(!ms)return false;
+  const w=getW(wid);if(!w)return false;
+  const ms=calcMonthStatus(wid,m,yr);if(!ms||!ms.salaryPaid)return false;
   let changed=false;
 
-  // ── 1. تسوية الغيابات: إذا الراتب مسدد → حوّل كل غيابات الشهر لـ "مسدد" ──
-  if(ms.salaryPaid){
-    (DB.absences[wid]||[])
-      .filter(a=>a.month===m&&!a.settled&&a.deductOpt!=='cancel')
-      .forEach(a=>{
-        a.settled=true;
-        a.settledDate=todayStr();
-        a.settleNote='خُصم تلقائياً مع إتمام الراتب';
-        changed=true;
-        audit('خصم غياب تلقائي: '+fmtN(a.deduct)+' دج — '+w.name);
+  // Pending absences are settled only when a real advance can contain the deduction.
+  absenceEntriesInCycle(wid,m,yr)
+    .filter(a=>!a.settled&&a.deductOpt!=='cancel')
+    .forEach(a=>{
+      const target=findAdvanceForDeduction(wid,m,yr,+a.deduct||0);
+      if(!target)return;
+      const did='abs_'+String(a.id||genId());
+      if(attachDeductionToAdvance(target,{type:'absence',amount:+a.deduct||0,date:todayStr(),absenceId:a.id,id:did,note:'خصم غياب تلقائي'})){
+        a.settled=true;a.settledDate=todayStr();a.settleNote='خُصم من التسبيق '+fmtN(+target.amount||0);a._advanceId=target.id;
+        changed=true;audit('خصم غياب تلقائي: '+fmtN(a.deduct)+' دج — '+w.name);
+      }
+    });
+
+  // One installment is eligible only when its due date belongs to this same payroll cycle.
+  (DB.debts[wid]||[])
+    .filter(d=>installmentDueInCycle(d,w,m,yr))
+    .forEach(d=>{
+      const instPaid=+d.instPaid||0,instCount=+d.instCount||1,instAmt=+d.instAmt||0;
+      if(!instAmt||instPaid>=instCount)return;
+      const tag=d.id+'_'+(instPaid+1);
+      const alreadyRet=(DB.debts[wid]||[]).some(x=>x.type==='return'&&x._instTag===tag);
+      if(alreadyRet)return;
+      const target=findAdvanceForDeduction(wid,m,yr,instAmt);
+      if(!target)return;
+      if(!attachDeductionToAdvance(target,{type:'debt',amount:instAmt,date:todayStr(),debtId:d.id,_instTag:tag,note:'قسط دين تلقائي '+(instPaid+1)+'/'+instCount}))return;
+      DB.debts[wid].push({
+        id:genId(),type:'return',amount:instAmt,date:todayStr(),debtId:d.id,
+        note:'قسط تلقائي '+(instPaid+1)+'/'+instCount+' — خُصم من تسبيق '+fmtN(+target.amount||0),
+        by:'النظام',_instTag:tag,_auto:true,_instPayment:true,_advanceId:target.id
       });
-  }
-
-  // ── 2. تسجيل قسط الدين التالي تلقائياً إذا الراتب مسدد ──
-  if(ms.salaryPaid){
-    (DB.debts[wid]||[])
-      .filter(d=>d.type==='debt'&&d.inst&&(+d.instPaid||0)<(+d.instCount||1))
-      .forEach(d=>{
-        // تحقق: هل القسط مستحق لهذا الشهر؟
-        const instPaid=+d.instPaid||0;
-        const instCount=+d.instCount||1;
-        const instAmt=+d.instAmt||0;
-        if(instPaid>=instCount)return;
-
-        // سجّل التسبيق المقابل للقسط إذا لم يُسجّل بعد — حماية من التكرار مع Firebase/جهازين
-        const tag=d.id+'_'+(instPaid+1);
-        const alreadyAdv=Object.values(DB.advances[wid]||{}).flat().some(a=>a._isInstDeduction&&a._instTag===tag);
-        const alreadyRet=(DB.debts[wid]||[]).some(x=>x.type==='return'&&x._instTag===tag);
-        if(alreadyAdv||alreadyRet)return;
-
-        // أضف تسبيق القسط كخصم مرتبط بالدين
-        if(!DB.advances[wid])DB.advances[wid]={};
-        if(!DB.advances[wid][m])DB.advances[wid][m]=[];
-        DB.advances[wid][m].push({
-          id:genId(),
-          amount:instAmt,
-          date:todayStr(),
-          month:m,
-          note:'قسط دين تلقائي '+(instPaid+1)+'/'+instCount,
-          by:'النظام',
-          _isInstDeduction:true,
-          _debtId:d.id,
-          _instTag:tag
-        });
-        // ── تسجيل الإرجاع في خانة الديون (يظهر بالتاريخ في جدول الديون) ──
-        if(!DB.debts[wid])DB.debts[wid]=[];
-        DB.debts[wid].push({
-          id:genId(),type:'return',amount:instAmt,date:todayStr(),debtId:d.id,
-          note:'قسط تلقائي '+(instPaid+1)+'/'+instCount+' — خُصم من الراتب',
-          by:'النظام',_instTag:tag,_auto:true
-        });
-        d.instPaid=instPaid+1;
-        // تحديث تاريخ القسط التالي
-        if(d.instPaid<instCount&&d.nextDue){
-          const next=new Date(d.nextDue+'T00:00:00');
-          const days=d.instType==='weekly'?7:d.instType==='monthly'?30:(+d.instDays||30);
-          next.setDate(next.getDate()+days);
-          d.nextDue=next.toISOString().slice(0,10);
-        }
-        changed=true;
-        audit('قسط دين تلقائي '+fmtN(instAmt)+' ('+( instPaid+1)+'/'+instCount+') — '+w.name);
-      });
-  }
-
+      d.instPaid=instPaid+1;
+      if(d.instPaid<instCount&&d.nextDue){
+        const next=new Date(d.nextDue+'T00:00:00');
+        const days=d.instType==='weekly'?7:d.instType==='monthly'?30:(+d.instDays||30);
+        next.setDate(next.getDate()+days);d.nextDue=next.toISOString().slice(0,10);
+      }else if(d.instPaid>=instCount){d.nextDue=null;}
+      changed=true;audit('قسط دين تلقائي '+fmtN(instAmt)+' ('+(instPaid+1)+'/'+instCount+') — '+w.name);
+    });
   return changed;
 }
 
@@ -3554,46 +3683,32 @@ function processDueInstallments(){
       let guard=0;
       while((+d.instPaid||0)<(+d.instCount||1)&&d.nextDue&&guard<60){
         guard++;
-        const due=new Date(d.nextDue+'T00:00:00');
-        if(due>today)break;
-        const instPaid=+d.instPaid||0;
-        const instCount=+d.instCount||1;
-        const instAmt=Math.round(+d.instAmt||0);
-        if(instAmt<=0)break;
-        // الدورة التي يقع فيها تاريخ الاستحقاق (مرساة يوم الدخول)
-        const entryDay=Math.min(+w.day||1,28);
-        let im,iyr;
-        if(due.getDate()>=entryDay){im=due.getMonth();iyr=due.getFullYear();}
-        else{im=(due.getMonth()-1+12)%12;iyr=due.getMonth()===0?due.getFullYear()-1:due.getFullYear();}
-        if(!DB.advances[wid])DB.advances[wid]={};
-        if(!DB.advances[wid][im])DB.advances[wid][im]=[];
-        // لا تكرار لنفس القسط
-        const tag=d.id+'_'+(instPaid+1);
-        const alreadyAdv=Object.values(DB.advances[wid]||{}).flat().some(a=>a._isInstDeduction&&a._instTag===tag);
-        const alreadyRet=(DB.debts[wid]||[]).some(x=>x.type==='return'&&x._instTag===tag);
-        if(!alreadyAdv&&!alreadyRet){
-          DB.advances[wid][im].push({
-            id:genId(),amount:instAmt,date:_dStr(due),month:im,
-            note:'قسط دين تلقائي '+(instPaid+1)+'/'+instCount+' (استحقاق '+_dStr(due)+')',
-            by:'النظام',_isInstDeduction:true,_debtId:d.id,_instTag:tag
-          });
-          // ── تسجيل الإرجاع في خانة الديون (يظهر بالتاريخ في جدول الديون) ──
-          DB.debts[wid].push({
-            id:genId(),type:'return',amount:instAmt,date:_dStr(due),debtId:d.id,
-            note:'قسط تلقائي '+(instPaid+1)+'/'+instCount+' — خُصم من الراتب',
-            by:'النظام',_instTag:tag,_auto:true
-          });
-          audit('قسط دين تلقائي (استحقاق) '+fmtN(instAmt)+' ('+(instPaid+1)+'/'+instCount+') — '+w.name);
+        const due=_toDate(d.nextDue);if(!due||due>today)break;
+        const anchor=cycleAnchorForDate(w,d.nextDue);
+        const status=calcMonthStatus(wid,anchor.m,anchor.yr);
+        // Never take an installment from a partial / unrelated advance.
+        if(!status||!status.salaryPaid)break;
+        const paid=+d.instPaid||0, count=+d.instCount||1, amt=Math.round(+d.instAmt||0);
+        if(amt<=0||paid>=count)break;
+        const tag=d.id+'_'+(paid+1);
+        if((DB.debts[wid]||[]).some(x=>x.type==='return'&&x._instTag===tag)){
+          d.instPaid=paid+1;changed=true;
+        }else{
+          const target=findAdvanceForDeduction(wid,anchor.m,anchor.yr,amt);
+          if(!target||!attachDeductionToAdvance(target,{type:'debt',amount:amt,date:isoToD(d.nextDue),debtId:d.id,_instTag:tag,note:'قسط دين تلقائي '+(paid+1)+'/'+count+' (استحقاق '+isoToD(d.nextDue)+')'}))break;
+          DB.debts[wid].push({id:genId(),type:'return',amount:amt,date:isoToD(d.nextDue),debtId:d.id,
+            note:'قسط تلقائي '+(paid+1)+'/'+count+' — خُصم من تسبيق '+fmtN(+target.amount||0),
+            by:'النظام',_instTag:tag,_auto:true,_instPayment:true,_advanceId:target.id});
+          d.instPaid=paid+1;changed=true;
+          audit('قسط دين تلقائي (استحقاق) '+fmtN(amt)+' ('+(paid+1)+'/'+count+') — '+w.name);
         }
-        d.instPaid=instPaid+1;
         const days=d.instType==='weekly'?7:d.instType==='monthly'?30:(+d.instDays||30);
         const next=new Date(due);next.setDate(next.getDate()+days);
-        d.nextDue=d.instPaid<instCount?next.toISOString().slice(0,10):null;
-        changed=true;
+        d.nextDue=d.instPaid<(+d.instCount||1)?next.toISOString().slice(0,10):null;
       }
     });
   });
-  if(changed){saveDB();}
+  if(changed)saveDB();
   return changed;
 }
 
@@ -3948,7 +4063,7 @@ function getActiveCycle(wid){
     const ms = calcMonthStatus(wid, m, y);
     if(!ms) return true;
     if(ms.totAdv === 0 && ms.totAbsNow === 0) return false; // لا تسبيقات = لم تبدأ بعد
-    return ms.salaryPaidWithInst; // التسبيقات + القسط المحجوز تغطي الراتب → مسددة
+    return ms.salaryPaid; // مسددة حسب التسبيقات الحقيقية فقط؛ الأقساط تظهر كخصم داخل التسبيق ولا تغلق الدورة وحدها
   }
 
   const nm = (cm + 1) % 12;
@@ -3957,8 +4072,10 @@ function getActiveCycle(wid){
   // إذا الدورة الحالية مسددة AND الدورة التالية فيها بيانات → الدورة التالية هي الحالية
   if(cycleIsPaid(cm, yr)){
     const nextHasData =
-      ((DB.advances[wid]||{})[nm]||[]).length > 0 ||
-      (DB.absences[wid]||[]).filter(a=>a.month===nm&&!a.settled&&a.deductOpt!=='cancel').length > 0;
+      advanceEntriesInCycle(wid,nm,nyr).length > 0 ||
+      absenceEntriesInCycle(wid,nm,nyr).some(a=>!a.settled&&a.deductOpt!=='cancel') ||
+      hourEntriesInCycle(wid,nm,nyr).length > 0 ||
+      bonusEntriesInCycle(wid,nm,nyr).length > 0;
     if(nextHasData) return{m:nm, yr:nyr};
   }
   return{m:cm, yr:yr};
@@ -4369,10 +4486,11 @@ function renderDash(){
   DB.workers.forEach(w=>{
     const n=wNum(w.id);
     Object.values(DB.advances[w.id]||{}).forEach(arr=>arr.forEach(a=>{
+      if(_isInstAdv(a))return;
       // التاريخ الفعلي للدفع إن وُجد (قيود موجَّهة لدورة سابقة)
       const _d=a.realDate||a.date;
       const iso=dToISO(_d)||'';
-      ops.push({dateRaw:_d,iso,ts:iso?new Date(iso).getTime():0,name:w.name,n,type:'تسبيق',amt:a.amount,col:'var(--green1)',month:a.month!=null?MN[a.month]+' ('+cycleRangeFromDate(w,a.month,_d)+')':''});
+      ops.push({dateRaw:_d,iso,ts:iso?new Date(iso).getTime():0,name:w.name,n,type:'تسبيق',amt:advGross(a),col:'var(--green1)',month:a.month!=null?MN[a.month]+' ('+cycleRangeFromDate(w,a.month,_d)+')':''});
     }));
     (DB.hours[w.id]||[]).forEach(h=>{
       const iso=dToISO(h.date)||h.date||'';
@@ -4748,7 +4866,7 @@ function openAdvModal(wid){
   const totAbs=_ms.totAbsNow;
   const ps=_ms.baseSal;
   const calRes=_ms.calRes;
-  const avail=Math.max(0,ps-totAdv-actInst-totAbs);
+  const avail=Math.max(0,ps-totAdv-totAbs);
 
   // ── اقتراح ذكي: الأيام المنجزة تُحسب من بداية نافذة الدورة النشطة ──
   const _win=cycleWindow(w,m,yr);
@@ -4763,11 +4881,11 @@ function openAdvModal(wid){
   {
     const _pm=(m-1+12)%12,_pyr=m===0?yr-1:yr;
     const _pms=calcMonthStatus(wid,_pm,_pyr);
-    if(_pms&&(_pms.totAdv>0||_pms.totAbsNow>0)&&!_pms.salaryPaidWithInst){
+    if(_pms&&!_pms.salaryPaid){
       const _pwin=cycleWindow(w,_pm,_pyr);
       if(today>=_pwin.to){
         // المتبقي = الصافي − التسبيقات − القسط المحجوز (القسط يُخصم عند الاستحقاق فلا يُطلب نقداً)
-        prevRest=Math.round(Math.max(0,_pms.netDue-_pms.totAdv-_pms.totInst));
+        prevRest=Math.round(Math.max(0,_pms.netDue-_pms.totAdv));
         if(prevRest>0)prevM=_pm;
       }
     }
@@ -4777,14 +4895,14 @@ function openAdvModal(wid){
   const earnedToday=(cycleDays>=30?+w.salary||0:Math.round(((+w.salary||0)*cycleDays)/30)); // المستحق الخام بدون ضياع فرق القسمة
   const pendHrs=_ms.hrsUnpaid||0;               // ساعات إضافية معلقة (غير مسددة)
   const pendBon=_ms.bonUnpaid||0;               // مكافآت معلقة (غير مسددة)
-  const netToday=Math.max(0,earnedToday-totAbs-actInst+pendHrs+pendBon); // الصافي
+  const netToday=Math.max(0,earnedToday-totAbs+pendHrs+pendBon); // الصافي
   const suggestedRaw=netToday;
   let suggested=Math.max(0,netToday-totAdv);
   // ── يُضاف متبقي الدورة السابقة للمقترح (سيُوجَّه إليها أولاً) ──
   suggested+=prevRest;
   // ── تقريب لأقرب 500 دينار لتجنب 4992 بدل 5000 ──
   suggested=Math.round(suggested/500)*500;
-  // ── لا يتجاوز المقترح المتاح + متبقي الدورة السابقة (سقف الراتب − القسط المحجوز) ──
+  // ── لا يتجاوز المقترح المتاح + متبقي الدورة السابقة (القسط يظهر كخصم داخل التسبيق ولا ينقص مجموع التسبيقات) ──
   suggested=Math.min(suggested,Math.max(0,avail)+prevRest+pendHrs+pendBon);
   suggested=Math.max(0,Math.round(suggested));
 
@@ -4814,7 +4932,7 @@ function openAdvModal(wid){
   }
 
   // ── جدول التسبيقات الحالية ──
-  const advList=DB.advances[wid][m]||[];
+  const advList=advanceEntriesInCycle(wid,m,yr);
   const advTableHtml=advList.length?`
     <div style="margin-bottom:12px">
       <div style="font-size:11px;font-weight:800;color:var(--amber);margin-bottom:6px">📋 تسبيقات ${MN[m]} <span style="color:var(--gray);font-weight:600">(${cycleRangeStr(w,m,yr)})</span>:</div>
@@ -4830,8 +4948,8 @@ function openAdvModal(wid){
           <tr style="border-top:1px solid rgba(255,255,255,.06)">
             <td style="padding:3px 6px;color:var(--gray)">${e.date||'—'}</td>
             <td style="padding:3px 6px;color:var(--teal);font-size:10px;white-space:nowrap">${advEntryStamp(e)||'—'}</td>
-            <td style="padding:3px 6px;font-weight:700;color:var(--green1)">${fmt(e.amount)}</td>
-            <td style="padding:3px 6px;color:var(--gray);font-size:10px">${e.note||'—'}</td>
+            <td style="padding:3px 6px;font-weight:700;color:var(--green1)">${fmt(e.amount)}${advDedTotal(e)>0?`<div style="color:var(--red);font-size:10px">صافي: ${fmt(advNetPaid(e))}</div>`:''}</td>
+            <td style="padding:3px 6px;color:var(--gray);font-size:10px">${(e.note||'—')}${advDedNote(e)?'<br><span style="color:var(--red)">'+advDedNote(e)+'</span>':''}</td>
             <td style="padding:3px 6px"><button onclick="deleteAdv(${wid},${m},'${e.id}')" style="background:rgba(255,68,102,.15);border:none;color:var(--red);border-radius:4px;padding:2px 7px;cursor:pointer;font-size:10px">حذف</button></td>
           </tr>`).join('')}
         </tbody>
@@ -4853,16 +4971,21 @@ function openAdvModal(wid){
   openModal('mAdv');setTimeout(()=>document.getElementById('adv_amt').focus(),150);
 }
 
+function _cycleFromAdvance(w,adv){return cycleAnchorForDate(w,(adv&&adv.date)||todayStr());}
 function deleteAdv(wid,m,id){
   if(!confirm('حذف هذا التسبيق؟'))return;
   if(!DB.advances[wid]||!DB.advances[wid][m])return;
-  DB.advances[wid][m]=DB.advances[wid][m].filter(e=>e.id!==id);
+  const old=(DB.advances[wid][m]||[]).find(e=>e.id!==undefined&&String(e.id)===String(id));
+  if(!old)return;
+  const w=getW(wid),cycle=_cycleFromAdvance(w,old);
+  cleanupAdvanceLinkedReturns(wid,old);
+  DB.advances[wid][m]=DB.advances[wid][m].filter(e=>String(e.id)!==String(id));
   _markDeleted(id);
-  audit('حذف تسبيق — '+getW(wid)?.name);
-  saveDB();renderDash();
-  if(S.sw===wid)renderSalContent();
-  openAdvModal(wid); // إعادة فتح النافذة بالبيانات المحدّثة
+  if(w)autoSettleOnAdvance(wid,cycle.m,cycle.yr);
+  audit('حذف تسبيق — '+getW(wid)?.name);saveDB();renderDash();
+  if(S.sw===wid)renderSalContent();openAdvModal(wid);
 }
+
 // ══════════════════════════════════════════════════════
 //  routeAdvToOldCycle — توجيه التسبيق للدورة السابقة 📥
 //  إذا الدورة السابقة انتهت نافذتها (مرّ يوم الاستحقاق)
@@ -4891,9 +5014,9 @@ function routeAdvToOldCycle(wid,m,yr,dateISO,amount,note){
     if(advD<cwin.to)continue;            // النافذة لم تنتهِ بعد
     const cms=calcMonthStatus(wid,cm,cyr);
     if(!cms)continue;
-    if(cms.totAdv<=0&&cms.totAbsNow<=0)continue;   // دورة فارغة
-    if(cms.salaryPaidWithInst)continue;            // مسددة
-    const rest=Math.round(Math.max(0,cms.netDue-cms.totAdv-cms.totInst));
+    // لا نستثني الدورة الفارغة: إذا انتهت ولم تُسدَّد فهي دين راتب قديم يجب إغلاقه.
+    if(cms.salaryPaid)continue;                    // مسددة حسب التسبيقات الحقيقية فقط
+    const rest=Math.round(Math.max(0,cms.netDue-cms.totAdv));
     if(rest<=0)continue;
     oldCycles.push({cm,cyr,rest,win:cwin});
   }
@@ -4922,17 +5045,18 @@ function routeAdvToOldCycle(wid,m,yr,dateISO,amount,note){
     if(!DB.advances[wid][p.cm])DB.advances[wid][p.cm]=[];
     const lastD=new Date(p.win.to.getTime()-86400000);
     const lastStr=String(lastD.getDate()).padStart(2,'0')+'/'+String(lastD.getMonth()+1).padStart(2,'0')+'/'+lastD.getFullYear();
-    DB.advances[wid][p.cm].push({id:genId(),amount:p.take,date:lastStr,realDate:realStr,month:p.cm,
-      note:(note?note+' — ':'')+'💵 دُفع فعلياً '+realStr+(p.closes?' — ✓ إكمال وإغلاق الدورة':''),by});
+    DB.advances[wid][p.cm].push({id:genId(),amount:p.take,date:lastStr,realDate:realStr,enteredAt:new Date().toISOString(),month:p.cm,
+      note:(note?note+' — ':'')+'💵 دُفع فعلياً '+realStr+(p.closes?' — ✓ إكمال وإغلاق الدورة':''),by,deductions:[],netPaid:p.take});
   }
   if(toCurrent>0){
     if(!DB.advances[wid][m])DB.advances[wid][m]=[];
-    DB.advances[wid][m].push({id:genId(),amount:toCurrent,date:realStr,month:m,
-      note:(note?note+' — ':'')+'فائض بعد إكمال الدورات السابقة',by});
+    DB.advances[wid][m].push({id:genId(),amount:toCurrent,date:realStr,realDate:realStr,enteredAt:new Date().toISOString(),month:m,
+      note:(note?note+' — ':'')+'فائض بعد إكمال الدورات السابقة',by,deductions:[],netPaid:toCurrent});
   }
   const closedCount=plan.filter(p=>p.closes).length;
   audit(`📥 تسبيق ${fmtN(amount)} موزَّع على ${plan.length} دورة سابقة${closedCount?` (${closedCount} أُغلقت)`:''}${toCurrent>0?` + ${fmtN(toCurrent)} للحالية`:''} — ${w.name}`);
   plan.forEach(p=>autoSettleOnAdvance(wid,p.cm,p.cyr));
+  if(toCurrent>0)autoSettleOnAdvance(wid,m,yr);
   return{placed:'cascade',plan,toCurrent,closedCount};
 }
 
@@ -4978,7 +5102,8 @@ function saveAdv(){
   // ── لا توجيه (رفض المستخدم أو لا دورات قديمة ناقصة) ──
   //    → التسبيق يُسجَّل كاملاً في الدورة الحالية بتاريخه كما أدخله، بلا أي سؤال إضافي ──
   if(!DB.advances[_wid][m])DB.advances[_wid][m]=[];
-  DB.advances[_wid][m].push({id:genId(),amount,date:isoToD(dateISO),month:m,note,by:(DB.settings.userName||'مستخدم')});
+  const _newAdv={id:genId(),amount,date:isoToD(dateISO),realDate:isoToD(dateISO),enteredAt:new Date().toISOString(),month:m,note,by:(DB.settings.userName||'مستخدم'),deductions:[],netPaid:amount};
+  DB.advances[_wid][m].push(_newAdv);
   audit(`تسبيق ${fmtN(amount)} — ${w.name}`);
   const autoChanged=autoSettleOnAdvance(_wid,m,yr);
   saveDB();closeModal('mAdv');renderDash();if(S.sw===_wid)renderSalContent();
@@ -5001,7 +5126,7 @@ function renderSalContent(){
   const _winSal=cycleWindow(w,m,yr);
   const entries=[];
   Object.entries(DB.advances[w.id]).forEach(([mk,arr])=>{
-    (arr||[]).forEach(e=>{if(_inCycle(e.date,_winSal))entries.push({...e,_bucket:+mk});});
+    (arr||[]).forEach(e=>{if(!_isInstAdv(e)&&_inCycle(e.date,_winSal))entries.push({...e,_bucket:+mk});});
   });
   // ترتيب حسب التاريخ
   entries.sort((a,b)=>{const da=_toDate(a.date),db=_toDate(b.date);return (da?da.getTime():0)-(db?db.getTime():0);});
@@ -5227,18 +5352,19 @@ function renderSalContent(){
       <div style="overflow-x:auto">
       <table>
         <thead><tr>
-          <th>#</th><th>التاريخ</th><th>المبلغ</th><th>ملاحظة</th><th></th>
+          <th>#</th><th>التاريخ</th><th>الإدخال الفعلي</th><th>المبلغ</th><th>ملاحظة</th><th></th>
         </tr></thead>
         <tbody>${entries.length?entries.map((e,i)=>`<tr>
           <td style="color:var(--gray)">تسبيق ${i+1}</td>
           <td style="font-size:11px">${e.date}</td>
-          <td style="color:var(--green1);font-weight:700">${fmt(e.amount)}</td>
-          <td style="color:var(--gray);font-size:11px">${e.note||'—'}</td>
+          <td style="font-size:10px;color:var(--teal);white-space:nowrap">${advEntryStamp(e)||'—'}</td>
+          <td style="color:var(--green1);font-weight:700">${fmt(e.amount)}${advDedTotal(e)>0?`<br><span style="color:var(--red);font-size:10px">صافي ${fmt(advNetPaid(e))}</span>`:''}</td>
+          <td style="color:var(--gray);font-size:11px">${e.note||'—'}${advDedNote(e)?`<br><span style="color:var(--red)">${advDedNote(e)}</span>`:''}</td>
           <td style="white-space:nowrap">
             <button class="eb" onclick="editAdv('${w.id}','${e._bucket}','${e.id}')" title="تعديل">✏️</button>
             <button class="db" onclick="delAdv('${w.id}','${e._bucket}','${e.id}')">🗑</button>
           </td>
-        </tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--gray);padding:20px">لا توجد تسبيقات في '+MN[m]+'</td></tr>'}
+        </tr>`).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--gray);padding:20px">لا توجد تسبيقات في '+MN[m]+'</td></tr>'}
         </tbody>
       </table>
       </div>
@@ -5247,15 +5373,14 @@ function renderSalContent(){
 
 function delAdv(wid,bucket,eid){
   const w=getW(wid);const _w=w?w.id:wid;
-  const arr=(DB.advances[_w]||{})[bucket];
-  if(!arr)return;
-  const i=arr.findIndex(x=>String(x.id)===String(eid));
-  if(i===-1){toast('❌ لم يُعثر على التسبيق','#c0392b');return;}
+  const arr=(DB.advances[_w]||{})[bucket];if(!arr)return;
+  const i=arr.findIndex(x=>String(x.id)===String(eid));if(i===-1){toast('❌ لم يُعثر على التسبيق','#c0392b');return;}
   _showConfirm('🗑️ حذف تسبيق',`حذف تسبيق <b>${fmt(arr[i].amount)}</b>؟`,()=>{
     const arr2=(DB.advances[_w]||{})[bucket];if(!arr2)return;
     const j=arr2.findIndex(x=>String(x.id)===String(eid));if(j===-1)return;
-    arr2.splice(j,1);
-    _markDeleted(eid);
+    const old=arr2[j],cycle=_cycleFromAdvance(w,old);
+    cleanupAdvanceLinkedReturns(_w,old);arr2.splice(j,1);_markDeleted(eid);
+    if(w)autoSettleOnAdvance(_w,cycle.m,cycle.yr);
     audit('حذف تسبيق');saveDB();renderSalContent();renderDash();toast('🗑️ تم');
   });
 }
@@ -5266,12 +5391,21 @@ function editAdv(wid,bucket,eid){
   const amt=prompt('تعديل المبلغ (دج):',e.amount);if(amt===null)return;
   const dt=prompt('تعديل التاريخ (YYYY-MM-DD):',dToISO(e.date)||e.date);if(dt===null)return;
   const nt=prompt('تعديل الملاحظة:',e.note||'');if(nt===null)return;
-  if(+amt<=0){toast('❌ مبلغ غير صالح',true);return;}
-  e.amount=+amt;e.date=dt.includes('-')&&dt.length===10?isoToD(dt):dt;e.note=nt;e._mod=nextMod();
-  audit(`تعديل تسبيق — ${getW(wid)?.name} — ${fmt(+amt)}`);
+  const newAmount=+amt;
+  if(newAmount<=0){toast('❌ مبلغ غير صالح',true);return;}
+  const deductionTotal=advDedTotal(e);
+  if(newAmount<deductionTotal){toast('❌ لا يمكن أن يكون التسبيق أقل من خصوماته ('+fmt(deductionTotal)+')',true);return;}
+  const oldCycle=_cycleFromAdvance(w,e);
+  // Effects are rebuilt from the underlying debt / absence records after the edit.
+  cleanupAdvanceLinkedReturns(_w,e);
+  e.amount=newAmount;e.date=dt.includes('-')&&dt.length===10?isoToD(dt):dt;e.realDate=e.realDate||e.date;e.note=nt;e.deductions=[];e.netPaid=newAmount;e._mod=nextMod();
+  const newCycle=_cycleFromAdvance(w,e);
+  if(w){autoSettleOnAdvance(_w,oldCycle.m,oldCycle.yr);if(newCycle.m!==oldCycle.m||newCycle.yr!==oldCycle.yr)autoSettleOnAdvance(_w,newCycle.m,newCycle.yr);}
+  audit(`تعديل تسبيق — ${getW(wid)?.name} — ${fmt(newAmount)}`);
   saveDB();renderSalContent();renderDash();toast('✅ تم تعديل التسبيق');
 }
 // ═══════════════════════════════════════════════════
+//  HOURS// ═══════════════════════════════════════════════════
 //  HOURS (ساعات إضافية)
 // ═══════════════════════════════════════════════════
 function openHrsModal(wid){
@@ -5568,7 +5702,7 @@ function saveAbs(){
     const di=document.getElementById('abs_date').value||todayISO();
     if(days<=0){toast('❌ أدخل عدد أيام صحيح',true);return;}
     if(days>30){toast('❌ عدد أيام الغياب لا يمكن أن يتجاوز 30 يوم في دورة واحدة',true);return;}
-    date=isoToD(di);m=new Date(di).getMonth();
+    date=isoToD(di);m=cycleAnchorForDate(w,di).m;
   }else if(t==='range'){
     const fi=document.getElementById('abs_from').value;
     const ti=document.getElementById('abs_to').value;
@@ -5577,7 +5711,7 @@ function saveAbs(){
     if(d2<d1){toast('❌ النهاية قبل البداية',true);return;}
     days=Math.floor((d2-d1)/86400000)+1;
     if(days>60){toast('❌ مدة الغياب طويلة جداً؛ قسّمها على دورات شهرية',true);return;}
-    from=isoToD(fi);to=isoToD(ti);date=from+' → '+to;m=d1.getMonth();
+    from=isoToD(fi);to=isoToD(ti);date=from+' → '+to;m=cycleAnchorForDate(w,fi).m;
     // تقسيم تلقائي إذا امتد الغياب عبر دورتَي راتب مختلفتين
     // الدورة تبدأ من يوم دخول العامل (w.day) وليس من أول الشهر الميلادي
     const entryD=Math.min(+w.day||1,28);
@@ -5626,7 +5760,7 @@ function saveAbs(){
     days=Math.floor((now-d1)/86400000)+1;
     if(days>30){toast('❌ الغياب المفتوح تجاوز 30 يوم؛ أغلقه وسجله كدورة منفصلة',true);return;}
     openEnded=true;openSince=isoToD(si);
-    date=openSince+' → ⏳ جارٍ...';m=d1.getMonth();
+    date=openSince+' → ⏳ جارٍ...';m=cycleAnchorForDate(w,si).m;
   }
   const deduct=deductOpt==='cancel'?0:Math.round(days*(w.salary/30));
   if(!DB.absences[_wid])DB.absences[_wid]=[];
@@ -6083,6 +6217,21 @@ function saveDbt(){
       }
     }
   }
+  if(_dtype==='return'){
+    const open=(DB.debts[_wid]||[]).filter(d=>d.type==='debt').map(d=>{
+      const paid=(DB.debts[_wid]||[]).filter(r=>r.type==='return'&&String(r.debtId||'')===String(d.id)).reduce((s,r)=>s+(+r.amount||0),0);
+      return {d,remaining:Math.max(0,(+d.amount||0)-paid)};
+    }).filter(x=>x.remaining>0);
+    if(open.length===1)entry.debtId=open[0].d.id;
+    else if(open.length>1){
+      const menu=open.map((x,i)=>(i+1)+') '+(x.d.note||'دين')+' — متبقي '+fmtN(x.remaining)).join('\n');
+      const pick=prompt('اختر الدين الذي يخصه هذا الإرجاع:\n'+menu);
+      const idx=(+pick||0)-1;
+      if(idx<0||idx>=open.length){toast('❌ لم يتم اختيار دين صحيح',true);return;}
+      entry.debtId=open[idx].d.id;
+      if(amount>open[idx].remaining){toast('❌ مبلغ الإرجاع أكبر من المتبقي لهذا الدين',true);return;}
+    }
+  }
   DB.debts[_wid].push(entry);
   audit(`${_dtype==='debt'?'دين':'إرجاع'} ${fmt(amount)} — ${w.name}`);
   saveDB();closeModal('mDbt');renderDbt();renderDash();updateBadges();
@@ -6207,7 +6356,7 @@ function payInst(did,wid){
   const toPay=Math.min(instAmt,remaining);
   if(!confirm(`دفع قسط ${fmt(toPay)}؟\nالقسط ${instPaid+1}/${instCount} | مسدَّد فعلاً: ${fmt(actuallyPaid)} | متبقي: ${fmt(remaining)}`))return;
   DB.debts[wid].push({id:genId(),type:'return',amount:toPay,date:todayStr(),debtId:did,
-    note:`قسط ${instPaid+1}/${instCount} — ${d.note||'دين'}`,by:(DB.settings.userName||'مستخدم')});
+    note:`قسط ${instPaid+1}/${instCount} — ${d.note||'دين'}`,by:(DB.settings.userName||'مستخدم'),_instPayment:true});
   d.instPaid=instPaid+1;
   if(d.instPaid<instCount&&d.nextDue){
     const nd=new Date(d.nextDue+'T00:00:00');
@@ -6220,14 +6369,43 @@ function payInst(did,wid){
   if(S.sw===wid)renderSalContent();
   toast(`✅ قسط ${fmt(toPay)} | متبقي: ${fmt(newRem)}`);
 }
+function _removeReturnDeduction(wid,ret){
+  let changed=false;
+  Object.values(DB.advances[wid]||{}).forEach(arr=>(arr||[]).forEach(a=>{
+    const before=(a.deductions||[]).length;
+    a.deductions=(a.deductions||[]).filter(d=>{
+      if(ret._instTag&&d._instTag===ret._instTag)return false;
+      if(ret._advanceId&&String(a.id)===String(ret._advanceId)&&d.type==='debt'&&String(d.debtId||'')===String(ret.debtId||''))return false;
+      return true;
+    });
+    if(a.deductions.length!==before){a.netPaid=advNetPaid(a);changed=true;}
+  }));
+  return changed;
+}
 function delDbt(wid,did){
   if(!confirm('حذف هذه العملية؟'))return;
-  DB.debts[wid]=(DB.debts[wid]||[]).filter(d=>d.id!==did);
-  _markDeleted(did);
-  audit('حذف دين');saveDB();renderDbtContent();updateBadges();toast('🗑️ تم');
+  const entries=DB.debts[wid]||[];
+  const target=entries.find(d=>String(d.id)===String(did));if(!target)return;
+  if(target.type==='debt'){
+    const related=entries.filter(r=>r.type==='return'&&String(r.debtId||'')===String(target.id));
+    related.forEach(r=>{_removeReturnDeduction(wid,r);if(r.id)_markDeleted(r.id);});
+    Object.values(DB.advances[wid]||{}).forEach(arr=>(arr||[]).forEach(a=>{
+      const before=(a.deductions||[]).length;
+      a.deductions=(a.deductions||[]).filter(d=>!(d.type==='debt'&&String(d.debtId||'')===String(target.id)));
+      if(a.deductions.length!==before)a.netPaid=advNetPaid(a);
+    }));
+    DB.debts[wid]=entries.filter(d=>String(d.id)!==String(target.id)&&!(d.type==='return'&&String(d.debtId||'')===String(target.id)));
+  }else{
+    _removeReturnDeduction(wid,target);
+    const debt=entries.find(d=>d.type==='debt'&&String(d.id)===String(target.debtId||''));
+    if(debt&&debt.inst&&_isInstallmentReturn(target)&&(+debt.instPaid||0)>0)debt.instPaid=Math.max(0,(+debt.instPaid||0)-1);
+    DB.debts[wid]=entries.filter(d=>String(d.id)!==String(target.id));
+  }
+  _markDeleted(did);audit('حذف دين/إرجاع');saveDB();renderDbtContent();updateBadges();renderDash();if(S.sw===wid)renderSalContent();toast('🗑️ تم');
 }
 
 // ═══════════════════════════════════════════════════
+//  QUICK ACTIONS// ═══════════════════════════════════════════════════
 //  QUICK ACTIONS
 // ═══════════════════════════════════════════════════
 function quickSettle(wid){
@@ -6243,19 +6421,28 @@ function quickSettle(wid){
 }
 function quickPayDebt(wid){
   const w=getW(wid);if(!w)return;
-  let bal=0;(DB.debts[wid]||[]).forEach(d=>bal+=(d.type==='debt'?1:-1)*(+d.amount||0));
-  if(bal<=0){toast('✅ لا توجد ديون');return;}
-  const a=prompt(`دين ${w.name}: ${fmt(bal)}\nأدخل المبلغ المُسدَّد:`);
+  const entries=DB.debts[wid]||[];
+  const open=entries.filter(d=>d.type==='debt').map(d=>{
+    const paid=entries.filter(r=>r.type==='return'&&String(r.debtId||'')===String(d.id)).reduce((s,r)=>s+(+r.amount||0),0);
+    return{d,remaining:Math.max(0,(+d.amount||0)-paid)};
+  }).filter(x=>x.remaining>0);
+  if(!open.length){toast('✅ لا توجد ديون');return;}
+  let choice=0;
+  if(open.length>1){
+    const menu=open.map((x,i)=>(i+1)+') '+(x.d.note||'دين')+' — متبقي '+fmtN(x.remaining)).join('\\n');
+    choice=(+prompt('اختر الدين الذي تريد تسديده:\\n'+menu)||0)-1;
+    if(choice<0||choice>=open.length)return;
+  }
+  const target=open[choice],a=prompt(`دين ${w.name}: ${fmt(target.remaining)}\\nأدخل المبلغ المُسدَّد:`);
   if(!a||isNaN(+a)||+a<=0)return;
-  if(!DB.debts[wid])DB.debts[wid]=[];
-  DB.debts[wid].push({id:genId(),type:'return',amount:+a,date:todayStr(),note:'تسديد سريع',by:(DB.settings.userName||'مستخدم')});
+  if(+a>target.remaining){toast('❌ المبلغ أكبر من المتبقي لهذا الدين',true);return;}
+  DB.debts[wid].push({id:genId(),type:'return',amount:+a,date:todayStr(),debtId:target.d.id,note:'تسديد سريع',by:(DB.settings.userName||'مستخدم')});
   audit(`تسديد سريع ${fmt(+a)} — ${w.name}`);saveDB();updateBadges();renderDash();
-  if(S.dw===wid)renderDbtContent();
-  if(S.sw===wid)renderSalContent();
-  toast('✅ تسديد: '+fmt(+a));
+  if(S.dw===wid)renderDbtContent();if(S.sw===wid)renderSalContent();toast('✅ تسديد: '+fmt(+a));
 }
 
 // ═══════════════════════════════════════════════════
+//  SUMMARY// ═══════════════════════════════════════════════════
 //  SUMMARY (الحصيلة) — LOGIC v9 CORRECTED
 //  صافي مستحق = راتب - غيابات (الأقساط منفصلة)
 // ═══════════════════════════════════════════════════
@@ -6326,7 +6513,7 @@ function renderSumContent(){
               </td>
               <td style="color:var(--green1)">${fmt(ms.baseSal)}<br><small style="color:var(--gray)">${calRes.days}ي</small></td>
               <td style="color:${ms.totAbsNow?'var(--red)':'var(--gray)'}">${ms.totAbsNow?'-'+fmt(ms.totAbsNow):'—'}</td>
-              <td style="color:${ms.totInst?'var(--red)':'var(--gray)'}">${ms.totInst?'-'+fmt(ms.totInst):'—'}</td>
+              <td style="color:${ms.totInst?'var(--amber)':'var(--gray)'}">${ms.totInst?fmt(ms.totInst)+' تنبيه':'—'}</td>
               <td style="color:var(--green1);font-weight:700">${fmt(ms.netDue)}</td>
               <td style="color:${ms.totAdv?'var(--red)':'var(--gray)'}">${ms.totAdv?'-'+fmt(ms.totAdv):'—'}</td>
               <td style="color:${ms.hrsTotal?'var(--teal)':'var(--gray)'}">
@@ -6340,7 +6527,7 @@ function renderSumContent(){
           }).join('')}
           <tr class="trow-total">
             <td>المجموع</td><td>${fmt(tS)}</td>
-            <td>-${fmt(tAb)}</td><td>-${fmt(tInst)}</td>
+            <td>-${fmt(tAb)}</td><td>${fmt(tInst)}</td>
             <td>${fmt(tND)}</td><td>-${fmt(tA)}</td>
             <td>${fmt(tHrs)}</td><td>${fmt(tBon)}</td>
             <td>—</td>
@@ -6362,20 +6549,9 @@ function renderAnnContent(){
   let tA=0,tH=0,tAb=0,tB=0,tNSal=0,tInst=0,tSal=0;
   const yr=new Date().getFullYear();
   const rows=MN.map((mn,m)=>{
-    const calRes=calcSal(w,m,yr); // الراتب الصحيح (نسبي أو كامل)
-    const ps=calRes.salary;
-    const adv=((DB.advances[w.id]||{})[m]||[]).reduce((s,e)=>s+(+e.amount||0),0);
-    const hrs=(DB.hours[w.id]||[]).filter(h=>h.month===m).reduce((s,h)=>s+(+h.total||0),0);
-    const abs=(DB.absences[w.id]||[]).filter(a=>a.month===m&&a.deductOpt==='now').reduce((s,a)=>s+(+a.deduct||0),0);
-    const bon=((DB.bonuses[w.id]||{})[m]||[]).reduce((s,b)=>s+(+b.net||+b.amount||0),0);
-    const mEnd=new Date(yr,m+1,0);
-    const inst=(DB.debts[w.id]||[]).filter(d=>{
-      if(d.type!=='debt'||!d.inst||(+d.instPaid||0)>=(+d.instCount||1))return false;
-      const due=d.nextDue?new Date(d.nextDue+'T00:00:00'):null;const mStart=new Date(yr,m,1);return due&&due>=mStart&&due<=mEnd;
-    }).reduce((s,d)=>s+(+d.instAmt||0),0);
-    const netDue=Math.max(0,ps-abs); // الصافي المستحق = راتب - غيابات فقط
-    const netSal=netDue-adv;          // الباقي بعد التسبيقات
-    const finalPayout=netSal-inst;    // ما يُصرف فعلياً بعد الأقساط
+    const ms=calcMonthStatus(w.id,m,yr);
+    const calRes=ms.calRes,ps=ms.baseSal,adv=ms.totAdv,hrs=ms.hrsTotal,abs=ms.totAbsNow,bon=ms.bonTotal,inst=ms.totInst;
+    const netDue=ms.netDue,netSal=ms.netSal,finalPayout=ms.netSal;
     tSal+=ps;tA+=adv;tH+=hrs;tAb+=abs;tB+=bon;tNSal+=netSal;tInst+=inst;
     return{mn,ps,calRes,adv,hrs,abs,bon,inst,netDue,netSal,finalPayout};
   });
@@ -6394,24 +6570,24 @@ function renderAnnContent(){
           <div class="scell sv"><div class="sclbl">صافي الرواتب</div><div class="scval">${fmt(tNSal)}</div></div>
         </div>
         <div style="overflow-x:auto">
-        <table><thead><tr><th>الشهر</th><th>الراتب</th><th>تسبيقات</th><th>غيابات</th><th>أقساط</th><th style="color:var(--green1)">متبقي الراتب</th><th style="color:var(--amber)">يُصرف فعلياً</th><th style="color:var(--teal)">ساعات إضافية</th><th style="color:var(--purple)">مكافآت</th></tr></thead>
+        <table><thead><tr><th>الشهر</th><th>الراتب</th><th>تسبيقات</th><th>غيابات</th><th>أقساط مستحقة</th><th style="color:var(--green1)">متبقي الراتب</th><th style="color:var(--amber)">ملاحظة القسط</th><th style="color:var(--teal)">ساعات إضافية</th><th style="color:var(--purple)">مكافآت</th></tr></thead>
         <tbody>
           ${rows.map(r=>`<tr${r.calRes.noPay?' style="opacity:.5"':''}>
             <td style="font-weight:700;color:var(--green1)">${r.mn}</td>
             <td style="color:${r.calRes.pro?'var(--amber)':'var(--white)'}">${fmt(r.ps)}${r.calRes.pro?`<br><small style="color:var(--gray)">${r.calRes.days}ي</small>`:''}</td>
             <td style="color:${r.adv?'var(--red)':'var(--gray)'}">${r.adv?'-'+fmt(r.adv):'—'}</td>
             <td style="color:${r.abs?'var(--red)':'var(--gray)'}">${r.abs?'-'+fmt(r.abs):'—'}</td>
-            <td style="color:${r.inst?'var(--amber)':'var(--gray)'}">${r.inst?'-'+fmt(r.inst):'—'}</td>
+            <td style="color:${r.inst?'var(--amber)':'var(--gray)'}">${r.inst?fmt(r.inst)+' تنبيه':'—'}</td>
             <td style="font-weight:700;color:${r.netSal<=0?'var(--teal)':r.netSal>0?'var(--green1)':'var(--red)'}">
               ${r.calRes.noPay?'<span style="color:var(--gray)">—</span>':fmt(r.netSal)}
             </td>
             <td style="font-weight:700;color:${r.finalPayout<0?'var(--red)':r.finalPayout===0?'var(--teal)':'var(--amber)'}">
-              ${r.calRes.noPay?'<span style="color:var(--gray)">—</span>':r.inst?fmt(r.finalPayout):'—'}
+              ${r.calRes.noPay?'<span style="color:var(--gray)">—</span>':r.inst?'يُخصم من تسبيق فعلي':'—'}
             </td>
             <td style="color:${r.hrs?'var(--teal)':'var(--gray)'}">${r.hrs?'+'+fmt(r.hrs):'—'}</td>
             <td style="color:${r.bon?'var(--purple)':'var(--gray)'}">${r.bon?'+'+fmt(r.bon):'—'}</td>
           </tr>`).join('')}
-          <tr class="trow-total"><td>المجموع</td><td>${fmt(tSal)}</td><td>-${fmt(tA)}</td><td>-${fmt(tAb)}</td><td style="color:var(--amber)">-${fmt(tInst)}</td><td>${fmt(tNSal)}</td><td>—</td><td>+${fmt(tH)}</td><td>+${fmt(tB)}</td></tr>
+          <tr class="trow-total"><td>المجموع</td><td>${fmt(tSal)}</td><td>-${fmt(tA)}</td><td>-${fmt(tAb)}</td><td style="color:var(--amber)">${fmt(tInst)}</td><td>${fmt(tNSal)}</td><td>—</td><td>+${fmt(tH)}</td><td>+${fmt(tB)}</td></tr>
         </tbody></table>
         </div>
       </div>
@@ -6475,25 +6651,27 @@ function getAlerts(){
       urgent:false,type:'abs',days:0,wid:w.id
     });
     // عقد ينتهي: ميزة محذوفة
-    // تجاوز التسبيقات
-    const cm=now.getMonth();
-    const totAdv=((DB.advances[w.id]||{})[cm]||[]).reduce((s,e)=>s+(+e.amount||0),0);
-    const totAbsCm=(DB.absences[w.id]||[]).filter(a=>a.month===cm&&a.deductOpt==='now').reduce((s,a)=>s+(+a.deduct||0),0);
-    const actInstCm=(DB.debts[w.id]||[]).filter(d=>d.type==='debt'&&d.inst&&(+d.instPaid||0)<(+d.instCount||1)).reduce((s,d)=>s+(+d.instAmt||0),0);
-    const r=w.salary>0?totAdv/w.salary:0;
-    if(totAdv>w.salary)alerts.push({
+    // تجاوز التسبيقات: يحسب داخل دورة الأجر الفعلية، لا داخل شهر ميلادي.
+    const activeCycle=getActiveCycle(w.id);
+    const cycleStatus=calcMonthStatus(w.id,activeCycle.m,activeCycle.yr);
+    const totAdv=cycleStatus?cycleStatus.totAdv:0;
+    const netDue=cycleStatus?cycleStatus.netDue:(+w.salary||0);
+    const actInstCm=cycleStatus?cycleStatus.totInst:0;
+    const r=netDue>0?totAdv/netDue:0;
+    const cycleText=cycleRangeStr(w,activeCycle.m,activeCycle.yr);
+    if(totAdv>netDue)alerts.push({
       icon:'🚨',
-      text:`<b>${w.name}</b> (#${n}): التسبيقات (${fmt(totAdv)}) تجاوزت الراتب (${fmt(w.salary)})!`,
+      text:`<b>${w.name}</b> (#${n}): تسبيقات دورة ${cycleText} (${fmt(totAdv)}) تجاوزت المستحق (${fmt(netDue)})!`,
       urgent:true,type:'over',days:0
     });
-    else if(totAdv>=w.salary&&actInstCm===0&&totAbsCm===0)alerts.push({
+    else if(cycleStatus&&cycleStatus.salaryPaid&&actInstCm===0)alerts.push({
       icon:'✅',
-      text:`<b>${w.name}</b> (#${n}): راتب ${MN[cm]} مسدد بالكامل`,
+      text:`<b>${w.name}</b> (#${n}): دورة ${cycleText} مسددة بالكامل`,
       urgent:false,type:'paid',days:0
     });
     else if(r>=0.9)alerts.push({
       icon:'⚠️',
-      text:`<b>${w.name}</b> (#${n}): تسبيقات ${Math.round(r*100)}% من الراتب`,
+      text:`<b>${w.name}</b> (#${n}): تسبيقات دورة ${cycleText} بلغت ${Math.round(r*100)}% من المستحق`,
       urgent:false,type:'over',days:0
     });
     // أيام زائدة
@@ -6599,7 +6777,7 @@ function runAI(){
   const stats=workers.map((w,idx)=>{
     const advArr=[];
     Object.values(DB.advances[w.id]||{}).forEach(arr=>arr.forEach(e=>{if(inRange(e.date,from,to))advArr.push(e);}));
-    const adv=advArr.reduce((s,e)=>s+(+e.amount||0),0);
+    const adv=advArr.reduce((s,e)=>s+advGross(e),0);
     const hArr=(DB.hours[w.id]||[]).filter(h=>inRange(h.date,from,to));
     const totH=hArr.reduce((s,h)=>s+(+h.total||0),0),totHH=hArr.reduce((s,h)=>s+(+h.hours||0),0);
     const aArr=(DB.absences[w.id]||[]).filter(a=>inRange(a.date,from,to));
@@ -6712,9 +6890,10 @@ function renderWorkerChart(wid){
   const months=[...Array(12).keys()];
   const salData=[],advData=[],absData=[];
   months.forEach(m=>{
-    const ps=calcSal(w,m,yr).salary;
-    const adv=((DB.advances[w.id]||{})[m]||[]).reduce((s,e)=>s+(+e.amount||0),0);
-    const abs=(DB.absences[w.id]||[]).filter(a=>a.month===m&&a.deductOpt==='now').reduce((s,a)=>s+(+a.deduct||0),0);
+    const ms=calcMonthStatus(w.id,m,yr);
+    const ps=ms?ms.baseSal:0;
+    const adv=ms?ms.totAdv:0;
+    const abs=ms?ms.totAbsNow:0;
     salData.push(ps);advData.push(adv);absData.push(abs);
   });
   const maxVal=Math.max(...salData,...advData,...absData,1);
@@ -6793,17 +6972,17 @@ function checkPaydayAlerts(){
     const payDay=Math.min(+w.day||28,30);
     const exitDue=hasExit && (new Date(w.exitDate+'T00:00:00')<=today);
     if(todayD===payDay || exitDue){
-      const calRes=calcSal(w,m,yr);
-      const adv=((DB.advances[w.id]||{})[m]||[]).reduce((s,e)=>s+(+e.amount||0),0);
-      const abs=(DB.absences[w.id]||[]).filter(a=>a.month===m&&a.deductOpt==='now').reduce((s,a)=>s+(+a.deduct||0),0);
-      const hrs=(DB.hours[w.id]||[]).filter(h=>h.month===m&&!h.paid).reduce((s,h)=>s+(+h.total||0),0);
-      const bon=((DB.bonuses[w.id]||{})[m]||[]).filter(b=>!b.paid).reduce((s,b)=>s+(+b.net||+b.amount||0),0);
-      const mEnd=new Date(yr,m+1,0);
-      const inst=(DB.debts[w.id]||[]).filter(d=>{
-        if(d.type!=='debt'||!d.inst||(+d.instPaid||0)>=(+d.instCount||1))return false;
-        const due2=d.nextDue?new Date(d.nextDue+'T00:00:00'):null;return due2&&due2<=mEnd;
-      }).reduce((s,d)=>s+(+d.instAmt||0),0);
-      let sal=calRes.salary, net=sal+hrs+bon-adv-abs, netAfterInst=net-inst;
+      // يوم الاستحقاق يصف الدورة التي انتهت للتو؛ في غير ذلك نعرض دورة التاريخ الحالي.
+      const payCycle=todayD===payDay
+        ? {m:(m-1+12)%12,yr:m===0?yr-1:yr}
+        : cycleAnchorForDate(w,today);
+      const ms=calcMonthStatus(w.id,payCycle.m,payCycle.yr);
+      const adv=ms?ms.totAdv:0;
+      const abs=ms?ms.totAbsNow:0;
+      const hrs=ms?ms.hrsUnpaid:0;
+      const bon=ms?ms.bonUnpaid:0;
+      const inst=ms?ms.totInst:0;
+      let sal=ms?ms.baseSal:0, net=(ms?ms.netSal:0)+hrs+bon, netAfterInst=net-inst;
       if(exitDue){
         const fs=calcFinalSettlement(w);
         if(fs){sal=fs.earnedSal;net=fs.netFinal+fs.debtBalance;netAfterInst=fs.netFinal;}
@@ -6922,7 +7101,7 @@ function renderAdvAudit(q,mFilter){
     var advAll=[];
     Object.entries(DB.advances[w.id]||{}).forEach(function(pair){
       var mKey=+pair[0];
-      (pair[1]||[]).forEach(function(e){ advAll.push({e:e, ck:(e.month!=null?e.month:mKey), ts:_advTs(e)}); });
+      (pair[1]||[]).forEach(function(e){ if(!_isInstAdv(e)) advAll.push({e:e, ck:(e.month!=null?e.month:mKey), ts:_advTs(e)}); });
     });
     var advG={};
     advAll.forEach(function(x){ var k=x.ts?('g'+Math.floor(x.ts/1000)):('na'+(x.e.id||Math.random())); (advG[k]=advG[k]||[]).push(x); });
@@ -6952,7 +7131,7 @@ function renderAdvAudit(q,mFilter){
       gCount++;
       if(ev.kind==='adv'){
         counts.adv++;
-        var total=ev.items.reduce(function(s2,x){return s2+(+x.e.amount||0);},0);
+        var total=ev.items.reduce(function(s2,x){return s2+advGross(x.e);},0);
         var multi=ev.items.length>1;
         var et=_advEntryTime(ev.items[0].e), by=ev.items[0].e.by||'';
         var head=multi?'💰 إدخال موزّع · المجموع <b style="color:var(--white)">'+fmt(total)+'</b>'
@@ -6967,9 +7146,9 @@ function renderAdvAudit(q,mFilter){
           rows+='<div style="display:flex;justify-content:space-between;gap:8px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--border)'+(dim?';opacity:.4':'')+'">'+
             '<div style="font-size:10px;color:var(--gray);line-height:1.75;flex:1;min-width:0">'+
               '<span style="color:'+k.col+';font-weight:700">'+k.lbl+'</span> ← دورة <b style="color:var(--amber)">'+MN[x.ck]+'</b>'+(range?' ('+range+')':'')+'<br>'+
-              '🗓️ محاسبي: '+(e.date||'—')+(diffReal?' · 💵 فعلي: <b style="color:var(--teal)">'+e.realDate+'</b>':'')+(e.note?'<br>📝 '+e.note+_carryWhy(e.note):'')+
+              '🗓️ محاسبي: '+(e.date||'—')+(diffReal?' · 💵 فعلي: <b style="color:var(--teal)">'+e.realDate+'</b>':'')+(e.note?'<br>📝 '+e.note+_carryWhy(e.note):'')+(advDedNote(e)?'<br><span style="color:var(--red)">'+advDedNote(e)+' · الصافي المدفوع '+fmt(advNetPaid(e))+'</span>':'')+
             '</div>'+
-            '<div style="font-size:12px;font-weight:900;color:'+k.col+';white-space:nowrap">'+fmt(e.amount)+'</div>'+
+            '<div style="font-size:12px;font-weight:900;color:'+k.col+';white-space:nowrap">'+fmt(e.amount)+(advDedTotal(e)>0?'<br><span style="color:var(--red);font-size:10px">صافي '+fmt(advNetPaid(e))+'</span>':'')+'</div>'+
           '</div>';
         });
         rows+='</div>';
@@ -7021,7 +7200,7 @@ function _workerBalanceBox(w){
   var _retTags=new Set((DB.debts[wid]||[]).filter(function(d){return d.type==='return'&&d._instTag;}).map(function(d){return d._instTag;}));
   var instDed=Object.values(DB.advances[wid]||{}).flat().filter(function(a){return a._isInstDeduction&&!(a._instTag&&_retTags.has(a._instTag));}).reduce(function(s,a){return s+(+a.amount||0);},0);
   instDed=Math.round(instDed);
-  var salaryAdv=Math.round((+fs.totalAdv||0)-instDed);
+  var salaryAdv=Math.round(+fs.totalAdv||0);
   var salNet=Math.round((+fs.earnedSal||0)-(+fs.totalAbs||0)-salaryAdv);
   var tol=Math.max(Math.round(+fs.daily||0),500);
   var verdict, vcol;
@@ -7057,7 +7236,7 @@ function openAuditModal(wid){
   var g={};
   advAll.forEach(function(x){ var k=x.ts?('g'+Math.floor(x.ts/1000)):('na'+(x.e.id||Math.random())); (g[k]=g[k]||[]).push(x); });
   Object.keys(g).forEach(function(k){
-    var items=g[k]; var total=items.reduce(function(s,x){return s+(+x.e.amount||0);},0); var multi=items.length>1;
+    var items=g[k]; var total=items.reduce(function(s,x){return s+advGross(x.e);},0); var multi=items.length>1;
     items.forEach(function(x){
       var e=x.e, kd=_advKind(e);
       rows.push({kind:'adv', cm:x.ck, ts:x.ts, col:kd.col, label:kd.lbl, amt:e.amount,
@@ -7527,15 +7706,11 @@ function printWorkerDetail(wid,fM,tM){
   if(fM===0&&tM===11){
     let firstM=-1,lastM=-1;
     for(let m=0;m<=11;m++){
-      const _adv=((DB.advances[w.id]||{})[m]||[]).length;
-      const _hrs=(DB.hours[w.id]||[]).filter(h=>h.month===m).length;
-      const _abs=(DB.absences[w.id]||[]).filter(a=>a.month===m).length;
-      const _bon=((DB.bonuses[w.id]||{})[m]||[]).length;
-      const _inst=(DB.debts[w.id]||[]).filter(d=>{
-        if(d.type!=='debt'||!d.inst||(+d.instPaid||0)>=(+d.instCount||1))return false;
-        const due=d.nextDue?new Date(d.nextDue+'T00:00:00'):null;
-        return due&&due<=new Date(yr,m+1,0);
-      }).length;
+      const _adv=advanceEntriesInCycle(w.id,m,yr).length;
+      const _hrs=hourEntriesInCycle(w.id,m,yr).length;
+      const _abs=absenceEntriesInCycle(w.id,m,yr).length;
+      const _bon=bonusEntriesInCycle(w.id,m,yr).length;
+      const _inst=(DB.debts[w.id]||[]).filter(d=>installmentDueInCycle(d,w,m,yr)).length;
       if(_adv||_hrs||_abs||_bon||_inst){if(firstM===-1)firstM=m;lastM=m;}
     }
     // إذا لا يوجد بيانات: نعرض الشهر الحالي فقط
@@ -7544,30 +7719,27 @@ function printWorkerDetail(wid,fM,tM){
   }
 
   for(let m=fM;m<=tM;m++){
-    const calRes=calcSal(w,m,yr);
-    const ps=calRes.salary;const wd=calRes.days;const pro=calRes.pro;
-    const advE=((DB.advances[w.id]||{})[m]||[]);
-    const hrsE=(DB.hours[w.id]||[]).filter(h=>h.month===m);
-    const absNow=(DB.absences[w.id]||[]).filter(a=>a.month===m&&a.deductOpt==='now');
-    const absPend=(DB.absences[w.id]||[]).filter(a=>a.month===m&&!a.settled&&a.deductOpt!=='cancel');
-    const bonE=((DB.bonuses[w.id]||{})[m]||[]);
-    const _entryD2=Math.min(+w.day||1,28);
-    const mEnd=_entryD2<=1?new Date(yr,m+1,0):new Date(yr,m+1,_entryD2-1);
-    const activeInst=(DB.debts[w.id]||[]).filter(d=>{
-      if(d.type!=='debt'||!d.inst||(+d.instPaid||0)>=(+d.instCount||1))return false;
-      const due=d.nextDue?new Date(d.nextDue+'T00:00:00'):null;const mStart=new Date(yr,m,1);return due&&due>=mStart&&due<=mEnd;
-    });
-    const tAdv=advE.reduce((s,e)=>s+(+e.amount||0),0);
-    const tAbsNow=absNow.reduce((s,a)=>s+(+a.deduct||0),0);
+    const ms=calcMonthStatus(w.id,m,yr);
+    const calRes=ms.calRes;
+    const ps=ms.baseSal;const wd=calRes.days;const pro=calRes.pro;
+    const advE=advanceEntriesInCycle(w.id,m,yr);
+    const hrsE=hourEntriesInCycle(w.id,m,yr);
+    const absAll=absenceEntriesInCycle(w.id,m,yr);
+    const absNow=absAll.filter(a=>a.deductOpt==='now');
+    const absPend=absAll.filter(a=>!a.settled&&a.deductOpt!=='cancel');
+    const bonE=bonusEntriesInCycle(w.id,m,yr);
+    const activeInst=(DB.debts[w.id]||[]).filter(d=>installmentDueInCycle(d,w,m,yr));
+    const tAdv=ms.totAdv;
+    const tAbsNow=ms.totAbsNow;
     const tAbsPend=absPend.reduce((s,a)=>s+(+a.deduct||0),0);
-    const tInst=activeInst.reduce((s,d)=>s+(+d.instAmt||0),0);
+    const tInst=0; // v33: قسط الدين لا يُطرح من صافي الراتب هنا؛ يظهر كخصم داخل التسبيق وإرجاع في الديون
     const tHrs=hrsE.reduce((s,h)=>s+(+h.total||0),0);
     const tHrsPaid=hrsE.filter(h=>h.paid).reduce((s,h)=>s+(+h.total||0),0);
     const tHrsUnpaid=tHrs-tHrsPaid;
     const tBon=bonE.reduce((s,b)=>s+(+b.net||+b.amount||0),0);
     const tBonPaid=bonE.filter(b=>b.paid).reduce((s,b)=>s+(+b.net||+b.amount||0),0);
     const tBonUnpaid=tBon-tBonPaid;
-    const netSal=ps-tAdv-tAbsNow-tInst;
+    const netSal=ms.netSal; // تسبيقات وغيابات الدورة محسوبة مرة واحدة فقط
 
     // ── منطق العرض: تخطي الأشهر المُصفَّرة تماماً ──
     // شهر مُصفَّر = لا بيانات فعلية + راتب مسدد بالكامل أو بدون تسبيقات
@@ -7593,16 +7765,16 @@ function printWorkerDetail(wid,fM,tM){
           <td style="font-weight:800;color:#1a3a6b;text-align:left">${fmtN(ps)} دج<span style="color:#999;font-size:10px;margin-right:6px">(${wd} يوم)</span></td>
         </tr>
         ${advE.map((e,i)=>`<tr>
-          <td style="color:#e65100">💰 تسبيق ${i+1} — ${e.date}${e.note?' <small style="color:#999">('+e.note+')</small>':''}</td>
-          <td style="color:#c0392b;font-weight:700;text-align:left">− ${fmtN(e.amount)} دج</td>
+          <td style="color:#e65100">💰 تسبيق ${i+1} — ${e.date}${advEntryStamp(e)?' <small style="color:#0e7c66">[إدخال: '+advEntryStamp(e)+']</small>':''}${e.note?' <small style="color:#999">('+e.note+')</small>':''}${advDedNote(e)?' <br><small style="color:#c0392b">'+advDedNote(e)+' | الصافي المدفوع: '+fmtN(advNetPaid(e))+'</small>':''}</td>
+          <td style="color:#c0392b;font-weight:700;text-align:left">− ${fmtN(advGross(e))} دج</td>
         </tr>`).join('')}
-        ${absNow.map(a=>`<tr>
+        ${absNow.filter(a=>!a._advanceId).map(a=>`<tr>
           <td style="color:#c0392b">📅 خصم غياب — ${a.date} — ${a.days}ي${a.reason?' ('+a.reason+')':''}</td>
           <td style="color:#c0392b;font-weight:700;text-align:left">− ${fmtN(a.deduct)} دج</td>
         </tr>`).join('')}
         ${activeInst.map(d=>`<tr>
-          <td style="color:#7c3aed">📋 قسط دين — ${fmtN(d.instAmt)} — ${d.note||'دين'}</td>
-          <td style="color:#7c3aed;font-weight:700;text-align:left">− ${fmtN(d.instAmt)} دج</td>
+          <td style="color:#7c3aed">📋 قسط دين مستحق — ${fmtN(d.instAmt)} — ${d.note||'دين'} <small style="color:#777">(لا يُطرح من الراتب هنا؛ يُخصم فقط داخل تسبيق فعلي)</small></td>
+          <td style="color:#7c3aed;font-weight:700;text-align:left">تنبيه</td>
         </tr>`).join('')}
         ${tAdv||tAbsNow||tInst?`<tr style="background:#fff8e1">
           <td style="font-weight:800">💳 صافي الراتب</td>
@@ -7699,9 +7871,13 @@ function printTodayAdvances(){
 
     Object.entries(DB.advances[w.id]||{}).forEach(([m,arr])=>{
       arr.forEach(a=>{
-        totAdv+=+a.amount||0;
+        if(_isInstAdv(a))return;
+        const gross=advGross(a);
+        totAdv+=gross;
+        const ded=advDedNote(a);
+        const net=advDedTotal(a)>0?' | الصافي المدفوع: '+fmtN(advNetPaid(a)):'';
         // التاريخ المعروض = التاريخ الفعلي للدفع إن وُجد (قيود موجَّهة لدورة سابقة)
-        advRows.push({date:a.realDate||a.date||'—',type:'💰 تسبيق',month:MN[+m]||'',amt:+a.amount||0,note:a.note||'',color:'#155e1a',sign:'+'});
+        advRows.push({date:a.realDate||a.date||'—',type:'💰 تسبيق',month:MN[+m]||'',amt:gross,note:(a.note||'')+(ded?(' | '+ded+net):''),color:'#155e1a',sign:'+'});
       });
     });
     (DB.hours[w.id]||[]).forEach(h=>{
@@ -7847,9 +8023,10 @@ function printTodayOnly(){
     let totAdv=0,totHrs=0,totBon=0,totAbs=0;
     Object.entries(DB.advances[w.id]||{}).forEach(([m,arr])=>{
       // a.realDate = التاريخ الفعلي للدفع (للقيود الموجَّهة للدورة السابقة)
-      arr.filter(a=>a.date===td||a.realDate===td).forEach(a=>{
-        totAdv+=+a.amount||0;
-        rows.push({type:'تسبيق'+(a.realDate?' (دورة '+(MN[+m]||'')+')':''),amt:+a.amount||0,note:a.note||'',sign:'+',col:'#1a7a4a'});
+      arr.filter(a=>!_isInstAdv(a)&&(a.date===td||a.realDate===td)).forEach(a=>{
+        const gross=advGross(a);
+        totAdv+=gross;
+        rows.push({type:'تسبيق'+(a.realDate?' (دورة '+(MN[+m]||'')+')':''),amt:gross,note:(a.note||'')+(advDedNote(a)?' | '+advDedNote(a)+' | الصافي المدفوع: '+fmtN(advNetPaid(a)):''),sign:'+',col:'#1a7a4a'});
       });
     });
     (DB.hours[w.id]||[]).filter(h=>h.date===td).forEach(h=>{
@@ -7948,24 +8125,20 @@ function printMonthReport(){
   if(!workers.length){toast('⚠️ لا يوجد عمال','#c0392b');return;}
   let totalSal=0,totalAdv=0,totalAbs=0,totalInst=0,totalHrs=0,totalBon=0,totalNet=0,totalDebt=0;
   const rows=workers.map((w,i)=>{
-    const calRes=calcSal(w,m,yr);const ps=calRes.salary;
-    const advE=((DB.advances[w.id]||{})[m]||[]);const adv=advE.reduce((s,e)=>s+(+e.amount||0),0);
-    const absNow=(DB.absences[w.id]||[]).filter(a=>a.month===m&&a.deductOpt==='now');
-    const abs=absNow.reduce((s,a)=>s+(+a.deduct||0),0);const absDays=absNow.reduce((s,a)=>s+(+a.days||0),0);
-    const absPend=(DB.absences[w.id]||[]).filter(a=>a.month===m&&!a.settled&&a.deductOpt!=='cancel').reduce((s,a)=>s+(+a.deduct||0),0);
-    const mEnd=new Date(yr,m+1,0);
-    const instE=(DB.debts[w.id]||[]).filter(d=>{
-      if(d.type!=='debt'||!d.inst||(+d.instPaid||0)>=(+d.instCount||1))return false;
-      const due=d.nextDue?new Date(d.nextDue+'T00:00:00'):null;const mStart=new Date(yr,m,1);return due&&due>=mStart&&due<=mEnd;
-    });
-    const inst=instE.reduce((s,d)=>s+(+d.instAmt||0),0);
-    const hrs=(DB.hours[w.id]||[]).filter(h=>h.month===m).reduce((s,h)=>s+(+h.total||0),0);
-    const bon=((DB.bonuses[w.id]||{})[m]||[]).reduce((s,b)=>s+(+b.net||+b.amount||0),0);
+    const ms=calcMonthStatus(w.id,m,yr),calRes=ms.calRes,ps=ms.baseSal;
+    const advE=advanceEntriesInCycle(w.id,m,yr),adv=ms.totAdv;
+    const absNow=absenceEntriesInCycle(w.id,m,yr).filter(a=>a.deductOpt==='now');
+    const abs=ms.totAbsNow,absDays=absNow.reduce((s,a)=>s+(+a.days||0),0);
+    const absPend=absenceEntriesInCycle(w.id,m,yr).filter(a=>!a.settled&&a.deductOpt!=='cancel').reduce((s,a)=>s+(+a.deduct||0),0);
+    const instE=(DB.debts[w.id]||[]).filter(d=>installmentDueInCycle(d,w,m,yr));
+    const inst=ms.totInst;
+    const hrs=ms.hrsTotal;
+    const bon=ms.bonTotal;
     let bal=0;(DB.debts[w.id]||[]).forEach(d=>bal+=(d.type==='debt'?1:-1)*(+d.amount||0));
-    const net=ps-adv-abs-inst;
+    const net=ms.netSal; // الأقساط لا تُطرح هنا لأنها تظهر داخل التسبيق وفي خانة الديون
     let finStatus,finBg,finColor;
     if(adv===0&&abs===0&&inst===0){finStatus='لا تسبيقات';finBg='#f0f4f8';finColor='#555';}
-    else if(net<=0&&adv>=ps){finStatus='✅ مسدد';finBg='#e8f5e9';finColor='#1a7a4a';}
+    else if(ms.salaryPaid){finStatus='✅ مسدد';finBg='#e8f5e9';finColor='#1a7a4a';}
     else if(net<0){finStatus='⚠️ دين '+fmtN(Math.abs(net));finBg='#fdecea';finColor='#c0392b';}
     else{finStatus='⏳ متبقي '+fmtN(net);finBg='#fffbeb';finColor='#b45309';}
     totalSal+=ps;totalAdv+=adv;totalAbs+=abs;totalInst+=inst;totalHrs+=hrs;totalBon+=bon;totalNet+=net;totalDebt+=Math.max(0,bal);
@@ -7996,7 +8169,7 @@ function printMonthReport(){
     <div class="scard"><div class="sl">إجمالي الرواتب</div><div class="sv">${fmtN(totalSal)} دج</div></div>
     <div class="scard"><div class="sl">التسبيقات</div><div class="sv" style="color:#c0392b">-${fmtN(totalAdv)} دج</div></div>
     <div class="scard"><div class="sl">خصم الغيابات</div><div class="sv" style="color:#c0392b">-${fmtN(totalAbs)} دج</div></div>
-    <div class="scard"><div class="sl">أقساط الديون</div><div class="sv" style="color:#7c3aed">-${fmtN(totalInst)} دج</div></div>
+    <div class="scard"><div class="sl">أقساط مستحقة</div><div class="sv" style="color:#7c3aed">${fmtN(totalInst)} دج</div></div>
     <div class="scard"><div class="sl">صافي الكل</div><div class="sv" style="color:${totalNet<=0?'#1a7a4a':'#e65100'}">${fmtN(totalNet)} دج</div></div>
     <div class="scard"><div class="sl">ساعات + مكافآت</div><div class="sv" style="color:#1a7a4a">+${fmtN(totalHrs+totalBon)} دج</div></div>
     <div class="scard"><div class="sl">ديون متراكمة</div><div class="sv" style="color:#c0392b">${fmtN(totalDebt)} دج</div></div>
@@ -8014,7 +8187,7 @@ function printMonthReport(){
     <td><b>${fmtN(r.ps)}</b><div style="font-size:8px;color:#888">${r.calRes.days}ي</div></td>
     <td class="${r.adv?'neg':'neu'}">${r.adv?'-'+fmtN(r.adv):'—'}</td>
     <td class="${r.abs?'neg':'neu'}">${r.abs?'-'+fmtN(r.abs):'—'}${r.absPend>0?`<div style="color:#e65100;font-size:8px">⏳معلق:${fmtN(r.absPend)}</div>`:''}</td>
-    <td style="color:${r.inst?'#7c3aed':'#bbb'}">${r.inst?'-'+fmtN(r.inst):'—'}</td>
+    <td style="color:${r.inst?'#7c3aed':'#bbb'}">${r.inst?fmtN(r.inst)+' تنبيه':'—'}</td>
     <td class="${r.hrs?'pos':'neu'}">${r.hrs?'+'+fmtN(r.hrs):'—'}</td>
     <td style="color:${r.bon?'#7c3aed':'#bbb'}">${r.bon?'+'+fmtN(r.bon):'—'}</td>
     <td class="${r.bal>0?'neg':'neu'}">${r.bal>0?fmtN(r.bal):'✓'}</td>
@@ -8023,7 +8196,7 @@ function printMonthReport(){
   </tr>`).join('')}
   </tbody><tfoot><tr class="total-row">
     <td colspan="3">المجموع</td><td>${fmtN(totalSal)}</td><td>-${fmtN(totalAdv)}</td>
-    <td>-${fmtN(totalAbs)}</td><td>-${fmtN(totalInst)}</td><td>+${fmtN(totalHrs)}</td>
+    <td>-${fmtN(totalAbs)}</td><td>${fmtN(totalInst)}</td><td>+${fmtN(totalHrs)}</td>
     <td>+${fmtN(totalBon)}</td><td>${fmtN(totalDebt)}</td><td colspan="2">${fmtN(totalNet)}</td>
   </tfoot></table>
   <div class="sig">
@@ -8052,24 +8225,15 @@ function _printBulkMonths(workers,months,fM,tM,yr,multiMonth){
   const rows=workers.map((w,idx)=>{
     let totAdv=0,totAbs=0,totInst=0,totHrs=0,totBon=0;
     const mData=months.map(m=>{
-      const calRes=calcSal(w,m,yr);const ps=calRes.salary;
-      const adv=((DB.advances[w.id]||{})[m]||[]).reduce((s,e)=>s+(+e.amount||0),0);
-      const abs=(DB.absences[w.id]||[]).filter(a=>a.month===m&&a.deductOpt==='now').reduce((s,a)=>s+(+a.deduct||0),0);
-      const absPend=(DB.absences[w.id]||[]).filter(a=>a.month===m&&!a.settled&&a.deductOpt!=='cancel').reduce((s,a)=>s+(+a.deduct||0),0);
-      const mEnd=new Date(yr,m+1,0);
-      const inst=(DB.debts[w.id]||[]).filter(d=>{
-        if(d.type!=='debt'||!d.inst||(+d.instPaid||0)>=(+d.instCount||1))return false;
-        const due=d.nextDue?new Date(d.nextDue+'T00:00:00'):null;const mStart=new Date(yr,m,1);return due&&due>=mStart&&due<=mEnd;
-      }).reduce((s,d)=>s+(+d.instAmt||0),0);
-      const hrs=(DB.hours[w.id]||[]).filter(h=>h.month===m).reduce((s,h)=>s+(+h.total||0),0);
-      const hrsPaid=(DB.hours[w.id]||[]).filter(h=>h.month===m&&h.paid).reduce((s,h)=>s+(+h.total||0),0);
-      const bon=((DB.bonuses[w.id]||{})[m]||[]).reduce((s,b)=>s+(+b.net||+b.amount||0),0);
-      const bonPaid=((DB.bonuses[w.id]||{})[m]||[]).filter(b=>b.paid).reduce((s,b)=>s+(+b.net||+b.amount||0),0);
-      const net=ps-adv-abs-inst;
+      const ms=calcMonthStatus(w.id,m,yr),calRes=ms.calRes,ps=ms.baseSal;
+      const adv=ms.totAdv,abs=ms.totAbsNow;
+      const absPend=absenceEntriesInCycle(w.id,m,yr).filter(a=>!a.settled&&a.deductOpt!=='cancel').reduce((s,a)=>s+(+a.deduct||0),0);
+      const inst=ms.totInst,hrs=ms.hrsTotal,hrsPaid=ms.hrsPaid,bon=ms.bonTotal,bonPaid=ms.bonPaid;
+      const net=ms.netSal; // الأقساط لا تُطرح هنا حتى لا تتكرر؛ تظهر داخل التسبيق وفي خانة الديون
       totAdv+=adv;totAbs+=abs;totInst+=inst;totHrs+=hrs;totBon+=bon;
       let status,statusColor,statusBg,statusIcon;
       if(adv===0&&abs===0&&inst===0&&ps>0){status='لا تسبيقات';statusColor='#555';statusBg='#f0f4f8';statusIcon='⬜';}
-      else if(net<=0&&adv>=ps){status='مسدد';statusColor='#1a7a4a';statusBg='#e8f5e9';statusIcon='✅';}
+      else if(ms.salaryPaid){status='مسدد';statusColor='#1a7a4a';statusBg='#e8f5e9';statusIcon='✅';}
       else if(net<0){status='دين '+fmtN(Math.abs(net));statusColor='#7b241c';statusBg='#fdecea';statusIcon='⚠️';}
       else{status='متبقي '+fmtN(net);statusColor='#b45309';statusBg='#fffbeb';statusIcon='⏳';}
       return{m,ps,adv,abs,absPend,inst,hrs,hrsPaid,bon,bonPaid,net,status,statusColor,statusBg,statusIcon,calRes};
@@ -8160,18 +8324,10 @@ function _printBulkMonths(workers,months,fM,tM,yr,multiMonth){
 function printSummary(){
   const m=S.sum;const workers=sw();const yr=S.sumyr||new Date().getFullYear();
   const rows=workers.map((w,idx)=>{
-    const calRes=calcSal(w,m,yr);const ps=calRes.salary;const pro=calRes.pro;const wd=calRes.days;
-    const adv=((DB.advances[w.id]||{})[m]||[]).reduce((s,e)=>s+(+e.amount||0),0);
-    const hrs=(DB.hours[w.id]||[]).filter(h=>h.month===m).reduce((s,h)=>s+(+h.total||0),0);
-    const abs=(DB.absences[w.id]||[]).filter(a=>a.month===m&&a.deductOpt==='now').reduce((s,a)=>s+(+a.deduct||0),0);
-    const bon=((DB.bonuses[w.id]||{})[m]||[]).reduce((s,b)=>s+(+b.net||+b.amount||0),0);
-    const mEnd=new Date(yr,m+1,0);
-    const inst=(DB.debts[w.id]||[]).filter(d=>{
-      if(d.type!=='debt'||!d.inst||(+d.instPaid||0)>=(+d.instCount||1))return false;
-      const due=d.nextDue?new Date(d.nextDue+'T00:00:00'):null;const mStart=new Date(yr,m,1);return due&&due>=mStart&&due<=mEnd;
-    }).reduce((s,d)=>s+(+d.instAmt||0),0);
+    const ms=calcMonthStatus(w.id,m,yr);const calRes=ms.calRes,ps=ms.baseSal;const pro=calRes.pro;const wd=calRes.days;
+    const adv=ms.totAdv,hrs=ms.hrsTotal,abs=ms.totAbsNow,bon=ms.bonTotal,inst=ms.totInst;
     let bal=0;(DB.debts[w.id]||[]).forEach(d=>bal+=(d.type==='debt'?1:-1)*(+d.amount||0));
-    const net=ps-adv-abs-inst; // صافي الراتب — الساعات والمكافآت مبيّنة منفصلة
+    const net=ms.netSal; // الأقساط لا تُطرح هنا حتى لا تتكرر؛ تظهر داخل التسبيق وفي خانة الديون
     return{w,idx,ps,pro,wd,adv,hrs,abs,bon,inst,bal,net};
   });
   const tS=rows.reduce((s,r)=>s+r.ps,0),tA=rows.reduce((s,r)=>s+r.adv,0);
@@ -8181,19 +8337,19 @@ function printSummary(){
   pWin(PB.replace('@media print{@page{size:A4;margin:1cm}}','@media print{@page{size:A4;margin:.6cm}}')+`
     <h2>🏗️ EGTPH — الحصيلة العامة — ${MN[m]} ${yr}</h2>
     <p style="text-align:center;font-size:10px;color:#666">طُبع: ${todayStr()} | ${workers.length} عامل</p>
-    <table><thead><tr><th>#</th><th>الاسم</th><th>الآلة</th><th>الراتب</th><th>تسبيقات</th><th>غيابات</th><th>أقساط</th><th>صافي الراتب</th><th style="color:green">ساعات إضافية</th><th style="color:purple">مكافآت</th><th>ديون</th></tr></thead>
+    <table><thead><tr><th>#</th><th>الاسم</th><th>الآلة</th><th>الراتب</th><th>تسبيقات</th><th>غيابات</th><th>أقساط مستحقة</th><th>صافي الراتب</th><th style="color:green">ساعات إضافية</th><th style="color:purple">مكافآت</th><th>ديون</th></tr></thead>
     <tbody>${rows.map(r=>`<tr>
       <td>${r.idx+1}</td><td><b>${r.w.name}</b>${r.pro?`<br><small>نسبي ${r.wd}ي</small>`:''}</td>
       <td>${r.w.type}</td><td>${fmtN(r.ps)}</td>
       <td style="color:${r.adv?'#c0392b':'#999'}">${r.adv?'-'+fmtN(r.adv):'—'}</td>
       <td style="color:${r.abs?'#c0392b':'#999'}">${r.abs?'-'+fmtN(r.abs):'—'}</td>
-      <td style="color:${r.inst?'#7c3aed':'#999'}">${r.inst?'-'+fmtN(r.inst):'—'}</td>
+      <td style="color:${r.inst?'#7c3aed':'#999'}">${r.inst?fmtN(r.inst)+' تنبيه':'—'}</td>
       <td><b style="color:${r.net<=0?'#1a7a4a':r.net>0?'#1a3a6b':'#c0392b'}">${fmtN(r.net)}</b></td>
       <td style="color:${r.hrs?'green':'#999'}">${r.hrs?'+'+fmtN(r.hrs):'—'}</td>
       <td style="color:${r.bon?'purple':'#999'}">${r.bon?'+'+fmtN(r.bon):'—'}</td>
       <td style="color:${r.bal>0?'#c0392b':'#999'}">${r.bal>0?fmtN(r.bal):'✓'}</td>
     </tr>`).join('')}
-    <tr class="total"><td colspan="3">المجموع</td><td>${fmtN(tS)}</td><td>-${fmtN(tA)}</td><td>-${fmtN(tAb)}</td><td>-${fmtN(tInst)}</td><td>${fmtN(tN)}</td><td>+${fmtN(tH)}</td><td>+${fmtN(tB)}</td><td>—</td></tr>
+    <tr class="total"><td colspan="3">المجموع</td><td>${fmtN(tS)}</td><td>-${fmtN(tA)}</td><td>-${fmtN(tAb)}</td><td>${fmtN(tInst)}</td><td>${fmtN(tN)}</td><td>+${fmtN(tH)}</td><td>+${fmtN(tB)}</td><td>—</td></tr>
     </tbody></table>
     <div class="sig"><div>توقيع المدير<br>Youcef Abdi<br><br>__________</div><div>توقيع المحاسب<br><br><br>__________</div></div>
 </body></html>`);
@@ -8202,34 +8358,25 @@ function printAnnual(){
   const w=getW(S.anw);if(!w)return;const n=wNum(w.id);const yr=new Date().getFullYear();
   let tA=0,tH=0,tAb=0,tB=0,tN=0,tSal=0,tInst=0;
   const rows=MN.map((mn,m)=>{
-    const calRes=calcSal(w,m,yr);
-    const ps=calRes.salary;
-    const adv=((DB.advances[w.id]||{})[m]||[]).reduce((s,e)=>s+(+e.amount||0),0);
-    const hrs=(DB.hours[w.id]||[]).filter(h=>h.month===m).reduce((s,h)=>s+(+h.total||0),0);
-    const abs=(DB.absences[w.id]||[]).filter(a=>a.month===m&&a.deductOpt==='now').reduce((s,a)=>s+(+a.deduct||0),0);
-    const bon=((DB.bonuses[w.id]||{})[m]||[]).reduce((s,b)=>s+(+b.net||+b.amount||0),0);
-    const mEnd=new Date(yr,m+1,0);
-    const inst=(DB.debts[w.id]||[]).filter(d=>{
-      if(d.type!=='debt'||!d.inst||(+d.instPaid||0)>=(+d.instCount||1))return false;
-      const due=d.nextDue?new Date(d.nextDue+'T00:00:00'):null;const mStart=new Date(yr,m,1);return due&&due>=mStart&&due<=mEnd;
-    }).reduce((s,d)=>s+(+d.instAmt||0),0);
-    const net=ps-adv-abs-inst; // صافي الراتب فقط (الساعات والمكافآت منفصلة)
+    const ms=calcMonthStatus(w.id,m,yr),calRes=ms.calRes;
+    const ps=ms.baseSal,adv=ms.totAdv,hrs=ms.hrsTotal,abs=ms.totAbsNow,bon=ms.bonTotal,inst=ms.totInst;
+    const net=ms.netSal; // الأقساط لا تُطرح هنا حتى لا تتكرر؛ تظهر داخل التسبيق وفي خانة الديون
     tSal+=ps;tA+=adv;tH+=hrs;tAb+=abs;tB+=bon;tN+=net;tInst+=inst;
     return{mn,ps,calRes,adv,hrs,abs,bon,inst,net};
   });
   pWin(PB+`<h2>🏗️ EGTPH — الملخص السنوي ${yr}<br><small>رقم ${n} — ${w.name} — ${w.type}${w.mat?' ('+w.mat+')':''}</small></h2>
-    <table><thead><tr><th>الشهر</th><th>الراتب</th><th>تسبيقات</th><th>غيابات</th><th>أقساط</th><th>صافي الراتب</th><th style="color:green">ساعات إضافية</th><th style="color:purple">مكافآت</th></tr></thead>
+    <table><thead><tr><th>الشهر</th><th>الراتب</th><th>تسبيقات</th><th>غيابات</th><th>أقساط مستحقة</th><th>صافي الراتب</th><th style="color:green">ساعات إضافية</th><th style="color:purple">مكافآت</th></tr></thead>
     <tbody>${rows.map(r=>`<tr${r.calRes.noPay?' style="opacity:.5"':''}>
       <td>${r.mn}</td>
       <td style="color:${r.calRes.pro?'#e65100':'#000'}">${fmtN(r.ps)}${r.calRes.pro?` <small style="color:#999">(${r.calRes.days}ي)</small>`:''}</td>
       <td style="color:${r.adv?'#c0392b':'#999'}">${r.adv?'-'+fmtN(r.adv):'—'}</td>
       <td style="color:${r.abs?'#c0392b':'#999'}">${r.abs?'-'+fmtN(r.abs):'—'}</td>
-      <td style="color:${r.inst?'#7c3aed':'#999'}">${r.inst?'-'+fmtN(r.inst):'—'}</td>
+      <td style="color:${r.inst?'#7c3aed':'#999'}">${r.inst?fmtN(r.inst)+' تنبيه':'—'}</td>
       <td><b style="color:${r.net<=0?'#1a7a4a':r.net>0?'#1a3a6b':'#c0392b'}">${r.calRes.noPay?'—':fmtN(r.net)}</b></td>
       <td style="color:${r.hrs?'green':'#999'}">${r.hrs?'+'+fmtN(r.hrs):'—'}</td>
       <td style="color:${r.bon?'purple':'#999'}">${r.bon?'+'+fmtN(r.bon):'—'}</td>
     </tr>`).join('')}
-    <tr class="total"><td>المجموع</td><td>${fmtN(tSal)}</td><td>-${fmtN(tA)}</td><td>-${fmtN(tAb)}</td><td>-${fmtN(tInst)}</td><td>${fmtN(tN)}</td><td>+${fmtN(tH)}</td><td>+${fmtN(tB)}</td></tr>
+    <tr class="total"><td>المجموع</td><td>${fmtN(tSal)}</td><td>-${fmtN(tA)}</td><td>-${fmtN(tAb)}</td><td>${fmtN(tInst)}</td><td>${fmtN(tN)}</td><td>+${fmtN(tH)}</td><td>+${fmtN(tB)}</td></tr>
     </tbody></table>
 </body></html>`);
 }
@@ -8256,8 +8403,8 @@ function printTodayByType(type){
     if(type==='advances'){
       title='💰 التسبيقات';color='#c0392b';
       const items=[];
-      Object.entries(DB.advances[w.id]||{}).forEach(([m,arr])=>arr.filter(a=>a.date===td||a.realDate===td).forEach(a=>items.push({...a,_month:MN[+m]||''})));
-      if(items.length)rows.push({w,n,items,total:items.reduce((s,a)=>s+(+a.amount||0),0)});
+      Object.entries(DB.advances[w.id]||{}).forEach(([m,arr])=>arr.filter(a=>!_isInstAdv(a)&&(a.date===td||a.realDate===td)).forEach(a=>items.push({...a,_month:MN[+m]||''})));
+      if(items.length)rows.push({w,n,items,total:items.reduce((s,a)=>s+advGross(a),0)});
     }else if(type==='hours'){
       title='⏱️ الساعات الإضافية';color='#1a5276';
       const items=(DB.hours[w.id]||[]).filter(h=>h.date===td);
@@ -8298,8 +8445,8 @@ function printTodayByType(type){
       let details='',val='',status='';
       const entryT=_advEntryTime(item)||'—';
       if(type==='advances'){
-        details=(item.note||'—')+(item._month?' ('+item._month+')':'');
-        val='-'+fmtN(item.amount);status=item.by||'—';
+        details=((item.note||'—')+(advDedNote(item)?' | '+advDedNote(item)+' | الصافي المدفوع: '+fmtN(advNetPaid(item)):'')+(item._month?' ('+item._month+')':''));
+        val='-'+fmtN(advGross(item));status=item.by||'—';
       }else if(type==='hours'){
         details=`${item.hours}سا × ${fmtN(item.hourly||0)}/سا`;
         val='+'+fmtN(item.total);status=item.paid?'✅ مسددة':'⏳ معلقة';
@@ -9125,6 +9272,15 @@ function runDoubleVerification(){
           }
           // تصحيح month إذا كان مفقوداً
           if(a.month==null&&m!=null){a.month=+m;}
+          if(!Array.isArray(a.deductions))a.deductions=[];
+          // Never keep a deduction greater than its advance after an import.
+          let remain=Math.max(0,(+a.amount||0));
+          a.deductions=a.deductions.filter(function(d){
+            const val=Math.max(0,Math.round(+((d||{}).amount)||0));
+            if(!val||val>remain){fixed++;return false;}
+            d.amount=val;remain-=val;return true;
+          });
+          a.netPaid=advNetPaid(a);
         });
         // إزالة الفارغة بعد الحذف
         DB.advances[wid][m]=arr.filter(a=>a&&+a.amount>0);
