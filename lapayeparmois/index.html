@@ -21,7 +21,7 @@ var renderAdmin = window.renderAdmin;
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>EGTPH — سجل الأجور v41</title>
+<title>EGTPH — سجل الأجور v49</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet">
 <style>
 :root{
@@ -796,7 +796,7 @@ body{
 
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div class="topbar">
-  <div class="tlogo">EGTPH <span>| سجل الأجور v41</span></div>
+  <div class="tlogo">EGTPH <span>| سجل الأجور v49</span></div>
   <div id="autoSv" style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--gray)">
     <span class="auto-save-dot" id="saveDot"></span>
     <span id="saveLabel">—</span>
@@ -10512,7 +10512,7 @@ try{
     if(DB && DB.settings){ DB.settings.syncSchemaVersion = V41_SCHEMA; }
     if(document && document.title) document.title = document.title.replace(/v\d+/,'v41');
     var logo = document.querySelector('.tlogo span');
-    if(logo) logo.textContent = '| سجل الأجور v41';
+    if(logo) logo.textContent = '| سجل الأجور v49';
     v41NormalizeShape(DB);
     saveDB();
     if(typeof _cloudDirty !== 'undefined') _cloudDirty = false;
@@ -10521,4 +10521,392 @@ try{
 })();
 </script>
 
+<script>
+/* ════════════════════════════════════════════════════════════
+   EGTPH Pay v49 — Ledger + Audit Details + Undo + Cycle Lock
+   + Transaction ID + Device ID + Sync Hash + Delta Journal
+   Safe additive layer: لا يحذف بيانات قديمة ولا يحتاج JSON جديد.
+════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  var V49_SCHEMA = 49;
+  var LS_DEVICE_KEY = 'egtph_pay_device_id_v49';
+  var LS_UNDO_KEY = 'egtph_pay_undo_stack_v49';
+  var LS_SNAPSHOT_KEY = 'egtph_pay_last_snapshot_v49';
+  var LS_DELTA_KEY = 'egtph_pay_delta_queue_v49';
+  var MAX_UNDO = 10;
+
+  function nowISO(){ return new Date().toISOString(); }
+  function safeJson(o){ try{return JSON.stringify(o||{});}catch(e){return '{}';} }
+  function clone(o){ try{return JSON.parse(JSON.stringify(o));}catch(e){return o;} }
+  function getById(id){ try{return (typeof getW==='function'?getW(id):null) || ((window.DB&&DB.workers)||[]).find(function(w){return String(w.id)===String(id);});}catch(e){return null;} }
+  function money(n){ try{return (typeof fmt==='function'?fmt(+n||0):((+n||0).toLocaleString('fr-DZ')+' دج'));}catch(e){return String(n||0)+' دج';} }
+  function moneyN(n){ try{return (typeof fmtN==='function'?fmtN(+n||0):String(+n||0));}catch(e){return String(n||0);} }
+  function alertToast(msg,err){ try{ if(typeof toast==='function') toast(msg,!!err); else console.log(msg); }catch(e){ console.log(msg); } }
+
+  function hashString(str){
+    var h=2166136261>>>0;
+    for(var i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619)>>>0; }
+    return (h>>>0).toString(36)+'_'+str.length;
+  }
+  function stableStringify(obj){
+    var seen=[];
+    function norm(x){
+      if(x===null||typeof x!=='object') return x;
+      if(seen.indexOf(x)>=0) return '[Circular]';
+      seen.push(x);
+      if(Array.isArray(x)) return x.map(norm);
+      var o={};
+      Object.keys(x).sort().forEach(function(k){
+        if(k==='_lastRender' || k==='_tmp') return;
+        o[k]=norm(x[k]);
+      });
+      return o;
+    }
+    return JSON.stringify(norm(obj));
+  }
+  function recordHash(rec){ return hashString(stableStringify(rec||{})); }
+  function dbHash(data){
+    var d=clone(data||{});
+    if(d){
+      delete d._lastSyncHash; delete d._lastSavedHash; delete d._syncBusy;
+      if(d.settings){ delete d.settings.cloudLastSync; delete d.settings.cloudRemoteStamp; delete d.settings.lastSyncHash; }
+    }
+    return hashString(stableStringify(d));
+  }
+
+  function deviceId(){
+    var id='';
+    try{ id=localStorage.getItem(LS_DEVICE_KEY)||''; }catch(e){}
+    if(!id){
+      id='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10);
+      try{ localStorage.setItem(LS_DEVICE_KEY,id); }catch(e){}
+    }
+    try{ if(window.DB){ DB.settings=DB.settings||{}; DB.settings.deviceId=id; } }catch(e){}
+    return id;
+  }
+  function txId(prefix){ return (prefix||'TX')+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9)+'_'+deviceId().slice(-5); }
+
+  function ensureShape(){
+    if(!window.DB) return;
+    DB.settings=DB.settings||{};
+    DB.schemaVersion=Math.max(+(DB.schemaVersion||0),V49_SCHEMA);
+    DB.settings.syncSchemaVersion=V49_SCHEMA;
+    DB.settings.deviceId=deviceId();
+    DB.settings.lastSyncHash=DB.settings.lastSyncHash||'';
+    DB.ledger=Array.isArray(DB.ledger)?DB.ledger:[];
+    DB.txJournal=Array.isArray(DB.txJournal)?DB.txJournal:[];
+    DB.cycleLocks=DB.cycleLocks&&typeof DB.cycleLocks==='object'?DB.cycleLocks:{};
+    DB.deletedRecords=DB.deletedRecords&&typeof DB.deletedRecords==='object'?DB.deletedRecords:{};
+    DB.deletedIds=Array.isArray(DB.deletedIds)?DB.deletedIds:[];
+    ['advances','hours','absences','bonuses','debts'].forEach(function(k){DB[k]=DB[k]&&typeof DB[k]==='object'?DB[k]:{};});
+    (DB.workers||[]).forEach(function(w){
+      if(!w) return;
+      ['advances','bonuses'].forEach(function(k){ if(!DB[k][w.id]) DB[k][w.id]={}; });
+      ['hours','absences','debts'].forEach(function(k){ if(!DB[k][w.id]) DB[k][w.id]=[]; });
+    });
+  }
+
+  function touchRecord(rec, section){
+    if(!rec || typeof rec!=='object') return rec;
+    var n=nowISO();
+    if(!rec.id) rec.id=txId(section||'REC');
+    if(!rec.txId) rec.txId=txId((section||'TX').toUpperCase());
+    if(!rec._deviceId) rec._deviceId=deviceId();
+    if(!rec._createdAt) rec._createdAt=n;
+    rec._updatedAt=rec._updatedAt||n;
+    rec._syncHash=recordHash(rec);
+    return rec;
+  }
+  function touchAllData(){
+    ensureShape();
+    if(!window.DB) return;
+    (DB.workers||[]).forEach(function(w){ touchRecord(w,'worker'); });
+    ['advances','bonuses'].forEach(function(sec){
+      Object.keys(DB[sec]||{}).forEach(function(wid){
+        Object.keys(DB[sec][wid]||{}).forEach(function(m){
+          var arr=DB[sec][wid][m]; if(!Array.isArray(arr)) arr=[];
+          DB[sec][wid][m]=arr.map(function(r){ return touchRecord(r,sec); });
+        });
+      });
+    });
+    ['hours','absences','debts'].forEach(function(sec){
+      Object.keys(DB[sec]||{}).forEach(function(wid){
+        var arr=DB[sec][wid]; if(!Array.isArray(arr)) arr=[];
+        DB[sec][wid]=arr.map(function(r){ return touchRecord(r,sec); });
+      });
+    });
+  }
+
+  function addLedger(entry){
+    ensureShape();
+    var e=Object.assign({
+      id: txId('LED'),
+      txId: entry && entry.txId || txId('TX'),
+      at: nowISO(),
+      user: (DB.settings&&DB.settings.userName)||'Youcef Abdi',
+      deviceId: deviceId(),
+      immutable: true
+    }, entry||{});
+    DB.ledger.push(e);
+    if(DB.ledger.length>3000) DB.ledger=DB.ledger.slice(-3000);
+    return e;
+  }
+  function queueDelta(type,path,value,meta){
+    ensureShape();
+    var op={id:txId('OP'),type:type||'upsert',path:path||'',at:nowISO(),deviceId:deviceId(),hash:recordHash(value),meta:meta||{}};
+    try{ DB.txJournal.push(op); if(DB.txJournal.length>2000) DB.txJournal=DB.txJournal.slice(-2000); }catch(e){}
+    try{
+      var q=JSON.parse(localStorage.getItem(LS_DELTA_KEY)||'[]'); q.push(op); if(q.length>500) q=q.slice(-500); localStorage.setItem(LS_DELTA_KEY,JSON.stringify(q));
+    }catch(e){}
+    return op;
+  }
+
+  function currentSnapshot(){
+    var d=clone(DB||{});
+    return d;
+  }
+  function restoreSnapshot(snap){
+    if(!snap || !window.DB) return false;
+    Object.keys(DB).forEach(function(k){ delete DB[k]; });
+    Object.assign(DB, clone(snap));
+    ensureShape();
+    try{ localStorage.setItem('egtph_payroll_v32', JSON.stringify(DB)); }catch(e){}
+    try{ if(typeof renderDash==='function') renderDash(); if(typeof updateBadges==='function') updateBadges(); if(typeof renderAdmin==='function') renderAdmin(); }catch(e){}
+    alertToast('↩️ تم التراجع عن آخر عملية');
+    return true;
+  }
+  function pushUndo(label){
+    try{
+      var prev=localStorage.getItem(LS_SNAPSHOT_KEY);
+      if(!prev) return;
+      var cur=stableStringify(DB);
+      if(hashString(prev)===hashString(cur)) return;
+      var stack=JSON.parse(localStorage.getItem(LS_UNDO_KEY)||'[]');
+      stack.push({at:nowISO(),label:label||window.__lastAuditAction||'عملية',snapshot:JSON.parse(prev)});
+      if(stack.length>MAX_UNDO) stack=stack.slice(-MAX_UNDO);
+      localStorage.setItem(LS_UNDO_KEY,JSON.stringify(stack));
+    }catch(e){ console.warn('v49 undo push:',e); }
+  }
+  window.undoLastEGTPH=function(){
+    try{
+      var stack=JSON.parse(localStorage.getItem(LS_UNDO_KEY)||'[]');
+      if(!stack.length){ alertToast('⚠️ لا توجد عملية للتراجع'); return; }
+      var item=stack.pop();
+      if(!confirm('تراجع عن آخر عملية؟\n'+(item.label||'')+'\n'+(item.at||''))) return;
+      localStorage.setItem(LS_UNDO_KEY,JSON.stringify(stack));
+      addLedger({type:'undo',action:'تراجع',details:{label:item.label,at:item.at}});
+      restoreSnapshot(item.snapshot);
+      try{ if(typeof saveDB==='function') saveDB(); }catch(e){}
+    }catch(e){ alertToast('❌ فشل التراجع: '+e.message,true); }
+  };
+
+  function parseDateISOInput(id){
+    try{ var el=document.getElementById(id); return el && el.value ? el.value : (typeof todayISO==='function'?todayISO():(new Date()).toISOString().slice(0,10)); }catch(e){return (new Date()).toISOString().slice(0,10);}
+  }
+  function cycleKeyFromWindow(win){ return (win&&win.start?win.start:'')+'_'+(win&&win.end?win.end:''); }
+  function isCycleLocked(wid,m,yr){
+    ensureShape(); var w=getById(wid); if(!w || typeof cycleWindow!=='function') return false;
+    var win=cycleWindow(w,m,yr); var k=wid+'|'+cycleKeyFromWindow(win);
+    return !!(DB.cycleLocks && DB.cycleLocks[k] && DB.cycleLocks[k].locked);
+  }
+  function setCycleLock(wid,m,yr,locked,reason){
+    ensureShape(); var w=getById(wid); if(!w || typeof cycleWindow!=='function') return;
+    var win=cycleWindow(w,m,yr); var k=wid+'|'+cycleKeyFromWindow(win);
+    DB.cycleLocks[k]={workerId:wid,workerName:w.name,cycleStart:win.start,cycleEnd:win.end,locked:!!locked,reason:reason||'',updatedAt:nowISO(),by:(DB.settings&&DB.settings.userName)||''};
+    addLedger({type:locked?'cycle_lock':'cycle_unlock',workerId:wid,workerName:w.name,action:locked?'قفل دورة':'فتح دورة',details:DB.cycleLocks[k]});
+  }
+  window.egtphToggleCycleLock=function(wid,m,yr){
+    var locked=isCycleLocked(wid,m,yr); var w=getById(wid); if(!w) return;
+    if(locked){ if(!confirm('فتح دورة '+w.name+'؟')) return; setCycleLock(wid,m,yr,false,'فتح يدوي'); }
+    else { if(!confirm('قفل دورة '+w.name+'؟')) return; setCycleLock(wid,m,yr,true,'قفل يدوي'); }
+    saveDB(); try{ if(typeof renderSalContent==='function') renderSalContent(); }catch(e){}
+  };
+
+  function addAdminPanel(){
+    try{
+      var body=document.querySelector('#page-admin .main, #page-admin .secbody, #page-admin') || document.getElementById('page-admin');
+      if(!body || document.getElementById('v49Panel')) return;
+      var div=document.createElement('div'); div.id='v49Panel'; div.className='sec';
+      div.innerHTML='<div class="sechdr"><h3>🧾 أدوات v49 — Ledger / Audit / Undo / Sync</h3></div>'+
+        '<div class="secbody" style="display:flex;gap:8px;flex-wrap:wrap">'+
+        '<button class="btn1" onclick="egtphShowLedger()">📒 السجل المحاسبي</button>'+
+        '<button class="btn2" onclick="egtphShowAuditDetails()">🧾 تدقيق مفصل</button>'+
+        '<button class="btn2" onclick="undoLastEGTPH()">↩️ تراجع آخر عملية</button>'+
+        '<button class="btn2" onclick="egtphSelfCheck()">🧠 فحص ذاتي v49</button>'+
+        '<button class="btn2" onclick="egtphSyncInfo()">☁️ حالة المزامنة</button>'+
+        '</div>';
+      body.appendChild(div);
+    }catch(e){ console.warn('v49 panel:',e); }
+  }
+  function modal(title,html){
+    try{
+      var old=document.getElementById('v49Modal'); if(old) old.remove();
+      var wrap=document.createElement('div'); wrap.id='v49Modal'; wrap.className='mo open';
+      wrap.innerHTML='<div class="modal" style="max-width:900px"><h3>'+title+'</h3><div style="max-height:65vh;overflow:auto">'+html+'</div><div class="mbtns"><button class="btn2" onclick="document.getElementById(\'v49Modal\').remove()">إغلاق</button></div></div>';
+      document.body.appendChild(wrap);
+    }catch(e){ alert(String(e.message||e)); }
+  }
+  window.egtphShowLedger=function(){
+    ensureShape();
+    var rows=(DB.ledger||[]).slice(-200).reverse().map(function(l,i){return '<tr><td>'+(i+1)+'</td><td>'+String(l.at||'').replace('T',' ').slice(0,19)+'</td><td><b>'+(l.type||'')+'</b><br><small>'+((l.action||'')+'').replace(/[<>&]/g,'')+'</small></td><td>'+((l.workerName||'')+'')+'</td><td><small>'+(l.txId||'')+'</small></td><td><small>'+((l.deviceId||'')+'').slice(-8)+'</small></td></tr>';}).join('');
+    modal('📒 السجل المحاسبي غير قابل للتعديل', '<table style="width:100%;border-collapse:collapse"><thead><tr><th>#</th><th>الوقت</th><th>العملية</th><th>العامل</th><th>Transaction</th><th>Device</th></tr></thead><tbody>'+rows+'</tbody></table>');
+  };
+  window.egtphShowAuditDetails=function(){
+    ensureShape();
+    var rows=(DB.auditLog||[]).slice(-200).reverse().map(function(a,i){return '<tr><td>'+(i+1)+'</td><td>'+((a.time||a.at||'')+'')+'</td><td>'+((a.user||'')+'')+'</td><td>'+((a.action||'')+'')+'</td><td><pre style="white-space:pre-wrap;font-size:10px">'+(a.details?JSON.stringify(a.details,null,2).replace(/[<>&]/g,''):'')+'</pre></td></tr>';}).join('');
+    modal('🧾 سجل التدقيق المفصل', '<table style="width:100%;border-collapse:collapse"><thead><tr><th>#</th><th>الوقت</th><th>المستخدم</th><th>العملية</th><th>التفاصيل</th></tr></thead><tbody>'+rows+'</tbody></table>');
+  };
+  window.egtphSyncInfo=function(){
+    ensureShape(); var h=dbHash(DB); DB.settings.lastSyncHash=h;
+    modal('☁️ حالة المزامنة v49','<div class="abox ok">'+
+      '<b>Schema:</b> '+V49_SCHEMA+'<br><b>Device ID:</b> '+deviceId()+'<br><b>Last Sync Hash:</b> '+h+'<br><b>Transactions:</b> '+(DB.txJournal||[]).length+'<br><b>Ledger:</b> '+(DB.ledger||[]).length+'</div>');
+  };
+  window.egtphSelfCheck=function(){
+    ensureShape(); var issues=[]; var ids={};
+    function checkRec(r,sec){ if(!r) return; if(!r.id) issues.push(sec+': سجل بدون id'); else if(ids[r.id]) issues.push('معرف مكرر: '+r.id); else ids[r.id]=1; if(r.deductions){ var s=(r.deductions||[]).reduce(function(a,d){return a+(+d.amount||0);},0); if(s>(+r.amount||0)) issues.push('خصم أكبر من التسبيق: '+r.id); } }
+    (DB.workers||[]).forEach(function(w){ checkRec(w,'workers'); });
+    ['advances','bonuses'].forEach(function(sec){Object.keys(DB[sec]||{}).forEach(function(wid){Object.keys(DB[sec][wid]||{}).forEach(function(m){(DB[sec][wid][m]||[]).forEach(function(r){checkRec(r,sec);});});});});
+    ['hours','absences','debts'].forEach(function(sec){Object.keys(DB[sec]||{}).forEach(function(wid){(DB[sec][wid]||[]).forEach(function(r){checkRec(r,sec);});});});
+    Object.keys(DB.debts||{}).forEach(function(wid){
+      var debts=(DB.debts[wid]||[]), by={}; debts.forEach(function(d){ if(d.type==='debt') by[d.id]=(+d.amount||0); });
+      Object.keys(by).forEach(function(id){ var ret=debts.filter(function(d){return d.type==='return'&&String(d.debtId)===String(id);}).reduce(function(s,d){return s+(+d.amount||0);},0); if(ret>by[id]) issues.push('دين صار سالباً: '+id); });
+    });
+    var html=issues.length?'<div class="abox danger"><b>وجدت '+issues.length+' ملاحظات:</b><br>'+issues.slice(0,80).map(function(x){return '• '+x;}).join('<br>')+'</div>':'<div class="abox ok">✅ الفحص الذاتي سليم: لا توجد أخطاء محاسبية ظاهرة.</div>';
+    addLedger({type:'self_check',action:'فحص ذاتي v49',details:{issues:issues.length}}); try{saveDB();}catch(e){}
+    modal('🧠 فحص ذاتي v49',html);
+  };
+
+  // Wrap audit with detailed immutable ledger entry.
+  var oldAudit = (typeof window.audit==='function') ? window.audit : null;
+  window.audit = function(action, details){
+    window.__lastAuditAction=action||'';
+    ensureShape();
+    var user=(DB.settings&&DB.settings.userName)||'Youcef Abdi';
+    if(oldAudit) oldAudit.apply(this,arguments);
+    else { DB.auditLog=Array.isArray(DB.auditLog)?DB.auditLog:[]; DB.auditLog.unshift({time:(typeof todayStr==='function'?todayStr():new Date().toLocaleString()),user:user,action:action}); }
+    try{
+      var a=DB.auditLog&&DB.auditLog[0];
+      if(a && details && !a.details) a.details=details;
+      addLedger({type:'audit',action:action,details:details||null});
+      queueDelta('audit','auditLog/0',a||{action:action},{action:action});
+    }catch(e){}
+  };
+
+  // saveDB wrapper: metadata, undo snapshot, sync hash, delta journal.
+  var oldSaveDB=(typeof window.saveDB==='function')?window.saveDB:null;
+  window.saveDB=function(){
+    ensureShape(); touchAllData();
+    var beforeHash=''; try{ beforeHash=localStorage.getItem('egtph_pay_last_hash_v49')||''; }catch(e){}
+    var curHash=dbHash(DB);
+    if(beforeHash && beforeHash!==curHash){ pushUndo(window.__lastAuditAction||'تعديل'); }
+    DB.settings.lastSyncHash=curHash;
+    DB._lastSyncHash=curHash;
+    var ret=oldSaveDB?oldSaveDB.apply(this,arguments):undefined;
+    try{ localStorage.setItem(LS_SNAPSHOT_KEY, stableStringify(currentSnapshot())); localStorage.setItem('egtph_pay_last_hash_v49',curHash); }catch(e){}
+    try{ if(typeof _cloudDirty!=='undefined' && beforeHash===curHash) _cloudDirty=false; }catch(e){}
+    return ret;
+  };
+
+  // Override/extend export payload to include v49 metadata.
+  var oldExportData=(typeof window.exportData==='function')?window.exportData:null;
+  window.exportData=function(){
+    ensureShape(); touchAllData(); DB.schemaVersion=V49_SCHEMA; DB.settings.syncSchemaVersion=V49_SCHEMA; DB.settings.lastSyncHash=dbHash(DB);
+    addLedger({type:'export',action:'تصدير JSON v49'});
+    if(oldExportData) return oldExportData.apply(this,arguments);
+  };
+
+  function addAdvanceRecord(wid,m,rec){
+    ensureShape(); if(!DB.advances[wid]) DB.advances[wid]={}; if(!DB.advances[wid][m]) DB.advances[wid][m]=[];
+    touchRecord(rec,'advance'); DB.advances[wid][m].push(rec); queueDelta('upsert','advances/'+wid+'/'+m+'/'+(DB.advances[wid][m].length-1),rec,{workerId:wid,section:'advances'}); return rec;
+  }
+
+  // Wrap advance: excess can be distributed to next cycle with confirmation and full audit.
+  var oldSaveAdv=(typeof window.saveAdv==='function')?window.saveAdv:null;
+  window.saveAdv=function(){
+    try{
+      ensureShape();
+      var wid=window._wid; var w=getById(wid); if(!w || !oldSaveAdv) return oldSaveAdv?oldSaveAdv.apply(this,arguments):undefined;
+      var amount=+(document.getElementById('adv_amount')&&document.getElementById('adv_amount').value)||0;
+      var dateISO=parseDateISOInput('adv_date');
+      var note=(document.getElementById('adv_note')&&document.getElementById('adv_note').value.trim())||'';
+      if(!(amount>0)) return oldSaveAdv.apply(this,arguments);
+      var d=new Date(dateISO), entryDay=Math.min(+w.day||1,28), m,yr;
+      if(d.getDate()>=entryDay){m=d.getMonth();yr=d.getFullYear();}else{m=(d.getMonth()-1+12)%12;yr=d.getMonth()===0?d.getFullYear()-1:d.getFullYear();}
+      if(isCycleLocked(wid,m,yr)){
+        if(!confirm('🔒 هذه الدورة مقفلة. هل تريد فتحها وإضافة العملية؟')) return;
+        setCycleLock(wid,m,yr,false,'فتح تلقائي لإضافة تسبيق');
+      }
+      var ms=(typeof calcMonthStatus==='function')?calcMonthStatus(wid,m,yr):null;
+      var due=ms?Math.max(0,(+ms.baseSal||0)-(+ms.totAdv||0)):0;
+      // لا نمنع التسبيق الأكبر، لكن نطلب تأكيد توزيع الفائض على الدورة التالية.
+      if(due>0 && amount>due){
+        var overflow=amount-due;
+        var msg='⚠️ مبلغ التسبيق أكبر من مستحق الدورة الحالية.\n\nالمستحق الحالي: '+moneyN(due)+' دج\nالمبلغ المدخل: '+moneyN(amount)+' دج\nالفائض: '+moneyN(overflow)+' دج\n\nنعم = توزيع الفائض تلقائياً على الدورة التالية\nإلغاء = سجّل كامل المبلغ في الدورة الحالية';
+        if(confirm(msg)){
+          var parent=txId('ADV_SPLIT'); var win=typeof cycleWindow==='function'?cycleWindow(w,m,yr):null;
+          var nextM=(m+1)%12, nextYr=m===11?yr+1:yr, nextWin=typeof cycleWindow==='function'?cycleWindow(w,nextM,nextYr):null;
+          var real=typeof isoToD==='function'?isoToD(dateISO):dateISO;
+          var base={parentTxId:parent,paymentTxId:parent,originalAmount:amount,split:true,splitReason:'exceeds_cycle_due',enteredAt:nowISO(),realDate:real,by:(DB.settings&&DB.settings.userName)||'مستخدم',deductions:[],note:note};
+          var r1=Object.assign({},base,{id:parent+'_1',amount:due,netPaid:due,date:real,month:m,allocationIndex:1,allocations:[{cycleStart:win&&win.start,cycleEnd:win&&win.end,amount:due},{cycleStart:nextWin&&nextWin.start,cycleEnd:nextWin&&nextWin.end,amount:overflow}],cycleStart:win&&win.start,cycleEnd:win&&win.end,cycleKey:win?cycleKeyFromWindow(win):'',note:(note?note+' — ':'')+'توزيع تلقائي: جزء الدورة الحالية'});
+          var r2=Object.assign({},base,{id:parent+'_2',amount:overflow,netPaid:overflow,date:(nextWin&&nextWin.start)?(typeof isoToD==='function'?isoToD(nextWin.start):nextWin.start):real,realDate:real,month:nextM,allocationIndex:2,allocations:r1.allocations,cycleStart:nextWin&&nextWin.start,cycleEnd:nextWin&&nextWin.end,cycleKey:nextWin?cycleKeyFromWindow(nextWin):'',note:(note?note+' — ':'')+'فائض موزع تلقائياً من عملية '+real});
+          addAdvanceRecord(wid,m,r1); addAdvanceRecord(wid,nextM,r2);
+          var details={worker:w.name,workerId:wid,originalAmount:amount,enteredDate:real,allocations:r1.allocations};
+          audit('تسبيق موزع تلقائياً '+money(amount)+' — '+w.name,details);
+          addLedger({type:'advance_split',workerId:wid,workerName:w.name,amount:amount,action:'توزيع تسبيق زائد على دورتين',details:details,txId:parent});
+          try{ if(typeof autoSettleOnAdvance==='function') autoSettleOnAdvance(wid,m,yr,r1,real); }catch(e){}
+          saveDB(); try{ if(typeof closeModal==='function') closeModal('mAdv'); if(typeof renderDash==='function') renderDash(); if(window.S&&S.sw===wid&&typeof renderSalContent==='function') renderSalContent(); }catch(e){}
+          alertToast('📥 تم توزيع التسبيق: '+money(due)+' للحالية + '+money(overflow)+' للدورة التالية');
+          return;
+        }
+      }
+      return oldSaveAdv.apply(this,arguments);
+    }catch(e){ alertToast('❌ خطأ v49 في حفظ التسبيق: '+e.message,true); console.error(e); }
+  };
+
+  // Cloud sync enhancement: device id, last hash, tx journal; skip full upload when unchanged.
+  var oldCloudSync=(typeof window.cloudSync==='function')?window.cloudSync:null;
+  window.cloudSync=async function(manual){
+    ensureShape(); touchAllData(); var h=dbHash(DB); var last=(DB.settings&&DB.settings.cloudPushedHash)||'';
+    if(!manual && last && last===h){ try{ if(typeof _cloudDirty!=='undefined') _cloudDirty=false; }catch(e){} return; }
+    DB.settings.lastSyncHash=h; DB.settings.deviceId=deviceId();
+    var before=(DB.txJournal||[]).length;
+    queueDelta('sync_hash','meta/lastSyncHash',h,{schemaVersion:V49_SCHEMA,deviceId:deviceId()});
+    if(oldCloudSync){ var r=await oldCloudSync.apply(this,arguments); DB.settings.cloudPushedHash=dbHash(DB); DB.settings.lastSyncHash=DB.settings.cloudPushedHash; return r; }
+  };
+
+  // Optional visible cycle lock button inside salary screen by patching renderSalContent after it runs.
+  var oldRenderSalContent=(typeof window.renderSalContent==='function')?window.renderSalContent:null;
+  if(oldRenderSalContent){
+    window.renderSalContent=function(){
+      var r=oldRenderSalContent.apply(this,arguments);
+      try{
+        var w=window.S?getById(S.sw):null; if(!w) return r;
+        var active=(typeof getActiveCycle==='function')?getActiveCycle(w.id):{m:S.sm,yr:S.syr||new Date().getFullYear()};
+        var m=(S&&S._smManual)?S.sm:active.m, yr=(S&&S._smManual)?(S.syr||new Date().getFullYear()):active.yr;
+        var target=document.getElementById('salContent'); if(target && !document.getElementById('v49CycleLockBtn')){
+          var locked=isCycleLocked(w.id,m,yr);
+          var b=document.createElement('div'); b.id='v49CycleLockBtn'; b.style='margin:8px 0;text-align:left';
+          b.innerHTML='<button class="btn2" onclick="egtphToggleCycleLock('+w.id+','+m+','+yr+')">'+(locked?'🔓 فتح الدورة':'🔒 قفل الدورة')+'</button>';
+          target.insertBefore(b,target.firstChild);
+        }
+      }catch(e){}
+      return r;
+    };
+  }
+
+  // Initialization
+  try{
+    ensureShape(); touchAllData();
+    DB.schemaVersion=V49_SCHEMA; DB.settings.syncSchemaVersion=V49_SCHEMA; DB.settings.lastSyncHash=dbHash(DB);
+    document.title=(document.title||'EGTPH').replace(/v\d+/,'v49');
+    var logo=document.querySelector('.tlogo span'); if(logo) logo.textContent='| سجل الأجور v49';
+    try{ localStorage.setItem(LS_SNAPSHOT_KEY, stableStringify(currentSnapshot())); localStorage.setItem('egtph_pay_last_hash_v49',dbHash(DB)); }catch(e){}
+    addAdminPanel();
+    addLedger({type:'system',action:'تشغيل طبقة v49',details:{schemaVersion:V49_SCHEMA,deviceId:deviceId(),lastSyncHash:DB.settings.lastSyncHash}});
+    if(oldSaveDB) saveDB();
+    if(typeof _cloudDirty!=='undefined') _cloudDirty=false;
+  }catch(e){ console.warn('v49 init:',e); }
+})();
+</script>
 </body></html>
