@@ -3,8 +3,31 @@
 <head>
 <meta charset="UTF-8">
 <script src="../egtph-auth.js"></script>
+<script>
+/* Fallback autonome : l'application reste capable de récupérer ses données même si ../egtph-auth.js n'est pas chargé. */
+(function(global){
+  'use strict';
+  if(global.EGTPHAuth) return;
+  function storageKey(appId){ return 'egtph_auth_'+appId; }
+  function saveSession(appId,data){ try{ localStorage.setItem(storageKey(appId),JSON.stringify({idToken:data.idToken,refreshToken:data.refreshToken,expiresAt:Date.now()+(parseInt(data.expiresIn||'3600',10)*1000)-60000,uid:data.localId||data.uid||null})); }catch(e){} }
+  function loadSession(appId){ try{return JSON.parse(localStorage.getItem(storageKey(appId)));}catch(e){return null;} }
+  function clearSession(appId){ try{localStorage.removeItem(storageKey(appId));}catch(e){} }
+  function signIn(apiKey,email,password){ return fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key='+apiKey,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,password:password,returnSecureToken:true})}).then(function(r){if(!r.ok)return r.json().then(function(e){throw new Error((e.error&&e.error.message)||'AUTH_FAILED');});return r.json();}); }
+  function refreshToken(apiKey,refreshTok){ return fetch('https://securetoken.googleapis.com/v1/token?key='+apiKey,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'grant_type=refresh_token&refresh_token='+encodeURIComponent(refreshTok)}).then(function(r){if(!r.ok)throw new Error('REFRESH_FAILED');return r.json();}).then(function(d){return{idToken:d.id_token,refreshToken:d.refresh_token,expiresIn:d.expires_in,uid:d.user_id};}); }
+  function buildOverlay(){
+    var existing=document.getElementById('egtphAuthOverlay');if(existing)return existing;
+    var css=document.createElement('style');css.textContent='#egtphAuthOverlay{position:fixed;inset:0;z-index:99999;background:rgba(10,10,12,.92);display:flex;align-items:center;justify-content:center;padding:20px;font-family:Arial,sans-serif}#egtphAuthOverlay .eg-card{background:#1c1e24;border:1px solid #2c2f38;border-radius:14px;padding:26px 22px;width:100%;max-width:280px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.5)}#egtphAuthOverlay h2{color:#f0f0f0;font-size:15px;margin-bottom:4px}#egtphAuthOverlay p{color:#9a9ea6;font-size:12px;margin-bottom:14px}#egtphAuthOverlay input{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #333740;background:#262932;color:#f0f0f0;font-size:15px;text-align:center;box-sizing:border-box}#egtphAuthOverlay button{width:100%;margin-top:10px;padding:10px;border:0;border-radius:8px;background:#ff7a1a;color:#1a0f06;font-weight:700;font-size:13px;cursor:pointer}#egtphAuthOverlay .eg-err{color:#ff8a78;font-size:12px;margin-top:8px;min-height:1em}';document.head.appendChild(css);
+    var wrap=document.createElement('div');wrap.id='egtphAuthOverlay';wrap.innerHTML='<div class="eg-card"><h2>EGTPH — تسجيل الدخول</h2><p>البرنامج محمي بكلمة سر — اكتبها لاسترجاع البيانات</p><form id="egtphAuthForm"><input type="password" id="egtphAuthPass" autocomplete="current-password" autofocus><button type="submit">دخول</button></form><div class="eg-err" id="egtphAuthErr"></div></div>';document.body.appendChild(wrap);return wrap;
+  }
+  function promptLogin(opts){return new Promise(function(resolve){var overlay=buildOverlay();overlay.style.display='flex';var form=document.getElementById('egtphAuthForm'),pass=document.getElementById('egtphAuthPass'),err=document.getElementById('egtphAuthErr');pass.focus();function submit(e){e.preventDefault();err.textContent='...';signIn(opts.apiKey,opts.email,pass.value).then(function(d){saveSession(opts.appId,d);form.removeEventListener('submit',submit);overlay.style.display='none';pass.value='';resolve(d.idToken);}).catch(function(){err.textContent='كلمة السر غير صحيحة. أعد المحاولة.';pass.value='';pass.focus();});}form.addEventListener('submit',submit);});}
+  var sessions={};
+  function scheduleRefresh(appId){var s=sessions[appId];if(!s)return;if(s.refreshTimer)clearTimeout(s.refreshTimer);var sess=loadSession(appId);if(!sess)return;var delay=Math.max(5000,sess.expiresAt-Date.now()-5000);s.refreshTimer=setTimeout(function(){var cur=loadSession(appId);if(!cur||!cur.refreshToken)return;refreshToken(s.opts.apiKey,cur.refreshToken).then(function(d){saveSession(appId,d);s.token=d.idToken;if(s.opts.onTokenChange)s.opts.onTokenChange(d.idToken);scheduleRefresh(appId);}).catch(function(){clearSession(appId);ensureLogin(appId,s.opts);});},delay);}
+  function ensureLogin(appId,opts){var sess=loadSession(appId);if(sess&&sess.idToken&&Date.now()<sess.expiresAt){sessions[appId]={token:sess.idToken,opts:opts};scheduleRefresh(appId);if(opts.onReady)opts.onReady(sess.idToken);return Promise.resolve(sess.idToken);}if(sess&&sess.refreshToken){return refreshToken(opts.apiKey,sess.refreshToken).then(function(d){saveSession(appId,d);sessions[appId]={token:d.idToken,opts:opts};scheduleRefresh(appId);if(opts.onReady)opts.onReady(d.idToken);return d.idToken;}).catch(function(){clearSession(appId);return promptLogin(opts).then(function(token){sessions[appId]={token:token,opts:opts};scheduleRefresh(appId);if(opts.onReady)opts.onReady(token);return token;});});}return promptLogin(opts).then(function(token){sessions[appId]={token:token,opts:opts};scheduleRefresh(appId);if(opts.onReady)opts.onReady(token);return token;});}
+  global.EGTPHAuth={init:function(opts){if(!opts||!opts.appId||!opts.apiKey||!opts.email){console.error('EGTPHAuth.init: configuration manquante');return;}ensureLogin(opts.appId,opts);},getToken:function(appId){return sessions[appId]?sessions[appId].token:null;},authParam:function(appId){var t=sessions[appId]?sessions[appId].token:null;return t?('?auth='+encodeURIComponent(t)):'';},logout:function(appId){clearSession(appId);delete sessions[appId];}};
+})(window);
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Système EGTPH - Pro (v8)</title>
+<title>Système EGTPH - Pro (v9.1)</title>
 <style>
 :root{--primary:#2c3e50;--secondary:#3498db;--accent:#e67e22;--light:#f8f9fa;--border:#dee2e6;--success:#27ae60;--danger:#e74c3c;}
 *{box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
@@ -57,6 +80,26 @@ textarea.tbl.desig{text-align:left;min-height:40px;}
 .client-card{background:white;border:1px solid var(--border);padding:12px;margin-bottom:10px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;}
 .client-info h4{margin:0 0 4px;color:var(--primary);}
 .client-info p{margin:2px 0;font-size:0.85rem;color:#666;}
+
+.client-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+.client-recovery-panel{margin:0 0 15px;padding:12px;border:1px dashed #d69016;border-radius:8px;background:#fff8e9;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:.84rem;color:#6b4a0f;}
+.client-recovery-panel p{margin:0;max-width:740px;line-height:1.45;}
+.client-source{display:inline-block;margin-top:5px;padding:2px 6px;border-radius:9px;background:#fff3d8;color:#87570a;font-size:.72rem;}
+.client-modal{display:none;position:fixed;inset:0;z-index:10000;background:rgba(20,30,42,.55);padding:18px;overflow:auto;}
+.client-modal.open{display:flex;align-items:flex-start;justify-content:center;}
+.client-modal-card{width:min(980px,100%);margin:24px auto;background:#fff;border-radius:12px;box-shadow:0 18px 55px rgba(0,0,0,.32);padding:20px;position:relative;}
+.client-modal-close{position:absolute;right:12px;top:10px;border:0;background:transparent;font-size:24px;color:#666;cursor:pointer;line-height:1;}
+.client-file-head{padding-right:30px;border-bottom:1px solid var(--border);margin-bottom:14px;}
+.client-file-head h3{margin:0 0 5px;color:var(--primary);}
+.client-file-head p{margin:0 0 12px;color:#666;font-size:.86rem;}
+.client-file-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:12px 0 16px;}
+.client-file-stat{background:var(--light);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:.8rem;color:#5a6370;}
+.client-file-stat strong{display:block;font-size:1rem;color:var(--primary);margin-top:3px;}
+.client-file-table{font-size:.83rem;}
+.client-file-table td,.client-file-table th{padding:8px 6px;}
+.client-recovery-detail{margin:10px 0 14px;padding:8px 10px;background:#fff8e9;border:1px solid #f0d28b;border-radius:6px;font-size:.8rem;color:#704f14;}
+@media (max-width:640px){.client-card{align-items:flex-start;gap:10px;flex-direction:column;}.client-actions{justify-content:flex-start;}.client-modal{padding:8px;}.client-modal-card{padding:16px 12px;margin:8px auto;}.client-file-table{font-size:.74rem;}.client-file-table th,.client-file-table td{padding:6px 3px;}}
+
 .filter-bar{display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap;align-items:center;}
 .active-filter-badge{background:var(--secondary);color:white;padding:4px 10px;border-radius:12px;font-size:0.8rem;display:inline-flex;align-items:center;gap:5px;}
 .active-filter-badge .close{cursor:pointer;font-weight:bold;}
@@ -68,6 +111,8 @@ textarea.tbl.desig{text-align:left;min-height:40px;}
 #toast{position:fixed;bottom:30px;right:30px;background:#2c3e50;color:white;padding:12px 20px;border-radius:8px;font-size:0.9rem;display:none;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);}
 #toast.success{background:var(--success);}
 #toast.error{background:var(--danger);}
+.cloud-status{display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:14px;border-radius:7px;border:1px solid #b9d9f5;background:#eef7ff;color:#1a5276;font-size:.86rem;line-height:1.35}.cloud-status.ok{background:#edf9f1;border-color:#b7e5c6;color:#1e6b3a}.cloud-status.warn{background:#fff8e9;border-color:#f0d28b;color:#7b5615}.cloud-status.error{background:#fff1f1;border-color:#efb9b9;color:#9b3030}.cloud-status strong{margin-left:auto;font-size:.78rem;white-space:nowrap}
+
 .avan-link{font-size:0.82rem;color:var(--secondary);cursor:pointer;text-decoration:underline;margin-left:10px;}
 @media print{
 body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
@@ -96,7 +141,7 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <div id="toast"></div>
 <div class="container no-print">
 <div class="header">
-<h1>🏗️ Système EGTPH - Pro (v8)</h1>
+<h1>🏗️ Système EGTPH - Pro (v9.1)</h1>
 <div class="ids" id="uiCoIds">RC: 02/00-4566908A15 | NIF: 192020105006199 | NIS: 1 992 0201 05006 48 | NIN: 109920029050060008</div>
 <div style="margin-top:3px" id="uiCoSub">Entreprise des Grands Travaux Publics et Hydrauliques – CHLEF</div>
 <div id="uiCoAddr" style="display:none"></div>
@@ -120,6 +165,7 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <div class="content">
 <div id="sec-doc" class="section active">
 <div id="storageAlert" class="alert alert-error">⚠️ التخزين المحلي غير متفعل.</div>
+<div id="cloudStatus" class="cloud-status"><span>☁️</span><span id="cloudStatusText">التحقق من النسخة المحلية والسحابية…</span><strong id="cloudStatusMeta">انتظار الدخول</strong></div>
 <div class="form-grid">
 <div class="form-group"><label>Type Document</label>
 <select id="docType" onchange="onTypeChange();syncPrint()"><option>DEVIS</option><option>FACTURE</option><option>AVOIR</option><option selected>SITUATION ACTUELLE</option><option>DÉCOMPTE FINAL</option></select></div>
@@ -176,6 +222,10 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <div class="filter-bar">
 <input type="text" id="searchClient" placeholder="🔍 Rechercher client..." style="flex:1;padding:8px;border:1px solid #ccc;border-radius:5px;" oninput="renderClients()">
 <button class="btn btn-primary" onclick="addClient()">+ Nouveau Client</button>
+</div>
+<div class="client-recovery-panel">
+  <p><strong>Secours PDF disponible :</strong> la situation <strong>102/2026</strong> de <strong>DJALOUL RAHMOUN</strong> a été enregistrée dans cette version comme source de récupération. Elle n’est ajoutée au dossier client qu’après votre confirmation, sans effacer ni remplacer les données locales ou cloud.</p>
+  <button class="btn btn-warning" onclick="restorePdfSituation102()">🛟 Restaurer PDF 102/2026</button>
 </div>
 <div id="clientsListContainer"></div>
 </div>
@@ -235,6 +285,14 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 </div>
 </div>
 
+<!-- CLIENT FILE MODAL -->
+<div id="clientFileModal" class="client-modal no-print" role="dialog" aria-modal="true" aria-labelledby="clientFileTitle" onclick="if(event.target===this)closeClientFile()">
+  <div class="client-modal-card">
+    <button class="client-modal-close" type="button" aria-label="Fermer" onclick="closeClientFile()">×</button>
+    <div id="clientFileContent"></div>
+  </div>
+</div>
+
 <!-- PRINT AREA -->
 <div id="print-area">
 <div class="print-header">
@@ -264,19 +322,125 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 </div>
 <div class="amount-words">Arrêté le présent document à la somme de : <span id="pAmtWords">ZÉRO DINARS ALGÉRIENS</span></div>
 <div id="pNotesBlock" class="print-notes" style="display:none"><strong>Observations :</strong> <span id="pNotes"></span></div>
-<div class="print-footer">Document généré le <span id="pGenDate"></span> via Système EGTPH - Pro v8</div>
+<div class="print-footer">Document généré le <span id="pGenDate"></span> via Système EGTPH - Pro v9.1</div>
 </div>
 
 <script>
 const DB_KEY='egtp_v8_database';
+const DB_BACKUP_PREFIX='egtp_v8_backup_';
 let db={clients:[],documents:[],currentDocId:null};
 let activeFilterClientId=null;
 let showAvan=false;
+let _localRecoveryDone=false;
+let _legacyRecovered=0;
 const fmt=n=>(isNaN(n)?0:n).toLocaleString('fr-DZ',{minimumFractionDigits:2,maximumFractionDigits:2});
 const uuid=()=>'doc_'+Date.now()+'_'+Math.random().toString(36).substr(2,9);
 const cliId=()=>'cli_'+Date.now()+'_'+Math.random().toString(36).substr(2,5);
 
 const DEFAULT_CO={name:'EGTPH ABDI YOUSSOUF ISLAM',sub:'Entreprise des Grands Travaux Publics et Hydrauliques – CHLEF',addr:'ANCIENNE ZEMALA, ANCIENNE CHORFA B1, Chlef',rc:'02/00-4566908A15',nif:'192020105006199',nis:'1 992 0201 05006 48',nin:'109920029050060008',_mod:0};
+function documentUsesAvancement(data){
+  if(data&&typeof data.useAvancement==='boolean')return data.useAvancement;
+  const type=String(data&&data.type||'');
+  if(type!=='SITUATION ACTUELLE'&&type!=='DÉCOMPTE FINAL')return false;
+  return _arr(data&&data.items).some(i=>{const n=parseFloat(i&&i.avancement);return Number.isFinite(n)&&n!==100;});
+}
+
+
+function _arr(v){return Array.isArray(v)?v:(v&&typeof v==='object'?Object.values(v):[]);}
+function _emptyFactDB(){return {clients:[],documents:[],currentDocId:null,company:Object.assign({},DEFAULT_CO)};}
+function normalizeFactDB(raw){
+  const out=(raw&&typeof raw==='object'&&!Array.isArray(raw))?raw:_emptyFactDB();
+  out.documents=_arr(out.documents||out.docs).filter(d=>d&&typeof d==='object').map(d=>{
+    d.items=_arr(d.items);d.deductions=_arr(d.deductions);if(d.recovery&&typeof d.recovery!=='object')delete d.recovery;if(typeof d.useAvancement!=='boolean')d.useAvancement=documentUsesAvancement(d);return d;
+  });
+  out.clients=_arr(out.clients).filter(c=>c&&typeof c==='object').map(c=>{c.docs=_arr(c.docs);if(c.recoveryInfo&&typeof c.recoveryInfo!=='object')delete c.recoveryInfo;return c;});
+  if(!out.company||typeof out.company!=='object')out.company=Object.assign({},DEFAULT_CO);
+  if(!Object.prototype.hasOwnProperty.call(out,'currentDocId'))out.currentDocId=null;
+  return out;
+}
+function isFactDatabase(raw){
+  if(!raw||typeof raw!=='object'||Array.isArray(raw))return false;
+  const docs=_arr(raw.documents||raw.docs);
+  const clients=_arr(raw.clients);
+  if(!docs.length)return !!((raw.documents||raw.docs)&&Array.isArray(raw.documents||raw.docs)&&clients.length);
+  return docs.some(d=>d&&typeof d==='object'&&(Array.isArray(d.items)||Array.isArray(d.deductions)||Object.prototype.hasOwnProperty.call(d,'tvaRate')||Object.prototype.hasOwnProperty.call(d,'garantieRate')));
+}
+function docFingerprint(d){return [String(d&&d.num||'').trim().toLowerCase(),String(d&&d.date||''),String(d&&d.clientName||'').trim().toLowerCase(),String(d&&d.type||'')].join('|');}
+function clientFingerprint(c){return String(c&&c.name||'').trim().toLowerCase();}
+function coalesceFactClients(){
+  const result=[];const byName=new Map();const remap=new Map();
+  _arr(db.clients).forEach(c=>{
+    if(!c||typeof c!=='object')return;
+    if(!c.id)c.id=cliId();
+    const key=clientFingerprint(c);
+    const existing=key?byName.get(key):null;
+    if(!existing){c.docs=_arr(c.docs);result.push(c);if(key)byName.set(key,c);return;}
+    // Un même nom de client ne doit pas produire deux dossiers après une restauration ou une fusion cloud.
+    _arr(c.docs).forEach(id=>{if(existing.docs.indexOf(id)<0)existing.docs.push(id);});
+    const srcNewer=(Number(c._mod)||0)>(Number(existing._mod)||0);
+    if(srcNewer){const keepId=existing.id,keepDocs=existing.docs;Object.assign(existing,c);existing.id=keepId;existing.docs=keepDocs;}
+    remap.set(c.id,existing.id);
+  });
+  if(remap.size)db.documents=_arr(db.documents).map(d=>{if(d&&remap.has(d.clientId))d.clientId=remap.get(d.clientId);return d;});
+  db.clients=result;
+}
+function relinkFactClients(){
+  db.documents=_arr(db.documents);db.clients=_arr(db.clients);coalesceFactClients();
+  const clientsById=new Map(),clientsByName=new Map();
+  db.clients.forEach(c=>{if(!c.id)c.id=cliId();c.docs=[];clientsById.set(c.id,c);if(clientFingerprint(c))clientsByName.set(clientFingerprint(c),c);});
+  db.documents.forEach(d=>{
+    if(!d.id)d.id=uuid();d.items=_arr(d.items);d.deductions=_arr(d.deductions);
+    let c=d.clientId?clientsById.get(d.clientId):null;
+    if(!c&&d.clientName)c=clientsByName.get(String(d.clientName).trim().toLowerCase());
+    if(!c&&String(d.clientName||'').trim()){
+      c={id:cliId(),name:String(d.clientName).trim(),docs:[]};db.clients.push(c);clientsById.set(c.id,c);clientsByName.set(clientFingerprint(c),c);
+    }
+    if(c){d.clientId=c.id;if(c.docs.indexOf(d.id)<0)c.docs.push(d.id);}
+    if(!d.totals||typeof d.totals!=='object'){
+      try{d.totals=calcTotals({items:d.items,deductions:d.deductions,tvaRate:d.tvaRate,garantieRate:d.garantieRate});}catch(e){}
+    }
+  });
+  if(db.currentDocId&&!db.documents.some(d=>d.id===db.currentDocId))db.currentDocId=null;
+}
+function mergeFactDatabase(source){
+  source=normalizeFactDB(source);let added=0,updated=0;
+  const byId=new Map(db.documents.map(d=>[String(d.id||''),d]));
+  const byFingerprint=new Map(db.documents.map(d=>[docFingerprint(d),d]));
+  source.documents.forEach(rd=>{
+    const id=String(rd.id||'');const fp=docFingerprint(rd);const local=(id&&byId.get(id))||byFingerprint.get(fp);
+    if(!local){db.documents.push(rd);if(id)byId.set(id,rd);byFingerprint.set(fp,rd);added++;return;}
+    const rMod=Number(rd._mod)||Date.parse(rd.updatedAt||'')||0;
+    const lMod=Number(local._mod)||Date.parse(local.updatedAt||'')||0;
+    if(rMod>lMod){Object.assign(local,rd);updated++;}
+  });
+  const cById=new Map(db.clients.map(c=>[String(c.id||''),c]));
+  const cByName=new Map(db.clients.map(c=>[clientFingerprint(c),c]));
+  source.clients.forEach(rc=>{
+    const local=(rc.id&&cById.get(String(rc.id)))||cByName.get(clientFingerprint(rc));
+    if(!local){db.clients.push(rc);if(rc.id)cById.set(String(rc.id),rc);cByName.set(clientFingerprint(rc),rc);}
+    else if((Number(rc._mod)||0)>(Number(local._mod)||0))Object.assign(local,rc);
+  });
+  if(source.company&&(Number(source.company._mod)||0)>(Number(db.company&&db.company._mod)||0))db.company=source.company;
+  relinkFactClients();return added+updated;
+}
+function findLegacyFactDatabases(){
+  const found=[];
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const key=localStorage.key(i);if(!key||key===DB_KEY||key.indexOf(DB_BACKUP_PREFIX)===0||key.indexOf('egtph_auth_')===0)continue;
+      const raw=localStorage.getItem(key);if(!raw||raw.length<10)continue;
+      let parsed=null;try{parsed=JSON.parse(raw);}catch(e){continue;}
+      if(isFactDatabase(parsed))found.push({key,data:parsed,score:_arr(parsed.documents||parsed.docs).length*100+_arr(parsed.clients).length});
+    }
+  }catch(e){}
+  return found.sort((a,b)=>b.score-a.score);
+}
+function setCloudStatus(kind,msg,meta){
+  const el=document.getElementById('cloudStatus'),text=document.getElementById('cloudStatusText'),m=document.getElementById('cloudStatusMeta');
+  if(!el)return;el.className='cloud-status '+(kind||'');if(text)text.textContent=msg||'';if(m)m.textContent=meta||'';
+}
+function backupRawCurrent(raw){try{if(raw)localStorage.setItem(DB_BACKUP_PREFIX+Date.now(),raw);}catch(e){}}
+
 function applyCompany(){
   const c=db.company||DEFAULT_CO;
   const ids='RC: '+(c.rc||'')+' | NIF: '+(c.nif||'')+' | NIS: '+(c.nis||'')+' | NIN: '+(c.nin||'');
@@ -316,12 +480,26 @@ function checkStorage(){
   catch(e){document.getElementById('storageAlert').style.display='block';}
 }
 function loadDB(){
-  try{const s=localStorage.getItem(DB_KEY);if(s)db=JSON.parse(s);}catch(e){db={clients:[],documents:[],currentDocId:null};}
-  if(!db.company)db.company=Object.assign({},DEFAULT_CO);
+  let raw=null,parsed=null;
+  try{raw=localStorage.getItem(DB_KEY);if(raw)parsed=JSON.parse(raw);}catch(e){backupRawCurrent(raw);parsed=null;}
+  db=normalizeFactDB(parsed);
+  let recovered=0;
+  if(!_localRecoveryDone){
+    findLegacyFactDatabases().forEach(x=>{recovered+=mergeFactDatabase(x.data);});
+    _localRecoveryDone=true;
+  }
+  relinkFactClients();
+  if(recovered>0){_legacyRecovered=recovered;try{localStorage.setItem(DB_KEY,JSON.stringify(db));}catch(e){};window._cloudDirty=true;setCloudStatus('warn','تم العثور على بيانات محلية قديمة ودمجها بأمان.','استرجاع محلي');}
+  else if(!db.documents.length&&!db.clients.length)setCloudStatus('warn','لا توجد بيانات محلية في هذه النسخة؛ جارٍ طلب النسخة السحابية.','استرجاع سحابي');
+  else setCloudStatus('ok','تم تحميل البيانات المحلية. جارٍ التحقق من السحابة.','محلي جاهز');
   applyCompany();fillCompanyForm();
   populateClientDatalist();renderClients();renderHistory();updateStats();
 }
-function saveDB(){localStorage.setItem(DB_KEY,JSON.stringify(db));updateStats();if(!window._cloudApplying)window._cloudDirty=true;}
+function saveDB(){
+  try{localStorage.setItem(DB_KEY,JSON.stringify(normalizeFactDB(db)));}
+  catch(e){toast('⚠️ تعذر حفظ البيانات محليًا: '+e.message,'error',6000);}
+  updateStats();if(!window._cloudApplying)window._cloudDirty=true;
+}
 
 function updateStats(){
   document.getElementById('statDocs').textContent=db.documents.length;
@@ -361,10 +539,22 @@ function updateModeBadge(){
   }else{badge.classList.remove('active');}
 }
 
-function onTypeChange(){
+function supportsAvancement(){
   const type=document.getElementById('docType').value;
+  return type==='SITUATION ACTUELLE'||type==='DÉCOMPTE FINAL';
+}
+function applyAvanVisibility(){
+  const visible=showAvan&&supportsAvancement();
+  showAvan=visible;
+  const h=document.getElementById('colAvanH');if(h)h.style.display=visible?'table-cell':'none';
+  document.querySelectorAll('.avan-cell').forEach(c=>c.style.display=visible?'table-cell':'none');
+  const lnk=document.getElementById('avanLink');if(lnk)lnk.textContent=visible?'📊 Masquer Avancement %':'📊 Afficher Avancement %';
+}
+function onTypeChange(){
   const lnk=document.getElementById('avanLink');
-  lnk.style.display=(type==='SITUATION ACTUELLE'||type==='DÉCOMPTE FINAL')?'inline':'none';
+  if(lnk)lnk.style.display=supportsAvancement()?'inline':'none';
+  if(!supportsAvancement())showAvan=false;
+  applyAvanVisibility();
   applyPayDateVisibility();
 }
 function applyPayDateVisibility(){
@@ -374,10 +564,9 @@ function applyPayDateVisibility(){
 }
 
 function toggleAvan(){
+  if(!supportsAvancement())return;
   showAvan=!showAvan;
-  document.getElementById('colAvanH').style.display=showAvan?'table-cell':'none';
-  document.querySelectorAll('.avan-cell').forEach(c=>c.style.display=showAvan?'table-cell':'none');
-  document.getElementById('avanLink').textContent=showAvan?'📊 Masquer Avancement %':'📊 Afficher Avancement %';
+  applyAvanVisibility();
   calc();syncPrint();
 }
 
@@ -536,14 +725,21 @@ function scrapeForm(){
   });
   const deductions=[];
   document.querySelectorAll('#deductionsBody tr').forEach(r=>deductions.push({date:r.querySelector('.ded-date').value,desig:r.querySelector('.ded-desig').value,amount:r.querySelector('.ded-amount').value}));
-  return{type:document.getElementById('docType').value,num:document.getElementById('docNum').value,date:document.getElementById('docDate').value,clientName:document.getElementById('clientName').value,refInt:document.getElementById('refInt').value,payMode:document.getElementById('payMode').value,payRef:document.getElementById('payRef').value,bank:document.getElementById('bank').value,payDate:document.getElementById('payDate').value,tvaRate:document.getElementById('tvaRate').value,garantieRate:document.getElementById('garantieRate').value,notes:document.getElementById('docNotes').value,items,deductions};
+  return{type:document.getElementById('docType').value,num:document.getElementById('docNum').value,date:document.getElementById('docDate').value,clientName:document.getElementById('clientName').value,refInt:document.getElementById('refInt').value,payMode:document.getElementById('payMode').value,payRef:document.getElementById('payRef').value,bank:document.getElementById('bank').value,payDate:document.getElementById('payDate').value,tvaRate:document.getElementById('tvaRate').value,garantieRate:document.getElementById('garantieRate').value,notes:document.getElementById('docNotes').value,useAvancement:showAvan,items,deductions};
 }
 
 function calcTotals(data){
+  data=data||{};
   const tvaR=parseFloat(data.tvaRate)||0;
   const garR=parseFloat(data.garantieRate)||0;
-  let ht=data.items.reduce((s,i)=>s+((parseFloat(i.qty)||0)*(parseFloat(i.pu)||0)*((i.avancement||100)/100)),0);
-  let acc=data.deductions.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+  const useAvan=documentUsesAvancement(data);
+  const items=_arr(data.items),deductions=_arr(data.deductions);
+  let ht=items.reduce((s,i)=>{
+    const raw=parseFloat(i&&i.avancement);
+    const avan=useAvan?(Number.isFinite(raw)?Math.max(0,Math.min(100,raw))/100:1):1;
+    return s+(parseFloat(i&&i.qty)||0)*(parseFloat(i&&i.pu)||0)*avan;
+  },0);
+  let acc=deductions.reduce((s,d)=>s+(parseFloat(d&&d.amount)||0),0);
   let tva=ht*tvaR;let gar=(ht+tva)*(garR/100);
   return{ht,tva,garantie:gar,acc,net:Math.max(0,ht+tva-gar-acc)};
 }
@@ -555,13 +751,14 @@ function saveDoc(){
   const isNew=!doc;
   if(isNew)doc={id:uuid(),createdAt:new Date().toISOString()};
   let c=db.clients.find(x=>x.name.toLowerCase()===data.clientName.toLowerCase());
-  if(!c&&data.clientName){c={id:cliId(),name:data.clientName,docs:[]};db.clients.push(c);}
+  if(!c&&data.clientName){c={id:cliId(),name:data.clientName,docs:[],_mod:nextMod()};db.clients.push(c);}
   doc.clientId=c?c.id:null;
   Object.assign(doc,data,{updatedAt:new Date().toISOString(),_mod:nextMod()});
   doc.totals=calcTotals(data);
   if(isNew)db.documents.push(doc);
   db.currentDocId=doc.id;
   if(c&&!c.docs.includes(doc.id))c.docs.push(doc.id);
+  if(c)c._mod=nextMod();
   populateClientDatalist();saveDB();updateModeBadge();renderHistory();renderClients();
   toast(isNew?'✅ Document créé et lié au client !':'✅ Document mis à jour !');
 }
@@ -581,6 +778,7 @@ function loadDocById(id){
   document.getElementById('tvaRate').value=doc.tvaRate||'0';
   document.getElementById('garantieRate').value=doc.garantieRate||'0';
   document.getElementById('docNotes').value=doc.notes||'';
+  showAvan=documentUsesAvancement(doc);applyAvanVisibility();
   document.getElementById('itemsBody').innerHTML='';
   doc.items.forEach(i=>addItem(i));
   document.getElementById('deductionsBody').innerHTML='';
@@ -592,6 +790,7 @@ function loadDocById(id){
 
 function newDoc(silent){
   db.currentDocId=null;
+  showAvan=false;applyAvanVisibility();
   ['itemsBody','deductionsBody'].forEach(id=>document.getElementById(id).innerHTML='');
   document.getElementById('docNotes').value='';
   document.getElementById('garantieRate').value='0';
@@ -612,9 +811,8 @@ function newDoc(silent){
 // Cliquer sur l'onglet « Document » depuis un autre onglet → page vierge.
 // (la modification d'un document existant se fait via Historique → 📥 Modifier)
 function enterDocTab(el){
-  const wasActive=document.getElementById('sec-doc').classList.contains('active');
+  // Ne jamais vider un document en cours en changeant simplement d'onglet.
   switchTab('sec-doc',el);
-  if(!wasActive)newDoc(true);
 }
 
 // Enregistrer sous : crée un NOUVEAU document (nouveau N° + date du jour)
@@ -687,6 +885,7 @@ function restoreForm(d){
   document.getElementById('tvaRate').value=d.tvaRate||'0';
   document.getElementById('garantieRate').value=d.garantieRate||'0';
   document.getElementById('docNotes').value=d.notes||'';
+  showAvan=documentUsesAvancement(d);applyAvanVisibility();
   document.getElementById('itemsBody').innerHTML='';
   (d.items||[]).forEach(i=>addItem(i));
   document.getElementById('deductionsBody').innerHTML='';
@@ -715,6 +914,7 @@ document.addEventListener('keydown',e=>{
     e.preventDefault();e.shiftKey?redoEdit():undoEdit();
   }
 });
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeClientFile();});
 
 function duplicateDoc(){
   if(!db.currentDocId){toast('⚠️ Ouvrez d\'abord un document à dupliquer.','error');return;}
@@ -763,25 +963,64 @@ function populateClientDatalist(){
   const dl=document.getElementById('clientsList');dl.innerHTML='';
   db.clients.forEach(c=>{const o=document.createElement('option');o.value=c.name;dl.appendChild(o);});
 }
+function clientDocs(cid){
+  const cl=db.clients.find(c=>c.id===cid);
+  const nm=String(cl&&cl.name||'').trim().toLowerCase();
+  return db.documents.filter(d=>d&&(d.clientId===cid||(!d.clientId&&nm&&String(d.clientName||'').trim().toLowerCase()===nm)));
+}
+function escHtml(v){return String(v??'').replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));}
+function escAttr(v){return escHtml(v).replace(/`/g,'&#96;');}
+function docTotal(d,key){
+  if(d&&d.totals&&Number.isFinite(Number(d.totals[key])))return Number(d.totals[key]);
+  try{return Number(calcTotals(d||{})[key])||0;}catch(e){return 0;}
+}
 function addClient(){
-  const name=prompt('Nom du client :');if(!name)return;
-  if(db.clients.find(c=>c.name.toLowerCase()===name.toLowerCase())){toast('Client existe déjà.','error');return;}
-  db.clients.push({id:cliId(),name,docs:[]});saveDB();populateClientDatalist();renderClients();toast('✅ Client ajouté.');
+  const name=(prompt('Nom du client :')||'').trim();if(!name)return;
+  if(db.clients.find(c=>String(c.name||'').toLowerCase()===name.toLowerCase())){toast('Client existe déjà.','error');return;}
+  db.clients.push({id:cliId(),name,docs:[],_mod:nextMod()});saveDB();populateClientDatalist();renderClients();toast('✅ Client ajouté.');
 }
 function renderClients(){
   const c=document.getElementById('clientsListContainer');c.innerHTML='';
-  const f=document.getElementById('searchClient').value.toLowerCase();
-  const filtered=db.clients.filter(x=>x.name.toLowerCase().includes(f));
+  const f=(document.getElementById('searchClient').value||'').toLowerCase();
+  const filtered=db.clients.filter(x=>String(x.name||'').toLowerCase().includes(f));
   if(!filtered.length){c.innerHTML='<p style="color:#888;padding:20px;text-align:center;">Aucun client trouvé</p>';return;}
   filtered.forEach(cl=>{
-    const tot=db.documents.filter(d=>d.clientId===cl.id).reduce((s,d)=>s+(d.totals?.net||0),0);
-    c.innerHTML+=`<div class="client-card"><div class="client-info"><h4>${cl.name}</h4><p>📄 ${cl.docs.length} document(s) &nbsp;|&nbsp; 💰 Net total: <strong>${fmt(tot)} DA</strong></p></div>
-    <div><button class="btn btn-sm btn-outline" onclick="viewClientDocs('${cl.id}')">Voir Documents</button>
-    <button class="btn btn-sm btn-danger" onclick="deleteClient('${cl.id}')">Supprimer</button></div></div>`;
+    const docs=clientDocs(cl.id);
+    const tot=docs.reduce((s,d)=>s+docTotal(d,'net'),0);
+    const source=cl.recoveryInfo?'<span class="client-source">🛟 Dossier complété depuis PDF de secours</span>':'';
+    c.innerHTML+=`<div class="client-card"><div class="client-info"><h4>${escHtml(cl.name)}</h4><p>📄 ${docs.length} document(s) &nbsp;|&nbsp; 💰 Net total: <strong>${fmt(tot)} DA</strong></p>${source}</div>
+    <div class="client-actions"><button class="btn btn-sm btn-outline" data-client-id="${escAttr(cl.id)}" onclick="openClientFile(this.dataset.clientId)">📁 Fiche client</button>
+    <button class="btn btn-sm btn-outline" data-client-id="${escAttr(cl.id)}" onclick="viewClientDocs(this.dataset.clientId)">Voir Documents</button>
+    <button class="btn btn-sm btn-danger" data-client-id="${escAttr(cl.id)}" onclick="deleteClient(this.dataset.clientId)">Supprimer</button></div></div>`;
   });
 }
 function viewClientDocs(cid){activeFilterClientId=cid;renderHistory();switchTab('sec-history',document.querySelectorAll('.tab')[2]);}
-function deleteClient(cid){if(!confirm('Supprimer ?'))return;_cliDel(cid);db.clients=db.clients.filter(c=>c.id!==cid);saveDB();populateClientDatalist();renderClients();toast('Client supprimé.','error');}
+function closeClientFile(){const m=document.getElementById('clientFileModal');if(m)m.classList.remove('open');}
+function openClientFile(cid){
+  const cl=db.clients.find(c=>c.id===cid);if(!cl){toast('Dossier client introuvable.','error');return;}
+  const docs=clientDocs(cid).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  const ht=docs.reduce((s,d)=>s+docTotal(d,'ht'),0);
+  const acc=docs.reduce((s,d)=>s+docTotal(d,'acc'),0);
+  const net=docs.reduce((s,d)=>s+docTotal(d,'net'),0);
+  const recovery=cl.recoveryInfo?`<div class="client-recovery-detail"><strong>Source de secours :</strong> ${escHtml(cl.recoveryInfo.source||'PDF')} - ${escHtml(cl.recoveryInfo.document||'')}<br><span>Ajouté le ${escHtml(cl.recoveryInfo.importedAt||'')}. Ce repère ne remplace pas une restauration cloud complète.</span></div>`:'';
+  const rows=docs.map(d=>{
+    const isRecovery=!!(d.recovery&&d.recovery.source==='PDF');
+    const src=isRecovery?'<span class="client-source">PDF secours</span>':'-';
+    return `<tr><td>${escHtml(d.date||'-')}</td><td>${escHtml(d.type||'-')}</td><td>${escHtml(d.num||'-')}</td><td>${fmt(docTotal(d,'ht'))}</td><td>- ${fmt(docTotal(d,'acc'))}</td><td><strong>${fmt(docTotal(d,'net'))}</strong></td><td>${src}</td><td><button class="btn btn-sm btn-outline" data-doc-id="${escAttr(d.id)}" onclick="loadDocById(this.dataset.docId);closeClientFile()">Ouvrir</button></td></tr>`;
+  }).join('')||'<tr><td colspan="8" style="color:#777;padding:18px;text-align:center;">Aucun document dans ce dossier.</td></tr>';
+  document.getElementById('clientFileContent').innerHTML=`<div class="client-file-head"><h3 id="clientFileTitle">📁 Fiche client - ${escHtml(cl.name)}</h3><p>Historique documentaire et synthèse financière du client.</p></div>${recovery}
+    <div class="client-file-grid"><div class="client-file-stat">Documents<strong>${docs.length}</strong></div><div class="client-file-stat">Total H.T.<strong>${fmt(ht)} DA</strong></div><div class="client-file-stat">Acomptes<strong>${fmt(acc)} DA</strong></div><div class="client-file-stat">Net cumulé<strong>${fmt(net)} DA</strong></div></div>
+    <div style="overflow:auto;"><table class="client-file-table"><thead><tr><th>Date</th><th>Type</th><th>N°</th><th>H.T.</th><th>Acomptes</th><th>Net</th><th>Source</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-outline" data-client-id="${escAttr(cid)}" onclick="closeClientFile();viewClientDocs(this.dataset.clientId)">Voir dans l’historique</button><button class="btn btn-outline" onclick="closeClientFile()">Fermer</button></div>`;
+  document.getElementById('clientFileModal').classList.add('open');
+}
+function deleteClient(cid){
+  const cl=db.clients.find(c=>c.id===cid);if(!cl)return;
+  const docs=clientDocs(cid);
+  if(docs.length){toast('Impossible de supprimer ce client : son historique contient '+docs.length+' document(s). Supprimez d’abord les documents concernés.','error',6000);return;}
+  if(!confirm('Supprimer définitivement ce dossier client vide ?'))return;
+  _cliDel(cid);db.clients=db.clients.filter(c=>c.id!==cid);saveDB();populateClientDatalist();renderClients();toast('Client supprimé.','error');
+}
 function clearClientFilter(){activeFilterClientId=null;renderHistory();}
 function matchesSearch(text,query){if(!query||!text)return!query;return query.toLowerCase().split(/\s+/).filter(w=>w).every(w=>text.toLowerCase().includes(w));}
 
@@ -825,6 +1064,8 @@ function renderHistory(){
 }
 
 function loadDemoData(){
+  if(!confirm('Charger une démonstration comme nouveau document ? Aucun document existant ne sera remplacé.'))return;
+  db.currentDocId=null;
   document.getElementById('docType').value='SITUATION ACTUELLE';
   document.getElementById('docNum').value='101/2026';
   document.getElementById('docDate').value='2026-05-14';
@@ -845,7 +1086,7 @@ function loadDemoData(){
   ].forEach(i=>addItem(i));
   document.getElementById('deductionsBody').innerHTML='';
   addDeduction({date:'2026-05-07',desig:'Versement',amount:'3000000'});
-  onTypeChange();calc();syncPrint();saveDoc();
+  showAvan=false;onTypeChange();calc();syncPrint();saveDoc();
   toast('✅ بيانات التجربة محملة ومحفوظة!');
 }
 
@@ -902,33 +1143,55 @@ function _factDel(id){
   if(id&&FACTDEL.indexOf(id)<0){FACTDEL.push(id);localStorage.setItem('egtp_fact_del',JSON.stringify(FACTDEL.slice(-300)));}
   if(id)_pushTomb([id]); // écrit le tombstone dans le nœud durable tout de suite
 }
-function _cloudEP(){return _CLOUD_URL+'/egtph/'+encodeURIComponent(_CLOUD_KEY)+'.json'+EGTPHAuth.authParam('facture');}
-// ── حماية حقيقية: نفس مشروع gestion بالضبط (egtph-abdi-youssouf-islam) — لا حاجة لخطوات جديدة في Firebase Console ──
-// كلمة السر لا تُكتب هنا أبداً — تُكتب من المستخدم في النافذة التي تظهر.
-EGTPHAuth.init({
-  appId:   'facture',
-  apiKey:  'AIzaSyBqMfhLqRm-GWR4HgPkLH-erCFg8EsrLcA', // Web API Key — مشروع egtph-abdi-youssouf-islam (نفس gestion)
-  email:   'abdiyoucefislam@gmail.com',
-  onReady: function(){ try{ if(typeof cloudSync==='function') cloudSync(false); }catch(e){} }
-});
+let _cloudAuthReady=false;
+function _authToken(){
+  try{
+    if(window.EGTPHAuth&&typeof window.EGTPHAuth.getToken==='function'){
+      const t=window.EGTPHAuth.getToken('facture');if(t)return t;
+    }
+    // Compatibilité avec l'ancien egtph-auth.js, qui expose authParam() mais pas getToken().
+    if(window.EGTPHAuth&&typeof window.EGTPHAuth.authParam==='function'){
+      const q=String(window.EGTPHAuth.authParam('facture')||'');
+      const m=q.match(/[?&]auth=([^&]+)/);return m?decodeURIComponent(m[1]):null;
+    }
+  }catch(e){}
+  return null;
+}
+function _cloudEP(){const token=_authToken();if(!token)return null;return _CLOUD_URL+'/egtph/'+encodeURIComponent(_CLOUD_KEY)+'.json?auth='+encodeURIComponent(token);}
+function _onCloudAuthReady(token){
+  _cloudAuthReady=!!(token||_authToken());
+  if(!_cloudAuthReady){setCloudStatus('warn','تم فتح وحدة الدخول لكن رمز Firebase غير جاهز بعد. لن يتم إرسال أي بيانات.','انتظار الرمز');return;}
+  setTimeout(function(){try{cloudSync(false);startCloudStream();}catch(e){}},0);
+}
+// لا نبدأ أي قراءة أو كتابة قبل الحصول على رمز دخول صالح؛ هذا يمنع مزامنة قاعدة فارغة أو غير مصادق عليها.
+if(window.EGTPHAuth&&typeof window.EGTPHAuth.init==='function'){
+  window.EGTPHAuth.init({
+    appId:'facture',apiKey:'AIzaSyBqMfhLqRm-GWR4HgPkLH-erCFg8EsrLcA',email:'abdiyoucefislam@gmail.com',
+    onReady:_onCloudAuthReady,
+    onTokenChange:_onCloudAuthReady
+  });
+}else{setCloudStatus('error','تعذر تحميل وحدة تسجيل الدخول؛ البيانات المحلية محفوظة، لكن الاسترجاع السحابي متوقف.','المصادقة غير متاحة');}
 // Nœud SÉPARÉ pour les suppressions : écrit en PATCH (additif), jamais écrasé par un PUT complet.
-function _tombEP(){return _CLOUD_URL+'/egtph_del/'+encodeURIComponent(_CLOUD_KEY)+'.json'+EGTPHAuth.authParam('facture');}
-function _tombEPcli(){return _CLOUD_URL+'/egtph_del_cli/'+encodeURIComponent(_CLOUD_KEY)+'.json'+EGTPHAuth.authParam('facture');}
+function _tombEP(){const token=_authToken();return token?_CLOUD_URL+'/egtph_del/'+encodeURIComponent(_CLOUD_KEY)+'.json?auth='+encodeURIComponent(token):null;}
+function _tombEPcli(){const token=_authToken();return token?_CLOUD_URL+'/egtph_del_cli/'+encodeURIComponent(_CLOUD_KEY)+'.json?auth='+encodeURIComponent(token):null;}
 function _safeKey(id){return String(id).replace(/[.$#\[\]\/]/g,'_');}
 async function _pushTomb(ids,cliIds){
+  if(!_cloudAuthReady)return;
   try{
-    const body={};(ids||[]).forEach(id=>{if(id)body[_safeKey(id)]=true;});
-    if(Object.keys(body).length)await fetch(_tombEP(),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const body={};(ids||[]).forEach(id=>{if(id)body[_safeKey(id)]=true;});const ep=_tombEP();
+    if(ep&&Object.keys(body).length)await fetch(ep,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   }catch(e){}
   try{
-    const cbody={};(cliIds||[]).forEach(id=>{if(id)cbody[_safeKey(id)]=true;});
-    if(Object.keys(cbody).length)await fetch(_tombEPcli(),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(cbody)});
+    const cbody={};(cliIds||[]).forEach(id=>{if(id)cbody[_safeKey(id)]=true;});const ep=_tombEPcli();
+    if(ep&&Object.keys(cbody).length)await fetch(ep,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(cbody)});
   }catch(e){}
 }
 async function _pullTomb(){
+  if(!_cloudAuthReady)return false;
   let added=false;
   try{
-    const r=await fetch(_tombEP());
+    const ep=_tombEP();if(!ep)throw new Error('AUTH_REQUIRED');
+    const r=await fetch(ep);
     if(r.ok){
       const tm=await r.json();
       if(tm&&typeof tm==='object'){
@@ -938,7 +1201,8 @@ async function _pullTomb(){
     }
   }catch(e){}
   try{
-    const r2=await fetch(_tombEPcli());
+    const ep2=_tombEPcli();if(!ep2)throw new Error('AUTH_REQUIRED');
+    const r2=await fetch(ep2);
     if(r2.ok){
       const tm2=await r2.json();
       if(tm2&&typeof tm2==='object'){
@@ -955,157 +1219,178 @@ function _normArr(x){if(Array.isArray(x))return x;if(x&&typeof x==='object')retu
 function mergeRemoteFact(remote){
   if(!remote||typeof remote!=='object')return false;
   let changed=false;
-  // 1) Tombstones (suppressions) — TOUJOURS traités, même si documents est vide/null côté cloud.
   const rDel=_normArr(remote.deleted);
   if(rDel.length){
     rDel.forEach(id=>{if(id&&FACTDEL.indexOf(id)<0){FACTDEL.push(id);changed=true;}});
     localStorage.setItem('egtp_fact_del',JSON.stringify(FACTDEL.slice(-300)));
   }
-  // 1b) Tombstones clients (union) — même principe, nœud séparé
   const rCliDel=_normArr(remote.deletedClients);
   if(rCliDel.length){
     rCliDel.forEach(id=>{if(id&&CLIDEL.indexOf(id)<0){CLIDEL.push(id);changed=true;}});
     localStorage.setItem('egtp_fact_cli_del',JSON.stringify(CLIDEL.slice(-300)));
   }
-  // Appliquer les tombstones au local (retire ce qui a été supprimé ailleurs) — AVANT le merge
-  const before=db.documents.length;
-  db.documents=db.documents.filter(d=>FACTDEL.indexOf(d.id)<0);
-  if(db.documents.length!==before)changed=true;
-  const beforeC=db.clients.length;
-  db.clients=db.clients.filter(c=>CLIDEL.indexOf(c.id)<0);
-  if(db.clients.length!==beforeC)changed=true;
-  // 2) Documents distants
-  const rDocs=_normArr(remote.documents);
-  const byId={};db.documents.forEach(d=>byId[d.id]=d);
-  rDocs.forEach(rd=>{
-    if(!rd||!rd.id||FACTDEL.indexOf(rd.id)>=0)return; // jamais ré-ajouter un document supprimé
-    const loc=byId[rd.id];
-    if(!loc){db.documents.push(rd);byId[rd.id]=rd;changed=true;}
-    else{
-      const rModN=+rd._mod||0, lModN=+loc._mod||0;
-      const newer=(rModN||lModN)?(rModN>lModN):((rd.updatedAt||'')>(loc.updatedAt||''));
-      if(newer){Object.assign(loc,rd);changed=true;}
+  const before=db.documents.length;db.documents=db.documents.filter(d=>FACTDEL.indexOf(d.id)<0);if(db.documents.length!==before)changed=true;
+  const beforeC=db.clients.length;db.clients=db.clients.filter(c=>CLIDEL.indexOf(c.id)<0);if(db.clients.length!==beforeC)changed=true;
+
+  // Document match = id, puis empreinte métier (type + N° + date + client). Cela évite le doublon si une copie PDF de secours est créée avant une restauration cloud.
+  const byId=new Map(db.documents.map(d=>[String(d.id||''),d]));
+  const byFp=new Map(db.documents.map(d=>[docFingerprint(d),d]));
+  _normArr(remote.documents).forEach(rd=>{
+    if(!rd||!rd.id||FACTDEL.indexOf(rd.id)>=0)return;
+    const fp=docFingerprint(rd);const loc=byId.get(String(rd.id))||byFp.get(fp);
+    if(!loc){db.documents.push(rd);byId.set(String(rd.id),rd);byFp.set(fp,rd);changed=true;return;}
+    const rModN=Number(rd._mod)||Date.parse(rd.updatedAt||'')||0;
+    const lModN=Number(loc._mod)||Date.parse(loc.updatedAt||'')||0;
+    if(rModN>lModN){
+      const keepId=loc.id;Object.assign(loc,rd);
+      // Une correspondance par empreinte garde l'identifiant local : aucune tombstone ancienne ne peut supprimer la copie de secours par erreur.
+      if(String(keepId)!==String(rd.id))loc.id=keepId;
+      byId.set(String(loc.id),loc);byFp.set(fp,loc);changed=true;
     }
   });
-  // 3) Clients distants
-  const rCli=_normArr(remote.clients);
-  if(rCli.length){
-    const cById={};db.clients.forEach(c=>cById[c.id]=c);
-    rCli.forEach(rc=>{
-      if(!rc||!rc.id||CLIDEL.indexOf(rc.id)>=0)return; // jamais ré-ajouter un client supprimé
-      const loc=cById[rc.id];
-      if(!loc){rc.docs=_normArr(rc.docs);db.clients.push(rc);cById[rc.id]=rc;changed=true;}
-      else{if(!Array.isArray(loc.docs))loc.docs=[];_normArr(rc.docs).forEach(id=>{if(loc.docs.indexOf(id)<0){loc.docs.push(id);changed=true;}});}
-    });
-  }
-  // 4) Société
-  if(remote.company && (remote.company._mod||0) > ((db.company&&db.company._mod)||0)){
+
+  // Client match = id, puis nom normalisé. Les métadonnées du dossier (notamment source PDF) suivent le plus récent _mod.
+  const cById=new Map(db.clients.map(c=>[String(c.id||''),c]));
+  const cByName=new Map(db.clients.map(c=>[clientFingerprint(c),c]));
+  _normArr(remote.clients).forEach(rc=>{
+    if(!rc||!rc.id||CLIDEL.indexOf(rc.id)>=0)return;
+    const key=clientFingerprint(rc);const loc=cById.get(String(rc.id))||cByName.get(key);
+    if(!loc){rc.docs=_normArr(rc.docs);db.clients.push(rc);cById.set(String(rc.id),rc);cByName.set(key,rc);changed=true;return;}
+    const localDocs=_normArr(loc.docs),remoteDocs=_normArr(rc.docs);
+    const rModN=Number(rc._mod)||0,lModN=Number(loc._mod)||0;
+    if(rModN>lModN){const keepId=loc.id;Object.assign(loc,rc);loc.id=keepId;}
+    loc.docs=[...new Set([..._normArr(loc.docs),...localDocs,...remoteDocs])];
+  });
+  if(remote.company && (Number(remote.company._mod)||0) > (Number(db.company&&db.company._mod)||0)){
     db.company=remote.company;applyCompany();fillCompanyForm();changed=true;
   }
-  // Garde de hذف مزدوج بعد الدمج — لو الجهاز الآخر رجّع نسخة عميل/وثيقة بنفس الوقت
   if(FACTDEL.length){const b2=db.documents.length;db.documents=db.documents.filter(d=>FACTDEL.indexOf(d.id)<0);if(db.documents.length!==b2)changed=true;}
   if(CLIDEL.length){const b3=db.clients.length;db.clients=db.clients.filter(c=>CLIDEL.indexOf(c.id)<0);if(db.clients.length!==b3)changed=true;}
+  coalesceFactClients();
   return changed;
 }
+function _remoteFactShape(remote){
+  if(remote===null)return 'empty';
+  if(!remote||typeof remote!=='object'||Array.isArray(remote))return 'unknown';
+  const keys=Object.keys(remote);if(!keys.length)return 'empty';
+  if(Object.prototype.hasOwnProperty.call(remote,'documents')||Object.prototype.hasOwnProperty.call(remote,'clients')||Object.prototype.hasOwnProperty.call(remote,'company')||Object.prototype.hasOwnProperty.call(remote,'syncedAt')||Object.prototype.hasOwnProperty.call(remote,'deleted'))return 'facture';
+  return 'unknown';
+}
 async function cloudSync(manual){
+  if(!_cloudAuthReady||!_authToken()){
+    _setDot('🟠','En attente de connexion sécurisée');setCloudStatus('warn','سجّل الدخول أولاً لاسترجاع النسخة السحابية؛ لم يتم إرسال أي بيانات.','بانتظار الدخول');
+    if(manual)toast('☁️ سجّل الدخول أولاً لاسترجاع بياناتك.','error',5000);return;
+  }
   if(_cloudBusy)return;_cloudBusy=true;
   try{
-    // ── JLB INTELLIGENT (smart fetch) : si le cloud n'a pas changé et rien à pousser → on sort ──
-    if(!manual&&!window._cloudDirty){
-      const pr=await fetch(_cloudEP().replace('.json','/syncedAt.json'));
-      if(pr.ok){const rs=await pr.json();
-        if(rs&&String(rs)===_cloudStamp){_cloudBusy=false;return;}}
-    }
-    _setDot('🔄');
-    await _pullTomb(); // suppressions durables d'abord (nœud séparé, additif)
-
-    // ── GARDE n°1 : on NE PUT JAMAIS sans un GET réussi (sinon risque d'écraser le cloud) ──
-    const g=await fetch(_cloudEP());
+    const endpoint=_cloudEP();if(!endpoint)throw new Error('AUTH_REQUIRED');
+    _setDot('🔄','Restauration / synchronisation en cours');setCloudStatus('warn','جارٍ قراءة النسخة السحابية ودمجها دون حذف أي سجل…','قراءة فقط');
+    await _pullTomb();
+    const g=await fetch(endpoint);
     if(!g.ok)throw new Error('GET '+g.status);
-    let remote=null;try{remote=await g.json();}catch(_){remote=null;}
-
-    // ── DMG INTELLIGENT (smart merge) : distant → local (LWW par document, union clients) ──
-    const ch=remote?mergeRemoteFact(remote):false;
+    let remote=null;try{remote=await g.json();}catch(e){throw new Error('Réponse cloud invalide');}
+    const shape=_remoteFactShape(remote);
+    if(shape==='unknown')throw new Error('Format cloud inconnu — écriture bloquée par sécurité');
+    const localBefore=db.documents.length;
+    const ch=shape==='facture'?mergeRemoteFact(remote):false;
+    relinkFactClients();
     if(ch){
-      window._cloudApplying=true;
-      saveDB();populateClientDatalist();renderHistory();renderClients();
-      window._cloudApplying=false;
+      window._cloudApplying=true;saveDB();populateClientDatalist();renderHistory();renderClients();window._cloudApplying=false;
     }
-
-    // ── GARDE n°2 (anti-perte) : aucun document/client distant non-supprimé ne doit disparaître ──
-    const _ids=new Set(db.documents.map(d=>d.id));
-    _normArr(remote&&remote.documents).forEach(rd=>{
-      if(rd&&rd.id&&FACTDEL.indexOf(rd.id)<0&&!_ids.has(rd.id)){db.documents.push(rd);_ids.add(rd.id);} // on restaure au lieu d'effacer
-    });
-    const _cids=new Set(db.clients.map(c=>c.id));
-    _normArr(remote&&remote.clients).forEach(rc=>{
-      if(rc&&rc.id&&CLIDEL.indexOf(rc.id)<0&&!_cids.has(rc.id)){rc.docs=_normArr(rc.docs);db.clients.push(rc);_cids.add(rc.id);}
-    });
-
-    if(FACTDEL.length||CLIDEL.length)_pushTomb(FACTDEL,CLIDEL); // propager les suppressions vers les nœuds durables
-
-    // ── ÉCRITURE seulement si nécessaire ──
-    const needPut = manual || window._cloudDirty || ch || FACTDEL.length>0 || CLIDEL.length>0;
-    if(needPut){
+    const remoteDocs=shape==='facture'?_normArr(remote.documents):[];
+    const remoteClients=shape==='facture'?_normArr(remote.clients):[];
+    // Dispositif anti-perte : aucun élément distant valide non supprimé ne peut disparaître avant une écriture.
+    const docIds=new Set(db.documents.map(d=>String(d.id||'')));
+    const docFps=new Set(db.documents.map(docFingerprint));
+    remoteDocs.forEach(rd=>{const fp=docFingerprint(rd);if(rd&&rd.id&&FACTDEL.indexOf(rd.id)<0&&!docIds.has(String(rd.id))&&!docFps.has(fp)){db.documents.push(rd);docIds.add(String(rd.id));docFps.add(fp);}});
+    const clientIds=new Set(db.clients.map(c=>String(c.id||'')));
+    const clientNames=new Set(db.clients.map(clientFingerprint));
+    remoteClients.forEach(rc=>{const key=clientFingerprint(rc);if(rc&&rc.id&&CLIDEL.indexOf(rc.id)<0&&!clientIds.has(String(rc.id))&&!clientNames.has(key)){rc.docs=_normArr(rc.docs);db.clients.push(rc);clientIds.add(String(rc.id));clientNames.add(key);}});
+    relinkFactClients();
+    if(FACTDEL.length||CLIDEL.length)_pushTomb(FACTDEL,CLIDEL);
+    // Un clic de synchronisation ne doit jamais, à lui seul, écraser la base distante par une base locale vide.
+    const localHasData=!!(db.documents.length||db.clients.length);
+    const needPut=!!(window._cloudDirty||ch||FACTDEL.length||CLIDEL.length);
+    if(needPut && (localHasData || FACTDEL.length || CLIDEL.length)){
       const stamp=String(Date.now());
       const payload={documents:db.documents,clients:db.clients,company:db.company,deleted:FACTDEL.slice(-300),deletedClients:CLIDEL.slice(-300),syncedAt:stamp,device:navigator.userAgent.slice(0,60)};
-      const p=await fetch(_cloudEP(),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      const p=await fetch(endpoint,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       if(!p.ok)throw new Error('PUT '+p.status);
-      _cloudStamp=stamp;localStorage.setItem('egtp_fact_stamp',stamp);
-    }else if(remote&&remote.syncedAt){
-      _cloudStamp=String(remote.syncedAt);localStorage.setItem('egtp_fact_stamp',_cloudStamp);
+      _cloudStamp=stamp;localStorage.setItem('egtp_fact_stamp',stamp);window._cloudDirty=false;
+    }else if(shape==='facture'&&remote&&remote.syncedAt){
+      _cloudStamp=String(remote.syncedAt);localStorage.setItem('egtp_fact_stamp',_cloudStamp);window._cloudDirty=false;
     }
-    window._cloudDirty=false;
-    _setDot('🟢','🛡️ Sync OK '+new Date().toLocaleTimeString('fr-FR'));
-    if(manual)toast('☁️ Synchronisé !');
+    updateStats();populateClientDatalist();renderHistory();renderClients();
+    const restored=Math.max(0,db.documents.length-localBefore);
+    _setDot('🟢','Synchronisation sécurisée OK '+new Date().toLocaleTimeString('fr-FR'));
+    setCloudStatus('ok',restored?'تم استرجاع '+restored+' سجل من السحابة ودمجه بأمان.':'تم التحقق من النسخة السحابية دون فقدان بيانات.','متزامن');
+    if(manual)toast(restored?'☁️ تم استرجاع البيانات ودمجها.':'☁️ تمت المزامنة الآمنة.');
   }catch(e){
-    // GARDE : en cas d'erreur (GET/PUT/réseau) on ne touche PAS au cloud — données préservées.
-    _setDot('🔴','Hors ligne / erreur: '+e.message);
-    if(manual)toast('☁️ Erreur sync (données préservées): '+e.message,'error');
-  }
-  _cloudBusy=false;
+    const msg=String(e&&e.message||e||'Erreur inconnue');
+    _setDot('🔴','Hors ligne / erreur: '+msg);
+    const denied=/\b(?:GET|PUT|PATCH) 401\b|permission_denied|AUTH_REQUIRED/i.test(msg);
+    setCloudStatus('error',denied?'رفض Firebase طلب الدخول (401). لم تُرسل أي بيانات. السبب يكون رمز دخول منتهيًا أو قواعد Firebase لا تسمح بهذا الحساب؛ يلزم التحقق من كلمة السر/قواعد قاعدة البيانات.':'تعذر الوصول إلى السحابة. لم تُحذف ولم تُرسل أي بيانات من هذه النسخة.','المزامنة متوقفة');
+    if(manual)toast('☁️ خطأ مزامنة: '+msg+' — بياناتك لم تُمس.','error',6500);
+  }finally{_cloudBusy=false;}
 }
 
-// ══ SEED: Situation 101/2026 RAHMOUN — injection UNIQUE, appelée par cloudSync ══
-// (n'injecte qu'après lecture des suppressions cloud → une fois supprimée, elle ne revient plus)
-function maybeSeedRahmoun(){
-  const SEED_ID='doc_seed_rahmoun_101_2026';
-  if(localStorage.getItem('egtp_fact_seeded'))return false;            // déjà fait une fois
-  if(FACTDEL.indexOf(SEED_ID)>=0){localStorage.setItem('egtp_fact_seeded','1');return false;} // supprimée → ne pas recréer
-  if(db.documents.some(d=>d.id===SEED_ID||d.num==='101/2026')){localStorage.setItem('egtp_fact_seeded','1');return false;} // déjà présente
-  localStorage.setItem('egtp_fact_seeded','1');
-  const data={type:'SITUATION ACTUELLE',num:'101/2026',date:'2026-05-14',clientName:'DJALOUL RAHMOUN',
-    refInt:'',payMode:'ESPÈCES',payRef:'/',bank:'/',payDate:'2026-05-07',tvaRate:'0',garantieRate:'0',notes:'',
-    items:[
-      {desig:'"Pose de tube annelé Ø500 mm (fourniture non incluse) › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable › Remblaiement en matériaux de terre"',qty:'153.2',unit:'ML',pu:'2500',avancement:100},
-      {desig:'"Pose de tube annelé Ø315 mm (fourniture non incluse) › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable › Remblaiement en matériaux de tuf"',qty:'721.25',unit:'ML',pu:'2500',avancement:100},
-      {desig:'Fourniture de tube annelé Ø315 mm',qty:'159',unit:'ML',pu:'1100',avancement:100},
-      {desig:'Fourniture de tube annelé Ø200 mm',qty:'72',unit:'ML',pu:'670',avancement:100},
-      {desig:'"Fourniture et pose de regard double nappe (profondeur ≤ 2 m)"',qty:'23',unit:'U',pu:'30000',avancement:100},
-      {desig:'"Fourniture et pose de regard double nappe (profondeur > 2 m)"',qty:'1',unit:'U',pu:'35000',avancement:100},
-      {desig:'"Fourniture et pose de tampon CPH 850×850 Série lourde"',qty:'31',unit:'U',pu:'25000',avancement:100},
-      {desig:'"Fourniture et pose de boite de raccordement › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable carriére › Remblaiement en matériaux de grave"',qty:'27',unit:'U',pu:'34000',avancement:100}
-    ],
-    deductions:[{date:'2026-05-07',desig:'Versement',amount:'3000000'}]};
-  let c=db.clients.find(x=>x.name.toLowerCase()==='djaloul rahmoun');
-  if(!c){c={id:cliId(),name:'DJALOUL RAHMOUN',docs:[]};db.clients.push(c);}
-  const doc=Object.assign({id:SEED_ID,createdAt:'2026-05-14T10:00:00.000Z',updatedAt:'2026-05-14T10:00:00.000Z',clientId:c.id},data);
-  doc.totals=calcTotals(data);
+// ══ RÉCUPÉRATION PDF MANUELLE : Situation 102/2026 - DJALOUL RAHMOUN ══
+// Ne s'injecte jamais automatiquement : l'utilisateur doit confirmer. Ainsi une restauration cloud tardive ne peut pas être écrasée par une copie partielle.
+const PDF_RECOVERY_102={
+  type:'SITUATION ACTUELLE',num:'102/2026',date:'2026-06-18',clientName:'DJALOUL RAHMOUN',
+  refInt:'',payMode:'ESPÈCES',payRef:'/',bank:'/',payDate:'',tvaRate:'0',garantieRate:'0',notes:'',useAvancement:false,
+  items:[
+    {desig:'Pose de tube annelé Ø500 mm (fourniture non incluse) › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable › Remblaiement en matériaux de terre',qty:'153.2',unit:'ML',pu:'2500',avancement:100},
+    {desig:'Pose de tube annelé Ø315 mm (fourniture non incluse) › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable › Remblaiement en matériaux de tuf',qty:'721.25',unit:'ML',pu:'2500',avancement:100},
+    {desig:'Fourniture de tube annelé Ø315 mm',qty:'159',unit:'ML',pu:'1100',avancement:100},
+    {desig:'Fourniture de tube annelé Ø200 mm',qty:'87',unit:'ML',pu:'670',avancement:100},
+    {desig:'Fourniture et pose de regard double nappe (profondeur ≤ 2 m)',qty:'23',unit:'U',pu:'30000',avancement:100},
+    {desig:'Fourniture et pose de regard double nappe (profondeur > 2 m)',qty:'1',unit:'U',pu:'35000',avancement:100},
+    {desig:'Fourniture et pose de tampon CPH 850×850 Série lourde',qty:'31',unit:'U',pu:'25000',avancement:100},
+    {desig:'Fourniture et pose de boite de raccordement › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable carrière › Remblaiement en matériaux de grave',qty:'25',unit:'U',pu:'34000',avancement:100},
+    {desig:'pose de boite de raccordement › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable carrière › Remblaiement en matériaux de grave',qty:'6',unit:'U',pu:'0',avancement:100}
+  ],
+  deductions:[{date:'2026-05-07',desig:'Versement',amount:'3000000'}]
+};
+function clonePdfRecovery102(){return JSON.parse(JSON.stringify(PDF_RECOVERY_102));}
+function recovery102Match(d){return d&&docFingerprint(d)===docFingerprint(PDF_RECOVERY_102);}
+function restorePdfSituation102(){
+  const existing=db.documents.find(recovery102Match);
+  if(existing){
+    const cid=existing.clientId||db.clients.find(c=>clientFingerprint(c)===clientFingerprint({name:PDF_RECOVERY_102.clientName}))?.id;
+    toast('Le document PDF 102/2026 est déjà présent dans le dossier client.');
+    if(cid)openClientFile(cid);
+    return;
+  }
+  if(!confirm('Restaurer uniquement la situation PDF 102/2026 de DJALOUL RAHMOUN dans son dossier client ?\n\nCette action ajoute une copie locale de secours. Elle ne supprime ni ne remplace les données cloud.'))return;
+  const data=clonePdfRecovery102();
+  let c=db.clients.find(x=>clientFingerprint(x)===clientFingerprint({name:data.clientName}));
+  if(!c){c={id:cliId(),name:data.clientName,docs:[],_mod:nextMod()};db.clients.push(c);}
+  const now=new Date().toISOString();
+  const doc=Object.assign({id:uuid(),createdAt:now,updatedAt:now,_mod:nextMod(),clientId:c.id,recovery:{source:'PDF',document:'Système EGTPH - Pro (v8).pdf',importedAt:new Date().toLocaleString('fr-FR')}},data);
+  doc.totals=calcTotals(doc);
   db.documents.push(doc);
-  if(c.docs.indexOf(SEED_ID)<0)c.docs.push(SEED_ID);
-  return true; // injecté → le caller (cloudSync) sauvegarde et rafraîchit
+  if(!Array.isArray(c.docs))c.docs=[];
+  if(!c.docs.includes(doc.id))c.docs.push(doc.id);
+  c.recoveryInfo={source:'PDF de secours',document:'Système EGTPH - Pro (v8).pdf - Situation 102/2026',importedAt:new Date().toLocaleString('fr-FR')};
+  c._mod=nextMod();
+  relinkFactClients();saveDB();populateClientDatalist();renderHistory();renderClients();updateStats();
+  toast('🛟 Situation 102/2026 restaurée dans la fiche de DJALOUL RAHMOUN.');
+  openClientFile(c.id);
 }
-cloudSync(false);
+// تبدأ المزامنة بعد نجاح تسجيل الدخول فقط.
 
 // ── البثّ المباشر (SSE) الأذكى: يبثّ syncedAt فقط (طابع خفيف)؛ عند تغيّره يُزامِن فوراً ──
 //    أخفّ بكثير على النت من فحص دوري كل 5 ثوانٍ.
 let _sse=null,_sseRetry=null;
 function startCloudStream(){
+  if(!_cloudAuthReady||!_authToken())return;
   if(!('EventSource' in window))return; // متصفّح قديم → الفحص الدوري يكفي
   if(_sse){try{_sse.close();}catch(e){}_sse=null;}
   if(!navigator.onLine)return;
   try{
-    _sse=new EventSource(_cloudEP().replace('.json','/syncedAt.json'));
+    const streamEP=_cloudEP();if(!streamEP)return;
+    _sse=new EventSource(streamEP.replace('.json?','/syncedAt.json?'));
     const onCh=()=>{ if(_sseDeb)clearTimeout(_sseDeb); _sseDeb=setTimeout(()=>{ if(!_cloudBusy)cloudSync(false); },300); };
     _sse.addEventListener('put',onCh);
     _sse.addEventListener('patch',onCh);
@@ -1119,7 +1404,7 @@ function startCloudStream(){
 let _sseDeb=null;
 startCloudStream();
 // فحص دوري خفيف كل 15ث كخطّة بديلة (يغطّي انقطاع SSE المؤقّت)
-setInterval(()=>cloudSync(false),15000);
+setInterval(()=>{if(_cloudAuthReady)cloudSync(false);},15000);
 
 // ── تثبيت الخانة النشطة تلقائياً: لو كنت تكتب في خانة (onchange) ولم تخرج منها بعد،
 //    نُطلق حفظها (blur) قبل الإغلاق/التصغير — حتى لا تبقى القيمة «أمام عينيك فقط» ──
@@ -1138,13 +1423,13 @@ window.addEventListener('beforeunload',function(e){
 document.addEventListener('visibilitychange',function(){
   if(document.visibilityState==='hidden'){
     _commitActiveField();
-    if(window._cloudDirty&&navigator.onLine&&!_cloudBusy)cloudSync(false);
+    if(window._cloudDirty&&navigator.onLine&&!_cloudBusy&&_cloudAuthReady)cloudSync(false);
   } else {
     try{startCloudStream();}catch(e){}
-    if(!_cloudBusy)cloudSync(false);
+    if(!_cloudBusy&&_cloudAuthReady)cloudSync(false);
   }
 });
-window.addEventListener('online',function(){ try{startCloudStream();}catch(e){} if(!_cloudBusy)cloudSync(false); });
+window.addEventListener('online',function(){ try{startCloudStream();}catch(e){} if(!_cloudBusy&&_cloudAuthReady)cloudSync(false); });
 </script>
 </body>
 </html>
