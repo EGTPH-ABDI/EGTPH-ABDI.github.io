@@ -7,7 +7,7 @@ window.renderAdmin = window.renderAdmin || function(){
     var p=document.getElementById('page-admin');
     if(!p) return;
     var h=document.getElementById('holidayList');
-    if(h && window.DB){
+    if(h && typeof DB!=='undefined' && DB){
       if(!DB.settings) DB.settings={};
       if(!Array.isArray(DB.settings.holidays)) DB.settings.holidays=[];
       h.innerHTML = DB.settings.holidays.length ? DB.settings.holidays.map(function(d,i){
@@ -21,7 +21,7 @@ var renderAdmin = window.renderAdmin;
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>EGTPH — سجل الأجور v49</title>
+<title>EGTPH — سجل الأجور v49.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet">
 <style>
 :root{
@@ -796,7 +796,7 @@ body{
 
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div class="topbar">
-  <div class="tlogo">EGTPH <span>| سجل الأجور v49</span></div>
+  <div class="tlogo">EGTPH <span>| سجل الأجور v49.2</span></div>
   <div id="autoSv" style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--gray)">
     <span class="auto-save-dot" id="saveDot"></span>
     <span id="saveLabel">—</span>
@@ -10539,7 +10539,7 @@ try{
   function nowISO(){ return new Date().toISOString(); }
   function safeJson(o){ try{return JSON.stringify(o||{});}catch(e){return '{}';} }
   function clone(o){ try{return JSON.parse(JSON.stringify(o));}catch(e){return o;} }
-  function getById(id){ try{return (typeof getW==='function'?getW(id):null) || ((window.DB&&DB.workers)||[]).find(function(w){return String(w.id)===String(id);});}catch(e){return null;} }
+  function getById(id){ try{return (typeof getW==='function'?getW(id):null) || (((typeof DB!=='undefined' && DB && DB.workers)||[])).find(function(w){return String(w.id)===String(id);});}catch(e){return null;} }
   function money(n){ try{return (typeof fmt==='function'?fmt(+n||0):((+n||0).toLocaleString('fr-DZ')+' دج'));}catch(e){return String(n||0)+' دج';} }
   function moneyN(n){ try{return (typeof fmtN==='function'?fmtN(+n||0):String(+n||0));}catch(e){return String(n||0);} }
   function alertToast(msg,err){ try{ if(typeof toast==='function') toast(msg,!!err); else console.log(msg); }catch(e){ console.log(msg); } }
@@ -10582,20 +10582,23 @@ try{
       id='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10);
       try{ localStorage.setItem(LS_DEVICE_KEY,id); }catch(e){}
     }
-    try{ if(window.DB){ DB.settings=DB.settings||{}; DB.settings.deviceId=id; } }catch(e){}
+    try{ if(typeof DB!=='undefined' && DB){ DB.settings=DB.settings||{}; DB.settings.deviceId=id; } }catch(e){}
     return id;
   }
   function txId(prefix){ return (prefix||'TX')+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9)+'_'+deviceId().slice(-5); }
 
+  // NOTE: DB is declared with `let` by the main app, therefore it is not guaranteed to exist as window.DB.
   function ensureShape(){
-    if(!window.DB) return;
+    if(typeof DB==='undefined' || !DB) return;
     DB.settings=DB.settings||{};
     DB.schemaVersion=Math.max(+(DB.schemaVersion||0),V49_SCHEMA);
     DB.settings.syncSchemaVersion=V49_SCHEMA;
     DB.settings.deviceId=deviceId();
     DB.settings.lastSyncHash=DB.settings.lastSyncHash||'';
     DB.ledger=Array.isArray(DB.ledger)?DB.ledger:[];
+    DB.auditLog=Array.isArray(DB.auditLog)?DB.auditLog:[];
     DB.txJournal=Array.isArray(DB.txJournal)?DB.txJournal:[];
+    DB.workers=Array.isArray(DB.workers)?DB.workers:[];
     DB.cycleLocks=DB.cycleLocks&&typeof DB.cycleLocks==='object'?DB.cycleLocks:{};
     DB.deletedRecords=DB.deletedRecords&&typeof DB.deletedRecords==='object'?DB.deletedRecords:{};
     DB.deletedIds=Array.isArray(DB.deletedIds)?DB.deletedIds:[];
@@ -10620,7 +10623,7 @@ try{
   }
   function touchAllData(){
     ensureShape();
-    if(!window.DB) return;
+    if(typeof DB==='undefined' || !DB) return;
     (DB.workers||[]).forEach(function(w){ touchRecord(w,'worker'); });
     ['advances','bonuses'].forEach(function(sec){
       Object.keys(DB[sec]||{}).forEach(function(wid){
@@ -10667,7 +10670,7 @@ try{
     return d;
   }
   function restoreSnapshot(snap){
-    if(!snap || !window.DB) return false;
+    if(!snap || typeof DB==='undefined' || !DB) return false;
     Object.keys(DB).forEach(function(k){ delete DB[k]; });
     Object.assign(DB, clone(snap));
     ensureShape();
@@ -10900,7 +10903,7 @@ try{
     ensureShape(); touchAllData();
     DB.schemaVersion=V49_SCHEMA; DB.settings.syncSchemaVersion=V49_SCHEMA; DB.settings.lastSyncHash=dbHash(DB);
     document.title=(document.title||'EGTPH').replace(/v\d+/,'v49');
-    var logo=document.querySelector('.tlogo span'); if(logo) logo.textContent='| سجل الأجور v49';
+    var logo=document.querySelector('.tlogo span'); if(logo) logo.textContent='| سجل الأجور v49.2';
     try{ localStorage.setItem(LS_SNAPSHOT_KEY, stableStringify(currentSnapshot())); localStorage.setItem('egtph_pay_last_hash_v49',dbHash(DB)); }catch(e){}
     addAdminPanel();
     addLedger({type:'system',action:'تشغيل طبقة v49',details:{schemaVersion:V49_SCHEMA,deviceId:deviceId(),lastSyncHash:DB.settings.lastSyncHash}});
@@ -10908,5 +10911,231 @@ try{
     if(typeof _cloudDirty!=='undefined') _cloudDirty=false;
   }catch(e){ console.warn('v49 init:',e); }
 })();
+</script>
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   EGTPH Pay v49.2 — حماية مرجع قسط الدين بعد حذف التسبيق
+   - القسط التلقائي مرتبط دائماً بتسبيق حقيقي + خصم داخل نفس التسبيق.
+   - عند حذف التسبيق: يُحذف قسطه التلقائي فقط، ثم يعاد حساب المتبقي وموعد القسط.
+   - لا يُعاد خصم القسط على تسبيق قديم؛ ينتظر تسبيقاً جديداً.
+   - قبل/بعد كل تسبيق جديد، وكل حفظ ودمج سحابي: فحص المرجع والمتبقي.
+════════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  var V492 = '49.2';
+  var _reconcileBusy = false;
+
+  function _safeDB(){ return (typeof DB !== 'undefined' && DB) ? DB : null; }
+  function _same(a,b){ return String(a == null ? '' : a) === String(b == null ? '' : b); }
+  function _n(v){ v=+v||0; return isFinite(v) ? v : 0; }
+  function _round(v){ return Math.round(_n(v)); }
+  function _allAdvances(wid){
+    var db=_safeDB(), out=[]; if(!db) return out;
+    Object.keys((db.advances||{})[wid]||{}).forEach(function(bucket){
+      ((db.advances||{})[wid][bucket]||[]).forEach(function(adv){
+        if(adv && adv.id) out.push({adv:adv,bucket:String(bucket)});
+      });
+    });
+    return out;
+  }
+  function _advanceById(wid,id){
+    var found=null; _allAdvances(wid).some(function(x){
+      if(_same(x.adv.id,id)){ found=x.adv; return true; }
+      return false;
+    }); return found;
+  }
+  function _linkedDeduction(ret,adv){
+    if(!ret || !adv || !Array.isArray(adv.deductions)) return null;
+    var debtId=String(ret.debtId||'');
+    var tag=String(ret._instTag||'');
+    var amt=_round(ret.amount);
+    return adv.deductions.find(function(d){
+      if(!d || d.type!=='debt' || !_same(d.debtId,debtId)) return false;
+      // إن وُجد وسم القسط، يجب أن يطابقه؛ وإلا نقبل الربط بنفس الدين والمبلغ.
+      if(tag && d._instTag && !_same(d._instTag,tag)) return false;
+      return _round(d.amount)===amt;
+    }) || null;
+  }
+  function _isAutoAdvanceInstallment(ret){
+    return !!(ret && ret.type==='return' && ret._auto===true && ret._advanceId);
+  }
+  function _debtRemaining(wid,debtId){
+    var db=_safeDB(), rows=db&&db.debts&&db.debts[wid]||[];
+    var debt=rows.find(function(r){ return r && r.type==='debt' && _same(r.id,debtId); });
+    if(!debt) return 0;
+    var paid=rows.filter(function(r){ return r && r.type==='return' && _same(r.debtId,debt.id); })
+      .reduce(function(s,r){ return s+_n(r.amount); },0);
+    return Math.max(0,_round(_n(debt.amount)-paid));
+  }
+  function _syncDebt(wid,debtId){
+    try{
+      if(typeof syncDebtInstallmentState==='function') syncDebtInstallmentState(wid,debtId);
+    }catch(e){ console.warn('v49.2 installment state:',e); }
+  }
+
+  // يتحقق من كل قسط تلقائي: لا يبقى القسط إلا إذا كان التسبيق المرجعي موجوداً
+  // ويحمل خصم دين مطابقاً له. الإرجاعات اليدوية لا تمس.
+  function reconcileInstallmentReferences(wid,reason){
+    var db=_safeDB();
+    if(!db || _reconcileBusy) return {removed:0,affected:[],reason:reason||''};
+    db.debts=db.debts||{}; db.debts[wid]=Array.isArray(db.debts[wid])?db.debts[wid]:[];
+    var rows=db.debts[wid], affected={}, removed=[];
+    _reconcileBusy=true;
+    try{
+      for(var i=rows.length-1;i>=0;i--){
+        var ret=rows[i];
+        if(!_isAutoAdvanceInstallment(ret)) continue;
+        var adv=_advanceById(wid,ret._advanceId);
+        var deduction=adv ? _linkedDeduction(ret,adv) : null;
+        if(adv && deduction) continue;
+
+        // المرجع حُذف أو لم يعد يحمل الخصم نفسه: نلغي الإرجاع التلقائي فقط.
+        if(ret.debtId) affected[String(ret.debtId)]=true;
+        if(ret.id && typeof _markDeleted==='function') _markDeleted(ret.id);
+        removed.push({
+          returnId:String(ret.id||''), debtId:String(ret.debtId||''), advanceId:String(ret._advanceId||''),
+          amount:_round(ret.amount), tag:String(ret._instTag||'')
+        });
+        rows.splice(i,1);
+      }
+      Object.keys(affected).forEach(function(debtId){ _syncDebt(wid,debtId); });
+    }finally{ _reconcileBusy=false; }
+    return {removed:removed.length,items:removed,affected:Object.keys(affected),reason:reason||''};
+  }
+
+  function reconcileAllInstallments(reason){
+    var db=_safeDB(); if(!db) return {removed:0,items:[]};
+    var seen={}, all=[];
+    (db.workers||[]).forEach(function(w){ if(w && w.id!=null) seen[String(w.id)]=w.id; });
+    Object.keys(db.debts||{}).forEach(function(wid){ seen[String(wid)]=wid; });
+    Object.keys(seen).forEach(function(key){
+      var r=reconcileInstallmentReferences(seen[key],reason);
+      if(r.removed) all=all.concat(r.items||[]);
+    });
+    return {removed:all.length,items:all,reason:reason||''};
+  }
+
+  function auditRepair(result,reason){
+    if(!result || !result.removed) return;
+    var text='إلغاء '+result.removed+' قسط تلقائي لأن التسبيق المرجعي حُذف أو لم يعد مطابقاً';
+    try{
+      if(typeof audit==='function') audit(text,{reason:reason||'',items:result.items||[]});
+      else if(_safeDB()){
+        DB.auditLog=Array.isArray(DB.auditLog)?DB.auditLog:[];
+        DB.auditLog.unshift({time:(typeof todayStr==='function'?todayStr():new Date().toLocaleString()),user:(DB.settings&&DB.settings.userName)||'النظام',action:text,details:{reason:reason||'',items:result.items||[]}});
+      }
+    }catch(e){ console.warn('v49.2 audit:',e); }
+    try{
+      if(typeof addLedger==='function') addLedger({type:'installment_unlinked',action:text,details:{reason:reason||'',items:result.items||[]}});
+    }catch(e){}
+  }
+
+  function _autoReturnsForAdvance(wid,advId){
+    var db=_safeDB(), rows=db&&db.debts&&db.debts[wid]||[];
+    return rows.filter(function(r){ return _isAutoAdvanceInstallment(r) && _same(r._advanceId,advId); })
+      .map(function(r){ return {returnId:String(r.id||''),debtId:String(r.debtId||''),advanceId:String(r._advanceId||''),amount:_round(r.amount),tag:String(r._instTag||'')}; });
+  }
+
+  // الدالة الأصلية للحذف تقوم أصلاً بحذف الإرجاع المرتبط. هذا الغلاف يوثق ذلك
+  // في Audit/Ledger ثم يضمن أيضاً تنظيف أي مرجع يتيم يأتي من جهاز آخر أو نسخة قديمة.
+  if(typeof cleanupAdvanceLinkedReturns==='function'){
+    var _oldCleanup=cleanupAdvanceLinkedReturns;
+    cleanupAdvanceLinkedReturns=function(wid,adv){
+      var linkedBefore=_autoReturnsForAdvance(wid,adv&&adv.id);
+      var count=_oldCleanup.apply(this,arguments);
+      if(linkedBefore.length) auditRepair({removed:linkedBefore.length,items:linkedBefore},'حذف تسبيق مرجعي');
+      var result=reconcileInstallmentReferences(wid,'حذف/تعديل تسبيق');
+      if(result.removed) auditRepair(result,'حذف/تعديل تسبيق');
+      return _n(count)+_n(result.removed);
+    };
+  }
+
+  // قبل أي تسوية آلية: المرجع والمتبقي يعاد حسابهما من البيانات الحقيقية.
+  // بعد التسوية: تحقق ثانٍ يمنع تكرار القسط أو بقاء رابط غير صالح.
+  if(typeof autoSettleOnAdvance==='function'){
+    var _oldAutoSettle=autoSettleOnAdvance;
+    autoSettleOnAdvance=function(wid,m,yr,targetAdvance,paidDate){
+      var before=reconcileInstallmentReferences(wid,'قبل تسبيق جديد');
+      if(before.removed) auditRepair(before,'قبل تسبيق جديد');
+      var result=_oldAutoSettle.apply(this,arguments);
+      var after=reconcileInstallmentReferences(wid,'بعد تسبيق جديد');
+      if(after.removed) auditRepair(after,'بعد تسبيق جديد');
+      return !!result || !!before.removed || !!after.removed;
+    };
+  }
+
+  // كل حفظ، بما فيه الحفظ بعد الدمج السحابي، يفحص المراجع أولاً.
+  if(typeof saveDB==='function'){
+    var _oldSaveV492=saveDB;
+    saveDB=function(){
+      var result=reconcileAllInstallments('قبل الحفظ/المزامنة');
+      if(result.removed) auditRepair(result,'قبل الحفظ/المزامنة');
+      return _oldSaveV492.apply(this,arguments);
+    };
+  }
+
+  // بعد الدمج السحابي مباشرة، قد يكون تسبيق محذوف وصل من جهاز آخر بينما بقي
+  // قسطه في النسخة المحلية؛ لذلك نتحقق فوراً ثم يسجل الحذف في tombstone.
+  if(typeof v40Merge==='function'){
+    var _oldV40Merge=v40Merge;
+    v40Merge=function(remote){
+      var out=_oldV40Merge.apply(this,arguments);
+      var result=reconcileAllInstallments('بعد دمج سحابي');
+      if(result.removed) auditRepair(result,'بعد دمج سحابي');
+      return out;
+    };
+  }
+
+  // واجهة فحص صغيرة للشفافية، دون تغيير الحسابات.
+  window.egtphCheckInstallmentLinks=function(){
+    var result=reconcileAllInstallments('فحص يدوي');
+    if(result.removed){
+      auditRepair(result,'فحص يدوي');
+      try{ saveDB(); }catch(e){}
+    }
+    var msg=result.removed
+      ? '⚠️ تم إلغاء '+result.removed+' قسط تلقائي بلا تسبيق مرجعي. المتبقي والموعد أعيدا حسابهما.'
+      : '✅ الأقساط التلقائية سليمة: كل قسط له تسبيق مرجعي وخصم مطابق.';
+    try{ if(typeof toast==='function') toast(msg,!!result.removed); else alert(msg); }catch(e){ alert(msg); }
+    return result;
+  };
+
+  // لا نخصم شيئاً في بدء التشغيل؛ نتحقق فقط. إن وُجد مرجع يتيم نحذفه ويُحفظ.
+  setTimeout(function(){
+    try{
+      var r=reconcileAllInstallments('فتح البرنامج');
+      if(r.removed){
+        auditRepair(r,'فتح البرنامج');
+        if(typeof saveDB==='function') saveDB();
+      }
+    }catch(e){ console.warn('v49.2 startup check:',e); }
+  },450);
+
+  try{
+    var db=_safeDB();
+    if(db){
+      db.settings=db.settings||{};
+      db.settings.installmentReferenceGuard=V492;
+      db.settings.installmentRule='delete-linked-auto-installment-until-next-new-advance';
+    }
+    var logo=document.querySelector('.tlogo span'); if(logo) logo.textContent='| سجل الأجور v49.2';
+    document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v49.2');
+  }catch(e){}
+
+  // زر اختياري داخل أدوات v49: لا يعدّل الحسابات، فقط يفحص روابط الأقساط.
+  setTimeout(function(){
+    try{
+      var panel=document.getElementById('v49Panel');
+      if(!panel || document.getElementById('v492CheckBtn')) return;
+      var host=panel.querySelector('.secbody')||panel;
+      var btn=document.createElement('button');
+      btn.id='v492CheckBtn'; btn.className='btn2';
+      btn.textContent='🔗 فحص مرجع الأقساط';
+      btn.onclick=window.egtphCheckInstallmentLinks;
+      host.appendChild(btn);
+    }catch(e){}
+  },700);
+})();
+
 </script>
 </body></html>
