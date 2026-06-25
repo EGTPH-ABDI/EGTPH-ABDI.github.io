@@ -1276,7 +1276,7 @@ const dbC = s     => _tx(s,'readwrite',(st)     => { st.clear(); }, undefined);
 
 // ── Helpers ──
 const uid   = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-const today = () => new Date().toISOString().slice(0,10);
+const today = () => { const d=new Date(); const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); };
 const fD    = d => { if (!d) return '—'; return new Date(d+'T00:00:00').toLocaleDateString('fr-DZ',{day:'2-digit',month:'2-digit',year:'numeric'}); };
 // وقت الإدخال الفعلي للعملية (من createdAt) — يُستعمل في قوائم المدفوعات/التسبيقات
 const fEntryT = iso => { if(!iso) return ''; try{ const d=new Date(iso); if(isNaN(d.getTime()))return ''; return d.toLocaleDateString('fr-DZ',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+formatTime(d); }catch(e){ return ''; } };
@@ -6483,7 +6483,7 @@ function downloadCSV(rows, filename) {
 }
 
 function exportAllCSV() {
-  var date = new Date().toISOString().slice(0,10);
+  var date = today();
   var exported = 0;
 
   // Sheet 1: Clients
@@ -6552,7 +6552,7 @@ function exportAllCSV() {
   logA('تصدير CSV: '+date);
 }
 function exportClientExcel(cid) {
-  var date = new Date().toISOString().slice(0,10);
+  var date = today();
   var cl = clients.find(function(x){return x.id===cid;}); if (!cl) return;
   var t  = getCT(cid);
 
@@ -7878,5 +7878,252 @@ function toggleNotesPanel() {
     <button onclick="addNote()" title="إضافة (Ctrl+Enter)">+</button>
   </div>
 </div>
+
+
+<!-- EGTPH v13.1 — تسعير في انتظار الاتفاق + تدقيق محاسبي -->
+<style id="egtph-pending-price-style">
+  .price-unset { border-color:var(--red)!important; color:var(--red)!important; background:var(--rdim)!important; }
+  .price-unset::placeholder { color:var(--red)!important; opacity:.9; }
+  .pending-price-tag{display:inline-flex;align-items:center;gap:4px;border:1px solid rgba(240,82,82,.42);background:var(--rdim);color:var(--red);border-radius:999px;padding:2px 7px;font-size:9px;font-weight:900;white-space:nowrap;line-height:1.4}
+  .pending-summary{margin:10px 0;padding:9px 11px;border:1px solid rgba(240,82,82,.42);background:var(--rdim);color:var(--red);border-radius:var(--rs);font-size:11px;font-weight:800;line-height:1.7}
+  .pending-summary b{font-family:'JetBrains Mono',monospace}
+  .pending-inline{color:var(--red)!important;font-weight:900!important}
+  @media print{.pending-print{display:block!important;border:1.5px solid #b91c1c!important;color:#991b1b!important;background:#fef2f2!important;padding:8px 10px!important;margin:0 0 12px!important;font-weight:800!important;font-size:11px!important}}
+</style>
+<script id="egtph-pending-price-engine">
+(function(){
+  'use strict';
+  const PENDING='pending', CONFIRMED='confirmed';
+  const n=v=>parseFloat(v)||0;
+  const pending=o=>!!o && o.priceStatus===PENDING;
+  const stateFromRaw=v=>String(v==null?'':v).trim()==='' ? PENDING : CONFIRMED;
+  const ptag=()=>'<span class="pending-price-tag">⚠ لم يُتفق عليه</span>';
+  const ptext='لم يُتفق عليه';
+
+  // Expose tiny helpers for formulae and controlled extensions.
+  window.EGTPHPricing = { pending, stateFromRaw, PENDING, CONFIRMED };
+
+  function resolveEntryPrice(e){
+    if (!e) return {price:0,pending:false};
+    if (pending(e)) return {price:0,pending:true};
+    if (e.unitPrice !== undefined && e.unitPrice !== null && e.unitPrice !== '') return {price:n(e.unitPrice),pending:false};
+    let def=null;
+    if (e.type==='truck') def=prices.find(p=>p.id===e.materialId&&p.recordId===e.recordId&&p.type==='mat_def');
+    if (e.type==='machine') def=prices.find(p=>p.id===e.unitId&&p.recordId===e.recordId&&p.type==='unit_def');
+    if (!def) return {price:0,pending:true};
+    return {price:pending(def)?0:n(def.price),pending:pending(def)};
+  }
+
+  // Central calculation: pending lines keep their quantities but are deliberately excluded from financial totals.
+  window.calcE = function(e){
+    if (!e) return {qty:0,price:0,amount:0,unit:'',pending:false};
+    if (e.type==='truck') {
+      const qty=Object.values(e.cols||{}).reduce((s,v)=>s+n(v),0), r=resolveEntryPrice(e);
+      return {qty,price:r.price,amount:r.pending?0:qty*r.price,unit:'رحلة',pending:r.pending};
+    }
+    if (e.type==='machine') {
+      const qty=n(e.hours), r=resolveEntryPrice(e);
+      return {qty,price:r.price,amount:r.pending?0:qty*r.price,unit:'ساعة',pending:r.pending};
+    }
+    if (e.type==='stock' || e.type==='invoice') {
+      const qty=n(e.qty), isPending=pending(e), price=isPending?0:n(e.unitPrice);
+      return {qty,price,amount:isPending?0:qty*price,unit:e.unit||(e.type==='invoice'?'U':'وحدة'),pending:isPending};
+    }
+    return {qty:0,price:0,amount:0,unit:'',pending:false};
+  };
+
+  window.getCT = function(cid){
+    let tot=0,trips=0,hours=0,pendingLines=0,pendingQty=0;
+    const pendingEntries=[];
+    records.filter(r=>r.clientId===cid).forEach(rec=>entries.filter(e=>e.recordId===rec.id).forEach(e=>{
+      const cv=calcE(e); tot+=cv.amount;
+      if(e.type==='truck') trips+=cv.qty;
+      if(e.type==='machine') hours+=cv.qty;
+      if(cv.pending && cv.qty>0){ pendingLines++; pendingQty+=cv.qty; pendingEntries.push({entry:e,calc:cv,record:rec}); }
+    }));
+    const paid=payments.filter(p=>p.clientId===cid).reduce((s,p)=>s+n(p.amount),0);
+    const adv=advances.filter(a=>a.clientId===cid&&a.status!=='X').reduce((s,a)=>s+n(a.amount),0);
+    const totalPaid=paid+adv, balance=tot-totalPaid;
+    return {tot,trips,hours,paid,adv,totalPaid,remain:Math.max(0,balance),overpaid:Math.max(0,-balance),balance,pendingLines,pendingQty,pendingEntries};
+  };
+
+  window.getRT = function(rid){
+    let amount=0,trips=0,hours=0,pendingLines=0,pendingQty=0;
+    entries.filter(e=>e.recordId===rid).forEach(e=>{
+      const cv=calcE(e); amount+=cv.amount;
+      if(e.type==='truck') trips+=cv.qty;
+      if(e.type==='machine') hours+=cv.qty;
+      if(cv.pending&&cv.qty>0){pendingLines++;pendingQty+=cv.qty;}
+    });
+    return {amount,trips,hours,pendingLines,pendingQty};
+  };
+
+  window.getSupDebt = function(spId){
+    const spInvs=(window._supInvs||[]).filter(v=>v.supplierId===spId);
+    let invoiced=0,pendingLines=0,pendingQty=0;
+    spInvs.forEach(v=>(v.items||[]).forEach(r=>{
+      const q=n(r.qty);
+      if(pending(r)){ if(q>0){pendingLines++;pendingQty+=q;} }
+      else invoiced+=q*n(r.unitPrice);
+    }));
+    const sp=suppliers.find(x=>x.id===spId), initDebt=n(sp?.initialDebt), totalDebt=invoiced+initDebt;
+    const paid=supPays.filter(p=>p.supplierId===spId).reduce((s,p)=>s+n(p.amount),0);
+    return {totalDebt,paid,remain:Math.max(0,totalDebt-paid),invoiced,initDebt,pendingLines,pendingQty};
+  };
+
+  // New and edited record prices retain a real semantic state, not an ambiguous numeric zero.
+  window.addRecMat = async function(recId,recType,cid){
+    const label=recType==='truck'?'مادة':'وحدة';
+    const pholder=recType==='truck'?'مثال: TUF، Sable، Grave...':'مثال: JCB، Pelle Godet...';
+    const truckMatOpts='<option value="">-- اختر نوعاً --</option>'+['TUF','Sable','Grave','Évacuation','Terre','Jour Chantier','Autre'].map(m=>'<option value="'+m+'">'+m+'</option>').join('');
+    const truckUnitOpts=['رحلة','يوم','m³','U','heure','ML','m²'].map(u=>'<option value="'+u+'">'+u+'</option>').join('');
+    const machUnitOpts=['heure','jour','PAH','forfait'].map(u=>'<option value="'+u+'">'+u+'</option>').join('');
+    const body=recType==='truck'
+      ? '<div class="fg"><label>نوع المادة</label><select id="rm-mtype">'+truckMatOpts+'</select></div><div class="fg"><label>الاسم / الوصف *</label><input type="text" id="rm-n" placeholder="'+pholder+'"></div><div class="fgr"><div class="fg"><label>السعر (اختياري)</label><input type="number" id="rm-p" placeholder="اتركه فارغاً إذا لم يُتفق عليه" min="0"><div class="hint">يبقى السعر معلّقاً ولا يدخل في الإجمالي حتى تثبيته.</div></div><div class="fg"><label>وحدة السعر</label><select id="rm-pu">'+truckUnitOpts+'</select></div></div>'
+      : '<div class="fg"><label>اسم الآلة / الوحدة *</label><input type="text" id="rm-n" placeholder="'+pholder+'"></div><div class="fgr"><div class="fg"><label>السعر (اختياري)</label><input type="number" id="rm-p" placeholder="اتركه فارغاً إذا لم يُتفق عليه" min="0"><div class="hint">يبقى السعر معلّقاً ولا يدخل في الإجمالي حتى تثبيته.</div></div><div class="fg"><label>وحدة التسعير</label><select id="rm-pu">'+machUnitOpts+'</select></div></div>';
+    OM('＋ '+label+' جديدة',body,async()=>{
+      const nameInput=document.getElementById('rm-n').value.trim();
+      const mtype=recType==='truck'?(document.getElementById('rm-mtype')?.value||''):'';
+      const name=nameInput||mtype||''; if(!name)return T('أدخل الاسم أو اختر نوع المادة','error');
+      const raw=(document.getElementById('rm-p').value||'').trim();
+      const price=raw===''?0:n(raw), priceStatus=stateFromRaw(raw);
+      const priceUnit=document.getElementById('rm-pu')?.value||(recType==='truck'?'رحلة':'heure');
+      const existing=prices.filter(p=>p.recordId===recId&&p.type===(recType==='truck'?'mat_def':'unit_def'));
+      const p={id:recId+'_'+uid(),recordId:recId,type:recType==='truck'?'mat_def':'unit_def',name,price,priceStatus,priceUnit,materialType:mtype,order:existing.length,cls:'',lockedAt:null,createdAt:new Date().toISOString()};
+      prices.push(p); const ok=await dbP('prices',p); if(!ok){prices.pop();return T('فشل الحفظ','error');}
+      CM(); renderCD(cid); T(priceStatus===PENDING?'⚠ تمت الإضافة بسعر معلّق':'✅ تمت إضافة '+label+': '+name,'warning');
+    },'إضافة '+label);
+    setTimeout(()=>document.getElementById('rm-n')?.focus(),80);
+  };
+
+  window.updateRecMat = async function(recId,matId,field,value,cid){
+    const p=prices.find(x=>x.id===matId&&x.recordId===recId); if(!p)return;
+    if(p.lockedAt){T('🔒 هذه المادة مقفلة — اضغط "فتح" أولاً','error');return;}
+    if(field==='name')p.name=value;
+    if(field==='price'){const raw=String(value==null?'':value).trim();p.price=raw===''?0:n(raw);p.priceStatus=stateFromRaw(raw);}
+    if(field==='priceUnit')p.priceUnit=value;
+    if(field==='materialType')p.materialType=value;
+    await dbP('prices',p); scheduleAutoSaveFile(); renderCD(cid);
+  };
+
+  window.addInvE = async function(recId,cid){
+    const ex=entries.filter(e=>e.recordId===recId&&e.type==='invoice');
+    const e={id:uid(),recordId:recId,type:'invoice',designation:'',qty:1,unit:'U',unitPrice:0,priceStatus:PENDING,order:ex.length,createdAt:new Date().toISOString()};
+    entries.push(e); await dbP('entries',e); renderCD(cid); scheduleAutoSaveFile();
+  };
+  window.updateInvE = async function(eid,field,value,cid){
+    const e=entries.find(x=>x.id===eid);if(!e)return;
+    if(field==='qty')e.qty=n(value);
+    else if(field==='unitPrice'){const raw=String(value==null?'':value).trim();e.unitPrice=raw===''?0:n(raw);e.priceStatus=stateFromRaw(raw);}
+    else e[field]=value;
+    await dbP('entries',e); scheduleAutoSaveFile(); renderCD(cid);
+  };
+
+  window.addStockE = async function(recId,cid){
+    const opts=stockItems.map(s=>'<option value="'+s.id+'|'+esc(s.name)+'|'+s.unit+'">'+esc(s.name)+' (متوفر: '+s.qty+' '+s.unit+')</option>').join('');
+    OM('＋ بيع من المخزون','<div class="fg"><label>التاريخ *</label><input type="date" id="se-d" value="'+today()+'"></div><div class="fg"><label>المادة *</label><select id="se-it">'+opts+'</select></div><div class="fgr"><div class="fg"><label>الكمية *</label><input type="number" id="se-q" placeholder="0" min="1"></div><div class="fg"><label>سعر الوحدة (اختياري)</label><input type="number" id="se-p" placeholder="اتركه فارغاً إذا لم يُتفق عليه"><div class="hint">الكمية تُسجل، لكن القيمة لا تدخل الحساب قبل تثبيت السعر.</div></div></div><div class="fg"><label>ملاحظة</label><input type="text" id="se-nt" placeholder="..."></div>',async()=>{
+      const [itemId,itemName,unit]=document.getElementById('se-it').value.split('|');
+      const qty=n(document.getElementById('se-q').value), raw=(document.getElementById('se-p').value||'').trim(), price=raw===''?0:n(raw), priceStatus=stateFromRaw(raw);
+      if(qty<=0)return T('أدخل كمية صحيحة','error'); const item=stockItems.find(s=>s.id===itemId);if(item&&item.qty<qty)return T('المتوفر '+item.qty+' فقط','error');
+      if(item){item.qty-=qty;await dbP('stock_items',item);}
+      const e={id:uid(),recordId:recId,type:'stock',date:document.getElementById('se-d').value,itemId,itemName,unit,qty,unitPrice:price,priceStatus,note:document.getElementById('se-nt').value.trim(),createdAt:new Date().toISOString()};
+      try{entries.push(e);const ok=await dbP('entries',e);if(!ok){entries.pop();if(item){item.qty+=qty;await dbP('stock_items',item);}return T('فشل الحفظ','error');}
+        const mv={id:uid(),type:'out',itemId,itemName,unit,qty,date:e.date,note:'بيع لعميل',createdAt:e.createdAt};stockMoves.push(mv);await dbP('stock_moves',mv);CM();renderCD(cid);T(priceStatus===PENDING?'⚠ تمت إضافة كمية بسعر معلّق':'✅ تمت إضافة البيع',priceStatus===PENDING?'warning':'success');
+      }catch(err){console.error(err);T('خطأ: '+err.message,'error');}
+    },'إضافة');
+  };
+
+  window.openStockMv = async function(type){
+    if(secGuard('stock','المخزون'))return;
+    const opts=stockItems.map(s=>'<option value="'+s.id+'|'+esc(s.name)+'|'+s.unit+'">'+esc(s.name)+' ('+s.qty+' '+s.unit+')</option>').join('');
+    const clientOpts=clients.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+    const formHtml=type==='in'
+      ? '<div class="fg"><label>الصنف *</label><select id="sm-it">'+opts+'</select></div><div class="fgr"><div class="fg"><label>الكمية (زيادة) *</label><input type="number" id="sm-q" placeholder="0" min="1"></div><div class="fg"><label>التاريخ</label><input type="date" id="sm-d" value="'+today()+'"></div></div><div class="fg"><label>ملاحظة</label><input type="text" id="sm-nt" placeholder="مصدر الزيادة..."></div>'
+      : '<div class="fg"><label>الصنف *</label><select id="sm-it">'+opts+'</select></div><div class="fgr"><div class="fg"><label>الكمية (نقصان) *</label><input type="number" id="sm-q" placeholder="0" min="1"></div><div class="fg"><label>التاريخ</label><input type="date" id="sm-d" value="'+today()+'"></div></div><div class="fg"><label>السعر للوحدة (اختياري)</label><input type="number" id="sm-price" placeholder="اتركه فارغاً إذا لم يُتفق عليه" min="0"><div class="hint">إذا وُجِّه إلى عميل، تسجّل الكمية بسعر معلّق ولا تدخل مستحقاته.</div></div><div class="fg"><label>توجيه النقصان إلى عميل (اختياري)</label><select id="sm-cl" onchange="smRecordUpdate()"><option value="">— بدون توجيه —</option>'+clientOpts+'</select></div><div id="sm-rec-wrap" style="display:none"><div class="fg"><label>السجل *</label><select id="sm-rid"></select></div></div><div class="fg"><label>ملاحظة</label><input type="text" id="sm-nt" placeholder="سبب النقصان..."></div>';
+    OM(type==='in'?'📥 زيادة المخزون':'📤 نقصان المخزون',formHtml,async()=>{
+      const [itemId,itemName,unit]=document.getElementById('sm-it').value.split('|');
+      const qty=n(document.getElementById('sm-q').value), raw=type==='out'?String(document.getElementById('sm-price')?.value||'').trim():'0', price=type==='out'&&raw!==''?n(raw):0, priceStatus=type==='out'?stateFromRaw(raw):CONFIRMED;
+      const note=document.getElementById('sm-nt').value.trim(), date=document.getElementById('sm-d').value;
+      if(qty<=0)return T('أدخل كمية صحيحة','error');const item=stockItems.find(s=>s.id===itemId);if(!item)return;if(type==='out'&&item.qty<qty)return T('المتوفر '+item.qty+' فقط','error');
+      item.qty=type==='in'?item.qty+qty:item.qty-qty;await dbP('stock_items',item);
+      const mv={id:uid(),type,itemId,itemName,unit,qty,date,note,createdAt:new Date().toISOString()};stockMoves.push(mv);await dbP('stock_moves',mv);
+      if(type==='out'){
+        const selCid=document.getElementById('sm-cl')?.value,selRid=document.getElementById('sm-rid')?.value;
+        if(selCid&&selRid){const rec=records.find(r=>r.id===selRid&&r.clientId===selCid);if(rec){const e={id:uid(),recordId:selRid,type:'stock',date,itemId,itemName,unit,qty,unitPrice:price,priceStatus,note:note||'من المخزون',createdAt:new Date().toISOString()};entries.push(e);await dbP('entries',e);const cl=clients.find(c=>c.id===selCid);await logA('نقصان موجَّه: '+qty+' '+unit+' '+itemName+' → '+(cl?.name||''),priceStatus===PENDING?'سعر معلّق':fDA(qty*price));T(priceStatus===PENDING?'⚠ سُجلت الكمية لدى '+(cl?.name||'')+' بسعر معلّق':'✅ سُجِّل لدى '+(cl?.name||'')+' بمبلغ '+fDA(qty*price),priceStatus===PENDING?'warning':'success');}}
+        else {T('✅ نقصان: −'+qty+' '+itemName,'success');await logA('نقصان مخزون: '+itemName,qty+' '+unit);}
+      }else{T('✅ زيادة: +'+qty+' '+itemName,'success');await logA('زيادة مخزون: '+itemName,qty+' '+unit);}
+      CM();renderStock();
+    },type==='in'?'زيادة':'نقصان');
+  };
+
+  // Supplier purchase invoices use the same explicit price state.
+  window.openSupInvoice = function(spId){
+    if(secGuard('sup:'+spId,'حساب المورد'))return; const s=suppliers.find(x=>x.id===spId);if(!s)return;
+    window._inv={spId,rows:[{name:'',unit:'وحدة',qty:1,unitPrice:0,priceStatus:PENDING}],date:today(),ref:'',note:''};renderInvModal();
+  };
+  window.editSupInvoice = function(invId,spId){
+    if(secGuard('sup:'+spId,'حساب المورد'))return;const s=suppliers.find(x=>x.id===spId),v=(window._supInvs||[]).find(x=>x.id===invId);if(!s||!v)return T('الفاتورة غير موجودة','error');
+    window._inv={spId,editId:invId,rows:(v.items||[]).map(it=>({name:it.name||'',unit:it.unit||'وحدة',qty:n(it.qty),unitPrice:n(it.unitPrice),priceStatus:pending(it)?PENDING:CONFIRMED})),date:v.date||today(),ref:v.ref||'',note:v.note||''};
+    if(!window._inv.rows.length)window._inv.rows=[{name:'',unit:'وحدة',qty:1,unitPrice:0,priceStatus:PENDING}];renderInvModal();
+  };
+  window.invCellChange = function(i,field,val){
+    if(!window._inv||!window._inv.rows[i])return;const r=window._inv.rows[i];
+    if(field==='qty')r.qty=n(val); else if(field==='unitPrice'){const raw=String(val==null?'':val).trim();r.unitPrice=raw===''?0:n(raw);r.priceStatus=stateFromRaw(raw);} else r[field]=val;
+    const totalRow=pending(r)?0:n(r.qty)*n(r.unitPrice),el=document.getElementById('inv-t-'+i);if(el){el.innerHTML=pending(r)?ptag():fDA(totalRow);el.classList.toggle('pending-inline',pending(r));}
+    const grand=window._inv.rows.reduce((s,x)=>s+(pending(x)?0:n(x.qty)*n(x.unitPrice)),0),gel=document.getElementById('inv-grand');if(gel)gel.textContent=fDA(grand);
+    if(field==='name'){const s=suppliers.find(x=>x.id===window._inv.spId),cat=s&&s.catalog?s.catalog.find(c=>c.name===val):null;if(cat){r.unit=cat.unit;const usel=document.getElementById('inv-u-'+i);if(usel)usel.value=cat.unit;}}
+  };
+  window.invAddRow = function(){if(!window._inv)return;window._inv.rows.push({name:'',unit:'وحدة',qty:1,unitPrice:0,priceStatus:PENDING});renderInvModal();};
+  window.invAddNewCatItem = function(){
+    const inv=window._inv;if(!inv)return;const s=suppliers.find(x=>x.id===inv.spId);if(!s)return;
+    OM('＋ صنف جديد للكتالوج','<div class="fg"><label>اسم الصنف / الخدمة *</label><input type="text" id="icn-n" placeholder="مثال: وقود، رمل، ساعة آلة..."></div><div class="fg"><label>الوحدة</label><select id="icn-u"><option>وحدة</option><option>متر</option><option>م2</option><option>م3</option><option>كجم</option><option>طن</option><option>لتر</option><option>رحلة</option><option>يوم</option><option>ساعة</option><option>قطعة</option></select></div><div class="hint">سيُضاف هذا الصنف للكتالوج ولفواتير المورد، ثم تحدد السعر عند الاتفاق.</div>',async()=>{
+      const name=document.getElementById('icn-n').value.trim(),unit=document.getElementById('icn-u').value;if(!name)return T('أدخل الاسم','error');if(!s.catalog)s.catalog=[];if(!s.catalog.find(x=>x.name===name)){s.catalog.push({name,unit});await dbP('suppliers',s);}inv.rows.push({name,unit,qty:1,unitPrice:0,priceStatus:PENDING});CM();renderInvModal();T('✅ '+name+' مضاف','success');
+    },'إضافة وأدراج في الفاتورة');setTimeout(()=>document.getElementById('icn-n')?.focus(),80);
+  };
+  window.invSave = async function(){
+    const inv=window._inv;if(!inv)return;if(secGuard('sup:'+inv.spId,'حساب المورد'))return;
+    const validRows=inv.rows.filter(r=>(r.name||'').trim()&&n(r.qty)>0);if(!validRows.length)return T('أضف صنفاً واحداً على الأقل','error');
+    const total=validRows.reduce((s,r)=>s+(pending(r)?0:n(r.qty)*n(r.unitPrice)),0),sp=suppliers.find(x=>x.id===inv.spId);if(!window._supInvs)window._supInvs=[];
+    if(inv.editId){const ex=window._supInvs.find(x=>x.id===inv.editId);if(!ex){window._inv=null;CM();return T('الفاتورة غير موجودة','error');}ex.date=inv.date||today();ex.ref=inv.ref||'';ex.note=inv.note||'';ex.items=validRows;ex.total=total;await dbP('sup_invoices',ex);window._inv=null;CM();renderSupDetail(inv.spId);T('✅ تم تعديل الفاتورة — '+fDA(total),'success');await logA('تعديل فاتورة: '+(sp?.name||''),fDA(total));return;}
+    const rec={id:uid(),supplierId:inv.spId,date:inv.date||today(),ref:inv.ref||'',note:inv.note||'',items:validRows,total,createdAt:new Date().toISOString()};window._supInvs.push(rec);await dbP('sup_invoices',rec);window._inv=null;CM();renderSupDetail(inv.spId);T('✅ فاتورة '+fDA(total)+' مسجّلة','success');await logA('فاتورة شراء: '+(sp?.name||''),fDA(total));
+  };
+
+  // Audit: pending price is a distinct actionable condition; confirmed zero remains allowed.
+  window.auditPrices = function(){
+    const issues=[];
+    for(const p of prices){if(p.recordId&&!records.find(r=>r.id===p.recordId))issues.push(makeIssue(SEV.WARN,'أسعار','سعر معرَّف لسجل محذوف (معرّف: '+p.recordId+')','جدول الأسعار',{type:'clients'}));}
+    for(const e of entries){const cv=calcE(e);if(cv.pending&&cv.qty>0){const rec=records.find(r=>r.id===e.recordId),cl=rec&&clients.find(c=>c.id===rec.clientId);issues.push(makeIssue(SEV.WARN,'أسعار','كمية '+fN(cv.qty)+' '+cv.unit+' بسعر لم يُتفق عليه — غير محسوبة مالياً',cl?cl.name:'—',{type:'client',id:cl?.id}));}}
+    const byName={};for(const p of prices){if(p.type!=='mat_def'&&p.type!=='unit_def')continue;if(pending(p))continue;const key=p.type+'|'+String(p.name||'').trim().toLocaleLowerCase()+'|'+String(p.priceUnit||'').trim().toLocaleLowerCase();(byName[key]||(byName[key]=new Set())).add(n(p.price));}
+    Object.entries(byName).forEach(([key,set])=>{if(set.size>1){const [kind,name]=key.split('|');issues.push(makeIssue(SEV.INFO,'أسعار',(kind==='mat_def'?'المادة ':'الوحدة ')+'"'+name+'" لها أسعار مؤكدة مختلفة: '+[...set].map(fDA).join(' / '),'جدول الأسعار',{type:'clients'}));}});
+    return issues;
+  };
+
+  function clientNotice(cid){const t=getCT(cid);return t.pendingLines?'<div class="pending-summary" data-pending-client="'+cid+'">⚠ يوجد <b>'+t.pendingLines+'</b> بند/بنود بكمية مسجلة وسعر غير متفق عليه. هذه الكميات لا تدخل في إجمالي الإيرادات أو المتبقي حتى تثبيت السعر.</div>':'';}
+  function supplierNotice(spId){const t=getSupDebt(spId);return t.pendingLines?'<div class="pending-summary" data-pending-supplier="'+spId+'">⚠ يوجد <b>'+t.pendingLines+'</b> بند/بنود شراء بسعر غير متفق عليه. هذه الكميات لا تدخل في دين المورد حتى تثبيت السعر.</div>':'';}
+  function markInput(el){if(!el||el.dataset.pendingMarked)return;el.dataset.pendingMarked='1';el.value='';el.placeholder=ptext;el.classList.add('price-unset');const tag=document.createElement('span');tag.className='pending-price-tag';tag.textContent='⚠ لم يُتفق عليه';el.insertAdjacentElement('afterend',tag);}
+  function decorate(){
+    // record-level materials and machine units
+    document.querySelectorAll('input[onchange*="updateRecMat"][onchange*="price"]').forEach(el=>{const m=el.getAttribute('onchange').match(/updateRecMat\('([^']+)'\s*,\s*'([^']+)'\s*,\s*'price'/);const p=m&&prices.find(x=>x.id===m[2]&&x.recordId===m[1]);if(pending(p))markInput(el);});
+    // invoice record input
+    document.querySelectorAll('input[onchange*="updateInvE"][onchange*="unitPrice"]').forEach(el=>{const m=el.getAttribute('onchange').match(/updateInvE\('([^']+)'/);const e=m&&entries.find(x=>x.id===m[1]);if(pending(e))markInput(el);});
+    // supplier edit modal
+    if(window._inv&&Array.isArray(window._inv.rows))window._inv.rows.forEach((r,i)=>{if(pending(r)){markInput(document.getElementById('inv-p-'+i));const total=document.getElementById('inv-t-'+i);if(total){total.innerHTML=ptag();total.classList.add('pending-inline');}}});
+    // supplier details
+    (window._supInvs||[]).forEach(v=>(v.items||[]).forEach((it,i)=>{if(!pending(it))return;const body=document.getElementById('iv_'+v.id)?.querySelector('tbody');const row=body?.querySelectorAll('tr')[i];if(row&&row.children.length>=5){row.children[3].innerHTML=ptag();row.children[4].innerHTML='<span class="pending-price-tag">غير محسوب</span>';}}));
+  }
+
+  const baseCD=window.renderCD; window.renderCD=function(cid){const r=baseCD.apply(this,arguments);setTimeout(()=>{const root=document.getElementById('content');if(root&&!root.querySelector('[data-pending-client]')){const h=root.querySelector('.cl-hdr');if(h)h.insertAdjacentHTML('afterend',clientNotice(cid));}decorate();},0);return r;};
+  const baseSD=window.renderSupDetail; window.renderSupDetail=function(spId){const r=baseSD.apply(this,arguments);setTimeout(()=>{const root=document.getElementById('content');if(root&&!root.querySelector('[data-pending-supplier]')){const h=root.querySelector('.cl-hdr');if(h)h.insertAdjacentHTML('afterend',supplierNotice(spId));}decorate();},0);return r;};
+  const baseIM=window.renderInvModal; window.renderInvModal=function(){const r=baseIM.apply(this,arguments);setTimeout(decorate,0);return r;};
+
+  // Printed client documents carry a red explanatory notice. It prevents a zero-looking total from being misread as a final account.
+  const basePH=window.printHeader;window.printHeader=function(){const h=basePH.apply(this,arguments);return h+(window.__egtphPendingPrintNotice||'');};
+  const baseBuild=window.buildAndPrintClient;window.buildAndPrintClient=async function(cid,type,opts){const t=getCT(cid);window.__egtphPendingPrintNotice=t.pendingLines?'<div class="pending-print">⚠ تنبيه محاسبي: يوجد '+t.pendingLines+' بند/بنود بكمية مسجلة وسعر غير متفق عليه. هذه البنود غير داخلة في جميع الإجماليات المالية أعلاه.</div>':'';try{return await baseBuild.apply(this,arguments);}finally{setTimeout(()=>{window.__egtphPendingPrintNotice='';},300);}};
+  const basePrintInvoice=window.printInvoiceRecord; if(typeof basePrintInvoice==='function') window.printInvoiceRecord=function(rec,c,signs){const es=entries.filter(e=>e.recordId===rec.id&&e.type==='invoice'),count=es.filter(e=>pending(e)&&n(e.qty)>0).length;window.__egtphPendingPrintNotice=count?'<div class="pending-print">⚠ تنبيه محاسبي: يوجد '+count+' بند/بنود بسعر غير متفق عليه وغير محسوب في الإجمالي.</div>':'';try{return basePrintInvoice.apply(this,arguments);}finally{setTimeout(()=>{window.__egtphPendingPrintNotice='';},300);}};
+
+  // Harden PDF import path: standard Anthropic API cannot be called here without a secret server-side integration.
+  window.importInvPDF=function(){T('استيراد PDF يحتاج خدمة خادمية مؤمّنة بمفتاح API. تم تعطيل الإرسال المباشر من المتصفح لحماية الفواتير ومنع فشل الاستيراد الصامت.','warning',6500);};
+})();
+</script>
 
 </body></html>
