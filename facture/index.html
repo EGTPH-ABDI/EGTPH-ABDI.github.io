@@ -26,7 +26,7 @@
 })(window);
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Système EGTPH - Pro (v9.7)</title>
+<title>Système EGTPH - Pro (v9.8)</title>
 <style>
 :root{--primary:#2c3e50;--secondary:#3498db;--accent:#e67e22;--light:#f8f9fa;--border:#dee2e6;--success:#27ae60;--danger:#e74c3c;}
 *{box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
@@ -113,6 +113,41 @@ textarea.tbl.desig{text-align:left;min-height:40px;}
 .cloud-status{display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:14px;border-radius:7px;border:1px solid #b9d9f5;background:#eef7ff;color:#1a5276;font-size:.86rem;line-height:1.35}.cloud-status.ok{background:#edf9f1;border-color:#b7e5c6;color:#1e6b3a}.cloud-status.warn{background:#fff8e9;border-color:#f0d28b;color:#7b5615}.cloud-status.error{background:#fff1f1;border-color:#efb9b9;color:#9b3030}.cloud-status strong{margin-left:auto;font-size:.78rem;white-space:nowrap}.cloud-recovery-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:-6px 0 14px;padding:9px 10px;background:#fff8e9;border:1px dashed #f0d28b;border-radius:7px;font-size:.82rem;color:#704f14}.cloud-recovery-actions .btn{margin:0;white-space:nowrap}@media (max-width:640px){.cloud-recovery-actions{align-items:flex-start;flex-direction:column}.cloud-recovery-actions .btn{width:100%;margin-top:1px}}
 
 .avan-link{font-size:0.82rem;color:var(--secondary);cursor:pointer;text-decoration:underline;margin-left:10px;}
+
+/* Navigation et affichage tactile : iPhone / Android.
+   Le balayage sur une zone libre passe à l'onglet voisin ; les champs, boutons,
+   listes et tableaux restent protégés afin de ne jamais interrompre une saisie. */
+.mobile-swipe-hint{display:none;}
+.table-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x;}
+.table-wrap>table{min-width:680px;margin:10px 0;}
+@media (max-width:768px){
+  html{overscroll-behavior-x:none;}
+  body{padding:0;overflow-x:hidden;}
+  .container{min-height:100dvh;border-radius:0;box-shadow:none;}
+  .header{padding:15px 12px 18px;}
+  .header h1{font-size:1.15rem;letter-spacing:.2px;}
+  .header .ids{font-size:.69rem;overflow-wrap:anywhere;}
+  .mode-badge{right:9px;top:auto;bottom:7px;font-size:.7rem;padding:4px 8px;max-width:72%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .stats-bar{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .stat-item{min-width:25%;padding:7px 4px;}
+  .stat-value{font-size:.9rem;}
+  .stat-label{font-size:.62rem;}
+  .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scrollbar-width:none;touch-action:pan-x;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tab{flex:0 0 auto;min-width:auto;padding:11px 14px;white-space:nowrap;scroll-snap-align:center;}
+  .mobile-swipe-hint{display:block;text-align:center;padding:6px 10px 5px;font-size:.72rem;color:#66727e;background:#f8f9fa;border-bottom:1px solid var(--border);}
+  .content{padding:14px 11px 18px;}
+  .form-grid{grid-template-columns:1fr;gap:10px;margin-bottom:14px;}
+  .form-group[style*="grid-column"]{grid-column:auto !important;}
+  .form-group input,.form-group select,.form-group textarea{font-size:16px;/* évite le zoom iOS pendant la saisie */}
+  .table-wrap{margin:0 -2px;}
+  .table-wrap>table{font-size:.79rem;}
+  #itemsTable{min-width:790px;}
+  .totals-box{max-width:none;margin-left:0;}
+  .actions{position:sticky;bottom:0;z-index:50;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);margin:14px -11px -18px;padding:9px 8px calc(9px + env(safe-area-inset-bottom));border-top:1px solid var(--border);gap:4px;}
+  .actions .btn{padding:8px 10px;margin:1px;font-size:.78rem;}
+  #toast{left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));text-align:center;}
+}
 @media print{
 body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 .no-print{display:none !important;}
@@ -140,7 +175,7 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <div id="toast"></div>
 <div class="container no-print">
 <div class="header">
-<h1>🏗️ Système EGTPH - Pro (v9.7)</h1>
+<h1>🏗️ Système EGTPH - Pro (v9.8)</h1>
 <div class="ids" id="uiCoIds">RC: 02/00-4566908A15 | NIF: 192020105006199 | NIS: 1 992 0201 05006 48 | NIN: 109920029050060008</div>
 <div style="margin-top:3px" id="uiCoSub">Entreprise des Grands Travaux Publics et Hydrauliques – CHLEF</div>
 <div id="uiCoAddr" style="display:none"></div>
@@ -160,6 +195,7 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <button class="tab" onclick="switchTab('sec-history',this)">📜 Historique</button>
 <button class="tab" onclick="switchTab('sec-settings',this)">⚙️ Réglages</button>
 </div>
+<div class="mobile-swipe-hint" aria-hidden="true">↔️ اسحب في مساحة فارغة يمينًا أو يسارًا للتنقل بين الشاشات</div>
 
 <div class="content">
 <div id="sec-doc" class="section active">
@@ -192,18 +228,18 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <h3 style="margin:15px 0 8px;color:var(--primary)">📦 Articles
 <span id="avanLink" class="avan-link" onclick="toggleAvan()" style="display:none">📊 Afficher Avancement %</span>
 </h3>
-<table id="itemsTable"><thead><tr>
+<div class="table-wrap" aria-label="Table des articles"><table id="itemsTable"><thead><tr>
 <th style="width:35px">N°</th><th>Désignation</th>
 <th style="width:95px">Qté</th><th style="width:60px">Unité</th>
 <th style="width:90px">P.U HT (DA)</th>
 <th id="colAvanH" style="width:90px;display:none">Avance %</th>
 <th style="width:95px">Montant HT</th>
 <th style="width:35px"></th>
-</tr></thead><tbody id="itemsBody"></tbody></table>
+</tr></thead><tbody id="itemsBody"></tbody></table></div>
 <button class="btn btn-primary btn-sm" onclick="addItem()">+ Ajouter Article</button>
 
 <h3 style="margin:20px 0 8px;color:var(--primary)">💰 Acomptes / Déductions</h3>
-<table><thead><tr><th style="width:100px">Date</th><th>Désignation / Mode</th><th style="width:100px">Montant (DA)</th><th style="width:35px"></th></tr></thead><tbody id="deductionsBody"></tbody></table>
+<div class="table-wrap" aria-label="Table des acomptes"><table><thead><tr><th style="width:100px">Date</th><th>Désignation / Mode</th><th style="width:100px">Montant (DA)</th><th style="width:35px"></th></tr></thead><tbody id="deductionsBody"></tbody></table></div>
 <button class="btn btn-outline btn-sm" onclick="addDeduction()">+ Ajouter Acompte</button>
 
 <div class="totals-box">
@@ -242,7 +278,7 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <button class="btn btn-sm btn-outline" onclick="clearHistFilters()">✖ Effacer</button>
 <div id="clientFilterBadge"></div>
 </div>
-<table><thead><tr><th>Date</th><th>Type</th><th>N°</th><th>Client</th><th>H.T.</th><th>Net</th><th>Actions</th></tr></thead><tbody id="histBody"></tbody></table>
+<div class="table-wrap" aria-label="Table historique"><table><thead><tr><th>Date</th><th>Type</th><th>N°</th><th>Client</th><th>H.T.</th><th>Net</th><th>Actions</th></tr></thead><tbody id="histBody"></tbody></table></div>
 </div>
 
 <div id="sec-settings" class="section">
@@ -323,7 +359,7 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 </div>
 <div class="amount-words">Arrêté le présent document à la somme de : <span id="pAmtWords">ZÉRO DINARS ALGÉRIENS</span></div>
 <div id="pNotesBlock" class="print-notes" style="display:none"><strong>Observations :</strong> <span id="pNotes"></span></div>
-<div class="print-footer">Document généré le <span id="pGenDate"></span> via Système EGTPH - Pro v9.7</div>
+<div class="print-footer">Document généré le <span id="pGenDate"></span> via Système EGTPH - Pro v9.8</div>
 </div>
 
 <script>
@@ -549,6 +585,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('payDate').valueAsDate=new Date();
     addItem();addDeduction();calc();syncPrint();updateModeBadge();onTypeChange();_initUndo();
   }
+  installMobileSwipeNavigation();
 });
 
 function switchTab(id,el){
@@ -558,6 +595,55 @@ function switchTab(id,el){
   if(el)el.classList.add('active');
   if(id==='sec-history')renderHistory();
   if(id==='sec-settings')fillCompanyForm();
+}
+
+// ── Navigation par balayage (téléphone) ────────────────────────────────────
+const MOBILE_TAB_FLOW=['sec-doc','sec-clients','sec-history','sec-settings'];
+let _mobileSwipeStart=null;
+function _isBlockedSwipeTarget(target){
+  if(!target||!target.closest)return false;
+  // La saisie et les actions gardent toujours leur geste naturel.
+  if(target.closest('input,textarea,select,button,a,[contenteditable="true"],.tabs,.table-wrap,.client-modal,.actions'))return true;
+  return false;
+}
+function _activeMobileTabIndex(){
+  const active=document.querySelector('.section.active');
+  return Math.max(0,MOBILE_TAB_FLOW.indexOf(active&&active.id));
+}
+function _switchMobileTabBySwipe(direction){
+  const current=_activeMobileTabIndex();
+  const next=current+direction;
+  if(next<0||next>=MOBILE_TAB_FLOW.length)return false;
+  const tab=document.querySelectorAll('.tab')[next];
+  switchTab(MOBILE_TAB_FLOW[next],tab);
+  // Centre l'onglet actif dans la barre défilante, sans déplacer brutalement la page.
+  try{tab&&tab.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});}catch(e){}
+  return true;
+}
+function installMobileSwipeNavigation(){
+  const root=document.querySelector('.container.no-print');
+  if(!root||root.dataset.swipeNavigationInstalled==='1')return;
+  root.dataset.swipeNavigationInstalled='1';
+  root.addEventListener('touchstart',function(event){
+    if(!event.touches||event.touches.length!==1){_mobileSwipeStart=null;return;}
+    const t=event.touches[0];
+    _mobileSwipeStart={x:t.clientX,y:t.clientY,at:Date.now(),blocked:_isBlockedSwipeTarget(event.target),moved:false};
+  },{passive:true});
+  root.addEventListener('touchmove',function(event){
+    if(!_mobileSwipeStart||!event.touches||event.touches.length!==1)return;
+    const t=event.touches[0],dx=t.clientX-_mobileSwipeStart.x,dy=t.clientY-_mobileSwipeStart.y;
+    // Après un défilement vertical net, le geste ne peut plus devenir une navigation.
+    if(Math.abs(dy)>Math.abs(dx)&&Math.abs(dy)>18)_mobileSwipeStart.moved=true;
+  },{passive:true});
+  root.addEventListener('touchend',function(event){
+    const start=_mobileSwipeStart;_mobileSwipeStart=null;
+    if(!start||start.blocked||start.moved||!event.changedTouches||event.changedTouches.length!==1)return;
+    const t=event.changedTouches[0],dx=t.clientX-start.x,dy=t.clientY-start.y,elapsed=Date.now()-start.at;
+    // Seul un vrai balayage horizontal volontaire sur une zone vide est accepté.
+    if(elapsed>900||Math.abs(dx)<70||Math.abs(dx)<=Math.abs(dy)*1.45)return;
+    _switchMobileTabBySwipe(dx<0?1:-1);
+  },{passive:true});
+  root.addEventListener('touchcancel',function(){_mobileSwipeStart=null;},{passive:true});
 }
 
 function updateModeBadge(){
