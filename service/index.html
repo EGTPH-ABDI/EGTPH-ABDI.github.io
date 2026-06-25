@@ -335,7 +335,8 @@ footer{text-align:center;font-size:10px;color:var(--muted);padding:16px 12px 4px
         مزامنة تلقائية (عند الإدخال + فحص دوري)
       </label>
       <div id="fb-last-txt" style="font-size:11px;color:var(--gold-dk);text-align:center"></div>
-      <div id="fb-secret-txt" style="font-size:10px;color:#9a8a5a;text-align:center;margin-top:5px;direction:ltr;font-family:monospace;word-break:break-all"></div>
+      <div id="dashboard-alert-status" style="font-size:10.5px;color:var(--muted);text-align:center;margin-top:5px"></div>
+      <div id="fb-secret-txt" style="font-size:10px;color:#9a8a5a;text-align:center;margin-top:5px"></div>
     </div>
     <input id="importFile" type="file" accept="application/json,.json" style="display:none" onchange="importData(this)">
   </div>
@@ -645,6 +646,7 @@ let ft;function save(){
     flash('✓ تمّ الحفظ');
   }catch(e){flash('⚠ الحفظ غير متاح هنا');}
   try{ fbScheduleAutoPush(); }catch(e){}
+  try{ scheduleMaintenanceDashboardAlerts(); }catch(e){}
 }
 function flash(t){const e=document.getElementById('saveMsg');if(!e)return;e.textContent=t;clearTimeout(ft);ft=setTimeout(()=>e.textContent='',2000);}
 const ACC={"truck": [["زيت المحرك WP10/WP12", "Huile moteur", [[4, "15W-40 · API CI-4 (أو ACEA E7) — يغطي حتى +50° محيطة: الأنسب لمناخ الشلف. أمثلة: Petroser X4 · Baraka Ultima Pro 740 · Chelia TD · Rubia TIR 7400 · Rimula R4"], [3, "10W-40 ديزل CI-4/E7 — جيد لكنه لا يضيف شيئاً في الصيف وغالباً أغلى"], [2, "CH-4 / CF-4 بلزوجة 15W-40 — يصلح إن كان هو المذكور في الدفتر، لكن CI-4 أفضل حماية"], [2, "20W-50 ديزل — للمحركات القديمة المستهلكة فقط، وليس للحديثة"], [1, "زيوت البنزين (API SL/SN دون تصنيف ديزل) · الزيوت الرقيقة 5W-30/0W-20 · زيت دون مواصفة مدوّنة · خلط نوعين"]]], ["علبة السرعة والجسور", "Boîte & ponts", [[4, "85W-90 API GL-5 — Tranself EP · Total EP · Carter EP · Spirax S3"], [3, "80W-90 GL-5 — يصلح، و85W-90 أثبت في الحرارة"], [1, "GL-4 وحدها (حماية ناقصة للتروس hypoïde) · زيت محرك في العلبة · ATF في الجسور"]]], ["الدركسيون", "Direction", [[4, "ISO VG 32 / ATF وفق الدفتر — Equivis ZS 32"], [1, "سائل فرامل في الدركسيون · زيت سميك 46+ (توجيه ثقيل في البرد)"]]], ["الشحم", "Graisse", [[4, "Lithium EP · NLGI 2 — يتحمّل الحرارة: Multis EP 2 · Naftal EP 2 · Gadus S2"], [3, "Lithium complexe NLGI 2 — أغلى وأكثر تحملاً للحرارة العالية"], [2, "NLGI 3 — للمحاور إذا نصّ عليها الدفتر (محاور Shacman)"], [1, "NLGI 0/1 (يسيل صيفاً) · شحم الكالسيوم العادي للنقاط الساخنة · خلط أنواع الشحم"]]], ["المبرّد", "Refroidissement", [[4, "G12/G12+ عضوي OAT · مزيج 50/50 · -36/-37° — حماية كاملة من التآكل والغليان (المطلوب)"], [3, "G13 · -36° — الجيل الأحدث، صالح أيضاً"], [2, "G12 جاهز -26° (≈40% غليكول) — مقبول في الشلف؛ لا يُضاف إليه ماء، ويبقى -36° الأفضل صيفاً"], [1, "G11 بدرجة -5°/-10° (مخفّف جداً) · الماء وحده · خلط الألوان/الأنواع · ماء معدني أو نقي دون غليكول"]]]], "exc": [["زيت المحرك Cummins", "Huile moteur", [[4, "15W-40 · API CI-4 (أو ACEA E7) — يغطي حتى +50° محيطة: الأنسب لمناخ الشلف. أمثلة: Petroser X4 · Baraka Ultima Pro 740 · Chelia TD · Rubia TIR 7400 · Rimula R4"], [3, "10W-40 ديزل CI-4/E7 — جيد لكنه لا يضيف شيئاً في الصيف وغالباً أغلى"], [2, "CH-4 / CF-4 بلزوجة 15W-40 — يصلح إن كان هو المذكور في الدفتر، لكن CI-4 أفضل حماية"], [2, "20W-50 ديزل — للمحركات القديمة المستهلكة فقط، وليس للحديثة"], [1, "زيوت البنزين (API SL/SN دون تصنيف ديزل) · الزيوت الرقيقة 5W-30/0W-20 · زيت دون مواصفة مدوّنة · خلط نوعين"]]], ["الهيدروليك", "Hydraulique", [[4, "ISO VG 68 صيفاً — وارد رسمياً في جدول Hyundai (نطاقه يتجاوز +40°): الأنسب لصيف الشلف، وهو ما تعمل به ✓"], [4, "ISO VG 46 — الخيار الرسمي لعموم السنة"], [2, "VG 32 — وارد رسمياً لكن للأجواء الباردة: لا يناسب الصيف"], [1, "خلط 46 مع 68 · زيت محرك بدل الهيدروليك · ATF · زيت متغيّر اللون (حليبي = ماء في الدارة)"]]], ["مخفّضات السير/الدوران", "Réducteurs", [[4, "SAE 85W-140 GL-5 — تعبئة المصنع الرسمية والأنسب للحرارة: Total Axle 7"], [3, "SAE 80W-90 GL-5 — وارد في جدول الحرارة الرسمي حتى ~+40°"], [2, "75W-90 — للمناطق الباردة فقط: لا حاجة إليه في الشلف"], [1, "GL-4 وحدها · زيت محرك · شحم بدل الزيت داخل المخفّض"]]], ["الشحم", "Graisse", [[4, "Lithium EP · NLGI 2 — يتحمّل الحرارة: Multis EP 2 · Naftal EP 2 · Gadus S2"], [3, "Lithium complexe NLGI 2 — أغلى وأكثر تحملاً للحرارة العالية"], [2, "NLGI 3 — للمحاور إذا نصّ عليها الدفتر (محاور Shacman)"], [1, "NLGI 0/1 (يسيل صيفاً) · شحم الكالسيوم العادي للنقاط الساخنة · خلط أنواع الشحم"]]], ["المبرّد (31L · 50/50)", "Refroidissement", [[4, "G12/G12+ عضوي OAT · مزيج 50/50 · -36/-37° — حماية كاملة من التآكل والغليان (المطلوب)"], [3, "G13 · -36° — الجيل الأحدث، صالح أيضاً"], [2, "G12 جاهز -26° (≈40% غليكول) — مقبول في الشلف؛ لا يُضاف إليه ماء، ويبقى -36° الأفضل صيفاً"], [1, "G11 بدرجة -5°/-10° (مخفّف جداً) · الماء وحده · خلط الألوان/الأنواع · ماء معدني أو نقي دون غليكول"]]]], "loader": [["زيت المحرك WP6", "Huile moteur", [[4, "15W-40 · API CI-4 (أو ACEA E7) — يغطي حتى +50° محيطة: الأنسب لمناخ الشلف. أمثلة: Petroser X4 · Baraka Ultima Pro 740 · Chelia TD · Rubia TIR 7400 · Rimula R4"], [3, "10W-40 ديزل CI-4/E7 — جيد لكنه لا يضيف شيئاً في الصيف وغالباً أغلى"], [2, "CH-4 / CF-4 بلزوجة 15W-40 — يصلح إن كان هو المذكور في الدفتر، لكن CI-4 أفضل حماية"], [2, "20W-50 ديزل — للمحركات القديمة المستهلكة فقط، وليس للحديثة"], [1, "زيوت البنزين (API SL/SN دون تصنيف ديزل) · الزيوت الرقيقة 5W-30/0W-20 · زيت دون مواصفة مدوّنة · خلط نوعين"]]], ["العلبة + convertisseur", "Boîte hydraulique", [[4, "8# (Q/SY RH2042) أو ATF Dexron II/III — Fluide ATX · Mobil ATF 220 (وهو ما يلائم الـconvertisseur)"], [2, "Caltex Torque Fluid / زيوت TO-4 — بعد تأكيد المطابقة"], [1, "GL-5 داخل العلبة (رغوة واحتكاك خاطئ = إتلاف الـconvertisseur) · زيت محرك داخل العلبة · هيدروليك VG46 داخلها"]]], ["الجسور", "Ponts", [[4, "85W-90 GL-5 (GB13895) — Total EP · Carter EP (للجسور غير ZF)"], [4, "Mobilube LS 85W-90 — إلزامي إذا كانت الجسور ZF AP410/AP412 (الدفتر: GL-5 SAE90+LS)"], [1, "85W-90 عادي في جسر ZF ذي الانزلاق المحدود — غير كافٍ (تحقق من لوحة الجسر) · GL-4 · ATF في الجسور"]]], ["سائل الفرامل", "Liquide de frein", [[4, "HZY4 تركيبي (GB12981) / DOT4 — Total HBF4"], [1, "سائل فرامل بترولي (يتلف الموانع — الدفتر يمنعه نصاً) · DOT5 سيليكون · زيت هيدروليك في دارة الفرامل"]]], ["الهيدروليك", "Hydraulique", [[4, "L-HV 46 — معامل لزوجة مرتفع يثبت بين برودة الصباح وحرارة الظهيرة"], [4, "L-HM 46 — المعيار المطلوب في دفتر Lovol"], [2, "VG 68 — دفتر Lovol يذكر عائلة الـ46 فقط؛ إن استُعمل صيفاً فبتأكيد من الوكيل ودون خلطه مع 46"], [1, "VG 32 صيفاً (رقيق → فقدان ضغط وحرارة) · ATF في الهيدروليك · زيت محرك بدله · زيت به ماء"]]], ["المبرّد", "Refroidissement", [[4, "G12/G12+ عضوي OAT · مزيج 50/50 · -36/-37° — حماية كاملة من التآكل والغليان (المطلوب)"], [3, "G13 · -36° — الجيل الأحدث، صالح أيضاً"], [2, "G12 جاهز -26° (≈40% غليكول) — مقبول في الشلف؛ لا يُضاف إليه ماء، ويبقى -36° الأفضل صيفاً"], [1, "G11 بدرجة -5°/-10° (مخفّف جداً) · الماء وحده · خلط الألوان/الأنواع · ماء معدني أو نقي دون غليكول"]]]], "jcb": [["زيت المحرك Dieselmax", "Huile moteur", [[4, "JCB EP 15W-40 (4001/1805) — الرسمي: CH-4/SJ · ACEA E5، مصمّم من -10° إلى +50°"], [4, "15W-40 CI-4/E7 معتمد للشاحنات — Petroser X4 · Baraka 740 · Rubia TIR 7400"], [2, "5W-40 (4001/2705) — للبرد القارس؛ لا حاجة إليه في الشلف"], [1, "زيت بنزين · زيت دون مواصفة · «huile moteur ordinaire» (الدفتر يحذّر منه نصاً في الهيدروليك والجسور)"]]], ["علبة Syncro Shuttle", "Boîte manuelle", [[4, "JCB Extreme Performance EP · SAE30 (4000/2605) — المحدّد من -5° إلى +46°: مثالي للشلف"], [2, "10W (4000/2505) — من -32° إلى +40°: يصلح شتاءً، وSAE30 أفضل صيفاً"], [1, "ATF (غير محدّد لهذه العلبة) · GL-5 · زيت محرك متعدد الدرجات عادي"]]], ["الجسور والمحاور", "Ponts & moyeux", [[4, "JCB Gear Oil HP Plus (4000/2205) — إلزامي إذا كان الجسر LSD أو بفرامل داخلية"], [4, "JCB HP90 (4000/0305) — للجسور العادية، والمحاور دائماً HP90"], [2, "GL-5 85W-90 تجاري — للجسر العادي فقط (دون LSD) وبتأكيد الوكيل"], [1, "GL-5 عادي في جسر LSD (يسبب اهتزاز الفرامل الداخلية ويتلفها — الدفتر صريح) · زيت محرك"]]], ["الهيدروليك (والفرامل منه)", "Hydraulique", [[4, "JCB HP46 (4002/0805) فوق 38° — صيف الشلف"], [3, "JCB Optimum Performance (4002/2005) — الأرقى"], [2, "HP32 (4002/1025) — دون 38° فقط: أي شتاءً"], [1, "VG68 خارج جدول JCB (الحد الأقصى HP46 حتى في الحر) — والفرامل تعمل بهذا الزيت: التزم بـHP46 · يُمنع DOT4 في هذه الدارة · يُمنع «huile moteur ordinaire» (تحذير الدفتر)"]]], ["الشحم", "Graisse", [[4, "JCB Special HP Grease (4003/2017) — الموصى بها"], [3, "Lithium EP2 — Multis EP2 · Naftal EP2"], [2, "JCB MPL-EP (4003/1501) — مسموح بها مع زيادة وتيرة التشحيم (الدفتر note 7)"], [1, "NLGI 0/1 · شحم عادي لا يتحمّل الحرارة"]]], ["المبرّد (17.5L)", "Refroidissement", [[4, "JCB Antifreeze HP 50/50 (4006/1120) — ASTM D3306/D6210"], [3, "G12/G12+ عضوي OAT -36° · 50/50"], [2, "G12 جاهز -26° — مقبول، و-36° أفضل"], [1, "G11 بدرجة -5/-10° · الماء وحده · الخلط · تعبئة أسرع من 10L/دقيقة (تحبس هواءً — تحذير الدفتر)"]]]]};
@@ -1057,6 +1059,7 @@ function renderGarage(){
     list.style.display='block';list.innerHTML='<div class="grp-grid">'+view.map(cardHTML).join('')+'</div>';
   }
   document.getElementById('fsum').innerHTML='<div class="chip tot"><div class="n">'+DB.machines.length+'</div><div class="l">عتاد · Total</div></div><div class="chip late"><div class="n">'+tLate+'</div><div class="l">متأخّر · Retard</div></div><div class="chip soon"><div class="n">'+tSoon+'</div><div class="l">قريب · Bientôt</div></div>';
+  try{ scheduleMaintenanceDashboardAlerts(); }catch(e){}
 }
 function getActive(){return DB.machines.find(x=>x.id===DB.active);}
 function openDetail(id){DB.active=id;document.getElementById('calcBox').classList.remove('show');setDetailTab('maint');renderDetail();}
@@ -1572,7 +1575,7 @@ EGTPHAuth.init({
   email:   'abdiyoucefislam@gmail.com',
   onReady: function(){ try{ if(typeof fbAutoTick==='function') fbAutoTick(); }catch(e){} }
 });
-try{ var _fbSecEl=document.getElementById('fb-secret-txt'); if(_fbSecEl) _fbSecEl.textContent='🔑 '+FB_SECRET; }catch(e){}
+try{ var _fbSecEl=document.getElementById('fb-secret-txt'); if(_fbSecEl) _fbSecEl.textContent='🔐 المزامنة السحابية محمية بتسجيل الدخول.'; }catch(e){}
 // قواعد قديمة يُرحَّل منها تلقائياً
 const _FB_OLD_URLS = ['https://egtph-abdi-youssouf-islam-default-rtdb.europe-west1.firebasedatabase.app'];
 
@@ -1943,6 +1946,182 @@ document.addEventListener('focusout',function(ev){
   }
 },true);
 
+
+/* ===== CENTRAL EGTPH ALERT BRIDGE — MAINTENANCE =====
+   This bridge sends only derived operational alerts to apps.html when this
+   program is opened inside the EGTPH dashboard. It never sends the complete
+   fleet database, documents, images, service notes, or authentication data.
+   Existing data in this program remains the single source of truth.
+*/
+let _maintenanceAlertTimer=null;
+const MAINTENANCE_ALERT_ITEM_IDS=Array.from(new Set(
+  [EXC_ITEMS,TRK_ITEMS,JMC_ITEMS,LOAD_ITEMS,JCB_ITEMS,GENERIC_CAR_ITEMS,GENERIC_LIGHT_TRUCK_ITEMS,GENERIC_MACHINE_ITEMS]
+    .filter(Array.isArray).flat().map(it=>String(it&&it.id||'')).filter(Boolean)
+));
+
+function maintenanceDashboardStamp(mc){
+  const saved=Number((mc&&mc._mod)||0)||Number((DB&&DB._mod)||0)||0;
+  const day=Date.parse(todayISO()+'T00:00:00');
+  return Math.max(saved,Number.isFinite(day)?day:0,1);
+}
+function maintenanceDashboardLabel(mc){
+  const name=String((mc&&mc.name)||'العتاد').trim();
+  const type=String((mc&&mc.eng)||'').trim();
+  return (name+(type?' — '+type:'')).trim();
+}
+function maintenanceAlertSeverity(status){
+  return status&&status.urgency==='late'?'critical':
+    (status&&['now','soon'].includes(status.urgency)?'warning':'info');
+}
+function maintenanceScheduleMessage(mc,it,status){
+  const u=unit(mc), cur=currentReading(mc), due=status&&status.due;
+  const label=maintenanceDashboardLabel(mc);
+  let state='';
+  if(status&&status.urgency==='late'){
+    state='متأخر بـ '+fmt(Math.abs(Number(status.rem)||0))+' '+u;
+  }else if(status&&status.urgency==='now'){
+    state='مستحق الآن — المتبقي '+fmt(Math.max(0,Number(status.rem)||0))+' '+u;
+  }else if(status&&status.urgency==='soon'){
+    state=(status.estDate?'متوقع حوالي '+status.estDate+' — ':'')+'متبقٍ '+fmt(Math.max(0,Number(status.rem)||0))+' '+u;
+  }else{
+    state='لا يوجد استحقاق مفتوح';
+  }
+  return label+' — '+String(it&&it.ar||'صيانة')+'. '+state+
+    (due!=null?' · الاستحقاق: '+fmt(due)+' '+u:'')+
+    ' · العداد الحالي: '+fmt(cur)+' '+u+'.';
+}
+function maintenanceScheduleAlert(mc,it){
+  const status=statusOf(mc,it);
+  const open=['late','now','soon'].includes(status&&status.urgency);
+  return {
+    id:'maintenance_'+String(mc.id)+'_'+String(it.id)+'_schedule',
+    app:'service',
+    source:'الصيانة',
+    severity:maintenanceAlertSeverity(status),
+    title:open
+      ? ((status.urgency==='late'?'صيانة متأخرة: ':status.urgency==='now'?'صيانة مستحقة: ':'صيانة قريبة: ')+String(it.ar||''))
+      : '',
+    message:open?maintenanceScheduleMessage(mc,it,status):'',
+    dueAt:open?String(status.estDate||''):'',
+    entityId:String(mc.id),
+    entityLabel:maintenanceDashboardLabel(mc),
+    status:open?'open':'resolved',
+    updatedAt:maintenanceDashboardStamp(mc)
+  };
+}
+function maintenanceMissingRecordAlert(mc){
+  const missing=itemsFor(mc).filter(it=>lastReadOf(mc,it.id)==null||!lastDateOf(mc,it.id));
+  const open=missing.length>0;
+  const examples=missing.slice(0,3).map(it=>String(it.ar||'')).filter(Boolean).join('، ');
+  return {
+    id:'maintenance_'+String(mc.id)+'_missing_record',
+    app:'service',
+    source:'الصيانة',
+    severity:'warning',
+    title:open?'بيانات صيانة ناقصة':'',
+    message:open
+      ? maintenanceDashboardLabel(mc)+' — '+missing.length+' بندًا بدون عدّاد أو تاريخ آخر صيانة.'
+        +(examples?' مثال: '+examples+'.':'')
+      :'',
+    dueAt:'',
+    entityId:String(mc.id),
+    entityLabel:maintenanceDashboardLabel(mc),
+    status:open?'open':'resolved',
+    updatedAt:maintenanceDashboardStamp(mc)
+  };
+}
+function maintenanceExtraAlerts(mc,field,kind,defaultSeverity){
+  const out=[];
+  const rows=Array.isArray(mc&&mc[field])?mc[field]:[];
+  rows.forEach((row,index)=>{
+    if(!row||typeof row!=='object')return;
+    const closed=['resolved','closed','done','cancelled','canceled'].includes(String(row.status||'').toLowerCase());
+    const label=String(row.title||row.name||row.label||'').trim();
+    const note=String(row.note||row.message||'').trim();
+    out.push({
+      id:'maintenance_'+String(mc.id)+'_'+kind+'_'+String(row.id||index),
+      app:'service',
+      source:'الصيانة',
+      severity:['critical','warning','info'].includes(String(row.severity||''))?String(row.severity):defaultSeverity,
+      title:closed?'':(kind==='fault'?'عطل مفتوح: ':'قطعة مطلوبة: ')+label,
+      message:closed?'':(maintenanceDashboardLabel(mc)+(note?' — '+note:'')),
+      dueAt:String(row.dueAt||row.due||''),
+      entityId:String(mc.id),
+      entityLabel:maintenanceDashboardLabel(mc),
+      status:closed?'resolved':'open',
+      updatedAt:Number(row.updatedAt)||maintenanceDashboardStamp(mc)
+    });
+  });
+  return out;
+}
+function buildMaintenanceDashboardAlerts(){
+  if(!DB||!Array.isArray(DB.machines))return [];
+  const alerts=[];
+  DB.machines.forEach(mc=>{
+    if(!mc)return;
+    itemsFor(mc).forEach(it=>alerts.push(maintenanceScheduleAlert(mc,it)));
+    alerts.push(maintenanceMissingRecordAlert(mc));
+    // Future-compatible: if a later maintenance form stores open faults or parts
+    // in mc.faults / mc.partsRequests, they are sent without exposing full records.
+    alerts.push(...maintenanceExtraAlerts(mc,'faults','fault','critical'));
+    alerts.push(...maintenanceExtraAlerts(mc,'partsRequests','part','warning'));
+  });
+  // A deleted machine must also clear its old alerts from the central table.
+  (Array.isArray(DB.deletedIds)?DB.deletedIds:[]).forEach(del=>{
+    const id=String(del&&del.id!=null?del.id:del);
+    const stamp=Number(del&&del.t)||Number((DB&&DB._mod)||0)||Date.now();
+    MAINTENANCE_ALERT_ITEM_IDS.forEach(itemId=>alerts.push({
+      id:'maintenance_'+id+'_'+itemId+'_schedule',
+      app:'service',
+      source:'الصيانة',
+      status:'resolved',
+      updatedAt:stamp
+    }));
+    ['missing_record'].forEach(kind=>alerts.push({
+      id:'maintenance_'+id+'_'+kind,
+      app:'service',
+      source:'الصيانة',
+      status:'resolved',
+      updatedAt:stamp
+    }));
+  });
+  return alerts;
+}
+function maintenanceOpenAlertCount(alerts){
+  return (alerts||[]).filter(a=>a&&a.status==='open').length;
+}
+function setMaintenanceDashboardStatus(message){
+  const el=document.getElementById('dashboard-alert-status');
+  if(el)el.textContent=message||'';
+}
+function emitMaintenanceDashboardAlerts(){
+  const alerts=buildMaintenanceDashboardAlerts();
+  const count=maintenanceOpenAlertCount(alerts);
+  if(!window.parent||window.parent===window){
+    setMaintenanceDashboardStatus('لوحة EGTPH: '+count+' تنبيهًا جاهزًا للإرسال عند فتح الصيانة من الواجهة.');
+    return;
+  }
+  try{
+    window.parent.postMessage({type:'egtph-dashboard-alerts',alerts:alerts},location.origin);
+    window.parent.postMessage({
+      type:'egtph-dashboard-widget',
+      key:'maintenanceAlerts',
+      value:String(count)
+    },location.origin);
+    setMaintenanceDashboardStatus('لوحة EGTPH: تم إرسال '+count+' تنبيهًا حقيقيًا.');
+  }catch(e){
+    setMaintenanceDashboardStatus('تعذّر إرسال تنبيهات الصيانة إلى اللوحة.');
+  }
+}
+function scheduleMaintenanceDashboardAlerts(){
+  if(_maintenanceAlertTimer)clearTimeout(_maintenanceAlertTimer);
+  _maintenanceAlertTimer=setTimeout(emitMaintenanceDashboardAlerts,180);
+}
+window.addEventListener('message',function(event){
+  if(event.origin!==location.origin||!event.data)return;
+  if(event.data.type==='egtph-dashboard-request-alerts')scheduleMaintenanceDashboardAlerts();
+});
+
 // ── ترحيل لمرة واحدة للقاعدة الجديدة: امسح طابع المزامنة القديم حتى لا يُساء فهم «لا جديد» ──
 try{
   const dbTag=localStorage.getItem('egtph_parc_dbtag');
@@ -1957,6 +2136,11 @@ setTimeout(fbStartStream,1500); // بثّ مباشر لحظي
 window.addEventListener('online', fbStartStream);
 document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible'){ fbStartStream(); try{ if(fbAuto()&&navigator.onLine&&!_fbBusy) fbAutoTick(); }catch(e){} } });
 try{ const c=document.getElementById('fb-auto-chk'); if(c) c.checked=fbAuto(); const lt=document.getElementById('fb-last-txt'); if(lt&&fbLastTS()) lt.textContent='آخر مزامنة: '+new Date(fbLastTS()).toLocaleString('fr-DZ'); }catch(e){}
+try{
+  setTimeout(scheduleMaintenanceDashboardAlerts,900);
+  setInterval(function(){ if(window.parent&&window.parent!==window) scheduleMaintenanceDashboardAlerts(); },60000);
+  document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible') scheduleMaintenanceDashboardAlerts(); });
+}catch(e){}
 </script>
 </body>
 </html>
