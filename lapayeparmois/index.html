@@ -9341,6 +9341,316 @@ setInterval(()=>{try{runDoubleVerification();}catch(e){}},30000);
 // ── دماغ المنطق كل 30 ثانية ──
 setTimeout(()=>{try{runPeriodicMonitor();}catch(e){console.warn('monitor:',e);}},3000);
 setInterval(()=>{try{runPeriodicMonitor();}catch(e){}},30000);
+
+
+/* =====================================================================
+   CENTRAL EGTPH ALERT BRIDGE — PAIE MENSUELLE
+   يرسل هذا الجسر التنبيهات التشغيلية المشتقة فقط إلى لوحة EGTPH عندما
+   يُفتح البرنامج من داخلها. لا يرسل قاعدة الأجور، أرقام الهواتف، الوثائق،
+   كلمات المرور أو أي بيانات شخصية كاملة. يبقى سجل الأجور مصدر الحقيقة.
+   ===================================================================== */
+let _monthlyDashboardAlertTimer = null;
+const MONTHLY_DASHBOARD_APP = 'lapayeparmois';
+const MONTHLY_ALERT_CACHE_KEY = 'egtph_monthly_dashboard_alert_ids_v1';
+
+function monthlyDashboardToday(){
+  const d = new Date();
+  d.setHours(0,0,0,0);
+  return d;
+}
+function monthlyDashboardIso(d){
+  if(!(d instanceof Date) || isNaN(d.getTime())) return '';
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function monthlyDashboardDayStamp(){
+  return Math.max(monthlyDashboardToday().getTime(), 1);
+}
+function monthlyDashboardWorkerActive(w, today){
+  if(!w || w.id === undefined || w.id === null || !String(w.name||'').trim()) return false;
+  if(!w.exitDate) return true;
+  const exit = new Date(String(w.exitDate) + 'T00:00:00');
+  return !isNaN(exit.getTime()) && exit >= today;
+}
+function monthlyDashboardPayday(w){
+  return Math.min(Math.max(Number(w && w.day) || 1, 1), 28);
+}
+function monthlyDashboardWorkerIsNew(w, today){
+  if(!w || !w.startDate) return false;
+  const start = new Date(String(w.startDate) + 'T00:00:00');
+  if(isNaN(start.getTime())) return false;
+  return Math.floor((today - start) / 86400000) < 26;
+}
+function monthlyDashboardCycleBeforeDue(dueDate){
+  let m = dueDate.getMonth() - 1;
+  let y = dueDate.getFullYear();
+  if(m < 0){ m = 11; y -= 1; }
+  return {m:m, yr:y};
+}
+function monthlyDashboardCurrentDueInfo(w, today){
+  const payDay = monthlyDashboardPayday(w);
+  let dueMonth = today.getMonth();
+  let dueYear = today.getFullYear();
+  if(today.getDate() < payDay){
+    dueMonth -= 1;
+    if(dueMonth < 0){ dueMonth = 11; dueYear -= 1; }
+  }
+  const dueDate = new Date(dueYear, dueMonth, payDay, 0, 0, 0, 0);
+  const cycle = monthlyDashboardCycleBeforeDue(dueDate);
+  return {
+    dueDate: dueDate,
+    dueAt: monthlyDashboardIso(dueDate),
+    daysLate: Math.max(0, Math.round((today - dueDate) / 86400000)),
+    cycle: cycle
+  };
+}
+function monthlyDashboardNextDueInfo(w, today){
+  const payDay = monthlyDashboardPayday(w);
+  let y = today.getFullYear();
+  let m = today.getMonth();
+  let due = new Date(y, m, payDay, 0, 0, 0, 0);
+  if(due < today){
+    m += 1;
+    if(m > 11){ m = 0; y += 1; }
+    due = new Date(y, m, payDay, 0, 0, 0, 0);
+  }
+  const active = getActiveCycle(w.id);
+  return {
+    dueDate: due,
+    dueAt: monthlyDashboardIso(due),
+    daysAway: Math.max(0, Math.round((due - today) / 86400000)),
+    cycle: active
+  };
+}
+function monthlyDashboardCycleLabel(cycle){
+  const names = ['جانفي','فيفري','مارس','أفريل','ماي','جوان','جويلية','أوت','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  return (names[Number(cycle && cycle.m)] || 'الدورة') + ' ' + String(cycle && cycle.yr || '');
+}
+function monthlyDashboardSafeStatus(w, cycle){
+  try{
+    return calcMonthStatus(w.id, cycle.m, cycle.yr);
+  }catch(e){
+    return null;
+  }
+}
+function monthlyDashboardAmount(n){
+  return Math.max(0, Math.round(Number(n) || 0));
+}
+function monthlyDashboardStamp(w){
+  return Math.max(Number(w && w._mod) || 0, monthlyDashboardDayStamp(), 1);
+}
+function monthlyDashboardBaseAlert(w, kind){
+  return {
+    id: 'monthly_' + String(w && w.id) + '_' + kind,
+    app: MONTHLY_DASHBOARD_APP,
+    source: 'الأجور الشهرية',
+    entityId: String(w && w.id || ''),
+    entityLabel: String(w && w.name || 'عامل'),
+    updatedAt: monthlyDashboardStamp(w)
+  };
+}
+function monthlyDashboardOutstanding(status){
+  if(!status) return {salary:0,hours:0,bonuses:0,total:0};
+  const salary = monthlyDashboardAmount(status.finalPayout);
+  const hours = monthlyDashboardAmount(status.hrsUnpaid);
+  const bonuses = monthlyDashboardAmount(status.bonUnpaid);
+  return {salary:salary, hours:hours, bonuses:bonuses, total:salary + hours + bonuses};
+}
+function monthlyDashboardSalaryDueAlert(w, today){
+  const info = monthlyDashboardCurrentDueInfo(w, today);
+  const status = monthlyDashboardSafeStatus(w, info.cycle);
+  const owed = monthlyDashboardOutstanding(status);
+  const open = !!(status && status.baseSal > 0 && owed.total > 0 && !monthlyDashboardWorkerIsNew(w, today));
+  let title = '', message = '', severity = 'warning';
+  if(open){
+    severity = info.daysLate > 0 ? 'critical' : 'warning';
+    title = info.daysLate > 0 ? 'راتب متأخر' : 'راتب مستحق اليوم';
+    message = String(w.name) + ' — دورة ' + monthlyDashboardCycleLabel(info.cycle) +
+      ' · المتبقي للصرف: ' + fmt(owed.total) + '.' +
+      (owed.hours > 0 ? ' يشمل ساعات إضافية غير مدفوعة: ' + fmt(owed.hours) + '.' : '') +
+      (owed.bonuses > 0 ? ' يشمل مكافآت غير مدفوعة: ' + fmt(owed.bonuses) + '.' : '') +
+      (info.daysLate > 0 ? ' متأخر بـ ' + info.daysLate + ' يوم.' : '');
+  }
+  return Object.assign(monthlyDashboardBaseAlert(w, 'salary_due'), {
+    severity: severity,
+    title: title,
+    message: message,
+    dueAt: open ? info.dueAt : '',
+    status: open ? 'open' : 'resolved'
+  });
+}
+function monthlyDashboardPaydaySoonAlert(w, today){
+  const info = monthlyDashboardNextDueInfo(w, today);
+  const status = monthlyDashboardSafeStatus(w, info.cycle);
+  const owed = monthlyDashboardOutstanding(status);
+  const open = !!(status && status.baseSal > 0 && info.daysAway > 0 && info.daysAway <= 5 &&
+    !monthlyDashboardWorkerIsNew(w, today));
+  const total = open ? Math.max(0, monthlyDashboardAmount(status.finalPayout) + owed.hours + owed.bonuses) : 0;
+  return Object.assign(monthlyDashboardBaseAlert(w, 'payday_soon'), {
+    severity: open && info.daysAway <= 2 ? 'warning' : 'info',
+    title: open ? 'موعد صرف راتب قريب' : '',
+    message: open
+      ? String(w.name) + ' — موعد الصرف ' + info.dueAt + ' بعد ' + info.daysAway +
+        ' يوم' + (info.daysAway === 1 ? '' : 'ًا') +
+        (total > 0 ? ' · المبلغ التقديري المتبقي: ' + fmt(total) + '.' : '.')
+      : '',
+    dueAt: open ? info.dueAt : '',
+    status: open ? 'open' : 'resolved'
+  });
+}
+function monthlyDashboardAdvanceExcessAlert(w, today){
+  const active = getActiveCycle(w.id);
+  const status = monthlyDashboardSafeStatus(w, active);
+  const excess = status ? Math.max(0, -(Number(status.netSal) || 0)) : 0;
+  const open = excess > 0 && !monthlyDashboardWorkerIsNew(w, today);
+  return Object.assign(monthlyDashboardBaseAlert(w, 'advance_excess'), {
+    severity: 'critical',
+    title: open ? 'تسبيقات تجاوزت الراتب' : '',
+    message: open
+      ? String(w.name) + ' — التسبيقات تجاوزت الصافي المستحق في دورة ' +
+        monthlyDashboardCycleLabel(active) + ' بمبلغ ' + fmt(excess) + '.'
+      : '',
+    dueAt: '',
+    status: open ? 'open' : 'resolved'
+  });
+}
+function monthlyDashboardPendingAbsenceAlert(w){
+  const pending = pendAbs(w.id);
+  const open = pending && Number(pending.days) > 0;
+  return Object.assign(monthlyDashboardBaseAlert(w, 'pending_absence'), {
+    severity: 'warning',
+    title: open ? 'غيابات لم تُسوَّ بعد' : '',
+    message: open
+      ? String(w.name) + ' — ' + Number(pending.days) + ' يوم غياب معلق' +
+        (Number(pending.amt) > 0 ? ' · خصم متوقع: ' + fmt(pending.amt) + '.' : '.')
+      : '',
+    dueAt: '',
+    status: open ? 'open' : 'resolved'
+  });
+}
+function monthlyDashboardInstallmentAlerts(w, today){
+  const alerts = [];
+  (DB.debts && DB.debts[w.id] || []).forEach(function(debt){
+    if(!debt || debt.type !== 'debt' || !debt.inst || debt.instDisabled ||
+       (Number(debt.instPaid)||0) >= (Number(debt.instCount)||1) || !debt.nextDue) return;
+    const due = new Date(String(debt.nextDue) + 'T00:00:00');
+    if(isNaN(due.getTime())) return;
+    const days = Math.round((due - today) / 86400000);
+    if(days < -30 || days > 5) return;
+    const open = true;
+    const amount = monthlyDashboardAmount(debt.instAmt);
+    alerts.push(Object.assign(monthlyDashboardBaseAlert(w, 'installment_' + String(debt.id||'unknown')), {
+      severity: days < 0 ? 'critical' : (days <= 2 ? 'warning' : 'info'),
+      title: days < 0 ? 'قسط دين متأخر' : (days === 0 ? 'قسط دين مستحق اليوم' : 'قسط دين قريب'),
+      message: String(w.name) + ' — قسط ' + fmt(amount) +
+        (days < 0 ? ' متأخر بـ ' + Math.abs(days) + ' يوم.' :
+          (days === 0 ? ' مستحق اليوم.' : ' مستحق بعد ' + days + ' أيام.')),
+      dueAt: monthlyDashboardIso(due),
+      status: open ? 'open' : 'resolved'
+    }));
+  });
+  return alerts;
+}
+function monthlyDashboardKnownAlertIds(){
+  try{
+    const saved = JSON.parse(localStorage.getItem(MONTHLY_ALERT_CACHE_KEY) || '[]');
+    return Array.isArray(saved) ? saved.filter(function(id){ return typeof id === 'string'; }) : [];
+  }catch(e){
+    return [];
+  }
+}
+function monthlyDashboardStoreAlertIds(ids){
+  try{
+    localStorage.setItem(MONTHLY_ALERT_CACHE_KEY, JSON.stringify(Array.from(new Set(ids)).slice(0,5000)));
+  }catch(e){}
+}
+function buildMonthlyDashboardAlerts(){
+  const today = monthlyDashboardToday();
+  const alerts = [];
+  if(!DB || !Array.isArray(DB.workers)) return alerts;
+  DB.workers.filter(function(w){ return monthlyDashboardWorkerActive(w, today); }).forEach(function(w){
+    alerts.push(monthlyDashboardSalaryDueAlert(w, today));
+    alerts.push(monthlyDashboardPaydaySoonAlert(w, today));
+    alerts.push(monthlyDashboardAdvanceExcessAlert(w, today));
+    alerts.push(monthlyDashboardPendingAbsenceAlert(w));
+    alerts.push.apply(alerts, monthlyDashboardInstallmentAlerts(w, today));
+  });
+
+  // أي عامل أو قسط حُذف يجب أن يغلق تنبيهاته السابقة في اللوحة المركزية.
+  const currentIds = new Set(alerts.map(function(a){ return String(a.id); }));
+  const stamp = monthlyDashboardDayStamp();
+  monthlyDashboardKnownAlertIds().forEach(function(id){
+    if(!currentIds.has(id)){
+      alerts.push({
+        id:id,
+        app:MONTHLY_DASHBOARD_APP,
+        source:'الأجور الشهرية',
+        status:'resolved',
+        updatedAt:stamp
+      });
+    }
+  });
+  monthlyDashboardStoreAlertIds(alerts.map(function(a){ return String(a.id); }));
+  return alerts;
+}
+function monthlyDashboardOutstandingWages(){
+  const today = monthlyDashboardToday();
+  let total = 0;
+  if(!DB || !Array.isArray(DB.workers)) return total;
+  DB.workers.filter(function(w){ return monthlyDashboardWorkerActive(w, today); }).forEach(function(w){
+    if(monthlyDashboardWorkerIsNew(w, today)) return;
+    const due = monthlyDashboardCurrentDueInfo(w, today);
+    const status = monthlyDashboardSafeStatus(w, due.cycle);
+    if(!status || !(status.baseSal > 0)) return;
+    total += monthlyDashboardOutstanding(status).total;
+  });
+  return Math.max(0, Math.round(total));
+}
+function emitMonthlyDashboardAlerts(){
+  const alerts = buildMonthlyDashboardAlerts();
+  const openCount = alerts.filter(function(a){ return a && a.status === 'open'; }).length;
+  window.__EGTPH_MONTHLY_ALERTS__ = alerts;
+  if(!window.parent || window.parent === window) return;
+  try{
+    window.parent.postMessage({type:'egtph-dashboard-alerts', alerts:alerts}, location.origin);
+    window.parent.postMessage({
+      type:'egtph-dashboard-widget',
+      key:'monthlyWages',
+      value:String(monthlyDashboardOutstandingWages())
+    }, location.origin);
+  }catch(e){
+    console.warn('Monthly dashboard alert bridge:', e);
+  }
+}
+function scheduleMonthlyDashboardAlerts(){
+  if(_monthlyDashboardAlertTimer) clearTimeout(_monthlyDashboardAlertTimer);
+  _monthlyDashboardAlertTimer = setTimeout(emitMonthlyDashboardAlerts, 180);
+}
+window.addEventListener('message', function(event){
+  if(event.origin !== location.origin || !event.data) return;
+  if(event.data.type === 'egtph-dashboard-request-alerts') scheduleMonthlyDashboardAlerts();
+});
+try{
+  const _monthlySaveDBOriginal = saveDB;
+  saveDB = function(){
+    const result = _monthlySaveDBOriginal.apply(this, arguments);
+    scheduleMonthlyDashboardAlerts();
+    return result;
+  };
+}catch(e){
+  console.warn('Monthly dashboard save hook:', e);
+}
+try{
+  setTimeout(scheduleMonthlyDashboardAlerts, 900);
+  setInterval(function(){
+    if(window.parent && window.parent !== window) scheduleMonthlyDashboardAlerts();
+  }, 60000);
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState === 'visible') scheduleMonthlyDashboardAlerts();
+  });
+}catch(e){
+  console.warn('Monthly dashboard alert scheduler:', e);
+}
+
 </script>
 
 
