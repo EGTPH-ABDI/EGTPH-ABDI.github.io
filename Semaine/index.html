@@ -125,6 +125,13 @@ pointer-events:none;z-index:0}
 .user-info-bar{display:flex;align-items:center;gap:10px;padding:7px 14px;background:var(--card);border-radius:30px;border:1px solid var(--border);font-size:13px;cursor:pointer;white-space:nowrap;box-shadow:var(--shadow)}
 .user-info-bar i{color:var(--primary)}
 
+/* === PAGE NAVIGATION CONTROLS === */
+.page-title-area{display:flex;align-items:center;gap:10px;min-width:0}
+.page-title-area h1{margin:0;min-width:0}
+.page-back-btn{display:none;align-items:center;justify-content:center;gap:6px;flex-shrink:0}
+.page-back-btn.visible{display:inline-flex}
+
+
 /* === STATS === */
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:22px}
 .stat-card{background:var(--glass);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);border-radius:var(--radius);padding:18px;box-shadow:var(--glass-shadow);display:flex;align-items:center;gap:14px;transition:all var(--transition);border:1px solid var(--glass-border);position:relative;overflow:hidden}
@@ -327,8 +334,11 @@ table tbody tr:last-child td{border-bottom:none}
   .sidebar{width:0;padding:0;overflow:hidden}
   .sidebar.open{width:260px;padding:18px 0}
   .main-content{margin-right:0;padding:14px;max-width:100vw}
-  .mobile-menu-btn{display:flex;position:fixed;top:calc(14px + env(safe-area-inset-top,0px));right:calc(20px + env(safe-area-inset-right,0px));z-index:500;background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;border:none;width:46px;height:46px;border-radius:50%;font-size:18px;cursor:pointer;box-shadow:0 4px 12px rgba(15,118,110,.3);align-items:center;justify-content:center;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transform:translateZ(0);-webkit-transform:translateZ(0);will-change:transform}
+  .mobile-menu-btn{display:flex;position:fixed;top:calc(14px + env(safe-area-inset-top,0px));left:calc(14px + env(safe-area-inset-left,0px));right:auto;z-index:500;background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;border:none;width:44px;height:44px;border-radius:12px;font-size:19px;cursor:pointer;box-shadow:0 4px 12px rgba(15,118,110,.3);align-items:center;justify-content:center;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transform:translateZ(0);-webkit-transform:translateZ(0);will-change:transform}
+  .page-header{padding-left:58px;min-height:50px}
   .page-header h1{font-size:18px}
+  .page-back-btn{padding:7px 10px}
+  .page-back-btn span{display:none}
   .stats-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
   .stat-info .value{font-size:16px}
   .ai-fab{bottom:80px}
@@ -436,7 +446,7 @@ table tbody tr:last-child td{border-bottom:none}
   </div>
 </div>
 
-<button id="mobileMenuBtn" class="mobile-menu-btn no-print" type="button" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+<button id="mobileMenuBtn" class="mobile-menu-btn no-print" type="button" aria-label="فتح القائمة" aria-controls="sidebar" aria-expanded="false" title="القائمة"><i class="fas fa-ellipsis-vertical"></i></button>
 
 <!-- ===== SIDEBAR ===== -->
 <aside class="sidebar" id="sidebar">
@@ -466,7 +476,12 @@ table tbody tr:last-child td{border-bottom:none}
 <!-- ===== MAIN ===== -->
 <div class="main-content" id="mainContent">
   <div class="page-header">
-    <h1 id="pageTitle"><i class="fas fa-chart-pie"></i> لوحة القيادة</h1>
+    <div class="page-title-area">
+      <button id="pageBackBtn" class="btn btn-outline btn-sm page-back-btn" type="button" onclick="goBack()" aria-label="رجوع" title="رجوع">
+        <i class="fas fa-arrow-right"></i><span>رجوع</span>
+      </button>
+      <h1 id="pageTitle"><i class="fas fa-chart-pie"></i> لوحة القيادة</h1>
+    </div>
     <div class="user-info-bar" id="userInfoBar"></div>
   </div>
 
@@ -1166,15 +1181,70 @@ function updateUserInfoBar(){
 }
 
 /* ---------- NAVIGATION ---------- */
-function navigateTo(p){
+let currentPage='dashboard';
+let navigationHistory=[];
+
+const pageTitles={
+  dashboard:'لوحة القيادة',workers:'العمال والموارد',projects:'المشاريع',week:'الأسبوع الحالي',
+  'project-weeks':'أسابيع المشروع',archive:'أرشيف الأسابيع',debts:'الديون والأقساط',
+  pendingwages:'أجور معلّقة',reports:'التقارير',settings:'الإعدادات',log:'سجل النشاطات',trash:'سلة المهملات'
+};
+const pageIcons={
+  dashboard:'fa-chart-pie',workers:'fa-users',projects:'fa-folder-tree',week:'fa-calendar-week',
+  'project-weeks':'fa-calendar-alt',archive:'fa-archive',debts:'fa-hand-holding-usd',
+  pendingwages:'fa-clock',reports:'fa-file-alt',settings:'fa-cog',log:'fa-history',trash:'fa-trash-can'
+};
+
+function setSidebarOpen(open){
+  const sidebar=document.getElementById('sidebar');
+  const button=document.getElementById('mobileMenuBtn');
+  if(sidebar) sidebar.classList.toggle('open',!!open);
+  if(button) button.setAttribute('aria-expanded',open?'true':'false');
+}
+function toggleSidebar(){
+  const sidebar=document.getElementById('sidebar');
+  if(!sidebar) return;
+  const active=document.activeElement;
+  if(active && active!==document.body && typeof active.blur==='function') active.blur();
+  setSidebarOpen(!sidebar.classList.contains('open'));
+}
+function closeSidebar(){ setSidebarOpen(false); }
+
+function updateBackButton(){
+  const button=document.getElementById('pageBackBtn');
+  if(!button) return;
+  const shouldShow=currentPage!=='dashboard';
+  button.classList.toggle('visible',shouldShow);
+  button.disabled=!shouldShow;
+  button.setAttribute('aria-hidden',shouldShow?'false':'true');
+}
+
+function navigateTo(p,options={}){
+  const pageName=String(p||'dashboard');
+  const page=document.getElementById('page-'+pageName);
+  if(!page){
+    console.warn('Unknown page:',pageName);
+    return false;
+  }
+
+  const previousPage=currentPage;
+  if(options.record!==false && pageName!==previousPage){
+    navigationHistory.push(previousPage);
+    if(navigationHistory.length>30) navigationHistory.shift();
+  }
+  currentPage=pageName;
+
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.sidebar-nav a').forEach(a=>a.classList.remove('active'));
-  const pg=document.getElementById('page-'+p); if(pg) pg.classList.add('active');
-  const lnk=document.querySelector(`[data-page="${p}"]`); if(lnk) lnk.classList.add('active');
-  const titles={dashboard:'لوحة القيادة',workers:'العمال والموارد',projects:'المشاريع',week:'الأسبوع الحالي','project-weeks':'أسابيع المشروع',archive:'أرشيف الأسابيع',debts:'الديون والأقساط',pendingwages:'أجور معلّقة',reports:'التقارير',settings:'الإعدادات',log:'سجل النشاطات',trash:'سلة المهملات'};
-  const icons={dashboard:'fa-chart-pie',workers:'fa-users',projects:'fa-folder-tree',week:'fa-calendar-week','project-weeks':'fa-calendar-alt',archive:'fa-archive',debts:'fa-hand-holding-usd',pendingwages:'fa-clock',reports:'fa-file-alt',settings:'fa-cog',log:'fa-history',trash:'fa-trash-can'};
-  document.getElementById('pageTitle').innerHTML=`<i class="fas ${icons[p]||''}"></i> ${titles[p]||''}`;
-  switch(p){
+  page.classList.add('active');
+
+  const link=document.querySelector(`[data-page="${pageName}"]`);
+  if(link) link.classList.add('active');
+
+  const title=document.getElementById('pageTitle');
+  if(title) title.innerHTML=`<i class="fas ${pageIcons[pageName]||''}"></i> ${pageTitles[pageName]||''}`;
+
+  switch(pageName){
     case'dashboard':loadDashboard();break;
     case'workers':renderWorkers();break;
     case'projects':renderProjects();break;
@@ -1188,7 +1258,18 @@ function navigateTo(p){
     case'log':renderLog();break;
     case'trash':renderTrash();break;
   }
-  document.getElementById('sidebar').classList.remove('open');
+
+  closeSidebar();
+  updateBackButton();
+  try{ window.scrollTo({top:0,left:0,behavior:'auto'}); }catch(e){ try{window.scrollTo(0,0);}catch(e2){} }
+  return true;
+}
+
+function goBack(){
+  if(currentPage==='dashboard') return;
+  let previousPage=navigationHistory.pop();
+  while(previousPage===currentPage && navigationHistory.length) previousPage=navigationHistory.pop();
+  navigateTo(previousPage||'dashboard',{record:false});
 }
 
 /* ---------- THEME / UI ---------- */
@@ -1197,32 +1278,75 @@ function applyTheme(){
   if(DB.settings.darkMode){ document.body.classList.add('dark'); document.getElementById('themeIcon').className='fas fa-sun'; document.getElementById('themeText').textContent='الوضع الفاتح'; }
   else{ document.body.classList.remove('dark'); document.getElementById('themeIcon').className='fas fa-moon'; document.getElementById('themeText').textContent='الوضع المظلم'; }
 }
-let _sidebarToggleLock=false;
-function toggleSidebar(){
-  if(_sidebarToggleLock)return;                 // يمنع ازدواج التبديل (نقرة + لمسة معاً)
-  _sidebarToggleLock=true;
-  document.getElementById('sidebar').classList.toggle('open');
-  setTimeout(()=>{_sidebarToggleLock=false;},250);
-}
-/* ربط موثوق لزر القائمة على آيفون.
-   السبب الحقيقي لعدم الاستجابة أحياناً: عندما تكون لوحة المفاتيح مفتوحة (المستخدم يكتب في خانة)،
-   أول لمسة خارج الخانة يستهلكها Safari لإغلاق الكيبورد فقط، فلا يصل أي click/touchend للزر —
-   تحتاج لمسة ثانية لتفعيله فعلاً. كما أن touchend قد يُسقَط أحياناً إذا اعتبره iOS إيقافاً لتمرير.
-   الحل: التفعيل من touchstart مباشرة (أبكر حدث يصل بثبات) مع إغلاق فوري لأي خانة مُركَّز عليها
-   في نفس اللمسة، فلا تُستهلك اللمسة الأولى بلا فائدة. */
+/* ربط موحّد لزر القائمة وروابط الشريط الجانبي على iPhone وAndroid.
+   لا يوجد onclick داخل زر القائمة: لذلك لا يمكن أن تتكرر اللمسة بين inline click وtouch/pointer.
+   روابط الشريط تستقبل touchend وclick مع حماية من التكرار؛ وعند السحب للتمرير لا يتم فتح أي صفحة. */
 function _wireMobileMenuBtn(){
-  const btn=document.querySelector('.mobile-menu-btn');
-  if(!btn||btn._wired)return; btn._wired=true;
-  let _firedAt=0;
-  function fire(){
-    const t=Date.now(); if(t-_firedAt<300)return; _firedAt=t;     // يمنع الازدواج بين الأحداث المختلفة
-    const ae=document.activeElement;
-    if(ae && ae!==btn && typeof ae.blur==='function') ae.blur();   // أغلق الكيبورد ضمن نفس اللمسة
+  const button=document.getElementById('mobileMenuBtn');
+  if(!button||button._egtphMenuWired) return;
+  button._egtphMenuWired=true;
+
+  let lastActivation=0;
+  function activateMenu(event){
+    if(event){ event.preventDefault(); event.stopPropagation(); }
+    const now=Date.now();
+    if(now-lastActivation<500) return;
+    lastActivation=now;
     toggleSidebar();
   }
-  btn.addEventListener('touchstart',function(e){ e.preventDefault(); fire(); },{passive:false});
-  btn.addEventListener('pointerup',fire);
-  btn.addEventListener('click',fire);
+
+  button.addEventListener('pointerup',activateMenu);
+  button.addEventListener('click',activateMenu);
+}
+
+function _wireSidebarNavigation(){
+  const sidebar=document.getElementById('sidebar');
+  if(!sidebar||sidebar._egtphNavigationWired) return;
+  sidebar._egtphNavigationWired=true;
+
+  let touchStart=null;
+  let lastNavigationAt=0;
+
+  function getLink(target){
+    return target&&typeof target.closest==='function'
+      ?target.closest('.sidebar-nav a[data-page]')
+      :null;
+  }
+  function openPage(link){
+    if(!link||!link.dataset.page) return;
+    navigateTo(link.dataset.page);
+  }
+
+  sidebar.addEventListener('touchstart',function(event){
+    const touch=event.touches&&event.touches[0];
+    touchStart=touch?{x:touch.clientX,y:touch.clientY}:null;
+  },{passive:true});
+
+  sidebar.addEventListener('touchmove',function(){ touchStart=null; },{passive:true});
+
+  sidebar.addEventListener('touchend',function(event){
+    const link=getLink(event.target);
+    const touch=event.changedTouches&&event.changedTouches[0];
+    const start=touchStart;
+    touchStart=null;
+    if(!link||!start||!touch) return;
+
+    const moved=Math.abs(touch.clientX-start.x)>12 || Math.abs(touch.clientY-start.y)>12;
+    if(moved) return;
+
+    event.preventDefault();
+    lastNavigationAt=Date.now();
+    openPage(link);
+  },{passive:false});
+
+  sidebar.addEventListener('click',function(event){
+    const link=getLink(event.target);
+    if(!link) return;
+
+    event.preventDefault();
+    if(Date.now()-lastNavigationAt<700) return;
+    openPage(link);
+  });
 }
 function showToast(m,t='success'){
   const toast=document.getElementById('toast');
@@ -3337,7 +3461,7 @@ function initApp(){
   loadDashboard(); renderWorkers(); renderProjects();
   loadWeekEditor(); renderArchive(); renderDebts(); renderReports();
   renderUsers(); renderLog(); renderTrash(); updateTrashBadge();
-  updateUserInfoBar(); updateSaveStatus();
+  updateUserInfoBar(); updateSaveStatus(); updateBackButton();
 }
 
 /* أحداث عامة */
@@ -3351,9 +3475,7 @@ document.addEventListener('DOMContentLoaded', async function(){
     DB.users.push({id:generateId(),name:'مدير النظام',email:'admin@egtph.dz',password:'admin123',role:'admin'});
     saveDB();
   }
-  document.querySelectorAll('.sidebar-nav a').forEach(l=>{
-    l.addEventListener('click',function(e){ if(this.dataset.page){ e.preventDefault(); navigateTo(this.dataset.page); } });
-  });
+  try{ _wireSidebarNavigation(); }catch(e){ console.warn('sidebar navigation:',e); }
   document.getElementById('modalOverlay').addEventListener('click',function(e){ if(e.target===this) closeModal(); });
   document.getElementById('deleteConfirmOverlay').addEventListener('click',function(e){ if(e.target===this) closeDeleteConfirm(); });
   document.getElementById('confirmDeleteBtn').addEventListener('click',function(){
