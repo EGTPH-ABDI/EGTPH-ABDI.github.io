@@ -105,10 +105,10 @@ pointer-events:none;z-index:0}
 .sidebar-logo small{font-size:11px;color:#94a3b8;display:block;margin-top:3px}
 .sidebar-nav{list-style:none;flex:1;padding:0 12px}
 .sidebar-nav li{margin-bottom:2px}
-.sidebar-nav li a{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:var(--radius-sm);color:var(--sidebar-text);text-decoration:none;font-size:13.5px;font-weight:500;cursor:pointer;transition:all var(--transition)}
-.sidebar-nav li a:hover{background:rgba(255,255,255,.06);color:#fff}
-.sidebar-nav li a.active{background:var(--sidebar-active);color:#fff;font-weight:700;box-shadow:0 4px 12px rgba(13,148,136,.3)}
-.sidebar-nav li a i{width:18px;text-align:center;font-size:14px}
+.sidebar-nav li a,.sidebar-nav li button{display:flex;align-items:center;gap:12px;width:100%;padding:11px 14px;border-radius:var(--radius-sm);color:var(--sidebar-text);text-decoration:none;font-size:13.5px;font-weight:500;cursor:pointer;transition:all var(--transition);font-family:inherit;text-align:right;border:none;background:transparent}
+.sidebar-nav li a:hover,.sidebar-nav li button:hover{background:rgba(255,255,255,.06);color:#fff}
+.sidebar-nav li a.active,.sidebar-nav li button.active{background:var(--sidebar-active);color:#fff;font-weight:700;box-shadow:0 4px 12px rgba(13,148,136,.3)}
+.sidebar-nav li a i,.sidebar-nav li button i{width:18px;text-align:center;font-size:14px}
 .sidebar-footer{padding:14px 16px;border-top:1px solid rgba(255,255,255,.08);margin-top:auto}
 .theme-toggle{display:flex;align-items:center;gap:10px;cursor:pointer;padding:9px 12px;border-radius:var(--radius-sm);color:var(--sidebar-text);transition:all var(--transition);font-size:13px}
 .theme-toggle:hover{background:rgba(255,255,255,.06)}
@@ -330,12 +330,74 @@ table tbody tr:last-child td{border-bottom:none}
 
 /* === MOBILE === */
 .mobile-menu-btn{display:none}
+/* طبقة خلفية لدرج القائمة على الهاتف. */
+.sidebar-backdrop{display:none}
+
+/* === MOBILE SIDEBAR — drawer ثابت ومقاوم لمشاكل اللمس في iPhone === */
 @media(max-width:900px){
-  .sidebar{width:0;padding:0;overflow:hidden}
-  .sidebar.open{width:260px;padding:18px 0}
+  body.sidebar-is-open{overflow:hidden}
+  .sidebar{
+    width:272px;
+    padding:calc(18px + env(safe-area-inset-top,0px)) 0 calc(18px + env(safe-area-inset-bottom,0px));
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+    z-index:1000;
+    transform:translate3d(110%,0,0);
+    opacity:0;
+    visibility:hidden;
+    pointer-events:none;
+    transition:transform .24s cubic-bezier(.2,.8,.2,1),opacity .18s ease,visibility 0s linear .24s;
+    will-change:transform;
+  }
+  .sidebar.open{
+    transform:translate3d(0,0,0);
+    opacity:1;
+    visibility:visible;
+    pointer-events:auto;
+    transition:transform .24s cubic-bezier(.2,.8,.2,1),opacity .18s ease;
+  }
+  .sidebar-backdrop{
+    display:block;
+    position:fixed;
+    inset:0;
+    z-index:900;
+    background:rgba(3,12,26,.46);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .18s ease;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .sidebar-backdrop.show{opacity:1;pointer-events:auto}
+  .sidebar-nav li button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;min-height:44px}
   .main-content{margin-right:0;padding:14px;max-width:100vw}
-  .mobile-menu-btn{display:flex;position:fixed;top:calc(14px + env(safe-area-inset-top,0px));left:calc(14px + env(safe-area-inset-left,0px));right:auto;z-index:500;background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;border:none;width:44px;height:44px;border-radius:12px;font-size:19px;cursor:pointer;box-shadow:0 4px 12px rgba(15,118,110,.3);align-items:center;justify-content:center;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transform:translateZ(0);-webkit-transform:translateZ(0);will-change:transform}
-  .page-header{padding-left:58px;min-height:50px}
+  .mobile-menu-btn{
+    display:flex;
+    position:fixed;
+    top:calc(14px + env(safe-area-inset-top,0px));
+    left:calc(14px + env(safe-area-inset-left,0px));
+    right:auto;
+    z-index:1101;
+    isolation:isolate;
+    background:linear-gradient(135deg,var(--primary),var(--accent));
+    color:#fff;
+    border:none;
+    width:48px;
+    height:48px;
+    border-radius:14px;
+    font-size:20px;
+    cursor:pointer;
+    box-shadow:0 5px 16px rgba(15,118,110,.38);
+    align-items:center;
+    justify-content:center;
+    touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent;
+    transform:translate3d(0,0,0);
+    -webkit-transform:translate3d(0,0,0);
+    will-change:transform;
+  }
+  .mobile-menu-btn:active{transform:scale(.94)}
+  .page-header{padding-left:64px;min-height:52px}
   .page-header h1{font-size:18px}
   .page-back-btn{padding:7px 10px}
   .page-back-btn span{display:none}
@@ -447,6 +509,7 @@ table tbody tr:last-child td{border-bottom:none}
 </div>
 
 <button id="mobileMenuBtn" class="mobile-menu-btn no-print" type="button" aria-label="فتح القائمة" aria-controls="sidebar" aria-expanded="false" title="القائمة"><i class="fas fa-ellipsis-vertical"></i></button>
+<div id="sidebarBackdrop" class="sidebar-backdrop" aria-hidden="true"></div>
 
 <!-- ===== SIDEBAR ===== -->
 <aside class="sidebar" id="sidebar">
@@ -456,17 +519,17 @@ table tbody tr:last-child td{border-bottom:none}
     <small>سجل الأجرة الأسبوعي</small>
   </div>
   <ul class="sidebar-nav">
-    <li><a class="active" data-page="dashboard"><i class="fas fa-chart-pie"></i> لوحة القيادة</a></li>
-    <li><a data-page="workers"><i class="fas fa-users"></i> العمال والموارد</a></li>
-    <li><a data-page="projects"><i class="fas fa-folder-tree"></i> المشاريع</a></li>
-    <li><a data-page="week"><i class="fas fa-calendar-week"></i> الأسبوع الحالي</a></li>
-    <li><a data-page="archive"><i class="fas fa-archive"></i> أرشيف الأسابيع</a></li>
-    <li><a data-page="debts"><i class="fas fa-hand-holding-usd"></i> الديون والأقساط</a></li>
-    <li><a data-page="pendingwages"><i class="fas fa-clock"></i> أجور معلّقة <span id="pendingWagesBadge" class="badge" style="display:none"></span></a></li>
-    <li><a data-page="reports"><i class="fas fa-file-alt"></i> التقارير</a></li>
-    <li><a data-page="settings"><i class="fas fa-cog"></i> الإعدادات</a></li>
-    <li><a data-page="log"><i class="fas fa-history"></i> سجل النشاطات</a></li>
-    <li><a data-page="trash" id="trashLink"><i class="fas fa-trash-can"></i> سلة المهملات <span id="trashBadge" style="display:none;background:#dc2626;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-right:4px"></span></a></li>
+    <li><button type="button" class="active" data-page="dashboard"><i class="fas fa-chart-pie"></i> لوحة القيادة</button></li>
+    <li><button type="button" data-page="workers"><i class="fas fa-users"></i> العمال والموارد</button></li>
+    <li><button type="button" data-page="projects"><i class="fas fa-folder-tree"></i> المشاريع</button></li>
+    <li><button type="button" data-page="week"><i class="fas fa-calendar-week"></i> الأسبوع الحالي</button></li>
+    <li><button type="button" data-page="archive"><i class="fas fa-archive"></i> أرشيف الأسابيع</button></li>
+    <li><button type="button" data-page="debts"><i class="fas fa-hand-holding-usd"></i> الديون والأقساط</button></li>
+    <li><button type="button" data-page="pendingwages"><i class="fas fa-clock"></i> أجور معلّقة <span id="pendingWagesBadge" class="badge" style="display:none"></span></button></li>
+    <li><button type="button" data-page="reports"><i class="fas fa-file-alt"></i> التقارير</button></li>
+    <li><button type="button" data-page="settings"><i class="fas fa-cog"></i> الإعدادات</button></li>
+    <li><button type="button" data-page="log"><i class="fas fa-history"></i> سجل النشاطات</button></li>
+    <li><button type="button" data-page="trash" id="trashLink"><i class="fas fa-trash-can"></i> سلة المهملات <span id="trashBadge" style="display:none;background:#dc2626;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-right:4px"></span></button></li>
   </ul>
   <div class="sidebar-footer">
     <div class="theme-toggle" onclick="toggleTheme()"><i class="fas fa-moon" id="themeIcon"></i> <span id="themeText">الوضع المظلم</span></div>
@@ -1195,19 +1258,44 @@ const pageIcons={
   pendingwages:'fa-clock',reports:'fa-file-alt',settings:'fa-cog',log:'fa-history',trash:'fa-trash-can'
 };
 
+function isMobileSidebarMode(){
+  try{return window.matchMedia('(max-width:900px)').matches;}catch(e){return window.innerWidth<=900;}
+}
+
 function setSidebarOpen(open){
   const sidebar=document.getElementById('sidebar');
+  const backdrop=document.getElementById('sidebarBackdrop');
   const button=document.getElementById('mobileMenuBtn');
-  if(sidebar) sidebar.classList.toggle('open',!!open);
-  if(button) button.setAttribute('aria-expanded',open?'true':'false');
+  const mobile=isMobileSidebarMode();
+  const shouldOpen=mobile&&Boolean(open);
+
+  if(sidebar){
+    sidebar.classList.toggle('open',shouldOpen);
+    sidebar.setAttribute('aria-hidden',mobile&&!shouldOpen?'true':'false');
+  }
+  if(backdrop){
+    backdrop.classList.toggle('show',shouldOpen);
+    backdrop.setAttribute('aria-hidden',shouldOpen?'false':'true');
+  }
+  document.body.classList.toggle('sidebar-is-open',shouldOpen);
+  if(button){
+    button.setAttribute('aria-expanded',shouldOpen?'true':'false');
+    button.setAttribute('aria-label',shouldOpen?'إغلاق القائمة':'فتح القائمة');
+    button.setAttribute('title',shouldOpen?'إغلاق القائمة':'القائمة');
+    const icon=button.querySelector('i');
+    if(icon) icon.className=shouldOpen?'fas fa-xmark':'fas fa-ellipsis-vertical';
+  }
 }
+
 function toggleSidebar(){
+  if(!isMobileSidebarMode()) return;
   const sidebar=document.getElementById('sidebar');
   if(!sidebar) return;
   const active=document.activeElement;
   if(active && active!==document.body && typeof active.blur==='function') active.blur();
   setSidebarOpen(!sidebar.classList.contains('open'));
 }
+
 function closeSidebar(){ setSidebarOpen(false); }
 
 function updateBackButton(){
@@ -1235,10 +1323,10 @@ function navigateTo(p,options={}){
   currentPage=pageName;
 
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
-  document.querySelectorAll('.sidebar-nav a').forEach(a=>a.classList.remove('active'));
+  document.querySelectorAll('.sidebar-nav [data-page]').forEach(a=>a.classList.remove('active'));
   page.classList.add('active');
 
-  const link=document.querySelector(`[data-page="${pageName}"]`);
+  const link=document.querySelector(`.sidebar-nav [data-page="${pageName}"]`);
   if(link) link.classList.add('active');
 
   const title=document.getElementById('pageTitle');
@@ -1278,75 +1366,66 @@ function applyTheme(){
   if(DB.settings.darkMode){ document.body.classList.add('dark'); document.getElementById('themeIcon').className='fas fa-sun'; document.getElementById('themeText').textContent='الوضع الفاتح'; }
   else{ document.body.classList.remove('dark'); document.getElementById('themeIcon').className='fas fa-moon'; document.getElementById('themeText').textContent='الوضع المظلم'; }
 }
-/* ربط موحّد لزر القائمة وروابط الشريط الجانبي على iPhone وAndroid.
-   لا يوجد onclick داخل زر القائمة: لذلك لا يمكن أن تتكرر اللمسة بين inline click وtouch/pointer.
-   روابط الشريط تستقبل touchend وclick مع حماية من التكرار؛ وعند السحب للتمرير لا يتم فتح أي صفحة. */
-function _wireMobileMenuBtn(){
-  const button=document.getElementById('mobileMenuBtn');
-  if(!button||button._egtphMenuWired) return;
-  button._egtphMenuWired=true;
 
-  let lastActivation=0;
-  function activateMenu(event){
-    if(event){ event.preventDefault(); event.stopPropagation(); }
-    const now=Date.now();
-    if(now-lastActivation<500) return;
-    lastActivation=now;
+/* آلية واحدة لزر القائمة: pointerdown على الأجهزة الحديثة، وtouchstart احتياطي فقط.
+   لا نستعمل touchend مع click في الوقت نفسه، لأن ذلك هو سبب الاستجابة المتقطعة في Safari. */
+function _wireMobileMenuBtn(){
+  const original=document.getElementById('mobileMenuBtn');
+  if(!original) return;
+
+  // نسخة نظيفة تمنع أي مستمع قديم أو مكرر من التأثير على الزر.
+  const button=original.cloneNode(true);
+  original.replaceWith(button);
+  let lastTriggerAt=-Infinity;
+
+  function trigger(event){
+    if(!isMobileSidebarMode()) return;
+    if(event && event.type==='pointerdown' && typeof event.button==='number' && event.button!==0) return;
+    const now=(window.performance&&performance.now)?performance.now():Date.now();
+    if(now-lastTriggerAt<420){
+      if(event&&event.cancelable) event.preventDefault();
+      return;
+    }
+    lastTriggerAt=now;
+    if(event&&event.cancelable) event.preventDefault();
     toggleSidebar();
   }
 
-  button.addEventListener('pointerup',activateMenu);
-  button.addEventListener('click',activateMenu);
+  if('PointerEvent' in window) button.addEventListener('pointerdown',trigger,{passive:false});
+  else button.addEventListener('touchstart',trigger,{passive:false});
+
+  // للوحة المفاتيح والمتصفحات التي ترسل click فقط.
+  button.addEventListener('click',function(event){
+    const now=(window.performance&&performance.now)?performance.now():Date.now();
+    if(now-lastTriggerAt<700){ event.preventDefault(); return; }
+    trigger(event);
+  });
+  button.addEventListener('keydown',function(event){
+    if(event.key==='Enter'||event.key===' '){ event.preventDefault(); trigger(event); }
+  });
 }
 
+/* عناصر القائمة أصبحت أزراراً أصلية؛ click واحد يكفي على iPhone/Android/desktop. */
 function _wireSidebarNavigation(){
   const sidebar=document.getElementById('sidebar');
   if(!sidebar||sidebar._egtphNavigationWired) return;
   sidebar._egtphNavigationWired=true;
 
-  let touchStart=null;
-  let lastNavigationAt=0;
-
-  function getLink(target){
-    return target&&typeof target.closest==='function'
-      ?target.closest('.sidebar-nav a[data-page]')
-      :null;
-  }
-  function openPage(link){
-    if(!link||!link.dataset.page) return;
-    navigateTo(link.dataset.page);
-  }
-
-  sidebar.addEventListener('touchstart',function(event){
-    const touch=event.touches&&event.touches[0];
-    touchStart=touch?{x:touch.clientX,y:touch.clientY}:null;
-  },{passive:true});
-
-  sidebar.addEventListener('touchmove',function(){ touchStart=null; },{passive:true});
-
-  sidebar.addEventListener('touchend',function(event){
-    const link=getLink(event.target);
-    const touch=event.changedTouches&&event.changedTouches[0];
-    const start=touchStart;
-    touchStart=null;
-    if(!link||!start||!touch) return;
-
-    const moved=Math.abs(touch.clientX-start.x)>12 || Math.abs(touch.clientY-start.y)>12;
-    if(moved) return;
-
-    event.preventDefault();
-    lastNavigationAt=Date.now();
-    openPage(link);
-  },{passive:false});
-
   sidebar.addEventListener('click',function(event){
-    const link=getLink(event.target);
-    if(!link) return;
-
+    const item=event.target&&event.target.closest?event.target.closest('.sidebar-nav button[data-page]'):null;
+    if(!item||item.disabled) return;
     event.preventDefault();
-    if(Date.now()-lastNavigationAt<700) return;
-    openPage(link);
+    navigateTo(item.dataset.page);
   });
+}
+
+function _wireSidebarBackdrop(){
+  const backdrop=document.getElementById('sidebarBackdrop');
+  if(!backdrop||backdrop._egtphBackdropWired) return;
+  backdrop._egtphBackdropWired=true;
+  backdrop.addEventListener('click',function(event){ event.preventDefault(); closeSidebar(); });
+  window.addEventListener('resize',function(){ if(!isMobileSidebarMode()) setSidebarOpen(false); },{passive:true});
+  document.addEventListener('keydown',function(event){ if(event.key==='Escape') closeSidebar(); });
 }
 function showToast(m,t='success'){
   const toast=document.getElementById('toast');
@@ -2571,20 +2650,6 @@ function printViaIframe(bodyHTML){
     tr{page-break-inside:avoid}
     @page{margin:10mm}
   
-/* === SAFE iPHONE MENU FIX ONLY - LOGIN UNTOUCHED === */
-@media(max-width:900px){
-  #mobileMenuBtn,.mobile-menu-btn{
-    display:flex!important;
-    z-index:99999!important;
-    pointer-events:auto!important;
-    touch-action:manipulation!important;
-    -webkit-tap-highlight-color:transparent!important;
-  }
-  #sidebar.sidebar.open{
-    width:260px!important;
-    padding:18px 0!important;
-  }
-}
 
 </style></head><body>${bodyHTML}</body></html>`);
   doc.close();
@@ -3468,6 +3533,7 @@ function initApp(){
 document.addEventListener('DOMContentLoaded', async function(){
   await loadDB();
   try{ _wireMobileMenuBtn(); }catch(e){}
+  try{ _wireSidebarBackdrop(); }catch(e){}
   try{ seedFromEmbedded(); }catch(e){ console.warn('seed embedded:',e); }
   seedDefaultData();
   try{cloudInit();}catch(e){console.warn('cloud:',e);}
