@@ -311,6 +311,8 @@ async function saveAll(){
     if(!saveWarned){saveWarned=true;alert("⚠️ Sauvegarde locale indisponible. Exportez pour garder une copie.");}
   }
   if(!window._cloudApplying){ try{ window._cloudDirty=true; schedulePush(); }catch(e){} }
+  // Envoie aussi les alertes documentaires réelles au tableau EGTPH lorsqu'il est ouvert dans l'iframe.
+  try{ scheduleParcDashboardAlerts(); }catch(e){}
 }
 async function getImg(k){
   try{const raw=localStorage.getItem("img_"+k);if(raw!=null)return raw;}catch(e){}
@@ -493,6 +495,113 @@ const $=s=>document.querySelector(s);
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function daysLeft(d){if(!d)return null;const t=new Date(d);if(isNaN(t))return null;const n=new Date();n.setHours(0,0,0,0);return Math.round((t-n)/86400000);}
 function statusOf(d){const n=daysLeft(d);if(n===null)return null;if(n<0)return"bad";if(n<=30)return"warn";return"ok";}
+
+/* ===== CENTRAL EGTPH ALERT BRIDGE — PARC DOCUMENTAIRE =====
+   Ce pont ne transmet aucune image, aucun OCR brut et aucune donnée sensible.
+   Il dérive uniquement les alertes réelles : assurance, contrôle technique,
+   permis de circuler et référence de carte grise manquants ou arrivant à échéance.
+   Le tableau parent (apps.html) les synchronise ensuite dans son propre espace Firebase.
+*/
+let _parcAlertTimer=null;
+function parcAlertStamp(e){
+  const n=Number((e&&e._mod)||0)||Number((DATA&&DATA._mod)||0);
+  return n>0?n:Date.now();
+}
+function parcAlertLabel(e){
+  const name=String((e&&e.name)||"Véhicule").trim();
+  const model=String((e&&e.model)||"").trim();
+  const mat=String((e&&e.matricule)||"").trim();
+  return (name+(model?" — "+model:"")+(mat?" ("+mat+")":"")).trim();
+}
+function parcDocAlert(id,e,kind,doc,required){
+  const stamp=parcAlertStamp(e);
+  const entity=parcAlertLabel(e);
+  const date=doc&&doc.fin?String(doc.fin):"";
+  const hasRequiredNumber=kind!=="carte_grise" || !!(doc&&String(doc.num||"").trim());
+  const dateStatus=kind==="carte_grise"?null:statusOf(date);
+  const missing=required && (kind==="carte_grise"?!hasRequiredNumber:!date);
+  let title="",message="",severity="info",status="resolved";
+
+  if(missing){
+    status="open";severity=kind==="carte_grise"?"warning":"critical";
+    if(kind==="assurance"){title="تأمين غير مسجل / Assurance manquante";message=entity+" — تاريخ انتهاء التأمين غير مسجل.";}
+    else if(kind==="controle_technique"){title="مراقبة تقنية غير مسجلة / Contrôle technique manquant";message=entity+" — تاريخ صلاحية المراقبة التقنية غير مسجل.";}
+    else if(kind==="permis_circuler"){title="رخصة سير غير مسجلة / Permis de circuler manquant";message=entity+" — تاريخ صلاحية رخصة السير غير مسجل.";}
+    else {title="بطاقة رمادية ناقصة / Carte grise manquante";message=entity+" — رقم أو مرجع البطاقة الرمادية غير مسجل.";}
+  }else if(dateStatus==="bad"){
+    status="open";severity="critical";
+    if(kind==="assurance"){title="تأمين منتهٍ / Assurance expirée";}
+    else if(kind==="controle_technique"){title="مراقبة تقنية منتهية / Contrôle technique expiré";}
+    else {title="رخصة سير منتهية / Permis de circuler expiré";}
+    message=entity+" — انتهت الصلاحية في "+date+".";
+  }else if(dateStatus==="warn"){
+    status="open";severity="warning";
+    const days=daysLeft(date);
+    if(kind==="assurance"){title="تأمين قريب من الانتهاء / Assurance à renouveler";}
+    else if(kind==="controle_technique"){title="مراقبة تقنية قريبة / Contrôle technique à renouveler";}
+    else {title="رخصة سير قريبة من الانتهاء / Permis de circuler à renouveler";}
+    message=entity+" — تنتهي الصلاحية بعد "+days+" يومًا ("+date+").";
+  }
+
+  return {
+    id:"parc_document_"+String(id)+"_"+kind,
+    app:"parc_document",
+    source:"Parc documentaire",
+    severity:severity,
+    title:title,
+    message:message,
+    dueAt:date,
+    entityId:String(id),
+    entityLabel:entity,
+    status:status,
+    updatedAt:stamp
+  };
+}
+function buildParcDashboardAlerts(){
+  if(!DATA||!Array.isArray(DATA.equipment))return [];
+  const alerts=[];
+  DATA.equipment.filter(e=>e&&e.veh).forEach(e=>{
+    const id=e.id;
+    alerts.push(parcDocAlert(id,e,"assurance",e.assurance||{},true));
+    if(e.needsCT)alerts.push(parcDocAlert(id,e,"controle_technique",e.ct||{},true));
+    if(e.needsPermis)alerts.push(parcDocAlert(id,e,"permis_circuler",e.permis||{},true));
+    alerts.push(parcDocAlert(id,e,"carte_grise",e.cg||{},true));
+  });
+  // Supprime aussi du tableau central les alertes d'un véhicule supprimé.
+  (Array.isArray(DATA.deletedIds)?DATA.deletedIds:[]).forEach(d=>{
+    if(!d||d.id==null)return;
+    const stamp=Number(d.t)||Date.now();
+    ["assurance","controle_technique","permis_circuler","carte_grise"].forEach(kind=>{
+      alerts.push({
+        id:"parc_document_"+String(d.id)+"_"+kind,
+        app:"parc_document",
+        source:"Parc documentaire",
+        status:"resolved",
+        updatedAt:stamp
+      });
+    });
+  });
+  return alerts;
+}
+function emitParcDashboardAlerts(){
+  if(!DATA)return;
+  if(!window.parent||window.parent===window)return;
+  try{
+    window.parent.postMessage({
+      type:"egtph-dashboard-alerts",
+      alerts:buildParcDashboardAlerts()
+    },location.origin);
+  }catch(e){}
+}
+function scheduleParcDashboardAlerts(){
+  if(_parcAlertTimer)clearTimeout(_parcAlertTimer);
+  _parcAlertTimer=setTimeout(emitParcDashboardAlerts,120);
+}
+window.addEventListener("message",function(ev){
+  if(ev.origin!==location.origin||!ev.data)return;
+  if(ev.data.type==="egtph-dashboard-request-alerts")scheduleParcDashboardAlerts();
+});
+
 function fmtDate(d){if(!d)return"—";const t=new Date(d);if(isNaN(t))return d;return t.toLocaleDateString("fr-FR");}
 // ⚠️ كان max+1 — يتصادم لو جهازان أضافا عتاداً جديداً بنفس الوقت بلا نت (نفس الرقم!).
 // الحلّ: معرّف فريد بالوقت+عشوائي — لا يتصادم أبداً حتى عند الإضافة المتزامنة من جهازين.
@@ -555,6 +664,8 @@ async function init(){
   $("#scrim").onclick=closeDrawer;
   $("#langBtn").onclick=async()=>{LANG=LANG==="fr"?"ar":"fr";DATA.lang=LANG;await saveAll();applyLang();render();};
   show("subm");
+  // Répond aussi si le tableau EGTPH avait demandé les alertes avant la fin du chargement.
+  scheduleParcDashboardAlerts();
 }
 function closeDrawer(){$("#sidebar").classList.remove("open");$("#scrim").classList.remove("show");}
 function applyLang(){
