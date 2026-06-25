@@ -21,7 +21,7 @@ var renderAdmin = window.renderAdmin;
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>EGTPH — سجل الأجور v39</title>
+<title>EGTPH — سجل الأجور v41</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet">
 <style>
 :root{
@@ -796,7 +796,7 @@ body{
 
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div class="topbar">
-  <div class="tlogo">EGTPH <span>| سجل الأجور v39</span></div>
+  <div class="tlogo">EGTPH <span>| سجل الأجور v41</span></div>
   <div id="autoSv" style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--gray)">
     <span class="auto-save-dot" id="saveDot"></span>
     <span id="saveLabel">—</span>
@@ -10335,4 +10335,190 @@ try{
 })();
 
 </script>
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   EGTPH Pay v41 — إصلاح الاستيراد + منع حلقة المزامنة الظاهرة
+   - يمنع خطأ: Cannot read properties of undefined (reading '8') عند استيراد JSON.
+   - يضمن وجود كل الأقسام قبل المرور على worker.id مثل أحمد id=8.
+   - يمنع تغيير حالة synchronisation/enregistrement كل 15 ثانية إذا لا توجد تغييرات.
+   - لا يغيّر أي عملية مالية ولا يحذف أي سجل.
+═══════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  const V41_SCHEMA = 41;
+
+  function v41Toast(msg, err){ try{ toast(msg, !!err); }catch(e){ console.log(msg); } }
+  function v41EnsureObject(x){ return (x && typeof x === 'object' && !Array.isArray(x)) ? x : {}; }
+  function v41EnsureArray(x){ return Array.isArray(x) ? x : []; }
+
+  function v41NormalizeShape(data){
+    if(!data || typeof data !== 'object') data = {};
+    data.workers = v41EnsureArray(data.workers).filter(function(w){ return w && typeof w === 'object' && w.id !== undefined && w.id !== null; });
+    data.advances = v41EnsureObject(data.advances);
+    data.hours = v41EnsureObject(data.hours);
+    data.absences = v41EnsureObject(data.absences);
+    data.bonuses = v41EnsureObject(data.bonuses);
+    data.debts = v41EnsureObject(data.debts);
+    data.trash = Object.assign({workers:[],advances:[],hours:[],absences:[],bonuses:[],debts:[]}, v41EnsureObject(data.trash));
+    data.auditLog = v41EnsureArray(data.auditLog);
+    data.deletedIds = v41EnsureArray(data.deletedIds);
+    data.deletedRecords = v41EnsureObject(data.deletedRecords);
+    data.repairLog = v41EnsureArray(data.repairLog);
+    data.settings = v41EnsureObject(data.settings);
+
+    data.workers.forEach(function(w){
+      var wid = String(w.id);
+      if(!data.advances[wid] || typeof data.advances[wid] !== 'object' || Array.isArray(data.advances[wid])) data.advances[wid] = {};
+      if(!Array.isArray(data.hours[wid])) data.hours[wid] = [];
+      if(!Array.isArray(data.absences[wid])) data.absences[wid] = [];
+      if(!data.bonuses[wid] || typeof data.bonuses[wid] !== 'object' || Array.isArray(data.bonuses[wid])) data.bonuses[wid] = {};
+      if(!Array.isArray(data.debts[wid])) data.debts[wid] = [];
+      ['exitDate','startDate','phone','idnum'].forEach(function(f){ if(!Object.prototype.hasOwnProperty.call(w,f)) w[f] = ''; });
+      w.payday = +(w.payday || w.day || 1);
+    });
+
+    // تنظيف خانات الأشهر: أي خانة غير Array تتحول إلى Array حتى لا تسقط القراءة لاحقاً.
+    ['advances','bonuses'].forEach(function(group){
+      Object.keys(data[group] || {}).forEach(function(wid){
+        var months = data[group][wid];
+        if(!months || typeof months !== 'object' || Array.isArray(months)){ data[group][wid] = {}; return; }
+        Object.keys(months).forEach(function(m){ if(!Array.isArray(months[m])) months[m] = []; });
+      });
+    });
+
+    // إصلاح alias رقمي/نصي: يضمن أن DB.absences[8] و DB.absences['8'] لا ينهاران عند القراءة.
+    data.workers.forEach(function(w){
+      var wid = String(w.id);
+      ['hours','absences','debts'].forEach(function(group){ if(!Array.isArray(data[group][wid])) data[group][wid] = []; });
+      ['advances','bonuses'].forEach(function(group){ if(!data[group][wid] || typeof data[group][wid] !== 'object' || Array.isArray(data[group][wid])) data[group][wid] = {}; });
+    });
+    return data;
+  }
+
+  function v41AdoptImportedData(d){
+    d = v41NormalizeShape(d);
+    DB.workers = d.workers;
+    DB.advances = d.advances;
+    DB.hours = d.hours;
+    DB.absences = d.absences;
+    DB.bonuses = d.bonuses;
+    DB.debts = d.debts;
+    DB.auditLog = d.auditLog;
+    DB.trash = d.trash;
+    DB.deletedIds = d.deletedIds;
+    DB.deletedRecords = d.deletedRecords;
+    DB.repairLog = d.repairLog;
+    DB.settings = Object.assign({}, DB.settings || {}, d.settings || {}, { syncSchemaVersion: V41_SCHEMA });
+    DB.workers.forEach(function(w){
+      (DB.absences[String(w.id)] || []).forEach(function(a){ if(a && !Object.prototype.hasOwnProperty.call(a,'deductOpt')) a.deductOpt = 'now'; });
+      (DB.debts[String(w.id)] || []).forEach(function(dd){ if(dd && dd.installment !== undefined && dd.inst === undefined) dd.inst = dd.installment; });
+    });
+  }
+
+  // استيراد أكثر صلابة: لا يقرأ DB.absences[w.id] قبل إنشاء DB.absences.
+  importData = function(e){
+    var file = e && e.target && e.target.files ? e.target.files[0] : null;
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var raw = String(ev.target.result || '');
+        if(raw.indexOf('<script') >= 0 || raw.indexOf('function ') >= 0 || raw.indexOf('eval(') >= 0 || raw.indexOf('__proto__') >= 0 || raw.indexOf('constructor') >= 0){
+          v41Toast('❌ ملف مرفوض — يحتوي على كود غير مسموح به', true);
+          e.target.value = ''; return;
+        }
+        var d = JSON.parse(raw);
+        d = v41NormalizeShape(d);
+        if(!d || !Array.isArray(d.workers) || d.workers.length === 0){
+          v41Toast('❌ ملف غير صالح — لا توجد قائمة عمال صالحة', true);
+          e.target.value = ''; return;
+        }
+
+        var doMerge = confirm('📥 ملف فيه '+d.workers.length+' عامل.\n\n✅ موافق = دمج ذكي آمن\n❌ إلغاء = الانتقال لخيار الاستبدال الكامل');
+        if(doMerge){
+          var added = {workers:0,advances:0,hours:0,absences:0,bonuses:0,debts:0};
+          try{ added = mergeImportData(d) || added; }
+          catch(mergeErr){
+            console.error('mergeImportData v41 fallback:', mergeErr);
+            if(!confirm('⚠️ فشل الدمج الذكي بسبب بنية غير متوافقة: '+mergeErr.message+'\n\nهل تريد الاستبدال الكامل بدل الدمج؟')){ e.target.value=''; return; }
+            v41AdoptImportedData(d);
+          }
+          try{ runDoubleVerification(); }catch(ex){}
+          try{ processDueInstallments(); }catch(ex){}
+          try{ audit('استيراد JSON v41 — دمج آمن'); }catch(ex){}
+          saveDB();
+          try{ updateBadges(); showPage('dashboard'); }catch(ex){}
+          v41Toast('✅ تم الاستيراد/الدمج بدون خطأ قراءة');
+          e.target.value=''; return;
+        }
+
+        if(!confirm('⚠️ استبدال كامل: سيتم مسح بيانات هذا الجهاز ووضع بيانات الملف مكانها.\nمتأكد؟')){ e.target.value=''; return; }
+        v41AdoptImportedData(d);
+        try{ runDoubleVerification(); }catch(ex){}
+        try{ processDueInstallments(); }catch(ex){}
+        try{ audit('استيراد JSON v41 — استبدال كامل — '+d.workers.length+' عامل'); }catch(ex){}
+        saveDB();
+        try{ updateBadges(); showPage('dashboard'); }catch(ex){}
+        v41Toast('✅ تم الاستيراد بنجاح — '+d.workers.length+' عامل');
+      }catch(ex){
+        console.error('importData v41 error:', ex);
+        v41Toast('❌ خطأ في قراءة الملف: '+(ex && ex.message ? ex.message : ex), true);
+      }
+      if(e && e.target) e.target.value='';
+    };
+    reader.readAsText(file,'UTF-8');
+  };
+
+  // منع ظهور “مزامنة آمنة 1/4” كل فترة بلا تغيير.
+  var v41OldCloudSync = (typeof cloudSync === 'function') ? cloudSync : null;
+  cloudSync = async function(manual){
+    try{
+      var cfg = (typeof _cloudCfg === 'function') ? _cloudCfg() : null;
+      if(!cfg){ if(manual) v41Toast('❌ هيّئ الإعدادات أولاً', true); return; }
+      if(!navigator.onLine){ if(manual) v41Toast('📡 لا يوجد اتصال', true); return; }
+
+      // إذا لا يوجد تغيير محلي، افحص stamp فقط بصمت. لا تغيّر واجهة الحالة ولا تدخل 1/4.
+      if(!manual && typeof _cloudDirty !== 'undefined' && !_cloudDirty){
+        try{
+          var r = await fbFetch(cfg.endpoint.replace('.json','/syncedAt.json'), {}, 1);
+          if(r && r.ok){
+            var remoteStamp = await r.json();
+            if(remoteStamp && remoteStamp === DB.settings.cloudRemoteStamp) return;
+          }
+        }catch(e){}
+      }
+      if(v41OldCloudSync) return await v41OldCloudSync(manual);
+    }catch(err){
+      console.warn('cloudSync v41:', err);
+      try{ _cloudStatus('🔴 فشل: '+err.message, 'var(--red)'); }catch(e){}
+      if(manual) v41Toast('❌ فشلت المزامنة: '+err.message, true);
+    }
+  };
+
+  // تقليل الفحص الدوري؛ SSE يكفي غالباً، والفحص لا يرفع إذا لا يوجد dirty.
+  cloudAutoSetup = function(){
+    try{ if(typeof _cloudTimer !== 'undefined' && _cloudTimer){ clearInterval(_cloudTimer); _cloudTimer = null; } }catch(e){}
+    try{
+      if(DB.settings && DB.settings.cloudAuto && typeof _cloudCfg === 'function' && _cloudCfg()){
+        _cloudTimer = setInterval(function(){
+          try{ if(typeof _cloudDirty !== 'undefined' && _cloudDirty) cloudSync(false); }
+          catch(e){}
+        }, 60000);
+      }
+    }catch(e){}
+  };
+
+  try{
+    if(DB && DB.settings){ DB.settings.syncSchemaVersion = V41_SCHEMA; }
+    if(document && document.title) document.title = document.title.replace(/v\d+/,'v41');
+    var logo = document.querySelector('.tlogo span');
+    if(logo) logo.textContent = '| سجل الأجور v41';
+    v41NormalizeShape(DB);
+    saveDB();
+    if(typeof _cloudDirty !== 'undefined') _cloudDirty = false;
+    try{ cloudAutoSetup(); }catch(e){}
+  }catch(e){ console.warn('v41 boot:', e); }
+})();
+</script>
+
 </body></html>
