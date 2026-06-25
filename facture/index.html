@@ -2,9 +2,8 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<script src="../egtph-auth.js"></script>
 <script>
-/* Fallback autonome : l'application reste capable de récupérer ses données même si ../egtph-auth.js n'est pas chargé. */
+/* Module autonome Firebase Authentication : génère un vrai ID token compatible avec les règles Realtime Database. */
 (function(global){
   'use strict';
   if(global.EGTPHAuth) return;
@@ -27,7 +26,7 @@
 })(window);
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Système EGTPH - Pro (v9.1)</title>
+<title>Système EGTPH - Pro (v9.7)</title>
 <style>
 :root{--primary:#2c3e50;--secondary:#3498db;--accent:#e67e22;--light:#f8f9fa;--border:#dee2e6;--success:#27ae60;--danger:#e74c3c;}
 *{box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
@@ -111,7 +110,7 @@ textarea.tbl.desig{text-align:left;min-height:40px;}
 #toast{position:fixed;bottom:30px;right:30px;background:#2c3e50;color:white;padding:12px 20px;border-radius:8px;font-size:0.9rem;display:none;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);}
 #toast.success{background:var(--success);}
 #toast.error{background:var(--danger);}
-.cloud-status{display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:14px;border-radius:7px;border:1px solid #b9d9f5;background:#eef7ff;color:#1a5276;font-size:.86rem;line-height:1.35}.cloud-status.ok{background:#edf9f1;border-color:#b7e5c6;color:#1e6b3a}.cloud-status.warn{background:#fff8e9;border-color:#f0d28b;color:#7b5615}.cloud-status.error{background:#fff1f1;border-color:#efb9b9;color:#9b3030}.cloud-status strong{margin-left:auto;font-size:.78rem;white-space:nowrap}
+.cloud-status{display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:14px;border-radius:7px;border:1px solid #b9d9f5;background:#eef7ff;color:#1a5276;font-size:.86rem;line-height:1.35}.cloud-status.ok{background:#edf9f1;border-color:#b7e5c6;color:#1e6b3a}.cloud-status.warn{background:#fff8e9;border-color:#f0d28b;color:#7b5615}.cloud-status.error{background:#fff1f1;border-color:#efb9b9;color:#9b3030}.cloud-status strong{margin-left:auto;font-size:.78rem;white-space:nowrap}.cloud-recovery-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:-6px 0 14px;padding:9px 10px;background:#fff8e9;border:1px dashed #f0d28b;border-radius:7px;font-size:.82rem;color:#704f14}.cloud-recovery-actions .btn{margin:0;white-space:nowrap}@media (max-width:640px){.cloud-recovery-actions{align-items:flex-start;flex-direction:column}.cloud-recovery-actions .btn{width:100%;margin-top:1px}}
 
 .avan-link{font-size:0.82rem;color:var(--secondary);cursor:pointer;text-decoration:underline;margin-left:10px;}
 @media print{
@@ -141,7 +140,7 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <div id="toast"></div>
 <div class="container no-print">
 <div class="header">
-<h1>🏗️ Système EGTPH - Pro (v9.1)</h1>
+<h1>🏗️ Système EGTPH - Pro (v9.7)</h1>
 <div class="ids" id="uiCoIds">RC: 02/00-4566908A15 | NIF: 192020105006199 | NIS: 1 992 0201 05006 48 | NIN: 109920029050060008</div>
 <div style="margin-top:3px" id="uiCoSub">Entreprise des Grands Travaux Publics et Hydrauliques – CHLEF</div>
 <div id="uiCoAddr" style="display:none"></div>
@@ -165,7 +164,9 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <div class="content">
 <div id="sec-doc" class="section active">
 <div id="storageAlert" class="alert alert-error">⚠️ التخزين المحلي غير متفعل.</div>
-<div id="cloudStatus" class="cloud-status"><span>☁️</span><span id="cloudStatusText">التحقق من النسخة المحلية والسحابية…</span><strong id="cloudStatusMeta">انتظار الدخول</strong></div>
+<div id="cloudStatus" class="cloud-status" style="display:none"><span>☁️</span><span id="cloudStatusText"></span><strong id="cloudStatusMeta"></strong></div>
+<div id="cloudRecoveryActions" class="cloud-recovery-actions" style="display:none"><span id="cloudRecoveryHint"></span><button id="cloudReconnectBtn" class="btn btn-outline btn-sm" type="button" onclick="reconnectFirebase()" style="display:none">🔐 إعادة تسجيل الدخول</button></div>
+<div id="legacyRecoveryActions" class="cloud-recovery-actions" style="display:none"></div>
 <div class="form-grid">
 <div class="form-group"><label>Type Document</label>
 <select id="docType" onchange="onTypeChange();syncPrint()"><option>DEVIS</option><option>FACTURE</option><option>AVOIR</option><option selected>SITUATION ACTUELLE</option><option>DÉCOMPTE FINAL</option></select></div>
@@ -223,9 +224,8 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <input type="text" id="searchClient" placeholder="🔍 Rechercher client..." style="flex:1;padding:8px;border:1px solid #ccc;border-radius:5px;" oninput="renderClients()">
 <button class="btn btn-primary" onclick="addClient()">+ Nouveau Client</button>
 </div>
-<div class="client-recovery-panel">
-  <p><strong>Secours PDF disponible :</strong> la situation <strong>102/2026</strong> de <strong>DJALOUL RAHMOUN</strong> a été enregistrée dans cette version comme source de récupération. Elle n’est ajoutée au dossier client qu’après votre confirmation, sans effacer ni remplacer les données locales ou cloud.</p>
-  <button class="btn btn-warning" onclick="restorePdfSituation102()">🛟 Restaurer PDF 102/2026</button>
+<div class="client-recovery-panel" style="border-color:#b9dff7;background:#f3fbff">
+  <p><strong>Document intégré et synchronisé :</strong> la situation <strong>102/2026</strong> de <strong>DJALOUL RAHMOUN</strong> est enregistrée comme document normal, avec ses neuf désignations, quantités, unités, prix unitaires, versement et calculs. Elle se synchronise après connexion Firebase. Ouvrez-la depuis <strong>Historique</strong> ou le fichier client pour la modifier.</p>
 </div>
 <div id="clientsListContainer"></div>
 </div>
@@ -274,6 +274,7 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <button class="btn btn-outline" id="btnRedo" onclick="redoEdit()">↷ Refaire</button>
 <button class="btn btn-outline" onclick="goBackHistory()">⬅️ Retour</button>
 <span id="cloudDot" title="Synchroniser maintenant" onclick="cloudSync(true)" style="cursor:pointer;font-size:16px;vertical-align:middle;">⚪</span>
+<button class="btn btn-outline" type="button" onclick="reconnectFirebase()">🔐 إعادة دخول Firebase</button>
 <button class="btn btn-purple" onclick="duplicateDoc()">📋 Dupliquer</button>
 <button class="btn btn-warning" onclick="loadDemoData()">📥 تحميل بيانات التجربة</button>
 <button class="btn btn-outline" onclick="newDoc()">↺ Nouveau</button>
@@ -322,11 +323,14 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 </div>
 <div class="amount-words">Arrêté le présent document à la somme de : <span id="pAmtWords">ZÉRO DINARS ALGÉRIENS</span></div>
 <div id="pNotesBlock" class="print-notes" style="display:none"><strong>Observations :</strong> <span id="pNotes"></span></div>
-<div class="print-footer">Document généré le <span id="pGenDate"></span> via Système EGTPH - Pro v9.1</div>
+<div class="print-footer">Document généré le <span id="pGenDate"></span> via Système EGTPH - Pro v9.7</div>
 </div>
 
 <script>
-const DB_KEY='egtp_v8_database';
+// يبقى المفتاح نفسه لضمان بقاء وثيقة PDF 102/2026 وكل تعديلات v9.5 على الهاتف.
+const DB_KEY='egtph_v9_5_pdf_102_database';
+// وثيقة PDF مدمجة كوثيقة عادية قابلة للتعديل، مع مزامنة Firebase مفعلة كالمعتاد.
+const PDF_ONLY_MODE=false;
 const DB_BACKUP_PREFIX='egtp_v8_backup_';
 let db={clients:[],documents:[],currentDocId:null};
 let activeFilterClientId=null;
@@ -435,9 +439,20 @@ function findLegacyFactDatabases(){
   }catch(e){}
   return found.sort((a,b)=>b.score-a.score);
 }
+function setCloudRecoveryVisible(show,hint){
+  const box=document.getElementById('cloudRecoveryActions');
+  const text=document.getElementById('cloudRecoveryHint');
+  const btn=document.getElementById('cloudReconnectBtn');
+  if(!box)return;
+  box.style.display=show?'flex':'none';
+  if(text)text.textContent=show?(hint||''):'';
+  if(btn)btn.style.display=show?'inline-block':'none';
+}
 function setCloudStatus(kind,msg,meta){
   const el=document.getElementById('cloudStatus'),text=document.getElementById('cloudStatusText'),m=document.getElementById('cloudStatusMeta');
   if(!el)return;el.className='cloud-status '+(kind||'');if(text)text.textContent=msg||'';if(m)m.textContent=meta||'';
+  if(kind==='error'&&_cloudAuthBlocked)setCloudRecoveryVisible(true,'المزامنة أوقفت تلقائيًا لحماية البيانات. إعادة الدخول لا تحذف بيانات الهاتف.');
+  else if(kind!=='error')setCloudRecoveryVisible(false,'');
 }
 function backupRawCurrent(raw){try{if(raw)localStorage.setItem(DB_BACKUP_PREFIX+Date.now(),raw);}catch(e){}}
 
@@ -479,26 +494,38 @@ function checkStorage(){
   try{localStorage.setItem('t','1');localStorage.removeItem('t');document.getElementById('storageAlert').style.display='none';}
   catch(e){document.getElementById('storageAlert').style.display='block';}
 }
+function _storeDBSilently(){
+  try{localStorage.setItem(DB_KEY,JSON.stringify(normalizeFactDB(db)));}catch(e){}
+}
+function queueCloudSync(){
+  if(PDF_ONLY_MODE||window._cloudApplying||!navigator.onLine)return;
+  clearTimeout(window._cloudSaveTimer);
+  window._cloudSaveTimer=setTimeout(function(){
+    if(_cloudAuthReady&&!_cloudAuthBlocked&&!_cloudBusy)cloudSync(false);
+  },700);
+}
 function loadDB(){
   let raw=null,parsed=null;
   try{raw=localStorage.getItem(DB_KEY);if(raw)parsed=JSON.parse(raw);}catch(e){backupRawCurrent(raw);parsed=null;}
   db=normalizeFactDB(parsed);
-  let recovered=0;
-  if(!_localRecoveryDone){
-    findLegacyFactDatabases().forEach(x=>{recovered+=mergeFactDatabase(x.data);});
-    _localRecoveryDone=true;
-  }
   relinkFactClients();
-  if(recovered>0){_legacyRecovered=recovered;try{localStorage.setItem(DB_KEY,JSON.stringify(db));}catch(e){};window._cloudDirty=true;setCloudStatus('warn','تم العثور على بيانات محلية قديمة ودمجها بأمان.','استرجاع محلي');}
-  else if(!db.documents.length&&!db.clients.length)setCloudStatus('warn','لا توجد بيانات محلية في هذه النسخة؛ جارٍ طلب النسخة السحابية.','استرجاع سحابي');
-  else setCloudStatus('ok','تم تحميل البيانات المحلية. جارٍ التحقق من السحابة.','محلي جاهز');
+  // وثيقة PDF تبقى وثيقة برنامج عادية، ويُدمج معها ما يوجد في Firebase قبل أي كتابة.
+  const created=ensurePdfSituation102();
+  const firstCloudSeed=!db.cloudSyncInitialized&&(db.documents.length||db.clients.length);
+  _storeDBSilently();
+  if(!PDF_ONLY_MODE&&(created||firstCloudSeed))window._cloudDirty=true;
+  setCloudStatus('warn',created?'تم إدراج وثيقة PDF 102/2026 كوثيقة قابلة للتعديل؛ ستتزامن بعد تسجيل الدخول.':'تم تحميل البيانات المحلية؛ ستتزامن داخل مساحة PDF مستقلة دون استيراد السجلات القديمة.','بانتظار المزامنة');
   applyCompany();fillCompanyForm();
   populateClientDatalist();renderClients();renderHistory();updateStats();
 }
 function saveDB(){
   try{localStorage.setItem(DB_KEY,JSON.stringify(normalizeFactDB(db)));}
   catch(e){toast('⚠️ تعذر حفظ البيانات محليًا: '+e.message,'error',6000);}
-  updateStats();if(!window._cloudApplying)window._cloudDirty=true;
+  updateStats();
+  if(!PDF_ONLY_MODE&&!window._cloudApplying){
+    window._cloudDirty=true;
+    queueCloudSync();
+  }
 }
 
 function updateStats(){
@@ -512,13 +539,16 @@ function updateStats(){
 
 document.addEventListener('DOMContentLoaded',()=>{
   checkStorage();loadDB();
-  document.getElementById('docDate').valueAsDate=new Date();
-  document.getElementById('payDate').valueAsDate=new Date();
-  addItem();addDeduction();calc();syncPrint();updateModeBadge();onTypeChange();
   const sd=document.getElementById('sec-doc');
   sd.addEventListener('input',_recordChange);
   sd.addEventListener('change',_recordChange);
-  _initUndo();
+  const initial=db.documents.find(d=>d.id===db.currentDocId)||db.documents.find(recovery102Match);
+  if(initial){loadDocById(initial.id);}
+  else{
+    document.getElementById('docDate').valueAsDate=new Date();
+    document.getElementById('payDate').valueAsDate=new Date();
+    addItem();addDeduction();calc();syncPrint();updateModeBadge();onTypeChange();_initUndo();
+  }
 });
 
 function switchTab(id,el){
@@ -1002,7 +1032,7 @@ function openClientFile(cid){
   const ht=docs.reduce((s,d)=>s+docTotal(d,'ht'),0);
   const acc=docs.reduce((s,d)=>s+docTotal(d,'acc'),0);
   const net=docs.reduce((s,d)=>s+docTotal(d,'net'),0);
-  const recovery=cl.recoveryInfo?`<div class="client-recovery-detail"><strong>Source de secours :</strong> ${escHtml(cl.recoveryInfo.source||'PDF')} - ${escHtml(cl.recoveryInfo.document||'')}<br><span>Ajouté le ${escHtml(cl.recoveryInfo.importedAt||'')}. Ce repère ne remplace pas une restauration cloud complète.</span></div>`:'';
+  const recovery=cl.recoveryInfo?`<div class="client-recovery-detail"><strong>Source de secours :</strong> ${escHtml(cl.recoveryInfo.source||'PDF')} - ${escHtml(cl.recoveryInfo.document||'')}<br><span>Ajouté le ${escHtml(cl.recoveryInfo.importedAt||'')}. Le document est éditable : ouvrez-le pour modifier les articles, prix, dates ou acomptes.</span></div>`:'';
   const rows=docs.map(d=>{
     const isRecovery=!!(d.recovery&&d.recovery.source==='PDF');
     const src=isRecovery?'<span class="client-source">PDF secours</span>':'-';
@@ -1126,11 +1156,15 @@ window.onbeforeprint=syncPrint;
 // ══ CLOUD SYNC (Firebase) ══
 const _CLOUD_URL='https://egtph-abdi-youssouf-islam-default-rtdb.europe-west1.firebasedatabase.app';
 const _CLOUD_KEY='EGTPH-FACT-xB9U6PtjCLYVz8d0NdNTELtq';
+// مساحة مستقلة داخل المسار المسموح في القواعد: لا تستورد السجلات القديمة الموجودة في الجذر.
+const _CLOUD_BRANCH='facture_pdf_active';
 // طابع زمني تصاعدي صارم بدقّة دون-المللي ثانية — يمنع تساوي/تراجع _mod
 // عند حفظ متتالٍ سريع أو تطابق ساعة جهازين (يُستعمل في الدمج "الأحدث يغلب")
 let _modLast=0;
 function nextMod(){ let t=Date.now()+(performance.now()%1)/1000; if(t<=_modLast)t=_modLast+0.001; _modLast=t; return t; }
 let _cloudBusy=false,_cloudStamp=localStorage.getItem('egtp_fact_stamp')||'';
+// Stop automatic retries after a Firebase 401. A repeated request cannot restore data and only obscures the real cause.
+let _cloudAuthBlocked=false;
 window._cloudDirty=false;window._cloudApplying=false;
 let FACTDEL=[];try{FACTDEL=JSON.parse(localStorage.getItem('egtp_fact_del')||'[]');}catch(e){FACTDEL=[];}
 // تومبستون مستقل للعملاء (نفس آلية الوثائق — لا يعود محذوف حتى لو وصل من جهاز آخر)
@@ -1157,26 +1191,57 @@ function _authToken(){
   }catch(e){}
   return null;
 }
-function _cloudEP(){const token=_authToken();if(!token)return null;return _CLOUD_URL+'/egtph/'+encodeURIComponent(_CLOUD_KEY)+'.json?auth='+encodeURIComponent(token);}
+// القواعد تسمح بكل ما تحت /EGTPH-FACT-… . تستعمل هذه النسخة فرعًا نظيفًا خاصًا بها
+// حتى تتزامن الوثيقة المأخوذة من PDF دون استرجاع قاعدة الجذر القديمة.
+function _cloudNodeEP(child){
+  const token=_authToken();if(!token)return null;
+  const clean=String(child||'').replace(/^\/+|\/+$/g,'');
+  const base=_CLOUD_URL+'/'+encodeURIComponent(_CLOUD_KEY)+'/'+encodeURIComponent(_CLOUD_BRANCH);
+  return base+(clean?'/'+clean:'')+'.json?auth='+encodeURIComponent(token);
+}
+function _cloudEP(){return _cloudNodeEP('');}
+// v8/v9.2 écrivaient historiquement sous /egtph/<clé>. Cette route ne sera lue
+// qu'à la demande de l'utilisateur pour importer les archives puis les migrer vers la racine actuelle.
+function _legacyCloudEP(){
+  const token=_authToken();if(!token)return null;
+  return _CLOUD_URL+'/egtph/'+encodeURIComponent(_CLOUD_KEY)+'.json?auth='+encodeURIComponent(token);
+}
 function _onCloudAuthReady(token){
   _cloudAuthReady=!!(token||_authToken());
   if(!_cloudAuthReady){setCloudStatus('warn','تم فتح وحدة الدخول لكن رمز Firebase غير جاهز بعد. لن يتم إرسال أي بيانات.','انتظار الرمز');return;}
+  _cloudAuthBlocked=false;
+  setCloudRecoveryVisible(false,'');
   setTimeout(function(){try{cloudSync(false);startCloudStream();}catch(e){}},0);
 }
+function reconnectFirebase(){
+  if(!confirm('سيتم حذف رمز الدخول المحفوظ فقط ثم إعادة فتح البرنامج لطلب كلمة السر من جديد.\n\nلن تُحذف الوثائق أو العملاء المحفوظون على هذا الهاتف.'))return;
+  try{if(_sse){_sse.close();_sse=null;}}catch(e){}
+  try{if(window.EGTPHAuth&&typeof window.EGTPHAuth.logout==='function')window.EGTPHAuth.logout('facture');}catch(e){}
+  try{localStorage.removeItem('egtph_auth_facture');}catch(e){}
+  _cloudAuthBlocked=false;_cloudAuthReady=false;
+  setCloudRecoveryVisible(false,'');
+  setCloudStatus('warn','تمت إزالة جلسة Firebase فقط. سيُطلب منك تسجيل الدخول من جديد الآن.','إعادة الدخول');
+  setTimeout(function(){window.location.reload();},120);
+}
 // لا نبدأ أي قراءة أو كتابة قبل الحصول على رمز دخول صالح؛ هذا يمنع مزامنة قاعدة فارغة أو غير مصادق عليها.
-if(window.EGTPHAuth&&typeof window.EGTPHAuth.init==='function'){
+if(!PDF_ONLY_MODE&&window.EGTPHAuth&&typeof window.EGTPHAuth.init==='function'){
   window.EGTPHAuth.init({
     appId:'facture',apiKey:'AIzaSyBqMfhLqRm-GWR4HgPkLH-erCFg8EsrLcA',email:'abdiyoucefislam@gmail.com',
     onReady:_onCloudAuthReady,
     onTokenChange:_onCloudAuthReady
   });
-}else{setCloudStatus('error','تعذر تحميل وحدة تسجيل الدخول؛ البيانات المحلية محفوظة، لكن الاسترجاع السحابي متوقف.','المصادقة غير متاحة');}
+}else if(!PDF_ONLY_MODE){setCloudStatus('error','تعذر تحميل وحدة تسجيل الدخول؛ البيانات المحلية محفوظة، لكن الاسترجاع السحابي متوقف.','المصادقة غير متاحة');}
 // Nœud SÉPARÉ pour les suppressions : écrit en PATCH (additif), jamais écrasé par un PUT complet.
-function _tombEP(){const token=_authToken();return token?_CLOUD_URL+'/egtph_del/'+encodeURIComponent(_CLOUD_KEY)+'.json?auth='+encodeURIComponent(token):null;}
-function _tombEPcli(){const token=_authToken();return token?_CLOUD_URL+'/egtph_del_cli/'+encodeURIComponent(_CLOUD_KEY)+'.json?auth='+encodeURIComponent(token):null;}
+// Les suppressions suivent les mêmes règles que les documents : elles sont rangées
+// sous le nœud autorisé afin de ne jamais être bloquées par le .read/.write global à false.
+function _tombEP(){return _cloudNodeEP('tombstones/documents');}
+function _tombEPcli(){return _cloudNodeEP('tombstones/clients');}
+function _tombstoneMap(ids){
+  const out={};(ids||[]).slice(-300).forEach(id=>{if(id)out[_safeKey(id)]=true;});return out;
+}
 function _safeKey(id){return String(id).replace(/[.$#\[\]\/]/g,'_');}
 async function _pushTomb(ids,cliIds){
-  if(!_cloudAuthReady)return;
+  if(PDF_ONLY_MODE||!_cloudAuthReady)return;
   try{
     const body={};(ids||[]).forEach(id=>{if(id)body[_safeKey(id)]=true;});const ep=_tombEP();
     if(ep&&Object.keys(body).length)await fetch(ep,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -1276,7 +1341,65 @@ function _remoteFactShape(remote){
   if(Object.prototype.hasOwnProperty.call(remote,'documents')||Object.prototype.hasOwnProperty.call(remote,'clients')||Object.prototype.hasOwnProperty.call(remote,'company')||Object.prototype.hasOwnProperty.call(remote,'syncedAt')||Object.prototype.hasOwnProperty.call(remote,'deleted'))return 'facture';
   return 'unknown';
 }
+async function recoverLegacyCloud(){
+  if(_cloudAuthBlocked){toast('🔐 أعد تسجيل الدخول إلى Firebase أولاً.','error',5000);return;}
+  if(!_cloudAuthReady||!_authToken()){
+    toast('🔐 سجّل الدخول أولاً ثم أعد تشغيل استرجاع البيانات القديمة.','error',5000);return;
+  }
+  if(_cloudBusy){toast('☁️ توجد عملية مزامنة جارية. انتظر لحظات ثم أعد المحاولة.','error',4000);return;}
+  if(!confirm('استرجاع السجلات القديمة من المسار /egtph/ ثم دمجها مع السجلات الحالية؟\n\nلن يحذف البرنامج أي وثيقة محلية. عند نجاح القراءة تُنسخ البيانات أيضًا إلى المسار الحالي المسموح في قواعد Firebase.'))return;
+  _cloudBusy=true;
+  let shouldPush=false;
+  try{
+    const endpoint=_legacyCloudEP();if(!endpoint)throw new Error('AUTH_REQUIRED');
+    _setDot('🔄','Lecture de l’archive Firebase v8/v9.2');
+    setCloudStatus('warn','جارٍ قراءة المسار السحابي القديم ودمج السجلات دون حذف أي وثيقة…','استرجاع قديم');
+    const r=await fetch(endpoint);
+    if(!r.ok)throw new Error('LEGACY GET '+r.status);
+    let remote=null;try{remote=await r.json();}catch(e){throw new Error('Réponse legacy invalide');}
+    const shape=_remoteFactShape(remote);
+    if(shape==='unknown')throw new Error('Format legacy inconnu — import bloqué par sécurité');
+    if(shape==='empty'){
+      setCloudStatus('warn','المسار السحابي القديم فارغ. لا توجد بيانات إضافية لاسترجاعها.','لا توجد سجلات قديمة');
+      toast('☁️ لم أجد سجلات في المسار السحابي القديم.');
+      return;
+    }
+    const beforeDocs=db.documents.length,beforeClients=db.clients.length;
+    const changed=mergeRemoteFact(remote);
+    relinkFactClients();
+    if(changed){
+      window._cloudApplying=true;saveDB();window._cloudApplying=false;
+      populateClientDatalist();renderHistory();renderClients();updateStats();
+      window._cloudDirty=true;shouldPush=true;
+    }
+    const addedDocs=Math.max(0,db.documents.length-beforeDocs);
+    const addedClients=Math.max(0,db.clients.length-beforeClients);
+    setCloudStatus('ok',addedDocs||addedClients?'تم استرجاع ودمج '+addedDocs+' وثيقة و'+addedClients+' ملف عميل من المسار القديم.':'تم فحص المسار القديم؛ لا توجد سجلات جديدة لدمجها.','الاسترجاع القديم مكتمل');
+    toast(addedDocs||addedClients?'☁️ تم دمج البيانات القديمة بأمان.':'☁️ لا توجد بيانات قديمة إضافية.');
+  }catch(e){
+    const msg=String(e&&e.message||e||'Erreur inconnue');
+    const denied=/LEGACY GET 401|LEGACY GET 403|permission_denied|AUTH_REQUIRED/i.test(msg);
+    if(denied){
+      setCloudStatus('error','المسار القديم /egtph/ محجوب بقواعد Firebase الحالية. أضف سماحًا مؤقتًا لنفس المفتاح تحت egtph، ثم اضغط «استرجاع البيانات القديمة». لا تُرسل هذه المحاولة أي بيانات.','صلاحية المسار القديم مطلوبة');
+      toast('☁️ يلزم السماح المؤقت لمسار egtph في قواعد Firebase لاسترجاع النسخة القديمة.','error',7000);
+    }else{
+      setCloudStatus('error','تعذر قراءة النسخة السحابية القديمة. لم تُحذف ولم تُرسل أي بيانات.','استرجاع قديم متوقف');
+      toast('☁️ خطأ في استرجاع المسار القديم: '+msg,'error',6000);
+    }
+  }finally{
+    _cloudBusy=false;
+    if(shouldPush)setTimeout(function(){cloudSync(true);},0);
+  }
+}
+
 async function cloudSync(manual){
+  if(PDF_ONLY_MODE){if(manual)toast('💾 وضع الحفظ المحلي مفعّل مؤقتًا.');return;}
+  if(_cloudAuthBlocked){
+    _setDot('🔴','Firebase login refused — automatic retry paused');
+    setCloudStatus('error','Firebase رفض جلسة الدخول السابقة. أوقفت المحاولات المتكررة لحماية البيانات المحلية.','401 — إعادة الدخول مطلوبة');
+    if(manual)toast('☁️ اضغط «إعادة تسجيل الدخول» لتجديد جلسة Firebase.','error',5000);
+    return;
+  }
   if(!_cloudAuthReady||!_authToken()){
     _setDot('🟠','En attente de connexion sécurisée');setCloudStatus('warn','سجّل الدخول أولاً لاسترجاع النسخة السحابية؛ لم يتم إرسال أي بيانات.','بانتظار الدخول');
     if(manual)toast('☁️ سجّل الدخول أولاً لاسترجاع بياناتك.','error',5000);return;
@@ -1313,13 +1436,16 @@ async function cloudSync(manual){
     const needPut=!!(window._cloudDirty||ch||FACTDEL.length||CLIDEL.length);
     if(needPut && (localHasData || FACTDEL.length || CLIDEL.length)){
       const stamp=String(Date.now());
-      const payload={documents:db.documents,clients:db.clients,company:db.company,deleted:FACTDEL.slice(-300),deletedClients:CLIDEL.slice(-300),syncedAt:stamp,device:navigator.userAgent.slice(0,60)};
+      const payload={documents:db.documents,clients:db.clients,company:db.company,deleted:FACTDEL.slice(-300),deletedClients:CLIDEL.slice(-300),tombstones:{documents:_tombstoneMap(FACTDEL),clients:_tombstoneMap(CLIDEL)},syncedAt:stamp,device:navigator.userAgent.slice(0,60)};
       const p=await fetch(endpoint,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       if(!p.ok)throw new Error('PUT '+p.status);
       _cloudStamp=stamp;localStorage.setItem('egtp_fact_stamp',stamp);window._cloudDirty=false;
     }else if(shape==='facture'&&remote&&remote.syncedAt){
       _cloudStamp=String(remote.syncedAt);localStorage.setItem('egtp_fact_stamp',_cloudStamp);window._cloudDirty=false;
     }
+    // Marque uniquement après une lecture Firebase réussie (et après le PUT si nécessaire).
+    // Cela garantit qu'une ancienne base v9.5 contenant le PDF soit envoyée au moins une fois.
+    if(!db.cloudSyncInitialized){db.cloudSyncInitialized=true;_storeDBSilently();}
     updateStats();populateClientDatalist();renderHistory();renderClients();
     const restored=Math.max(0,db.documents.length-localBefore);
     _setDot('🟢','Synchronisation sécurisée OK '+new Date().toLocaleTimeString('fr-FR'));
@@ -1329,7 +1455,13 @@ async function cloudSync(manual){
     const msg=String(e&&e.message||e||'Erreur inconnue');
     _setDot('🔴','Hors ligne / erreur: '+msg);
     const denied=/\b(?:GET|PUT|PATCH) 401\b|permission_denied|AUTH_REQUIRED/i.test(msg);
-    setCloudStatus('error',denied?'رفض Firebase طلب الدخول (401). لم تُرسل أي بيانات. السبب يكون رمز دخول منتهيًا أو قواعد Firebase لا تسمح بهذا الحساب؛ يلزم التحقق من كلمة السر/قواعد قاعدة البيانات.':'تعذر الوصول إلى السحابة. لم تُحذف ولم تُرسل أي بيانات من هذه النسخة.','المزامنة متوقفة');
+    if(denied){
+      _cloudAuthBlocked=true;
+      try{if(_sse){_sse.close();_sse=null;}}catch(_e){}
+      setCloudStatus('error','Firebase رفض طلب المزامنة. لم تُرسل هذه النسخة أي بيانات إلى السحابة. اضغط «إعادة تسجيل الدخول» وأدخل كلمة المرور الصحيحة؛ إن استمر 401 فتأكد من تفعيل Email/Password وأن الحساب abdiyoucefislam@gmail.com موجود في Firebase Authentication.','401 — إعادة الدخول مطلوبة');
+    }else{
+      setCloudStatus('error','تعذر الوصول إلى السحابة. لم تُحذف ولم تُرسل أي بيانات من هذه النسخة.','المزامنة متوقفة');
+    }
     if(manual)toast('☁️ خطأ مزامنة: '+msg+' — بياناتك لم تُمس.','error',6500);
   }finally{_cloudBusy=false;}
 }
@@ -1354,29 +1486,43 @@ const PDF_RECOVERY_102={
 };
 function clonePdfRecovery102(){return JSON.parse(JSON.stringify(PDF_RECOVERY_102));}
 function recovery102Match(d){return d&&docFingerprint(d)===docFingerprint(PDF_RECOVERY_102);}
-function restorePdfSituation102(){
+// Crée une seule fois le document normal issu du PDF. Ce n'est pas une restauration cloud :
+// les champs sont des données éditables dans la base locale, comme tout document créé dans l'application.
+function ensurePdfSituation102(){
   const existing=db.documents.find(recovery102Match);
   if(existing){
-    const cid=existing.clientId||db.clients.find(c=>clientFingerprint(c)===clientFingerprint({name:PDF_RECOVERY_102.clientName}))?.id;
-    toast('Le document PDF 102/2026 est déjà présent dans le dossier client.');
-    if(cid)openClientFile(cid);
-    return;
+    existing.totals=calcTotals(existing);
+    db.pdf102Seeded=true;
+    if(!db.currentDocId)db.currentDocId=existing.id;
+    return false;
   }
-  if(!confirm('Restaurer uniquement la situation PDF 102/2026 de DJALOUL RAHMOUN dans son dossier client ?\n\nCette action ajoute une copie locale de secours. Elle ne supprime ni ne remplace les données cloud.'))return;
+  // بعد الحذف المتعمد لا تعيد النسخة إنشاء الوثيقة في كل تشغيل.
+  if(db.pdf102Seeded===true)return false;
   const data=clonePdfRecovery102();
   let c=db.clients.find(x=>clientFingerprint(x)===clientFingerprint({name:data.clientName}));
-  if(!c){c={id:cliId(),name:data.clientName,docs:[],_mod:nextMod()};db.clients.push(c);}
-  const now=new Date().toISOString();
-  const doc=Object.assign({id:uuid(),createdAt:now,updatedAt:now,_mod:nextMod(),clientId:c.id,recovery:{source:'PDF',document:'Système EGTPH - Pro (v8).pdf',importedAt:new Date().toLocaleString('fr-FR')}},data);
+  if(!c){c={id:'cli_djaloul_rahmoun',name:data.clientName,docs:[],_mod:nextMod()};db.clients.push(c);}
+  const doc=Object.assign({
+    id:'doc_102_2026_djaloul_rahmoun',
+    createdAt:'2026-06-18T00:00:00.000Z',
+    updatedAt:'2026-06-18T00:00:00.000Z',
+    _mod:nextMod(),clientId:c.id
+  },data);
   doc.totals=calcTotals(doc);
   db.documents.push(doc);
   if(!Array.isArray(c.docs))c.docs=[];
   if(!c.docs.includes(doc.id))c.docs.push(doc.id);
-  c.recoveryInfo={source:'PDF de secours',document:'Système EGTPH - Pro (v8).pdf - Situation 102/2026',importedAt:new Date().toLocaleString('fr-FR')};
   c._mod=nextMod();
-  relinkFactClients();saveDB();populateClientDatalist();renderHistory();renderClients();updateStats();
-  toast('🛟 Situation 102/2026 restaurée dans la fiche de DJALOUL RAHMOUN.');
-  openClientFile(c.id);
+  db.currentDocId=doc.id;
+  db.pdf102Seeded=true;
+  relinkFactClients();
+  return true;
+}
+function restorePdfSituation102(){
+  ensurePdfSituation102();
+  const doc=db.documents.find(recovery102Match);
+  saveDB();populateClientDatalist();renderHistory();renderClients();updateStats();
+  if(doc)loadDocById(doc.id);
+  toast('📝 Situation 102/2026 ouverte en mode modification.');
 }
 // تبدأ المزامنة بعد نجاح تسجيل الدخول فقط.
 
@@ -1384,7 +1530,7 @@ function restorePdfSituation102(){
 //    أخفّ بكثير على النت من فحص دوري كل 5 ثوانٍ.
 let _sse=null,_sseRetry=null;
 function startCloudStream(){
-  if(!_cloudAuthReady||!_authToken())return;
+  if(_cloudAuthBlocked||!_cloudAuthReady||!_authToken())return;
   if(!('EventSource' in window))return; // متصفّح قديم → الفحص الدوري يكفي
   if(_sse){try{_sse.close();}catch(e){}_sse=null;}
   if(!navigator.onLine)return;
@@ -1402,9 +1548,9 @@ function startCloudStream(){
   }catch(e){_sse=null;}
 }
 let _sseDeb=null;
-startCloudStream();
+if(!PDF_ONLY_MODE)startCloudStream();
 // فحص دوري خفيف كل 15ث كخطّة بديلة (يغطّي انقطاع SSE المؤقّت)
-setInterval(()=>{if(_cloudAuthReady)cloudSync(false);},15000);
+if(!PDF_ONLY_MODE)setInterval(()=>{if(_cloudAuthReady&&!_cloudAuthBlocked)cloudSync(false);},15000);
 
 // ── تثبيت الخانة النشطة تلقائياً: لو كنت تكتب في خانة (onchange) ولم تخرج منها بعد،
 //    نُطلق حفظها (blur) قبل الإغلاق/التصغير — حتى لا تبقى القيمة «أمام عينيك فقط» ──
@@ -1423,13 +1569,13 @@ window.addEventListener('beforeunload',function(e){
 document.addEventListener('visibilitychange',function(){
   if(document.visibilityState==='hidden'){
     _commitActiveField();
-    if(window._cloudDirty&&navigator.onLine&&!_cloudBusy&&_cloudAuthReady)cloudSync(false);
+    if(!PDF_ONLY_MODE&&window._cloudDirty&&navigator.onLine&&!_cloudBusy&&_cloudAuthReady&&!_cloudAuthBlocked)cloudSync(false);
   } else {
-    try{startCloudStream();}catch(e){}
-    if(!_cloudBusy&&_cloudAuthReady)cloudSync(false);
+    if(!PDF_ONLY_MODE){try{startCloudStream();}catch(e){}
+    if(!_cloudBusy&&_cloudAuthReady&&!_cloudAuthBlocked)cloudSync(false);}
   }
 });
-window.addEventListener('online',function(){ try{startCloudStream();}catch(e){} if(!_cloudBusy&&_cloudAuthReady)cloudSync(false); });
+window.addEventListener('online',function(){ if(!PDF_ONLY_MODE){try{startCloudStream();}catch(e){} if(!_cloudBusy&&_cloudAuthReady&&!_cloudAuthBlocked)cloudSync(false);} });
 </script>
 </body>
 </html>
