@@ -27,6 +27,7 @@
   --danger:#d42020;
   --danger-soft:rgba(212,32,32,0.12);
   --gold:#b87800;
+  --gold-dk:#8a5800;
   --gold-soft:rgba(184,120,0,0.12);
   --border:rgba(14,122,110,0.18);
   --border2:rgba(14,122,110,0.3);
@@ -64,6 +65,7 @@
   --danger:#ef4444;
   --danger-soft:rgba(239,68,68,0.15);
   --gold:#eab308;
+  --gold-dk:#facc15;
   --gold-soft:rgba(234,179,8,0.15);
   --border:rgba(20,184,166,0.2);
   --border2:rgba(20,184,166,0.35);
@@ -1005,6 +1007,17 @@ function migrateDB(){
     });
   });
   if(!DB.company) DB.company={name:'مؤسسة الأشغال العمومية الكبرى والري',short:'EGTPH',address:'وادي سلي، الشلف',nif:'19202010500199',phone:''};
+
+  // توحيد النصوص القادمة من النسخ القديمة أو الاستيراد حتى لا تكسر قوالب HTML.
+  ['name','short','address','nif','phone'].forEach(k=>{ if(DB.company[k]!==undefined) DB.company[k]=cleanText(DB.company[k]); });
+  (DB.workers||[]).forEach(w=>{ ['name','phone','note'].forEach(k=>{if(w[k]!==undefined)w[k]=cleanText(w[k]);}); (w.services||[]).forEach(s=>s.name=cleanText(s.name)); });
+  (DB.projects||[]).forEach(x=>['name','chef','note'].forEach(k=>{if(x[k]!==undefined)x[k]=cleanText(x[k]);}));
+  (DB.currentWeek.entries||[]).forEach(e=>{if(e.note!==undefined)e.note=cleanText(e.note);(e.services||[]).forEach(s=>s.name=cleanText(s.name));});
+  (DB.currentWeek.expenses||[]).forEach(e=>{e.label=cleanText(e.label);e.type=cleanText(e.type);});
+  (DB.weeks||[]).forEach(w=>{(w.entries||[]).forEach(e=>{if(e.workerName!==undefined)e.workerName=cleanText(e.workerName);if(e.note!==undefined)e.note=cleanText(e.note);(e.services||[]).forEach(s=>s.name=cleanText(s.name));if(e.dailyWageSnapshot===undefined&&num(e.days)>0&&e.parts&&num(e.parts.base)>0)e.dailyWageSnapshot=Math.round(num(e.parts.base)/num(e.days));});(w.expenses||[]).forEach(e=>{e.label=cleanText(e.label);e.type=cleanText(e.type);});});
+  // البريد الإلكتروني معرّف فريد: نحتفظ بأول حساب فقط لتفادي التباس الدخول والمزامنة.
+  const seenEmails=new Set();
+  DB.users=(DB.users||[]).filter(u=>{u.name=cleanText(u.name);u.email=cleanEmail(u.email);if(!u.email)return true;if(seenEmails.has(u.email)){if(!DB.deletedIds.includes(String(u.id)))DB.deletedIds.push(String(u.id));return false;}seenEmails.add(u.email);return true;});
   if(DB.currentWeek.status==='open' && !DB.currentWeek.startDate) initCurrentWeek();
 }
 
@@ -1039,25 +1052,14 @@ async function loadDB(){
 }
 
 /* ── حفظ البيانات (async) ── */
-let _saveTimer = null;
-function saveDB(){
-  if(!_cloudApplying){try{_cloudDirty=true;}catch(e){} try{schedulePush();}catch(e){}}
-  // تنفيذ فوري مع إلغاء تجميع السريع (debounce 300ms لتجنب كتابات متكررة)
-  clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(async ()=>{
-    try{
-      await idbPut(DB_KEY, JSON.parse(JSON.stringify(DB)));
-      lastSaveTime = new Date().toLocaleTimeString('ar-DZ');
-      totalSaves++;
-      updateSaveStatus();
-    }catch(e){
-      showToast('⚠️ فشل الحفظ في IndexedDB! صدّر نسخة احتياطية.','warning');
-      // خطة بديلة: localStorage
-      try{ localStorage.setItem(DB_KEY,JSON.stringify(DB)); }catch(e2){}
-      console.error('saveDB error:',e);
-    }
-  }, 300);
+let _saveTimer = null, _saveInFlight=null;
+function snapshotDB(){ return JSON.parse(JSON.stringify(DB)); }
+async function persistDB(snapshot){
+  try{await idbPut(DB_KEY,snapshot);lastSaveTime=new Date().toLocaleTimeString('ar-DZ');totalSaves++;updateSaveStatus();}
+  catch(e){try{localStorage.setItem(DB_KEY,JSON.stringify(snapshot));}catch(e2){}console.error('saveDB error:',e);showToast('⚠️ تعذر حفظ IndexedDB؛ تم الاحتفاظ بنسخة محلية احتياطية.','warning');}
 }
+function flushSave(){clearTimeout(_saveTimer);_saveTimer=null;const snapshot=snapshotDB();try{localStorage.setItem(DB_KEY,JSON.stringify(snapshot));}catch(e){}_saveInFlight=persistDB(snapshot);return _saveInFlight;}
+function saveDB(){if(!_cloudApplying){try{_cloudDirty=true;}catch(e){}try{schedulePush();}catch(e){}}clearTimeout(_saveTimer);_saveTimer=setTimeout(flushSave,300);}
 
 /* ---------- DATE HELPERS ---------- */
 function formatDate(d){ const x=new Date(d); const y=x.getFullYear(),m=String(x.getMonth()+1).padStart(2,'0'),dd=String(x.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; }
@@ -1106,6 +1108,32 @@ function initCurrentWeek(){
 }
 function num(v){ return (parseFloat(v)||0); }
 function money(v){ return Math.round(num(v)).toLocaleString('en-US'); } // أرقام غربية مقروءة في الجزائر
+/* منع إدخال علامات HTML في البيانات النصية لأن العرض يتم داخل قوالب HTML. */
+function cleanText(v){
+  return String(v??'').replace(/\u0000/g,'').replace(/</g,'‹').replace(/>/g,'›').replace(/"/g,'“').replace(/'/g,'’');
+}
+function cleanEmail(v){ return String(v??'').trim().toLowerCase().replace(/[<>"']/g,''); }
+function isArchivedEdit(){ return !!editingWeekId; }
+function getEntryCard(entryId){ return document.querySelector('.entry-card[data-entry-id="'+String(entryId).replace(/"/g,'')+'"]'); }
+function refreshEntryCardAmounts(entryId,sourceEl=null){
+  const e=DB.currentWeek.entries.find(x=>x.id===entryId); if(!e)return;
+  const card=getEntryCard(entryId); if(!card)return;
+  const parts=calcEntryParts(e);
+  card.querySelectorAll('[data-entry-total]').forEach(el=>el.textContent=money(parts.net)+' دج');
+  card.querySelectorAll('[data-entry-base]').forEach(el=>el.textContent=money(parts.base)+' دج');
+  card.querySelectorAll('[data-entry-overtime]').forEach(el=>el.textContent=money(parts.overtime)+' دج');
+  card.querySelectorAll('[data-entry-piece-total]').forEach(el=>el.textContent=money(parts.piece)+' دج');
+  const paidNow=Math.min(Math.max(0,num(e.paidNow??parts.net)),parts.net),pending=Math.max(0,parts.net-paidNow);
+  card.querySelectorAll('[data-entry-pending]').forEach(el=>{el.textContent=pending>0?'متبقٍّ: '+money(pending)+' دج':'';el.style.display=pending>0?'inline':'none';});
+  const pendingRemaining=getPendingRemainingForWorker(e.workerId),settleNow=Math.min(num(e.settlePending),pendingRemaining>0?pendingRemaining:0);
+  card.querySelectorAll('[data-entry-settle-total]').forEach(el=>{el.textContent=settleNow>0?'الإجمالي المدفوع له اليوم: '+money(paidNow+settleNow)+' دج':'';el.style.display=settleNow>0?'inline':'none';});
+  const row=sourceEl?.closest?.('.service-row');
+  if(row){const el=row.querySelector('.calc-result'),i=Number(row.dataset.serviceIndex);if(el&&Number.isInteger(i)&&e.services?.[i])el.textContent=money(num(e.services[i].qty)*num(e.services[i].price));}
+}
+function refreshExpenseCardAmount(expenseId){
+  const e=(DB.currentWeek.expenses||[]).find(x=>x.id===expenseId),card=document.querySelector('.expense-card[data-expense-id="'+String(expenseId).replace(/"/g,'')+'"]');
+  if(!e||!card)return; const total=money(num(e.qty)*num(e.price))+' دج'; card.querySelectorAll('[data-expense-total]').forEach(el=>el.textContent=total);
+}
 
 /* ---------- AUTH ---------- */
 function loginDirect(){
@@ -1271,7 +1299,7 @@ function toggleWorkerType(){
   document.getElementById('taskServicesGroup').style.display=t==='قطعة'?'block':'none';
 }
 function saveWorker(){
-  const name=document.getElementById('wName').value.trim();
+  const name=cleanText(document.getElementById('wName').value.trim());
   const type=document.getElementById('wType').value;
   const dw=num(document.getElementById('wDailyWage').value);
   const pid=document.getElementById('wProject').value;
@@ -1280,14 +1308,14 @@ function saveWorker(){
     id:editingWorkerId||generateId(),
     number:editingWorkerId?(DB.workers.find(x=>x.id===editingWorkerId)?.number||DB.workers.length+1):DB.workers.length+1,
     name,type, dailyWage:type==='قطعة'?0:dw, projectId:pid||null,
-    phone:document.getElementById('wPhone').value.trim(),
-    note:document.getElementById('wNote').value.trim(),
+    phone:cleanText(document.getElementById('wPhone').value.trim()),
+    note:cleanText(document.getElementById('wNote').value.trim()),
     services:[], createdAt:new Date().toISOString(), _mod:nextMod()
   };
   if(type==='قطعة'){
     const ns=document.querySelectorAll('#taskServicesList .serviceName');
     const ps=document.querySelectorAll('#taskServicesList .servicePrice');
-    wd.services=Array.from(ns).map((n,i)=>({name:n.value.trim(),price:num(ps[i].value)})).filter(s=>s.name&&s.price>0);
+    wd.services=Array.from(ns).map((n,i)=>({name:cleanText(n.value.trim()),price:num(ps[i].value)})).filter(s=>s.name&&s.price>0);
   }
   if(editingWorkerId){ const idx=DB.workers.findIndex(x=>x.id===editingWorkerId); if(idx!==-1) DB.workers[idx]=wd; }
   else DB.workers.push(wd);
@@ -1345,10 +1373,10 @@ function openProjectModal(id=null){
     <div class="form-group"><label>رئيس الورشة</label><input type="text" id="pChef" value="${p?.chef||''}"></div>
     <div class="form-group"><label>ملاحظة</label><input type="text" id="pNote" value="${p?.note||''}"></div>
   </div>`,()=>{
-    const n=document.getElementById('pName').value.trim();
+    const n=cleanText(document.getElementById('pName').value.trim());
     if(!n){ showToast('❌ الاسم مطلوب','error'); return false; }
-    if(id){ const x=DB.projects.find(x=>x.id===id); x.name=n; x.chef=document.getElementById('pChef').value.trim(); x.note=document.getElementById('pNote').value.trim(); x._mod=nextMod(); }
-    else DB.projects.push({id:generateId(),name:n,chef:document.getElementById('pChef').value.trim(),note:document.getElementById('pNote').value.trim(),_mod:nextMod()});
+    if(id){ const x=DB.projects.find(x=>x.id===id); x.name=n; x.chef=cleanText(document.getElementById('pChef').value.trim()); x.note=cleanText(document.getElementById('pNote').value.trim()); x._mod=nextMod(); }
+    else DB.projects.push({id:generateId(),name:n,chef:cleanText(document.getElementById('pChef').value.trim()),note:cleanText(document.getElementById('pNote').value.trim()),_mod:nextMod()});
     saveDB(); renderProjects(); showToast('✅ تم حفظ المشروع');
   });
 }
@@ -1511,18 +1539,11 @@ function clearGlobalManualHourlyRate(){
   showToast('تم الرجوع لحساب أجر الساعة التلقائي');
 }
 function editWeek(weekId){
-  const week=DB.weeks.find(w=>w.id===weekId);
-  if(!week) return;
+  const week=DB.weeks.find(w=>w.id===weekId);if(!week)return;
+  const hasPostedFinance=num(week.debtDeductionTotal)>0||num(week.pendingCreatedTotal)>0||num(week.settledPendingTotal)>0||(week.entries||[]).some(e=>num(e.debtDeduction)>0||num(e.pendingAmount)>0||num(e.settlePending)>0);
+  if(hasPostedFinance){showToast('هذا الأسبوع يحتوي على دين أو أجر معلّق مسجل. لا يُفتح للتعديل كي لا تتكرر الحركة المالية؛ أنشئ أسبوع تصحيح مستقل.','warning');return;}
   editingWeekId=weekId;
-  DB.currentWeek={
-    startDate:week.startDate, endDate:week.endDate,
-    entries:week.entries.map(e=>({...e, services:(e.services||[]).map(s=>({...s}))})),
-    expenses:(week.expenses||[]).map(e=>({...e})),
-    projectId:week.projectId||null,
-    overtimeRate:week.overtimeRate??1.5,
-    manualHourlyRate:week.manualHourlyRate||null,
-    status:'open'
-  };
+  DB.currentWeek={startDate:week.startDate,endDate:week.endDate,entries:week.entries.map(e=>({...e,services:(e.services||[]).map(s=>({...s}))})),expenses:(week.expenses||[]).map(e=>({...e})),projectId:week.projectId||null,overtimeRate:week.overtimeRate??1.5,manualHourlyRate:week.manualHourlyRate||null,status:'open',_mod:nextMod()};
   navigateTo('week');
 }
 function updateOvertimeRate(){
@@ -1537,29 +1558,30 @@ function calcEntryParts(e){
   const rate=DB.currentWeek.overtimeRate??1.5;
   let base=0, overtime=0, piece=0;
   if(!w) return {base:0,overtime:0,piece:0,bonus:num(e.bonus),deduction:num(e.debtDeduction),additions:0,gross:0,net:0,type:''};
-  if(w.type==='قطعة'){
+  const workerType=e.workerType||w.type;
+  if(workerType==='قطعة'){
     piece=(e.services||[]).reduce((s,it)=>s+num(it.qty)*num(it.price),0);
   } else {
-    base=num(e.days)*num(w.dailyWage);
-    // أجر الساعة: يدوي للعامل > يدوي عالمي > تلقائي (أجر يومي ÷ 8)
-    const manualWorkerRate=num(e.manualHourlyRate); // أجر ساعة يدوي للعامل نفسه
-    const globalManualRate=num(DB.currentWeek.manualHourlyRate); // أجر ساعة يدوي عالمي
+    const dailyWage=(e.dailyWageSnapshot!==undefined&&e.dailyWageSnapshot!==null)?num(e.dailyWageSnapshot):num(w.dailyWage);
+    base=num(e.days)*dailyWage;
+    const manualWorkerRate=num(e.manualHourlyRate),globalManualRate=num(DB.currentWeek.manualHourlyRate);
     let hourlyRate;
-    if(manualWorkerRate>0) hourlyRate=manualWorkerRate;
-    else if(globalManualRate>0) hourlyRate=globalManualRate;
-    else hourlyRate=w.dailyWage>0?w.dailyWage/8:0;
+    if(manualWorkerRate>0) hourlyRate=manualWorkerRate; else if(globalManualRate>0) hourlyRate=globalManualRate; else hourlyRate=dailyWage>0?dailyWage/8:0;
     overtime=hourlyRate*rate*num(e.extraHours);
   }
   const bonus=num(e.bonus);
-  // سقف الخصم: لا يتجاوز الرصيد المتبقي من الدين
+  // في الأسبوع الجاري لا يتجاوز الخصم رصيد الدين الحالي. أما السجل المؤرشف
+  // فيحتفظ بخصمه التاريخي، حتى لا يتغير صافي أسبوع قديم بعد تسديد الدين لاحقاً.
   const rawDeduction=num(e.debtDeduction);
+  const hasHistoricalParts=!!(e.weekId && e.parts);
+  const historicalDeduction=hasHistoricalParts?num(e.parts.deduction):null;
   const debtRec=DB.debts?DB.debts.find(d=>d.workerId===e.workerId):null;
   const debtRemaining=debtRec?Math.max(0,num(debtRec.total)-num(debtRec.paid)):rawDeduction;
-  const deduction=Math.min(rawDeduction, debtRemaining);
+  const deduction=hasHistoricalParts?historicalDeduction:Math.min(rawDeduction, debtRemaining);
   const additions=overtime+bonus-deduction;
   const gross=base+piece+bonus+overtime;
   const net=Math.round(gross-deduction);
-  return {base:Math.round(base),overtime:Math.round(overtime),piece:Math.round(piece),bonus,deduction,additions:Math.round(additions),gross:Math.round(gross),net,type:w.type};
+  return {base:Math.round(base),overtime:Math.round(overtime),piece:Math.round(piece),bonus,deduction,additions:Math.round(additions),gross:Math.round(gross),net,type:workerType};
 }
 function calculateEntryTotal(e){ return calcEntryParts(e).net; }
 
@@ -1592,8 +1614,8 @@ function renderWeek(){
       bodyHTML=`<div class="entry-body">
         <div class="entry-field"><label><i class="fas fa-calendar-day"></i> عدد الأيام</label><input type="number" min="0" max="7" step="0.5" value="${e.days||0}" oninput="updateWeekEntry('${e.id}','days',this.value)"></div>
         <div class="entry-field"><label><i class="fas fa-clock"></i> ساعات إضافية</label><input type="number" min="0" step="0.5" value="${e.extraHours||0}" oninput="updateWeekEntry('${e.id}','extraHours',this.value)"></div>
-        <div class="entry-field" style="background:var(--accent-soft)"><label>الأجر الأساسي</label><div style="font-weight:800;padding:6px 0;color:var(--accent)">${money(parts.base)} دج</div></div>
-        <div class="entry-field" style="background:var(--gold-soft)"><label>قيمة الساعات الإضافية</label><div style="font-weight:800;padding:6px 0;color:var(--gold)">${money(parts.overtime)} دج</div></div>
+        <div class="entry-field" style="background:var(--accent-soft)"><label>الأجر الأساسي</label><div data-entry-base style="font-weight:800;padding:6px 0;color:var(--accent)">${money(parts.base)} دج</div></div>
+        <div class="entry-field" style="background:var(--gold-soft)"><label>قيمة الساعات الإضافية</label><div data-entry-overtime style="font-weight:800;padding:6px 0;color:var(--gold)">${money(parts.overtime)} دج</div></div>
         <div class="entry-field" style="background:rgba(184,120,0,0.08);border:1px dashed rgba(184,120,0,0.35)"><label style="color:var(--gold)"><i class="fas fa-coins"></i> أجر الساعة اليدوي (دج) <small style="font-weight:500;color:var(--text3)">${hourlyRateLabel}</small></label><input type="number" min="0" step="50" placeholder="${Math.round(effectiveHourlyRate)}" value="${e.manualHourlyRate||''}" oninput="updateWeekEntry('${e.id}','manualHourlyRate',this.value)" style="background:var(--glass);border-color:var(--gold)" title="اتركه فارغاً لاستخدام الحساب التلقائي"></div>
       </div>`;
     }
@@ -1603,7 +1625,7 @@ function renderWeek(){
         <h5><i class="fas fa-list-check"></i> الخدمات المنجزة هذا الأسبوع</h5>
         <div id="svc-rows-${e.id}">${renderServiceRows(e,w)}</div>
         <button class="btn btn-outline btn-xs mt-2" type="button" onclick="addEntryService('${e.id}')"><i class="fas fa-plus"></i> إضافة خدمة منجزة</button>
-        <div style="margin-top:8px;text-align:left;font-weight:800;color:var(--gold)">إجمالي القطعة: ${money(parts.piece)} دج</div>
+        <div style="margin-top:8px;text-align:left;font-weight:800;color:var(--gold)">إجمالي القطعة: <span data-entry-piece-total>${money(parts.piece)} دج</span></div>
       </div>`;
     } else {
       bodyHTML=`<div class="text-muted" style="padding:8px">اختر عاملاً من القائمة أعلاه</div>`;
@@ -1637,7 +1659,7 @@ function renderWeek(){
     const payHTML=`<div class="meta-chip" style="${remainingPay>0?'border-color:var(--danger);background:rgba(220,53,69,0.06)':''}">
       <span><i class="fas fa-money-bill-wave"></i> المدفوع فعلياً الآن</span>
       <input type="number" min="0" max="${parts.net}" step="100" placeholder="${money(parts.net)} (كامل)" value="${e.paidNow??''}" oninput="updateWeekEntry('${e.id}','paidNow',this.value)" title="اتركه فارغاً إن دُفع المبلغ كاملاً">
-      ${remainingPay>0?`<span style="color:var(--danger);font-weight:800">متبقٍّ: ${money(remainingPay)} دج</span>`:''}
+      <span data-entry-pending style="color:var(--danger);font-weight:800;display:${remainingPay>0?'inline':'none'}">${remainingPay>0?'متبقٍّ: '+money(remainingPay)+' دج':''}</span>
     </div>`;
 
     // --- تسديد أجر معلّق من أسابيع سابقة (يُضاف لما يُدفع فعلياً هذا الأسبوع) ---
@@ -1649,11 +1671,11 @@ function renderWeek(){
       settleHTML=`<div class="meta-chip" style="border-color:var(--gold);background:var(--gold-soft)">
         <span><i class="fas fa-clock"></i> أجر معلّق سابق: ${money(pendingRemaining)} دج</span>
         <input type="number" min="0" max="${pendingRemaining}" step="100" placeholder="0" value="${e.settlePending||''}" oninput="updateWeekEntry('${e.id}','settlePending',this.value)" title="مبلغ من المعلّق تُسدّده الآن مع أجر هذا الأسبوع">
-        ${settleNow>0?`<span style="font-weight:800;color:var(--gold-dk)">الإجمالي المدفوع له اليوم: ${money(totalHandedToday)} دج</span>`:''}
+        <span data-entry-settle-total style="font-weight:800;color:var(--gold-dk);display:${settleNow>0?'inline':'none'}">${settleNow>0?'الإجمالي المدفوع له اليوم: '+money(totalHandedToday)+' دج':''}</span>
       </div>`;
     }
 
-    return `<div class="entry-card ${cls}">
+    return `<div class="entry-card ${cls}" data-entry-id="${e.id}">
       <div class="entry-head">
         <div class="flex gap-2" style="align-items:center;flex:1;flex-wrap:wrap">
           <span class="entry-num">${i+1}</span>
@@ -1661,7 +1683,7 @@ function renderWeek(){
             <option value="">— اختر العامل —</option>${opts}
           </select>
         </div>
-        <div class="entry-total"><i class="fas fa-money-bill-wave"></i> ${money(parts.net)} دج</div>
+        <div class="entry-total"><i class="fas fa-money-bill-wave"></i> <span data-entry-total>${money(parts.net)} دج</span></div>
       </div>
       ${bodyHTML}
       <div class="entry-meta">
@@ -1682,7 +1704,7 @@ function renderServiceRows(e,w){
   return e.services.map((s,idx)=>{
     const opts=w.services.map(ws=>`<option value="${ws.name}" data-price="${ws.price}" ${s.name===ws.name?'selected':''}>${ws.name} (${money(ws.price)} دج)</option>`).join('');
     const lineTotal=num(s.qty)*num(s.price);
-    return `<div class="service-row">
+    return `<div class="service-row" data-service-index="${idx}">
       <select onchange="updateEntryService('${e.id}',${idx},'name',this)"><option value="">— اختر —</option>${opts}</select>
       <input type="number" min="0" step="1" placeholder="الكمية" value="${s.qty||''}" oninput="updateEntryService('${e.id}',${idx},'qty',this)">
       <input type="number" min="0" placeholder="السعر" value="${s.price||''}" oninput="updateEntryService('${e.id}',${idx},'price',this)">
@@ -1702,17 +1724,10 @@ function addEntryService(eid){
   saveDB(); renderWeek(); renderWeekSummary();
 }
 function updateEntryService(eid,idx,field,el){
-  const e=DB.currentWeek.entries.find(x=>x.id===eid);
-  if(!e||!e.services||!e.services[idx]) return;
-  if(field==='name'){
-    e.services[idx].name=el.value;
-    const opt=el.options[el.selectedIndex];
-    if(opt&&opt.dataset.price) e.services[idx].price=num(opt.dataset.price);
-  } else if(field==='qty'){ e.services[idx].qty=num(el.value); }
-  else if(field==='price'){ e.services[idx].price=num(el.value); }
-  stampCW(e);
-  saveDB(); renderWeekSummary();
-  if(field==='name' || !isEditingNow()) renderWeek();
+  const e=DB.currentWeek.entries.find(x=>x.id===eid); if(!e||!e.services||!e.services[idx]) return;
+  if(field==='name'){e.services[idx].name=cleanText(el.value);const opt=el.options[el.selectedIndex];if(opt&&opt.dataset.price)e.services[idx].price=num(opt.dataset.price);const priceInput=el.closest('.service-row')?.querySelectorAll('input')[1];if(priceInput)priceInput.value=e.services[idx].price||'';}
+  else if(field==='qty')e.services[idx].qty=num(el.value); else if(field==='price')e.services[idx].price=num(el.value);
+  stampCW(e);saveDB();refreshEntryCardAmounts(eid,el);renderWeekSummary();
 }
 function removeEntryService(eid,idx){
   const e=DB.currentWeek.entries.find(x=>x.id===eid);
@@ -1736,24 +1751,10 @@ function removeWeekRow(id){
   });
 }
 function updateWeekEntry(id,f,v){
-  const e=DB.currentWeek.entries.find(x=>x.id===id);
-  if(!e) return;
-  if(f==='workerId'){
-    e.workerId=v; e.services=[]; e.days=0; e.extraHours=0; e.debtDeduction=0;
-    const w=DB.workers.find(x=>x.id===v);
-    if(w&&w.type==='قطعة') e.services=[];
-  }
-  else if(f==='days') e.days=num(v);
-  else if(f==='extraHours') e.extraHours=num(v);
-  else if(f==='note') e.note=v;
-  else if(f==='debtDeduction') e.debtDeduction=num(v);
-  else if(f==='bonus') e.bonus=num(v);
-  else if(f==='paidNow') e.paidNow=(v===''||v===null)?null:num(v);
-  else if(f==='settlePending') e.settlePending=num(v);
-  else if(f==='manualHourlyRate') e.manualHourlyRate=num(v)||null;
-  stampCW(e);
-  saveDB(); renderWeekSummary();                 // حفظ + مزامنة فورية لكل ضغطة
-  if(f==='workerId' || !isEditingNow()) renderWeek();  // لا تُعِد بناء الشبكة أثناء الكتابة
+  const e=DB.currentWeek.entries.find(x=>x.id===id);if(!e)return;
+  if(isArchivedEdit()&&['debtDeduction','paidNow','settlePending'].includes(f)){showToast('لا يمكن تعديل حركة الدين أو الأجر المعلّق بعد الأرشفة. أنشئ أسبوع تصحيح مستقل.','warning');return;}
+  if(f==='workerId'){e.workerId=v;e.services=[];e.days=0;e.extraHours=0;e.debtDeduction=0;} else if(f==='days')e.days=num(v);else if(f==='extraHours')e.extraHours=num(v);else if(f==='note')e.note=cleanText(v);else if(f==='debtDeduction')e.debtDeduction=num(v);else if(f==='bonus')e.bonus=num(v);else if(f==='paidNow')e.paidNow=(v===''||v===null)?null:num(v);else if(f==='settlePending')e.settlePending=num(v);else if(f==='manualHourlyRate')e.manualHourlyRate=num(v)||null;
+  stampCW(e);saveDB();refreshEntryCardAmounts(id);renderWeekSummary();if(f==='workerId')renderWeek();
 }
 function applyDebtChoice(eid,wid,choice){
   const e=DB.currentWeek.entries.find(x=>x.id===eid);
@@ -1784,7 +1785,7 @@ function renderWeekExpenses(){
   }
   c.innerHTML=exps.map((ex,i)=>{
     const tot=num(ex.qty)*num(ex.price);
-    return `<div class="expense-card">
+    return `<div class="expense-card" data-expense-id="${ex.id}">
       <div class="expense-head">
         <span class="entry-num" style="background:var(--warning)">${i+1}</span>
         <select onchange="updateWeekExpense('${ex.id}','type',this.value)" style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--card);color:var(--text);font-family:inherit;font-size:13px;font-weight:600">
@@ -1796,14 +1797,14 @@ function renderWeekExpenses(){
           <option value="أخرى" ${ex.type==='أخرى'?'selected':''}>🛠️ أخرى</option>
         </select>
         <span style="flex:1"></span>
-        <span class="entry-total" style="background:var(--warning-soft);color:var(--warning)">${money(tot)} دج</span>
+        <span class="entry-total" data-expense-total style="background:var(--warning-soft);color:var(--warning)">${money(tot)} دج</span>
         <button class="btn btn-danger btn-xs" onclick="removeWeekExpense('${ex.id}')"><i class="fas fa-trash"></i></button>
       </div>
       <div class="expense-body">
         <div class="entry-field"><label>البيان / الوصف</label><input type="text" value="${ex.label||''}" placeholder="مثلا: وجبات العمال" oninput="updateWeekExpense('${ex.id}','label',this.value)"></div>
         <div class="entry-field"><label>الكمية</label><input type="number" min="0" step="1" value="${ex.qty||1}" oninput="updateWeekExpense('${ex.id}','qty',this.value)"></div>
         <div class="entry-field"><label>سعر الوحدة (دج)</label><input type="number" min="0" value="${ex.price||0}" oninput="updateWeekExpense('${ex.id}','price',this.value)"></div>
-        <div class="entry-field" style="background:var(--warning-soft)"><label>المجموع</label><div style="font-weight:800;padding:6px 0;color:var(--warning)">${money(tot)} دج</div></div>
+        <div class="entry-field" style="background:var(--warning-soft)"><label>المجموع</label><div data-expense-total style="font-weight:800;padding:6px 0;color:var(--warning)">${money(tot)} دج</div></div>
       </div>
     </div>`;
   }).join('');
@@ -1824,14 +1825,9 @@ function removeWeekExpense(id){
   });
 }
 function updateWeekExpense(id,f,v){
-  const e=DB.currentWeek.expenses.find(x=>x.id===id);
-  if(!e) return;
-  if(f==='qty'||f==='price') e[f]=num(v); else e[f]=v;
-  // حدّث المبلغ دائماً بعد أي تغيير
-  e.amount=num(e.qty)*num(e.price);
-  stampCW(e);
-  saveDB(); renderWeekSummary();
-  if(f==='type' || !isEditingNow()) renderWeekExpenses();
+  const e=DB.currentWeek.expenses.find(x=>x.id===id);if(!e)return;
+  if(f==='qty'||f==='price')e[f]=num(v);else e[f]=cleanText(v);
+  e.amount=num(e.qty)*num(e.price);stampCW(e);saveDB();refreshExpenseCardAmount(id);renderWeekSummary();if(f==='type')renderWeekExpenses();
 }
 
 /* ----- ملخص الأسبوع ----- */
@@ -1943,8 +1939,10 @@ function saveWeek(){
     const p=calcEntryParts(e);
     const paidNow=Math.min(Math.max(0,num(e.paidNow??p.net)), p.net);
     const pendingAmount=Math.max(0,p.net-paidNow);
-    return {...e, services:(e.services||[]).map(s=>({...s})), workerName:w?.name||'غير معروف', workerNumber:w?.number||0, workerType:w?.type||'', parts:p, total:p.net, paidNow, pendingAmount, debtDeduction:p.deduction, weekId};
+    return {...e, services:(e.services||[]).map(s=>({...s})), workerName:w?.name||'غير معروف', workerNumber:w?.number||0, workerType:w?.type||'', dailyWageSnapshot:w?.type==='قطعة'?0:num(w?.dailyWage), parts:p, total:p.net, paidNow, pendingAmount, debtDeduction:p.deduction, weekId};
   });
+  // يجب التقاط الإجماليات قبل تحريك سجل الدين؛ وإلا يصبح الخصم الكامل صفراً بعد تسديد الدين.
+  const t=computeWeekTotals();
 
   // عند تعديل أسبوع قديم لا نعيد تسجيل آثار الديون والمعلّقات حتى لا تتكرر. يتم تحديث الأرشيف فقط.
   if(!editingWeekId){
@@ -1974,12 +1972,11 @@ function saveWeek(){
     // تسديد الأجور المعلّقة السابقة وتوزيعها على أقدم سجل مفتوح لنفس العامل
     entriesWithTotals.forEach(e=>{
       if(num(e.settlePending)>0){
-        distributePendingWagePayment(e.workerId, num(e.settlePending), `تسديد مع أجر أسبوع ${formatDateAR(cw.startDate)}`);
+        distributePendingWagePayment(e.workerId, num(e.settlePending), `تسديد مع أجر أسبوع ${formatDateAR(cw.startDate)}`, weekId, cw.startDate);
       }
     });
   }
 
-  const t=computeWeekTotals();
   const weekData={
     id:weekId,
     weekSequence:(DB.weeks.filter(w=>(w.projectId||null)===(cw.projectId||null)).length+1),
@@ -2160,20 +2157,10 @@ function getOpenPendingWagesForWorker(workerId){
 function getPendingRemainingForWorker(workerId){
   return getOpenPendingWagesForWorker(workerId).reduce((s,pw)=>s+pendingWagesRemaining(pw),0);
 }
-function distributePendingWagePayment(workerId, amount, note){
+function distributePendingWagePayment(workerId, amount, note, paidByWeekId=null, paidByWeekStart=null){
   let rest=Math.max(0,num(amount));
   const list=getOpenPendingWagesForWorker(workerId).sort((a,b)=>new Date((a.dates?.[0]?.date)||a.createdAt||0)-new Date((b.dates?.[0]?.date)||b.createdAt||0));
-  list.forEach(pw=>{
-    if(rest<=0) return;
-    const pay=Math.min(rest,pendingWagesRemaining(pw));
-    if(pay>0){
-      pw.paid=num(pw.paid)+pay;
-      pw.dates=pw.dates||[];
-      pw.dates.push({date:new Date().toISOString(),amount:pay,note:note||'تسديد',type:'pay',weekId:pw.weekId||null,weekStart:pw.weekStart||null});
-      pw._mod=nextMod();
-      rest-=pay;
-    }
-  });
+  list.forEach(pw=>{if(rest<=0)return;const pay=Math.min(rest,pendingWagesRemaining(pw));if(pay>0){pw.paid=num(pw.paid)+pay;pw.dates=pw.dates||[];pw.dates.push({date:new Date().toISOString(),amount:pay,note:note||'تسديد',type:'pay',sourceWeekId:pw.weekId||null,paidByWeekId,paidByWeekStart});pw._mod=nextMod();rest-=pay;}});
   return Math.max(0,num(amount)-rest);
 }
 function updatePendingWagesBadge(){
@@ -2259,14 +2246,17 @@ function renderArchive(){
     </tr>`;
   }).join('');
 }
+function recalculateDebtPaid(debt){const payments=(debt.dates||[]).filter(x=>x.type==='pay').reduce((s,x)=>s+num(x.amount),0);debt.paid=Math.min(num(debt.total),Math.max(0,payments));debt._mod=nextMod();}
 function deleteWeek(id){
-  const w=DB.weeks.find(x=>x.id===id);
-  confirmDelete(`أسبوع ${formatDateAR(w?.startDate)}`,()=>{
-    moveToTrash('week', w, `أسبوع ${formatDateAR(w?.startDate)}`);
-    _markDeleted(id);
-    DB.pendingWages=(DB.pendingWages||[]).filter(pw=>pw.weekId!==id);
-    DB.weeks=DB.weeks.filter(x=>x.id!==id);
-    saveDB(); renderArchive(); renderProjectWeeks();
+  const w=DB.weeks.find(x=>x.id===id);if(!w)return;
+  const createdPending=(DB.pendingWages||[]).filter(pw=>pw.weekId===id);
+  const hasPaidCreatedPending=createdPending.some(pw=>num(pw.paid)>0);
+  const hasLegacySettlement=(w.entries||[]).some(e=>num(e.settlePending)>0)&&!(DB.pendingWages||[]).some(pw=>(pw.dates||[]).some(d=>d.paidByWeekId===id));
+  if(hasPaidCreatedPending||hasLegacySettlement){showToast('لا يمكن حذف هذا الأسبوع لأن له أجوراً معلّقة سُدد منها أو تسديداً قديماً غير قابل للعكس آلياً. استخدم أسبوع تصحيح للحفاظ على السجل.','warning');return;}
+  confirmDelete(`أسبوع ${formatDateAR(w.startDate)}`,()=>{
+    (DB.debts||[]).forEach(d=>{const before=(d.dates||[]).length;d.dates=(d.dates||[]).filter(x=>!(x.type==='pay'&&x.weekId===id));if(d.dates.length!==before)recalculateDebtPaid(d);});
+    (DB.pendingWages||[]).forEach(pw=>{const removed=(pw.dates||[]).filter(x=>x.type==='pay'&&x.paidByWeekId===id);if(removed.length){pw.dates=pw.dates.filter(x=>!(x.type==='pay'&&x.paidByWeekId===id));pw.paid=Math.max(0,num(pw.paid)-removed.reduce((s,x)=>s+num(x.amount),0));pw._mod=nextMod();}});
+    moveToTrash('week',w,`أسبوع ${formatDateAR(w.startDate)}`);_markDeleted(id);DB.pendingWages=(DB.pendingWages||[]).filter(pw=>pw.weekId!==id);DB.weeks=DB.weeks.filter(x=>x.id!==id);saveDB();renderArchive();renderProjectWeeks();renderDebts();renderPendingWages();loadDashboard();
   });
 }
 
@@ -2780,10 +2770,9 @@ let _pushTimer=null,_cloudES=null,_pollTimer=null,_lastPushStamp=null,_cloudSync
 /* هل المستخدم يكتب الآن؟ (نتفادى إعادة بناء الواجهة أثناء الكتابة) */
 function isEditingNow(){
   const ae=document.activeElement;
-  const typing = ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName||'');
-  const modalOpen = document.getElementById('modalOverlay')?.classList.contains('show');
-  const inEditSession = !!editingWeekId || !!editingWorkerId; // تعديل أسبوع مأرشف/عامل قائم — حتى لو الفوكس خرج من الخانة لحظياً
-  return !!(typing || modalOpen || inEditSession);
+  const typing=ae&&/^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName||'');
+  const modalOpen=document.getElementById('modalOverlay')?.classList.contains('show');
+  return !!(typing||modalOpen);
 }
 /* عند انتهاء الكتابة: إن كانت هناك مزامنة مؤجلة، حدّث الواجهة مرة واحدة */
 document.addEventListener('focusout',(ev)=>{
@@ -2802,12 +2791,9 @@ document.addEventListener('focusout',(ev)=>{
 });
 // ── حماية حقيقية: تسجيل دخول بكلمة سر (مرة واحدة لكل جهاز)، الرمز يتجدد وحده ──
 // كلمة السر لا تُكتب هنا أبداً — تُكتب من المستخدم في النافذة التي تظهر.
-EGTPHAuth.init({
-  appId:   'semaine',
-  apiKey:  'AIzaSyAnRqmYvW3g9b7ysQJQ9stVsdoEVgKFcxM', // Web API Key — مشروع egtph-semaine
-  email:   'abdiyoucefislam@gmail.com',
-  onReady: function(){ try{ if(typeof cloudSync==='function') cloudSync(false); }catch(e){} }
-});
+if(window.EGTPHAuth&&typeof window.EGTPHAuth.init==='function'){
+  window.EGTPHAuth.init({appId:'semaine',apiKey:'AIzaSyAnRqmYvW3g9b7ysQJQ9stVsdoEVgKFcxM',email:'abdiyoucefislam@gmail.com',onReady:function(){try{if(typeof cloudSync==='function')cloudSync(false);}catch(e){}}});
+} else {console.warn('egtph-auth.js غير متاح؛ سيعمل السجل محلياً وتبقى المزامنة السحابية متوقفة حتى توفر الملف.');}
 function _cloudCfg(){
   const url=(DB.settings.cloudUrl||_CLOUD_URL).trim().replace(/\/+$/,'');
   const k=(DB.settings.cloudKey||_CLOUD_KEY).trim();
@@ -3067,11 +3053,12 @@ function _commitActiveField(){
 }
 function _wireCloudTriggers(){
   if(_cloudTriggersWired)return;_cloudTriggersWired=true;
-  window.addEventListener('beforeunload',(e)=>{ _commitActiveField(); if(_cloudDirty){ e.preventDefault(); e.returnValue=''; } });
+  window.addEventListener('beforeunload',(e)=>{_commitActiveField();flushSave();if(_cloudDirty){e.preventDefault();e.returnValue='';}});
+  window.addEventListener('pagehide',()=>{_commitActiveField();flushSave();});
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden){
-      _commitActiveField();
-      if(_cloudDirty&&navigator.onLine&&!_cloudBusy)cloudSync(false); // تصغير التطبيق على الهاتف = أحياناً إغلاق فعلي
+      _commitActiveField();flushSave();
+      if(_cloudDirty&&navigator.onLine&&!_cloudBusy)cloudSync(false);
     } else {
       cloudPullOnly();schedulePush();
     }
@@ -3106,9 +3093,8 @@ function handleImport(ev){
         // ضمان وجود currentWeek سليم
         migrateDB();  // ترحيل كامل بعد الاستيراد
         if(!DB.company) DB.company={name:'مؤسسة الأشغال العمومية الكبرى والري',short:'EGTPH',address:'وادي سلي، الشلف',nif:'19202010500199',phone:''};
-        saveDB();
-        // انتظر قليلاً لضمان انتهاء saveDB (debounced 300ms)
-        setTimeout(()=>{ showToast('✅ تم الاستيراد بنجاح — '+d.workers.length+' عامل، '+d.weeks.length+' أسبوع'); }, 400);
+        flushSave();
+        setTimeout(()=>{ showToast('✅ تم الاستيراد بنجاح — '+d.workers.length+' عامل، '+d.weeks.length+' أسبوع'); }, 50);
         navigateTo('dashboard'); initApp();
       } else showToast('❌ ملف غير صالح — يجب أن يحتوي على workers و projects','error');
     }catch(err){ showToast('❌ خطأ في قراءة الملف: '+err.message,'error'); }
@@ -3139,11 +3125,11 @@ function loadCompanyForm(){
 }
 function saveCompany(){
   DB.company={
-    name:document.getElementById('cName').value.trim(),
-    short:document.getElementById('cShort').value.trim(),
-    address:document.getElementById('cAddress').value.trim(),
-    nif:document.getElementById('cNif').value.trim(),
-    phone:document.getElementById('cPhone').value.trim()
+    name:cleanText(document.getElementById('cName').value.trim()),
+    short:cleanText(document.getElementById('cShort').value.trim()),
+    address:cleanText(document.getElementById('cAddress').value.trim()),
+    nif:cleanText(document.getElementById('cNif').value.trim()),
+    phone:cleanText(document.getElementById('cPhone').value.trim())
   };
   saveDB(); showToast('✅ تم حفظ بيانات المؤسسة');
 }
@@ -3151,24 +3137,26 @@ function openUserModal(id=null){
   const u=id?DB.users.find(x=>x.id===id):null;
   openModal(id?'تعديل مستخدم':'إضافة مستخدم',`<div class="form-grid">
     <div class="form-group"><label>الاسم</label><input type="text" id="uName" value="${u?.name||''}"></div>
-    <div class="form-group"><label>البريد الإلكتروني</label><input type="email" id="uEmail" value="${u?.email||''}"></div>
-    <div class="form-group"><label>كلمة السر</label><input type="text" id="uPass" value="${u?.password||''}"></div>
+    <div class="form-group"><label>البريد الإلكتروني</label><input type="email" id="uEmail" value="${u?.email||''}" autocomplete="email"></div>
+    <div class="form-group"><label>كلمة السر</label><input type="password" id="uPass" value="" placeholder="${id?'اتركها فارغة للإبقاء عليها':'كلمة السر'}" autocomplete="new-password"></div>
     <div class="form-group"><label>الصلاحية</label><select id="uRole">
       <option value="admin" ${u?.role==='admin'?'selected':''}>👑 مدير</option>
       <option value="supervisor" ${u?.role==='supervisor'?'selected':''}>🔧 مشرف</option>
       <option value="viewer" ${u?.role==='viewer'?'selected':''}>👁️ مستخدم</option>
     </select></div>
   </div>`,()=>{
-    const n=document.getElementById('uName').value.trim(),em=document.getElementById('uEmail').value.trim(),pw=document.getElementById('uPass').value.trim(),r=document.getElementById('uRole').value;
-    if(!n||!em||!pw){ showToast('❌ جميع الحقول مطلوبة','error'); return false; }
-    if(id){ const x=DB.users.find(x=>x.id===id); x.name=n; x.email=em; x.password=pw; x.role=r; }
-    else DB.users.push({id:generateId(),name:n,email:em,password:pw,role:r});
-    saveDB(); renderUsers(); showToast('✅ تم الحفظ');
+    const n=cleanText(document.getElementById('uName').value.trim()),em=cleanEmail(document.getElementById('uEmail').value),typedPassword=document.getElementById('uPass').value,r=document.getElementById('uRole').value;
+    if(!n||!em||(!id&&!typedPassword)){showToast('❌ الاسم والبريد وكلمة السر مطلوبة','error');return false;}
+    if(DB.users.find(x=>x.id!==id&&cleanEmail(x.email)===em)){showToast('❌ البريد الإلكتروني مستخدم بالفعل','error');return false;}
+    if(id){const x=DB.users.find(x=>x.id===id);if(!x)return false;const otherAdmins=DB.users.filter(y=>y.id!==id&&y.role==='admin').length;if(x.role==='admin'&&r!=='admin'&&otherAdmins===0){showToast('❌ يجب أن يبقى مدير واحد على الأقل','error');return false;}x.name=n;x.email=em;if(typedPassword)x.password=typedPassword;x.role=r;x._mod=nextMod();}
+    else DB.users.push({id:generateId(),name:n,email:em,password:typedPassword,role:r,_mod:nextMod()});
+    saveDB();renderUsers();showToast('✅ تم الحفظ');
   });
 }
 function deleteUser(id){
-  if(DB.users.length<=1){ showToast('❌ لا يمكن حذف آخر مستخدم','error'); return; }
-  confirmDelete('مستخدم',()=>{ _markDeleted(id); DB.users=DB.users.filter(u=>u.id!==id); saveDB(); renderUsers(); });
+  if(DB.users.length<=1){showToast('❌ لا يمكن حذف آخر مستخدم','error');return;}
+  const target=DB.users.find(u=>u.id===id);if(target?.role==='admin'&&DB.users.filter(u=>u.role==='admin').length<=1){showToast('❌ لا يمكن حذف آخر مدير','error');return;}
+  confirmDelete('مستخدم',()=>{_markDeleted(id);DB.users=DB.users.filter(u=>u.id!==id);saveDB();renderUsers();});
 }
 function renderUsers(){
   const tb=document.getElementById('usersTableBody'); if(!tb) return;
@@ -3376,6 +3364,7 @@ document.addEventListener('DOMContentLoaded', async function(){
   document.getElementById('mainContent').style.display='none';
   document.getElementById('sidebar').style.display='none';
   document.getElementById('loginOverlay').style.display='flex';
+  flushSave();
 });
 </script>
 </body>
