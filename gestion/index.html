@@ -756,6 +756,8 @@ body.light-mode .theme-btn:hover { border-color: var(--gold2); background: var(-
 .ts-legacy-note{padding:10px 12px;background:var(--bdim);border:1px solid rgba(79,142,247,.32);border-radius:var(--rs);font-size:11px;font-weight:800;color:var(--blue);line-height:1.7;margin-bottom:13px;}
 .ts-legacy-note b{font-family:'JetBrains Mono','Courier New',monospace;}
 .ts-money-pending{color:var(--red);font-size:10px;font-weight:900;white-space:nowrap;}
+.ts-auto-start-note{grid-column:1/-1;padding:9px 12px;background:var(--gdim);border:1px solid rgba(212,168,67,.32);border-radius:var(--rs);font-size:11px;color:var(--gold2);font-weight:700;line-height:1.7;}
+.ts-auto-start-note .num{color:var(--gold2);font-weight:900;}
 @media(max-width:720px){.ts-filter-grid{grid-template-columns:1fr 1fr;}.ts-filter-grid .ts-wide{grid-column:1/-1;}.ts-results-grid{grid-template-columns:1fr!important;}}
 @media(max-width:420px){.ts-filter-grid{grid-template-columns:1fr;}.ts-filter-grid .ts-wide{grid-column:auto;}}
 </style>
@@ -1896,13 +1898,32 @@ function _tsDateRange(s) {
   if (s.period === 'custom') {
     return { from:s.dateFrom||'', to:s.dateTo||'', label:'فترة مخصصة' };
   }
+  if (s.period === 'fromFirstTrip') {
+    const first = _tsFirstTripDate(s);
+    const to = s.dateTo || today;
+    return {
+      from:first,
+      to,
+      firstTrip:first,
+      label:first ? `من أول رحلة فعلية (${first}) إلى ${to}` : 'من أول رحلة فعلية'
+    };
+  }
   return { from:'', to:'', label:'كل الفترات' };
 }
 function _tsValidateRange(s) {
-  if (s.period !== 'custom') return '';
-  if (!s.dateFrom || !s.dateTo) return 'حدّد تاريخ البداية وتاريخ النهاية للفترة المخصصة.';
-  if (!_tsIsISODate(s.dateFrom) || !_tsIsISODate(s.dateTo)) return 'صيغة تاريخ الفترة المخصصة غير صحيحة.';
-  if (s.dateFrom > s.dateTo) return 'تاريخ البداية يجب أن يكون قبل تاريخ النهاية أو مساويًا له.';
+  if (s.period === 'custom') {
+    if (!s.dateFrom || !s.dateTo) return 'حدّد تاريخ البداية وتاريخ النهاية للفترة المخصصة.';
+    if (!_tsIsISODate(s.dateFrom) || !_tsIsISODate(s.dateTo)) return 'صيغة تاريخ الفترة المخصصة غير صحيحة.';
+    if (s.dateFrom > s.dateTo) return 'تاريخ البداية يجب أن يكون قبل تاريخ النهاية أو مساويًا له.';
+    return '';
+  }
+  if (s.period === 'fromFirstTrip') {
+    const first = _tsFirstTripDate(s);
+    if (!first) return 'لا توجد رحلات فعلية لتحديد تاريخ البداية التلقائي. اختر عميلًا أو سجلًا يحتوي على رحلة مسجلة.';
+    if (!s.dateTo) return 'حدّد تاريخ النهاية للفترة من أول رحلة.';
+    if (!_tsIsISODate(s.dateTo)) return 'صيغة تاريخ النهاية غير صحيحة.';
+    if (s.dateTo < first) return 'تاريخ النهاية لا يمكن أن يكون قبل أول رحلة فعلية في النطاق المختار.';
+  }
   return '';
 }
 function _tsRecords(s) {
@@ -1910,6 +1931,21 @@ function _tsRecords(s) {
   if (s.clientId) rs = rs.filter(r=>r.clientId===s.clientId);
   if (s.recordId) rs = rs.filter(r=>r.id===s.recordId);
   return rs;
+}
+// The automatic start date is based only on real, positive truck trips in the
+// selected client / record scope. It deliberately ignores later filters such
+// as material or truck, so it remains the true beginning of the work record.
+function _tsHasActualTrip(e) {
+  return !!(e && e.type==='truck' && Object.values(e.cols||{}).some(v=>(parseFloat(v)||0)>0));
+}
+function _tsFirstTripDate(s) {
+  const recordIds = new Set(_tsRecords(s).map(r=>r.id));
+  let first='';
+  entries.forEach(e=>{
+    if (!recordIds.has(e.recordId) || !_tsHasActualTrip(e) || !_tsIsISODate(e.date)) return;
+    if (!first || e.date < first) first=e.date;
+  });
+  return first;
 }
 function _tsMaterialName(e) {
   const p = prices.find(x=>x.id===e.materialId && x.recordId===e.recordId && x.type==='mat_def')
@@ -1973,10 +2009,18 @@ function setTripStatsFilter(key, value) {
     s.truckIds=[];
   }
   if (key === 'material') s.truckIds=[];
-  if (key === 'period' && value === 'custom') {
+  if (key === 'period') {
     const today = _tsLocalISO(new Date());
-    if (!s.dateFrom) s.dateFrom = today;
-    if (!s.dateTo) s.dateTo = today;
+    if (value === 'custom') {
+      if (!s.dateFrom) s.dateFrom = _tsFirstTripDate(s) || today;
+      if (!s.dateTo) s.dateTo = today;
+    }
+    if (value === 'fromFirstTrip') {
+      // dateFrom is derived live from the selected client / record and is never
+      // saved as a manual value; only the chosen end date is editable.
+      s.dateFrom='';
+      if (!s.dateTo) s.dateTo = today;
+    }
   }
   renderTripStats();
 }
@@ -2086,6 +2130,7 @@ function _tsScopeText(s, range) {
   if (s.material) parts.push('المادة / الخدمة: '+s.material);
   if (s.truckIds.length) parts.push('الشاحنات: '+s.truckIds.join(' + '));
   if (s.period === 'custom' && range.from && range.to) parts.push(`من ${range.from} إلى ${range.to}`);
+  else if (s.period === 'fromFirstTrip' && range.from && range.to) parts.push(`من أول رحلة فعلية: ${range.from} إلى ${range.to}`);
   else parts.push(range.label);
   return parts.join(' · ');
 }
@@ -2120,6 +2165,7 @@ function renderTripStats() {
   s.truckIds = s.truckIds.filter(t=>truckNames.includes(t));
 
   const validation = _tsValidateRange(s);
+  const firstTripDate = _tsFirstTripDate(s);
   const range = _tsDateRange(s);
   const rows = validation ? [] : _tsRows(s);
   const trips = rows.reduce((sum,x)=>sum+x.qty,0);
@@ -2145,7 +2191,7 @@ function renderTripStats() {
   <div class="ph">
     <div>
       <h1>📈 إحصائيات الرحلات</h1>
-      <p>اختر العميل أولاً، ثم السجل التابع له أو كل سجلاته، وبعدها الشاحنة أو الشاحنات والمادة والفترة. النتيجة تُحسب من الرحلات المسجلة فقط.</p>
+      <p>اختر العميل أولاً، ثم السجل التابع له أو كل سجلاته، وبعدها الشاحنة أو الشاحنات والمادة والفترة. يمكنك الحساب من أول رحلة فعلية تلقائيًا إلى تاريخ تحدده.</p>
     </div>
   </div>
 
@@ -2174,12 +2220,15 @@ function renderTripStats() {
         </div>
         <div class="fg ts-wide" style="margin:0"><label>الفترة</label>
           <div class="tabs" style="margin:0;flex-wrap:wrap">
-            ${[['all','الكل'],['today','اليوم'],['week','هذا الأسبوع'],['month','هذا الشهر'],['year','هذه السنة'],['custom','مخصصة']].map(([id,label])=>`<button class="tab ${s.period===id?'on':''}" style="flex:0 1 auto" onclick="setTripStatsFilter('period','${id}')">${label}</button>`).join('')}
+            ${[['all','الكل'],['today','اليوم'],['week','هذا الأسبوع'],['month','هذا الشهر'],['year','هذه السنة'],['fromFirstTrip','من أول رحلة تلقائيًا'],['custom','مخصصة']].map(([id,label])=>`<button class="tab ${s.period===id?'on':''}" style="flex:0 1 auto" onclick="setTripStatsFilter('period','${id}')">${label}</button>`).join('')}
           </div>
         </div>
         ${s.period==='custom' ? `
           <div class="fg" style="margin:0"><label>من تاريخ</label><input type="date" value="${esc(s.dateFrom)}" onchange="setTripStatsFilter('dateFrom',this.value)"></div>
-          <div class="fg" style="margin:0"><label>إلى تاريخ</label><input type="date" value="${esc(s.dateTo)}" onchange="setTripStatsFilter('dateTo',this.value)"></div>` : ''}
+          <div class="fg" style="margin:0"><label>إلى تاريخ</label><input type="date" value="${esc(s.dateTo)}" onchange="setTripStatsFilter('dateTo',this.value)"></div>` : s.period==='fromFirstTrip' ? `
+          <div class="fg" style="margin:0"><label>تاريخ البداية التلقائي</label><input type="date" value="${esc(firstTripDate)}" readonly disabled></div>
+          <div class="fg" style="margin:0"><label>إلى غاية تاريخ</label><input type="date" value="${esc(s.dateTo)}" onchange="setTripStatsFilter('dateTo',this.value)" ${firstTripDate?'':'disabled'}></div>
+          <div class="ts-auto-start-note">${firstTripDate ? `📌 أول رحلة فعلية في النطاق المختار: <span class="num">${esc(firstTripDate)}</span>. البداية تُحدَّد تلقائيًا من هذا التاريخ، ويمكنك تعديل تاريخ النهاية فقط.` : '⚠️ لا توجد رحلات فعلية ضمن العميل أو السجل المختار لتحديد تاريخ البداية تلقائيًا.'}</div>` : ''}
         <div class="fg ts-wide" style="margin:0"><label>الشاحنة / الشاحنات</label>
           <div class="ts-truck-chips">
             <button class="rtab ${!s.truckIds.length?'on':''}" onclick="clearTripStatsTrucks()">كل الشاحنات</button>
@@ -2203,6 +2252,7 @@ function renderTripStats() {
       <div class="kpi gd"><div class="kl">متوسط الرحلة المؤكدة</div><div class="kv gd">${fDA(pricedTrips?amount/pricedTrips:0)}</div><div class="ks">${fN(pricedTrips)} رحلة بسعر مؤكد</div></div>
       <div class="kpi rd"><div class="kl">رحلات بسعر معلّق</div><div class="kv rd">${fN(pendingTrips)}</div><div class="ks">مستبعدة من الإيراد</div></div>
       <div class="kpi pp"><div class="kl">أيام العمل</div><div class="kv pp">${fN(days.size)}</div><div class="ks">آخر رحلة: ${last?fD(last):'—'}</div></div>
+      <div class="kpi gd"><div class="kl">أول رحلة في النطاق</div><div class="kv gd" style="font-size:14px">${firstTripDate?fD(firstTripDate):'—'}</div><div class="ks">بداية العمل المسجلة تلقائيًا</div></div>
     </div>
 
     ${!rows.length ? `
@@ -9088,7 +9138,7 @@ if (document.readyState === 'loading') {
     'إضافة عميل':'Ajouter un client','عميل جديد':'Nouveau client','مورد جديد':'Nouveau fournisseur','سجل جديد':'Nouveau dossier','يوم جديد':'Nouvelle journée','إدخال جديد':'Nouvelle saisie','صنف جديد':'Nouvel article','وحدة جديدة':'Nouvelle unité','مادة جديدة':'Nouvelle matière','فاتورة جديدة':'Nouvelle facture','دفعة جديدة':'Nouveau paiement','تسبيق جديد':'Nouvelle avance','فتح':'Ouvrir','إغلاق':'Fermer','تعديل':'Modifier','تعديل الدفعة':'Modifier le paiement','تعديل التسبيق':'Modifier l’avance','حذف':'Supprimer','حذف نهائي':'Suppression définitive','إلغاء':'Annuler','تسجيل':'Enregistrer','بحث':'Rechercher','طباعة':'Imprimer','تصدير':'Exporter','استيراد':'Importer','تحديد الكل':'Tout sélectionner','إنهاء التحديد':'Terminer la sélection','قفل':'Verrouiller','فتح للتعديل':'Déverrouiller pour modifier','قفل الكل':'Tout verrouiller','تصفير الفلاتر':'Réinitialiser les filtres','فحص الآن':'Vérifier maintenant','مسح المحلولة':'Effacer les éléments résolus','تصدير التقرير':'Exporter le rapport',
     'بحث بالاسم أو الهاتف':'Rechercher par nom ou téléphone','بحث بالاسم، الهاتف، طريقة الدفع، الملاحظة':'Rechercher par nom, téléphone, mode de paiement ou note','لا يوجد عملاء بعد':'Aucun client pour le moment','لا يوجد موردون':'Aucun fournisseur pour le moment','لا توجد نتائج':'Aucun résultat','غيّر الفلتر أو عبارة البحث':'Modifiez le filtre ou le texte recherché','جرب بحثاً آخر':'Essayez une autre recherche','اضغط "عميل جديد" للبدء':'Cliquez sur « Nouveau client » pour commencer','اضغط "مورد جديد" للبدء':'Cliquez sur « Nouveau fournisseur » pour commencer','لا توجد سجلات':'Aucun dossier','لا توجد مدفوعات':'Aucun paiement','لا توجد تسبيقات':'Aucune avance','لا توجد مدفوعات أو تسبيقات':'Aucun paiement ou avance','لا توجد تذكيرات حالياً':'Aucun rappel actuellement','لا توجد تنبيهات حالياً':'Aucune alerte actuellement','لا توجد شاحنات':'Aucun camion','لا توجد آلات':'Aucune machine','لا يوجد مخزون':'Aucun stock',
     'نقداً':'Espèces','نقدا':'Espèces','شيك':'Chèque','تحويل بنكي':'Virement bancaire','طريقة الدفع':'Mode de paiement','طريقة التحصيل':'Mode d’encaissement','دفعة عامة للعميل':'Paiement général du client','دفعة تخص سجلًا واحدًا':'Paiement affecté à un dossier','دفعة موزعة على عدة سجلات':'Paiement réparti entre plusieurs dossiers','كل سجلات العميل':'Tous les dossiers du client','السجل التابع للعميل':'Dossier du client','كل سجلات العميل المحدد':'Tous les dossiers du client sélectionné','اختر العميل أولاً':'Choisissez d’abord le client','اختر عميلاً صحيحاً':'Choisissez un client valide','اختر تاريخ العملية':'Choisissez la date de l’opération','أدخل مبلغاً صحيحاً':'Saisissez un montant valide','أدخل كمية صحيحة':'Saisissez une quantité valide','تم تسجيل الدفعة':'Paiement enregistré','تم تعديل الدفعة':'Paiement modifié','تم الحذف نهائياً':'Suppression définitive effectuée','فشل الحفظ — لم يتم تغيير البيانات':'Échec de l’enregistrement — aucune donnée modifiée','فشل التسجيل — لم يتم الحفظ':'Échec de l’enregistrement','فشل الحذف — العملية بقيت محفوظة':'Échec de la suppression — l’opération a été conservée','فشل تسجيل الدفعة':'Échec de l’enregistrement du paiement','لم يتم الحفظ':'Non enregistré','تحقق من البيانات':'Vérifiez les données',
-    'إحصائيات الرحلات':'Statistiques des trajets','نطاق الإحصاء':'Périmètre des statistiques','كل العملاء':'Tous les clients','كل المواد':'Toutes les matières','كل الشاحنات':'Tous les camions','الفترة':'Période','الكل':'Toutes','اليوم':"Aujourd’hui",'هذا الأسبوع':'Cette semaine','هذا الشهر':'Ce mois-ci','هذه السنة':'Cette année','فترة مخصصة':'Période personnalisée','من تاريخ':'Du','إلى تاريخ':'Au','من':'Du','إلى':'Au','الخدمة':'Service','الشاحنات:':'Camions :','العميل:':'Client :','السجل:':'Dossier :','المادة:':'Matière :','لا توجد شاحنات ذات رحلات داخل النطاق المختار':'Aucun camion avec des trajets dans le périmètre sélectionné','إجمالي الرحلات':'Total des trajets','إجمالي الإيراد المؤكد':'Revenu confirmé total','متوسط الرحلة المؤكدة':'Moyenne par trajet confirmé','رحلات بسعر معلّق':'Trajets à prix en attente','أيام العمل':'Jours travaillés','آخر رحلة':'Dernier trajet','النتيجة حسب الشاحنة':'Résultat par camion','النتيجة حسب السجل':'Résultat par dossier','النتيجة حسب المادة':'Résultat par matière','آخر الرحلات المطابقة':'Derniers trajets correspondants','لا توجد رحلات ضمن الاختيار الحالي':'Aucun trajet dans la sélection actuelle','غيّر الفترة أو العميل أو السجل أو المادة أو الشاحنات المختارة':'Modifiez la période, le client, le dossier, la matière ou les camions sélectionnés','إحصائيات هذا السجل':'Statistiques de ce dossier',
+    'إحصائيات الرحلات':'Statistiques des trajets','نطاق الإحصاء':'Périmètre des statistiques','كل العملاء':'Tous les clients','كل المواد':'Toutes les matières','كل الشاحنات':'Tous les camions','الفترة':'Période','الكل':'Toutes','اليوم':"Aujourd’hui",'هذا الأسبوع':'Cette semaine','هذا الشهر':'Ce mois-ci','هذه السنة':'Cette année','فترة مخصصة':'Période personnalisée','من أول رحلة تلقائيًا':'Depuis le premier trajet','تاريخ البداية التلقائي':'Date de début automatique','إلى غاية تاريخ':'Jusqu’au','أول رحلة فعلية في النطاق المختار':'Premier trajet effectif dans le périmètre sélectionné','البداية تُحدَّد تلقائيًا من هذا التاريخ، ويمكنك تعديل تاريخ النهاية فقط.':'Le début est déterminé automatiquement à partir de cette date ; vous pouvez modifier uniquement la date de fin.','لا توجد رحلات فعلية ضمن العميل أو السجل المختار لتحديد تاريخ البداية تلقائيًا.':'Aucun trajet effectif dans le client ou dossier sélectionné pour déterminer automatiquement la date de début.','أول رحلة في النطاق':'Premier trajet dans le périmètre','بداية العمل المسجلة تلقائيًا':'Début de travail enregistré automatiquement','من أول رحلة فعلية':'Depuis le premier trajet effectif','حدّد تاريخ النهاية للفترة من أول رحلة.':'Indiquez la date de fin pour la période depuis le premier trajet.','صيغة تاريخ النهاية غير صحيحة.':'Le format de la date de fin est incorrect.','تاريخ النهاية لا يمكن أن يكون قبل أول رحلة فعلية في النطاق المختار.':'La date de fin ne peut pas précéder le premier trajet effectif dans le périmètre sélectionné.','لا توجد رحلات فعلية لتحديد تاريخ البداية التلقائي. اختر عميلًا أو سجلًا يحتوي على رحلة مسجلة.':'Aucun trajet effectif pour déterminer la date de début automatique. Choisissez un client ou dossier contenant un trajet enregistré.','اختر العميل أولاً، ثم السجل التابع له أو كل سجلاته، وبعدها الشاحنة أو الشاحنات والمادة والفترة. يمكنك الحساب من أول رحلة فعلية تلقائيًا إلى تاريخ تحدده.':'Choisissez d’abord le client, puis son dossier ou tous ses dossiers, ensuite le ou les camions, la matière et la période. Vous pouvez calculer automatiquement depuis le premier trajet effectif jusqu’à la date choisie.','من تاريخ':'Du','إلى تاريخ':'Au','من':'Du','إلى':'Au','الخدمة':'Service','الشاحنات:':'Camions :','العميل:':'Client :','السجل:':'Dossier :','المادة:':'Matière :','لا توجد شاحنات ذات رحلات داخل النطاق المختار':'Aucun camion avec des trajets dans le périmètre sélectionné','إجمالي الرحلات':'Total des trajets','إجمالي الإيراد المؤكد':'Revenu confirmé total','متوسط الرحلة المؤكدة':'Moyenne par trajet confirmé','رحلات بسعر معلّق':'Trajets à prix en attente','أيام العمل':'Jours travaillés','آخر رحلة':'Dernier trajet','النتيجة حسب الشاحنة':'Résultat par camion','النتيجة حسب السجل':'Résultat par dossier','النتيجة حسب المادة':'Résultat par matière','آخر الرحلات المطابقة':'Derniers trajets correspondants','لا توجد رحلات ضمن الاختيار الحالي':'Aucun trajet dans la sélection actuelle','غيّر الفترة أو العميل أو السجل أو المادة أو الشاحنات المختارة':'Modifiez la période, le client, le dossier, la matière ou les camions sélectionnés','إحصائيات هذا السجل':'Statistiques de ce dossier',
     'تحصيلات العملاء':'Encaissements clients','تقرير مباشر يوضح العملاء الذين دفعوا، آخر دفعة، المجموع المحصّل، والمتبقي':'Rapport direct : clients payeurs, dernier paiement, total encaissé et solde restant','إجمالي المحصّل':'Total encaissé','عدد الدفعات':'Nombre de paiements','آخر تحصيل':'Dernier encaissement','رصيد زائد':'Crédit excédentaire','دفعوا':'Ont payé','عليهم متبقي':'Avec solde restant','عملاء دفعوا أكثر من المطلوب':'Clients ayant payé plus que le dû','فتح ملف العميل':'Ouvrir le dossier client','العميل غير موجود':'Client introuvable','الدفعة أو العميل غير موجود':'Paiement ou client introuvable','التسبيق غير موجود':'Avance introuvable',
     'ملف العميل التفصيلي':'Fiche client détaillée','تسوية السجل':'Règlement du dossier','إجمالي السجل':'Total du dossier','المسدد لهذا السجل فقط':'Payé pour ce dossier uniquement','المتبقي الحقيقي':'Solde réel restant','مجموع النقد':'Total espèces','مجموع الشيكات':'Total chèques','العمليات المرتبطة بالسجل':'Opérations liées au dossier','لا يمكن حذف هذا السجل':'Impossible de supprimer ce dossier','توجد عملية تحصيل مرتبطة به':'Une opération d’encaissement y est liée','عدّل توزيع الدفعات أو احذفها أولاً':'Modifiez la répartition des paiements ou supprimez-les d’abord',
     'المخزون والحركات':'Stock et mouvements','إجمالي الأصناف':'Total des articles','منخفض المخزون':'Stock faible','إجمالي الحركات':'Total des mouvements','الكمية الحالية':'Quantité actuelle','الحد الأدنى':'Minimum','زيادة المخزون':'Entrée de stock','نقصان المخزون':'Sortie de stock','بيع من المخزون':'Vente depuis le stock','إعادة الكمية للمخزون':'Retour de quantité au stock','مورد مسجّل':'Fournisseur enregistré','ملف المورد':'Fiche fournisseur','فواتير الشراء':'Factures d’achat','حساب المورد':'Compte fournisseur','دفعة للمورد':'Paiement fournisseur','تسبيق للمورد':'Avance fournisseur',
