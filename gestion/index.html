@@ -768,6 +768,25 @@ body.light-mode .theme-btn:hover { border-color: var(--gold2); background: var(-
 .tr-flt-btn.on{background:var(--rdim);border-color:var(--red);color:var(--red)}
 
 </style>
+
+<style id="trip-stats-styles">
+/* ══ TRIP STATISTICS — filters and responsive result tables ══ */
+.ts-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;}
+.ts-truck-chips{display:flex;gap:6px;flex-wrap:wrap;padding:9px;background:rgba(255,255,255,.03);border:1px solid var(--glass-bdr,var(--bdr));border-radius:var(--rs);}
+.ts-truck-chips .rtab{flex:0 1 auto;min-height:31px;}
+.ts-meta{font-size:11px;color:var(--tx3);line-height:1.7;}
+.ts-section-title{padding:9px 13px;background:var(--bg4);border-bottom:1px solid var(--bdr);font-size:11px;font-weight:800;color:var(--tx2);}
+.ts-inline-note{padding:9px 12px;background:var(--bdim);border:1px solid rgba(79,142,247,.22);border-radius:var(--rs);font-size:11px;color:var(--tx2);line-height:1.65;}
+.ts-validation{padding:12px 14px;background:var(--rdim);border:1px solid rgba(240,82,82,.45);border-radius:var(--rs);color:var(--red);font-size:12px;font-weight:800;line-height:1.7;}
+.ts-pending-note{padding:10px 12px;background:var(--rdim);border:1px solid rgba(240,82,82,.35);border-radius:var(--rs);font-size:11px;font-weight:800;color:var(--red);line-height:1.7;margin-bottom:13px;}
+.ts-pending-note b{font-family:'JetBrains Mono','Courier New',monospace;}
+.ts-legacy-note{padding:10px 12px;background:var(--bdim);border:1px solid rgba(79,142,247,.32);border-radius:var(--rs);font-size:11px;font-weight:800;color:var(--blue);line-height:1.7;margin-bottom:13px;}
+.ts-legacy-note b{font-family:'JetBrains Mono','Courier New',monospace;}
+.ts-money-pending{color:var(--red);font-size:10px;font-weight:900;white-space:nowrap;}
+@media(max-width:720px){.ts-filter-grid{grid-template-columns:1fr 1fr;}.ts-filter-grid .ts-wide{grid-column:1/-1;}.ts-results-grid{grid-template-columns:1fr!important;}}
+@media(max-width:420px){.ts-filter-grid{grid-template-columns:1fr;}.ts-filter-grid .ts-wide{grid-column:auto;}}
+</style>
+
 </head><body class="light-mode">
 
 <div id="app">
@@ -783,6 +802,8 @@ body.light-mode .theme-btn:hover { border-color: var(--gold2); background: var(-
       <button class="si on" id="sn-dash" onclick="nav('dash')">      <span class="si-ic">📊</span>لوحة التحكم</button>
       <div class="sb-sec">العمليات</div>
       <button class="si" id="sn-clients" onclick="nav('clients')">   <span class="si-ic">👥</span>العملاء</button>
+      <button class="si" id="sn-collections" onclick="nav('collections')"><span class="si-ic">💰</span>التحصيلات</button>
+      <button class="si" id="sn-tripstats" onclick="nav('tripstats')"><span class="si-ic">📈</span>إحصائيات الرحلات</button>
       <button class="si" id="sn-advances" onclick="nav('advances')">  <span class="si-ic">💳</span>التسبيقات</button>
       <button class="si" id="sn-stock" onclick="nav('stock')">     <span class="si-ic">📦</span>المخزون</button>
       <button class="si" id="sn-suppliers" onclick="nav('suppliers')"> <span class="si-ic">🏭</span>الموردون</button>
@@ -834,7 +855,7 @@ body.light-mode .theme-btn:hover { border-color: var(--gold2); background: var(-
       <div class="kv gd">21 173 390,00</div>
       <div class="ks">5 عميل · 10 سجل</div>
     </div>
-    <div class="kpi gn" onclick="nav('clients')" style="cursor:pointer">
+    <div class="kpi gn" onclick="nav('collections')" style="cursor:pointer">
       <div class="kl">المحصّل</div>
       <div class="kv gn">5 200 000,00</div>
       <div class="ks">25% من الإجمالي</div>
@@ -844,7 +865,7 @@ body.light-mode .theme-btn:hover { border-color: var(--gold2); background: var(-
       <div class="kv rd">15 973 390,00</div>
       <div class="ks">5 عميل غير مسدد</div>
     </div>
-    <div class="kpi bl">
+    <div class="kpi bl" onclick="nav('tripstats')" style="cursor:pointer">
       <div class="kl">الرحلات / الساعات</div>
       <div class="kv bl">5 684</div>
       <div class="ks">1 979 ساعة آلات</div>
@@ -1506,6 +1527,7 @@ let V = 'dash';
 const PI = {
   dash:      { t:'لوحة التحكم',    s:'نظرة شاملة على النشاط'       },
   clients:   { t:'العملاء',         s:'إدارة العملاء والسجلات'       },
+  tripstats: { t:'إحصائيات الرحلات', s:'تحليل الرحلات حسب الشاحنة ثم العميل والسجل التابع له والمادة والفترة' },
   advances:  { t:'التسبيقات',       s:'تسبيقات العملاء'              },
   stock:     { t:'المخزون',          s:'إدارة المخزون والحركات'       },
   suppliers: { t:'الموردون',         s:'إدارة الموردين والمشتريات'    },
@@ -1526,6 +1548,8 @@ function nav(v, p={}) {
   closeSB();
   if (v==='dash')      renderDash();
   else if (v==='clients')   renderClients(p);
+  else if (v==='collections') renderCollections(p);
+  else if (v==='tripstats') renderTripStats(p);
   else if (v==='advances')  renderAdvances();
   else if (v==='stock')     renderStock();
   else if (v==='suppliers') renderSuppliers(p);
@@ -1670,7 +1694,7 @@ function renderDash() {
       <div class="kv gd">${fDA(gTot)}</div>
       <div class="ks">${clients.length} عميل · ${records.length} سجل</div>
     </div>
-    <div class="kpi gn" onclick="nav('clients')" style="cursor:pointer">
+    <div class="kpi gn" onclick="nav('collections')" style="cursor:pointer">
       <div class="kl">المحصّل</div>
       <div class="kv gn">${fDA(gPaid)}</div>
       <div class="ks">${pct}% من الإجمالي</div>
@@ -1680,7 +1704,7 @@ function renderDash() {
       <div class="kv rd">${fDA(gRem)}</div>
       <div class="ks">${unpaid.length} عميل غير مسدد</div>
     </div>
-    <div class="kpi bl">
+    <div class="kpi bl" onclick="nav('tripstats')" style="cursor:pointer">
       <div class="kl">الرحلات / الساعات</div>
       <div class="kv bl">${fN(gTrips)}</div>
       <div class="ks">${fN(gHours)} ساعة آلات</div>
@@ -1817,6 +1841,530 @@ function renderDash() {
 
 // CLIENTS LIST
 let csq='', openCid=null, activeRid=null;
+
+
+
+// ══════════════════════════════════════════
+// TRIP STATISTICS — حساب مباشر من entries / cols بدون تخزين أو مزامنة إضافية
+// ══════════════════════════════════════════
+function _tripStatsDefaults() {
+  return { clientId:'', recordId:'', material:'', truckIds:[], period:'all', dateFrom:'', dateTo:'' };
+}
+function tripStatsState() {
+  if (!window._tripStatsState || typeof window._tripStatsState !== 'object') {
+    window._tripStatsState = _tripStatsDefaults();
+  }
+  const s = window._tripStatsState;
+  if (!Array.isArray(s.truckIds)) s.truckIds = [];
+  return s;
+}
+function _tsLocalISO(d) {
+  const x = new Date(d);
+  const mm = String(x.getMonth()+1).padStart(2,'0');
+  const dd = String(x.getDate()).padStart(2,'0');
+  return `${x.getFullYear()}-${mm}-${dd}`;
+}
+function _tsIsISODate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value||''))) return false;
+  const d = new Date(`${value}T00:00:00`);
+  return !Number.isNaN(d.getTime()) && _tsLocalISO(d) === value;
+}
+function _tsDateRange(s) {
+  const now = new Date();
+  const today = _tsLocalISO(now);
+  if (s.period === 'today') return { from:today, to:today, label:'اليوم' };
+  if (s.period === 'week') {
+    const start = new Date(now);
+    const day = start.getDay() || 7; // الأسبوع يبدأ يوم الاثنين
+    start.setDate(start.getDate() - day + 1);
+    return { from:_tsLocalISO(start), to:today, label:'هذا الأسبوع' };
+  }
+  if (s.period === 'month') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { from:_tsLocalISO(start), to:today, label:'هذا الشهر' };
+  }
+  if (s.period === 'year') {
+    const start = new Date(now.getFullYear(), 0, 1);
+    return { from:_tsLocalISO(start), to:today, label:'هذه السنة' };
+  }
+  if (s.period === 'custom') {
+    return { from:s.dateFrom||'', to:s.dateTo||'', label:'فترة مخصصة' };
+  }
+  return { from:'', to:'', label:'كل الفترات' };
+}
+function _tsValidateRange(s) {
+  if (s.period !== 'custom') return '';
+  if (!s.dateFrom || !s.dateTo) return 'حدّد تاريخ البداية وتاريخ النهاية للفترة المخصصة.';
+  if (!_tsIsISODate(s.dateFrom) || !_tsIsISODate(s.dateTo)) return 'صيغة تاريخ الفترة المخصصة غير صحيحة.';
+  if (s.dateFrom > s.dateTo) return 'تاريخ البداية يجب أن يكون قبل تاريخ النهاية أو مساويًا له.';
+  return '';
+}
+function _tsRecords(s) {
+  let rs = records.filter(r=>r.type==='trucks');
+  if (s.clientId) rs = rs.filter(r=>r.clientId===s.clientId);
+  if (s.recordId) rs = rs.filter(r=>r.id===s.recordId);
+  return rs;
+}
+function _tsMaterialName(e) {
+  const p = prices.find(x=>x.id===e.materialId && x.recordId===e.recordId && x.type==='mat_def')
+         || prices.find(x=>x.id===e.materialId);
+  return (p?.name || 'مادة غير معرّفة').toString();
+}
+function _tsTruckNames(s, scopedEntries) {
+  let sourceEntries = Array.isArray(scopedEntries)
+    ? scopedEntries.slice()
+    : entries.filter(e=>e.type==='truck' && _tsRecords(s).some(r=>r.id===e.recordId));
+  if (s.material) sourceEntries = sourceEntries.filter(e=>_tsMaterialName(e)===s.material);
+  const set = new Set();
+  sourceEntries.forEach(e=>Object.entries(e.cols||{}).forEach(([truck,rawQty])=>{
+    if (truck && (parseFloat(rawQty)||0) > 0) set.add(truck);
+  }));
+  return [...set].sort((a,b)=>a.localeCompare(b,'ar'));
+}
+function _tsSafeArg(value) {
+  return JSON.stringify(String(value)).replace(/"/g,'&quot;');
+}
+function _tsEntryPricing(e) {
+  // New truck entries store a price snapshot. Older entries deliberately keep
+  // their previous behaviour and read the current material price; they are
+  // flagged in the report so the source of the value is never hidden.
+  const legacy = !e?.priceCapturedAt;
+
+  // Use the program's central price calculator when available so this report
+  // follows exactly the same pending-price rule as client statements/invoices.
+  try {
+    if (typeof window.calcE === 'function') {
+      const result = window.calcE(e);
+      if (result && typeof result === 'object') {
+        return { price: result.pending ? 0 : (parseFloat(result.price)||0), pending:!!result.pending, legacy };
+      }
+    }
+  } catch (err) {}
+
+  // Defensive fallback for startup order; it must never treat an unknown price
+  // as confirmed financial income.
+  if (e?.priceStatus === 'pending') return {price:0,pending:true,legacy};
+  if (e?.unitPrice !== undefined && e?.unitPrice !== null && e?.unitPrice !== '') {
+    return {price:parseFloat(e.unitPrice)||0,pending:false,legacy};
+  }
+  const def = prices.find(p=>p.id===e?.materialId && p.recordId===e?.recordId && p.type==='mat_def')
+           || prices.find(p=>p.id===e?.materialId);
+  if (!def || def.priceStatus === 'pending') return {price:0,pending:true,legacy};
+  return {price:parseFloat(def.price)||0,pending:false,legacy};
+}
+function setTripStatsFilter(key, value) {
+  const s = tripStatsState();
+  s[key] = value;
+  if (key === 'clientId') {
+    s.recordId='';
+    s.material='';
+    s.truckIds=[];
+  }
+  if (key === 'recordId') {
+    const r = records.find(x=>x.id===value);
+    if (r) s.clientId = r.clientId;
+    s.material='';
+    s.truckIds=[];
+  }
+  if (key === 'material') s.truckIds=[];
+  if (key === 'period' && value === 'custom') {
+    const today = _tsLocalISO(new Date());
+    if (!s.dateFrom) s.dateFrom = today;
+    if (!s.dateTo) s.dateTo = today;
+  }
+  renderTripStats();
+}
+function toggleTripStatsTruck(name) {
+  const s = tripStatsState();
+  const idx = s.truckIds.indexOf(name);
+  if (idx >= 0) s.truckIds.splice(idx,1); else s.truckIds.push(name);
+  renderTripStats();
+}
+function clearTripStatsTrucks() {
+  tripStatsState().truckIds=[];
+  renderTripStats();
+}
+function resetTripStats() {
+  window._tripStatsState=_tripStatsDefaults();
+  renderTripStats();
+}
+function printTripStats() {
+  const error = _tsValidateRange(tripStatsState());
+  if (error) {
+    if (typeof T === 'function') T('⚠️ '+error,'warning');
+    return;
+  }
+  window.print();
+}
+function openTripStats(seed={}) {
+  const s = tripStatsState();
+  if (seed.clientId !== undefined || seed.recordId !== undefined) {
+    s.material='';
+    s.truckIds=[];
+  }
+  if (seed.clientId !== undefined) s.clientId = seed.clientId || '';
+  if (seed.recordId !== undefined) {
+    s.recordId = seed.recordId || '';
+    const record = records.find(x=>x.id===s.recordId);
+    if (record) s.clientId = record.clientId || '';
+  }
+  if (seed.material !== undefined) s.material = seed.material || '';
+  if (Array.isArray(seed.truckIds)) s.truckIds = seed.truckIds.slice();
+  if (seed.period) s.period = seed.period;
+  nav('tripstats');
+}
+function _tsRows(s) {
+  if (_tsValidateRange(s)) return [];
+  const scope = _tsRecords(s);
+  const recordMap = new Map(scope.map(r=>[r.id,r]));
+  const clientMap = new Map(clients.map(c=>[c.id,c]));
+  const dr = _tsDateRange(s);
+  const rows = [];
+  entries.filter(e=>e.type==='truck' && recordMap.has(e.recordId)).forEach(e=>{
+    const date = e.date || '';
+    if (dr.from && (!date || date < dr.from)) return;
+    if (dr.to && (!date || date > dr.to)) return;
+    const material = _tsMaterialName(e);
+    if (s.material && material !== s.material) return;
+    const rec = recordMap.get(e.recordId);
+    const client = clientMap.get(rec.clientId);
+    const pricing = _tsEntryPricing(e);
+    Object.entries(e.cols||{}).forEach(([truck, rawQty])=>{
+      const qty = parseFloat(rawQty)||0;
+      if (!qty) return;
+      if (s.truckIds.length && !s.truckIds.includes(truck)) return;
+      rows.push({
+        entryId:e.id, date, truck, qty,
+        price:pricing.price,
+        amount:pricing.pending ? 0 : qty*pricing.price,
+        pending:pricing.pending,
+        legacyPrice:pricing.legacy,
+        material, materialId:e.materialId||'', recordId:rec.id, recordName:rec.name||'—',
+        clientId:rec.clientId, clientName:client?.name||'عميل محذوف', dest:e.dest||''
+      });
+    });
+  });
+  return rows.sort((a,b)=>(b.date||'').localeCompare(a.date||'') || a.truck.localeCompare(b.truck,'ar'));
+}
+function _tsGroup(rows, keyFn) {
+  const map = new Map();
+  rows.forEach(row=>{
+    const key = keyFn(row);
+    if (!map.has(key)) {
+      map.set(key,{ key, trips:0, pricedTrips:0, pendingTrips:0, legacyTrips:0, amount:0, days:new Set(), records:new Set(), trucks:new Set(), last:'' });
+    }
+    const g = map.get(key);
+    g.trips += row.qty;
+    if (row.pending) g.pendingTrips += row.qty;
+    else {
+      g.pricedTrips += row.qty;
+      g.amount += row.amount;
+    }
+    if (row.legacyPrice) g.legacyTrips += row.qty;
+    if (row.date) {
+      g.days.add(row.date);
+      if (row.date > g.last) g.last=row.date;
+    }
+    g.records.add(row.recordId);
+    g.trucks.add(row.truck);
+  });
+  return [...map.values()];
+}
+function _tsScopeText(s, range) {
+  const c = clients.find(x=>x.id===s.clientId);
+  const r = records.find(x=>x.id===s.recordId);
+  const parts=[];
+  if (c) parts.push('العميل: '+c.name);
+  if (r) parts.push('السجل: '+r.name);
+  else if (c) parts.push('كل سجلات العميل');
+  if (s.material) parts.push('المادة / الخدمة: '+s.material);
+  if (s.truckIds.length) parts.push('الشاحنات: '+s.truckIds.join(' + '));
+  if (s.period === 'custom' && range.from && range.to) parts.push(`من ${range.from} إلى ${range.to}`);
+  else parts.push(range.label);
+  return parts.join(' · ');
+}
+function _tsPendingCell(row) {
+  return row.pending ? '<span class="ts-money-pending">⚠ لم يُتفق عليه</span>' : `<span class="num" style="color:var(--green)">${fDA(row.amount)}</span>`;
+}
+function renderTripStats() {
+  const s = tripStatsState();
+  const allTruckRecords = records.filter(r=>r.type==='trucks');
+  const scopedRecords = _tsRecords(s);
+
+  // A record always belongs to one client. Do not keep an orphan selection
+  // after the user changes that client.
+  if (s.recordId && !scopedRecords.some(r=>r.id===s.recordId)) {
+    s.recordId='';
+    s.material='';
+    s.truckIds=[];
+    return renderTripStats();
+  }
+
+  const scopedEntries = entries.filter(e=>e.type==='truck' && scopedRecords.some(r=>r.id===e.recordId));
+  const materialNames = [...new Set(scopedEntries.map(_tsMaterialName))].sort((a,b)=>a.localeCompare(b,'ar'));
+  if (s.material && !materialNames.includes(s.material)) {
+    s.material='';
+    s.truckIds=[];
+    return renderTripStats();
+  }
+
+  // Truck choices are limited to trucks that have actual registered trips
+  // inside the selected client / record / material scope.
+  const truckNames = _tsTruckNames(s, scopedEntries);
+  s.truckIds = s.truckIds.filter(t=>truckNames.includes(t));
+
+  const validation = _tsValidateRange(s);
+  const range = _tsDateRange(s);
+  const rows = validation ? [] : _tsRows(s);
+  const trips = rows.reduce((sum,x)=>sum+x.qty,0);
+  const pricedTrips = rows.filter(x=>!x.pending).reduce((sum,x)=>sum+x.qty,0);
+  const pendingTrips = rows.filter(x=>x.pending).reduce((sum,x)=>sum+x.qty,0);
+  const legacyTrips = rows.filter(x=>x.legacyPrice).reduce((sum,x)=>sum+x.qty,0);
+  const amount = rows.reduce((sum,x)=>sum+x.amount,0);
+  const days = new Set(rows.map(x=>x.date).filter(Boolean));
+  const last = rows.reduce((m,x)=>!m || (x.date||'') > m ? (x.date||'') : m, '');
+  const truckGroups = _tsGroup(rows,x=>x.truck).sort((a,b)=>b.trips-a.trips || b.amount-a.amount);
+  const recordGroups = _tsGroup(rows,x=>x.recordId).sort((a,b)=>b.trips-a.trips || b.amount-a.amount);
+  const materialGroups = _tsGroup(rows,x=>x.material).sort((a,b)=>b.trips-a.trips || b.amount-a.amount);
+  const recordInfo = new Map(records.map(r=>[r.id,r]));
+  const clientInfo = new Map(clients.map(c=>[c.id,c]));
+  const clientOptions = clients.filter(c=>allTruckRecords.some(r=>r.clientId===c.id)).sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+
+  document.getElementById('tb-act').innerHTML = `
+    <button class="btn btn-sec btn-sm" onclick="resetTripStats()">↺ تصفير الفلاتر</button>
+    <button class="btn btn-gold btn-sm" onclick="printTripStats()">🖨 طباعة</button>`;
+
+  const option = (value,label,selected) => `<option value="${esc(value)}"${selected?' selected':''}>${esc(label)}</option>`;
+  document.getElementById('content').innerHTML = `
+  <div class="ph">
+    <div>
+      <h1>📈 إحصائيات الرحلات</h1>
+      <p>اختر العميل أولاً، ثم السجل التابع له أو كل سجلاته، وبعدها الشاحنة أو الشاحنات والمادة والفترة. النتيجة تُحسب من الرحلات المسجلة فقط.</p>
+    </div>
+  </div>
+
+  <div class="cp" style="margin-bottom:13px">
+    <div class="ts-section-title">🎯 نطاق الإحصاء</div>
+    <div style="padding:12px 13px">
+      <div class="ts-filter-grid">
+        <div class="fg" style="margin:0"><label>العميل</label>
+          <select onchange="setTripStatsFilter('clientId',this.value)">
+            ${option('','كل العملاء',!s.clientId)}
+            ${clientOptions.map(c=>option(c.id,c.name,s.clientId===c.id)).join('')}
+          </select>
+        </div>
+        <div class="fg" style="margin:0"><label>السجل التابع للعميل</label>
+          <select onchange="setTripStatsFilter('recordId',this.value)" ${!s.clientId?'disabled style="opacity:.55;cursor:not-allowed"':''}>
+            ${option('', s.clientId ? 'كل سجلات العميل المحدد' : 'اختر العميل أولاً', !s.recordId)}
+            ${scopedRecords.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar')).map(r=>option(r.id,r.name,s.recordId===r.id)).join('')}
+          </select>
+          <div class="hint">${s.clientId ? 'تظهر هنا سجلات العميل المختار فقط.' : 'اختر العميل لتظهر سجلاته فقط.'}</div>
+        </div>
+        <div class="fg" style="margin:0"><label>المادة / الخدمة</label>
+          <select onchange="setTripStatsFilter('material',this.value)">
+            ${option('','كل المواد / الخدمات',!s.material)}
+            ${materialNames.map(m=>option(m,m,s.material===m)).join('')}
+          </select>
+        </div>
+        <div class="fg ts-wide" style="margin:0"><label>الفترة</label>
+          <div class="tabs" style="margin:0;flex-wrap:wrap">
+            ${[['all','الكل'],['today','اليوم'],['week','هذا الأسبوع'],['month','هذا الشهر'],['year','هذه السنة'],['custom','مخصصة']].map(([id,label])=>`<button class="tab ${s.period===id?'on':''}" style="flex:0 1 auto" onclick="setTripStatsFilter('period','${id}')">${label}</button>`).join('')}
+          </div>
+        </div>
+        ${s.period==='custom' ? `
+          <div class="fg" style="margin:0"><label>من تاريخ</label><input type="date" value="${esc(s.dateFrom)}" onchange="setTripStatsFilter('dateFrom',this.value)"></div>
+          <div class="fg" style="margin:0"><label>إلى تاريخ</label><input type="date" value="${esc(s.dateTo)}" onchange="setTripStatsFilter('dateTo',this.value)"></div>` : ''}
+        <div class="fg ts-wide" style="margin:0"><label>الشاحنة / الشاحنات</label>
+          <div class="ts-truck-chips">
+            <button class="rtab ${!s.truckIds.length?'on':''}" onclick="clearTripStatsTrucks()">كل الشاحنات</button>
+            ${truckNames.map(tr=>`<button class="rtab ${s.truckIds.includes(tr)?'on':''}" onclick="toggleTripStatsTruck(${_tsSafeArg(tr)})">🚛 ${esc(tr)}</button>`).join('') || '<span style="font-size:11px;color:var(--tx3)">لا توجد شاحنات ذات رحلات داخل النطاق المختار.</span>'}
+          </div>
+          <div class="hint">تظهر هنا فقط الشاحنات التي لديها رحلات مسجلة ضمن العميل والسجل والمادة المختارة. يمكنك اختيار شاحنة واحدة أو عدة شاحنات معًا.</div>
+        </div>
+      </div>
+      <div class="ts-inline-note" style="margin-top:11px">📌 ${esc(_tsScopeText(s,range))}</div>
+    </div>
+  </div>
+
+  ${validation ? `
+    <div class="ts-validation">⚠️ ${esc(validation)} لم يتم حساب أي نتيجة حتى تصحيح الفترة.</div>
+  ` : `
+    ${pendingTrips ? `<div class="ts-pending-note">⚠️ <b>${fN(pendingTrips)}</b> رحلة لها سعر غير متفق عليه أو غير معرّف. تُحتسب في عدد الرحلات وأيام العمل، لكنها <b>لا تدخل إطلاقًا</b> في إجمالي الإيراد أو متوسط الإيراد.</div>` : ''}
+    ${legacyTrips ? `<div class="ts-legacy-note">ℹ️ <b>${fN(legacyTrips)}</b> رحلة قديمة لا تملك سعرًا مثبتًا وقت التسجيل؛ إيرادها يُقرأ من سعر المادة الحالي. الرحلات الجديدة تُثبَّت أسعارها تلقائيًا عند إنشاء اليوم ولا تتغير عند تعديل سعر المادة لاحقًا.</div>` : ''}
+    <div class="kgrid" style="margin-bottom:13px">
+      <div class="kpi bl"><div class="kl">إجمالي الرحلات</div><div class="kv bl">${fN(trips)}</div><div class="ks">${truckGroups.length} شاحنة مطابقة</div></div>
+      <div class="kpi gn"><div class="kl">إجمالي الإيراد المؤكد</div><div class="kv gn">${fDA(amount)}</div><div class="ks">للرحلات ذات السعر المؤكد فقط</div></div>
+      <div class="kpi gd"><div class="kl">متوسط الرحلة المؤكدة</div><div class="kv gd">${fDA(pricedTrips?amount/pricedTrips:0)}</div><div class="ks">${fN(pricedTrips)} رحلة بسعر مؤكد</div></div>
+      <div class="kpi rd"><div class="kl">رحلات بسعر معلّق</div><div class="kv rd">${fN(pendingTrips)}</div><div class="ks">مستبعدة من الإيراد</div></div>
+      <div class="kpi pp"><div class="kl">أيام العمل</div><div class="kv pp">${fN(days.size)}</div><div class="ks">آخر رحلة: ${last?fD(last):'—'}</div></div>
+    </div>
+
+    ${!rows.length ? `
+      <div class="empty card"><div class="empty-ic">📈</div><h3>لا توجد رحلات ضمن الاختيار الحالي</h3><p>غيّر الفترة أو العميل أو السجل أو المادة أو الشاحنات المختارة.</p></div>` : `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px" class="ts-results-grid">
+        <div class="cp">
+          <div class="ts-section-title">🚛 النتيجة حسب الشاحنة</div>
+          <div class="tw" style="border:0;border-radius:0"><table class="tbl" style="min-width:610px"><thead><tr><th class="tl">الشاحنة</th><th>الرحلات</th><th>معلّقة</th><th>الإيراد المؤكد</th><th>أيام العمل</th><th>آخر رحلة</th></tr></thead><tbody>
+            ${truckGroups.map(g=>`<tr><td class="tl"><strong>${esc(g.key)}</strong></td><td class="num">${fN(g.trips)}</td><td class="num" style="color:${g.pendingTrips?'var(--red)':'var(--tx3)'}">${fN(g.pendingTrips)}</td><td class="num" style="color:var(--green)">${fDA(g.amount)}</td><td>${fN(g.days.size)}</td><td>${g.last?fD(g.last):'—'}</td></tr>`).join('')}
+            <tr class="ttr"><td class="tl">الإجمالي</td><td class="num">${fN(trips)}</td><td class="num">${fN(pendingTrips)}</td><td class="num">${fDA(amount)}</td><td>${fN(days.size)}</td><td>${last?fD(last):'—'}</td></tr>
+          </tbody></table></div>
+        </div>
+        <div class="cp">
+          <div class="ts-section-title">📋 النتيجة حسب السجل</div>
+          <div class="tw" style="border:0;border-radius:0"><table class="tbl" style="min-width:640px"><thead><tr><th class="tl">السجل</th><th class="tl">العميل</th><th>الرحلات</th><th>معلّقة</th><th>الإيراد المؤكد</th><th>شاحنات</th></tr></thead><tbody>
+            ${recordGroups.map(g=>{ const r=recordInfo.get(g.key); const c=clientInfo.get(r?.clientId); return `<tr><td class="tl"><strong>${esc(r?.name||'سجل محذوف')}</strong></td><td class="tl">${esc(c?.name||'—')}</td><td class="num">${fN(g.trips)}</td><td class="num" style="color:${g.pendingTrips?'var(--red)':'var(--tx3)'}">${fN(g.pendingTrips)}</td><td class="num" style="color:var(--green)">${fDA(g.amount)}</td><td>${fN(g.trucks.size)}</td></tr>`; }).join('')}
+          </tbody></table></div>
+        </div>
+      </div>
+      <div class="ts-results-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="cp">
+          <div class="ts-section-title">📦 النتيجة حسب المادة / الخدمة</div>
+          <div class="tw" style="border:0;border-radius:0"><table class="tbl" style="min-width:510px"><thead><tr><th class="tl">المادة / الخدمة</th><th>الرحلات</th><th>معلّقة</th><th>الإيراد المؤكد</th><th>السجلات</th></tr></thead><tbody>
+            ${materialGroups.map(g=>`<tr><td class="tl"><strong>${esc(g.key)}</strong></td><td class="num">${fN(g.trips)}</td><td class="num" style="color:${g.pendingTrips?'var(--red)':'var(--tx3)'}">${fN(g.pendingTrips)}</td><td class="num" style="color:var(--green)">${fDA(g.amount)}</td><td>${fN(g.records.size)}</td></tr>`).join('')}
+          </tbody></table></div>
+        </div>
+        <div class="cp">
+          <div class="ts-section-title">🕒 آخر الرحلات المطابقة</div>
+          <div class="tw" style="border:0;border-radius:0"><table class="tbl" style="min-width:680px"><thead><tr><th>التاريخ</th><th class="tl">الشاحنة</th><th class="tl">السجل</th><th class="tl">المادة</th><th>الرحلات</th><th>الإيراد</th></tr></thead><tbody>
+            ${rows.slice(0,50).map(x=>`<tr><td>${x.date?fD(x.date):'—'}</td><td class="tl">${esc(x.truck)}</td><td class="tl">${esc(x.recordName)}</td><td class="tl">${esc(x.material)}</td><td class="num">${fN(x.qty)}</td><td>${_tsPendingCell(x)}</td></tr>`).join('')}
+          </tbody></table></div>
+        </div>
+      </div>`}
+  `}
+  `;
+}
+
+
+// ── Collections / تحصيلات العملاء ──
+function getClientCollections(cid) {
+  const payRows = payments.filter(p=>p.clientId===cid).map(p=>({
+    id:p.id, kind:'دفعة', amount:parseFloat(p.amount)||0, date:p.date||'', method:p.method||'', note:p.note||'', createdAt:p.createdAt||''
+  }));
+  const advRows = advances.filter(a=>a.clientId===cid && a.status!=='X').map(a=>({
+    id:a.id, kind:a.type||'تسبيق', amount:parseFloat(a.amount)||0, date:a.date||'', method:'', note:a.note||'', createdAt:a.createdAt||''
+  }));
+  const rows = payRows.concat(advRows).sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.createdAt||'').localeCompare(a.createdAt||''));
+  const amount = rows.reduce((sum,x)=>sum+(parseFloat(x.amount)||0),0);
+  const last = rows.length ? rows[0] : null;
+  return { rows, amount, last, payCount:payRows.length, advCount:advRows.length };
+}
+
+function renderCollections(p={}) {
+  const q = (p.q || window._collectionsQ || '').toString().trim().toLowerCase();
+  const filter = p.filter || window._collectionsFilter || 'paid';
+  window._collectionsQ = q; window._collectionsFilter = filter;
+
+  const all = clients.map(c => {
+    const t = getCT(c.id);
+    const col = getClientCollections(c.id);
+    return { c, t, col };
+  });
+
+  const totalCollected = all.reduce((s,x)=>s+x.col.amount,0);
+  const totalRemain = all.reduce((s,x)=>s+Math.max(0,x.t.remain),0);
+  const paidClients = all.filter(x=>x.col.amount>0).length;
+  const overpaidClients = all.filter(x=>x.t.overpaid>0).length;
+
+  let list = all.filter(x => {
+    if (filter === 'paid') return x.col.amount > 0;
+    if (filter === 'unpaid') return x.t.remain > 0;
+    if (filter === 'overpaid') return x.t.overpaid > 0;
+    return true;
+  });
+  if (q) {
+    list = list.filter(x => {
+      const hay = [
+        x.c.name, x.c.phone, x.c.address,
+        x.col.last?.method, x.col.last?.note, x.col.last?.kind
+      ].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }
+  list.sort((a,b)=>(b.col.last?.date||'').localeCompare(a.col.last?.date||'') || b.col.amount-a.col.amount);
+
+  document.getElementById('tb-act').innerHTML = `
+    <button class="btn btn-sec btn-sm" onclick="nav('clients')">👥 العملاء</button>
+    <button class="btn btn-gold btn-sm" onclick="window.print()">🖨 طباعة</button>`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="ph">
+    <div>
+      <h1>💰 التحصيلات</h1>
+      <p>تقرير مباشر يوضح العملاء الذين دفعوا، آخر دفعة، المجموع المحصّل، والمتبقي.</p>
+    </div>
+  </div>
+
+  <div class="kgrid" style="margin-bottom:13px">
+    <div class="kpi gn"><div class="kl">إجمالي المحصّل</div><div class="kv gn">${fDA(totalCollected)}</div><div class="ks">${paidClients} عميل دفعوا أموالاً</div></div>
+    <div class="kpi rd"><div class="kl">المتبقي عند العملاء</div><div class="kv rd">${fDA(totalRemain)}</div><div class="ks">${all.filter(x=>x.t.remain>0).length} عميل عليهم رصيد</div></div>
+    <div class="kpi bl"><div class="kl">عدد الدفعات</div><div class="kv bl">${fN(payments.length + advances.filter(a=>a.status!=='X').length)}</div><div class="ks">دفعات + تسبيقات غير ملغاة</div></div>
+    <div class="kpi pp"><div class="kl">رصيد زائد</div><div class="kv pp">${fN(overpaidClients)}</div><div class="ks">عملاء دفعوا أكثر من المطلوب</div></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab ${filter==='paid'?'on':''}" onclick="window._collectionsFilter='paid';renderCollections()">دفعوا</button>
+    <button class="tab ${filter==='unpaid'?'on':''}" onclick="window._collectionsFilter='unpaid';renderCollections()">عليهم متبقي</button>
+    <button class="tab ${filter==='overpaid'?'on':''}" onclick="window._collectionsFilter='overpaid';renderCollections()">رصيد زائد</button>
+    <button class="tab ${filter==='all'?'on':''}" onclick="window._collectionsFilter='all';renderCollections()">الكل</button>
+  </div>
+
+  <div class="srch">
+    <span>🔎</span>
+    <input value="${esc(q)}" placeholder="بحث بالاسم، الهاتف، طريقة الدفع، الملاحظة..." oninput="window._collectionsQ=this.value;renderCollections()">
+  </div>
+
+  <div class="tw">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th class="tl">العميل</th>
+          <th>المحصّل</th>
+          <th>الدفعات</th>
+          <th>آخر تحصيل</th>
+          <th>المتبقي</th>
+          <th>الحالة</th>
+          <th>إجراء</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${list.length ? list.map(x => {
+          const last = x.col.last;
+          const status = x.t.overpaid>0
+            ? `<span class="bdg bb">رصيد زائد ${fDA(x.t.overpaid)}</span>`
+            : x.t.remain>0
+              ? `<span class="bdg br">متبقي</span>`
+              : `<span class="bdg bg">مسدد</span>`;
+          return `<tr>
+            <td class="tl">
+              <strong>${esc(x.c.name)}</strong>
+              <div style="font-size:10px;color:var(--tx3)">${x.c.phone?esc(x.c.phone):''}${x.c.address?' · '+esc(x.c.address):''}</div>
+            </td>
+            <td><span class="num" style="color:var(--green)">${fDA(x.col.amount)}</span></td>
+            <td>${fN(x.col.payCount)} دفعة${x.col.advCount?` + ${fN(x.col.advCount)} تسبيق`:''}</td>
+            <td>${last?`${fD(last.date)}<div style="font-size:10px;color:var(--tx3)">${esc(last.kind)}${last.method?' · '+esc(last.method):''}</div>`:'—'}</td>
+            <td><span class="num ${x.t.remain>0?'rd':'gn'}">${fDA(x.t.remain)}</span></td>
+            <td>${status}</td>
+            <td><button class="btn btn-sec btn-xs" onclick="openCD('${x.c.id}')">فتح</button></td>
+          </tr>`;
+        }).join('') : `<tr><td colspan="7"><div class="empty" style="padding:26px"><div class="empty-ic" style="font-size:28px">💰</div><h3>لا توجد نتائج</h3><p>غيّر الفلتر أو عبارة البحث.</p></div></td></tr>`}
+      </tbody>
+    </table>
+  </div>
+
+  ${list.length ? `
+  <div class="cp" style="margin-top:13px">
+    <div style="padding:9px 13px;background:var(--bg3);border-bottom:1px solid var(--bdr)" class="sh-t">🧾 آخر عمليات التحصيل</div>
+    ${all.flatMap(x=>x.col.rows.map(r=>({client:x.c,row:r}))).sort((a,b)=>(b.row.date||'').localeCompare(a.row.date||'') || (b.row.createdAt||'').localeCompare(a.row.createdAt||'')).slice(0,12).map(x=>`
+      <div class="pay-it">
+        <div class="pay-sg ${x.row.kind==='دفعة'?'gn':'blu'}">${x.row.kind==='دفعة'?'💵':'💳'}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:800">${esc(x.client.name)} — <span style="color:var(--green)">${fDA(x.row.amount)}</span></div>
+          <div style="font-size:10px;color:var(--tx3)">${fD(x.row.date)} · ${esc(x.row.kind)}${x.row.method?' · '+esc(x.row.method):''}${x.row.note?' · '+esc(x.row.note):''}</div>
+        </div>
+        <button class="btn btn-sec btn-xs" onclick="openCD('${x.client.id}')">فتح</button>
+      </div>`).join('')}
+  </div>` : ''}`;
+}
 
 function renderClients(p={}) {
   if (p.cid) { openCid=p.cid; return renderCD(p.cid); }
@@ -2100,6 +2648,16 @@ async function delRecord(rid, cid) {
   T('🗑 نُقل السجل "'+r.name+'" إلى سلة المهملات','success',3000);
   await logA('نقل للسلة (سجل): '+r.name);
 }
+function _truckEntryPriceSnapshot(recId, matId) {
+  const mat = prices.find(p=>p.id===matId && p.recordId===recId && p.type==='mat_def')
+           || prices.find(p=>p.id===matId);
+  return {
+    unitPrice: parseFloat(mat?.price)||0,
+    priceStatus: (!mat || mat.priceStatus === 'pending') ? 'pending' : 'confirmed',
+    priceCapturedAt: new Date().toISOString()
+  };
+}
+
 async function addTruckDay(recId, cid) {
   // Use this record's own materials (mat_def)
   const recMats = prices.filter(p=>p.recordId===recId && p.type==='mat_def')
@@ -2120,7 +2678,7 @@ async function addTruckDay(recId, cid) {
     // Create one entry per mat_def in this record
     try {
       for (const mat of recMats) {
-        const e = { id:uid(), recordId:recId, type:'truck', date, materialId:mat.id, cols:{}, dest:'', createdAt:new Date().toISOString() };
+        const e = { id:uid(), recordId:recId, type:'truck', date, materialId:mat.id, cols:{}, dest:'', ..._truckEntryPriceSnapshot(recId,mat.id), createdAt:new Date().toISOString() };
         entries.push(e);
         await dbP('entries', e);
       }
@@ -2135,7 +2693,7 @@ async function updateTruck(recId, date, matId, truck, value, cid) {
   if (isDayLocked(recId, date, 'truck')) return;
   let e = entries.find(x=>x.recordId===recId && x.date===date && x.materialId===matId && x.type==='truck');
   if (!e) {
-    e = { id:uid(), recordId:recId, type:'truck', date, materialId:matId, cols:{}, dest:'', createdAt:new Date().toISOString() };
+    e = { id:uid(), recordId:recId, type:'truck', date, materialId:matId, cols:{}, dest:'', ..._truckEntryPriceSnapshot(recId,matId), createdAt:new Date().toISOString() };
     entries.push(e);
   }
   if (!e.cols) e.cols = {};
@@ -2901,6 +3459,7 @@ function renderTR(rec, cid) {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:7px">
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-gold btn-sm" onclick="addTruckDay('${rec.id}','${cid}')">＋ يوم جديد</button>
+        <button class="btn btn-blu btn-sm" onclick="openTripStats({clientId:'${cid}',recordId:'${rec.id}'})">📈 إحصائيات هذا السجل</button>
         <button class="btn btn-sec  btn-sm" onclick="delRecord('${rec.id}','${cid}')">🗑 حذف السجل</button>
       </div>
       <div style="font-size:11px;color:var(--tx3)">
@@ -4992,6 +5551,19 @@ function aiProcess(q) {
       if(rt.amount>0) res8+='• <strong>'+r.name+'</strong> ('+( cl?cl.name:'—')+'): '+fDA(rt.amount)+'<br>';
     });
     return res8||'لا توجد بيانات بعد.';
+  }
+
+  if (/من.*دفع|دفعوا|دفعات|تحصيل|تحصلت|حصلت|المحصّل|المحصل/.test(ql) && !/مورد/.test(ql)) {
+    const rows = clients.map(function(c){ return {c:c,t:getCT(c.id)}; }).filter(function(x){return x.t.totalPaid>0;})
+      .sort(function(a,b){return b.t.totalPaid-a.t.totalPaid;});
+    if (!rows.length) return 'لا يوجد أي عميل دفع دفعات أو تسبيقات بعد.';
+    var resPay='العملاء الذين دفعوا / تم تحصيل أموال منهم<br><br>';
+    rows.slice(0,10).forEach(function(x,i){
+      var lastP = payments.filter(function(p){return p.clientId===x.c.id;}).concat(advances.filter(function(a){return a.clientId===x.c.id&&a.status!=='X';}))
+        .sort(function(a,b){return (b.date||'').localeCompare(a.date||'');})[0];
+      resPay+=(i+1)+'. <strong>'+x.c.name+'</strong>: '+fDA(x.t.totalPaid)+' — المتبقي: '+fDA(x.t.remain)+(lastP?' — آخر تحصيل: '+fD(lastP.date):'')+'<br>';
+    });
+    return resPay;
   }
 
   if (/تسبيق|تسبيقات/.test(ql) && !/مورد/.test(ql)) {
