@@ -20,7 +20,7 @@ var renderAdmin = window.renderAdmin;
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0" name="viewport"/>
-<title>EGTPH — سجل الأجور v54</title>
+<title>EGTPH — سجل الأجور v55</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -11474,4 +11474,254 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
 })();
 </script>
 
+
+<script id="v55DeletionLedgerGuard">
+/* ═══════════════════════════════════════════════════════════════
+   EGTPH v55 — Ledger integrity migration + deletion guardians
+   - Re-seals legacy Ledger fingerprints with a traceable migration entry.
+   - Every deletion receives a tombstone, a witness code, and a Ledger certificate.
+   - A deleted record cannot return unless restored explicitly from the trash.
+   - Guards run before saves and after sync/pull operations.
+═══════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  var VERSION='v55';
+  var DEVICE_KEY='egtph_pay_device_id_v50';
+  var savingGuard=false, booted=false, installed=false;
+
+  function live(){ try{return (typeof DB!=='undefined' && DB)?DB:null;}catch(e){return null;} }
+  function arr(v){return Array.isArray(v)?v:[];}
+  function clone(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
+  function now(){return new Date().toISOString();}
+  function stamp(v){var n=Date.parse(v||'');return isNaN(n)?0:n;}
+  function asText(v){return String(v==null?'':v);}
+  function esc(v){return asText(v).replace(/[&<>'"]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'})[c];});}
+  function deviceId(){var id='';try{id=localStorage.getItem(DEVICE_KEY)||'';}catch(e){}if(!id){id='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10);try{localStorage.setItem(DEVICE_KEY,id);}catch(e){}}return id;}
+  function id(prefix){return (prefix||'V55')+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10)+'_'+deviceId().slice(-5);}
+  function hash(text){var h=2166136261>>>0,s=String(text||'');for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}return (h>>>0).toString(36)+'_'+s.length;}
+  function stable(value){
+    var stack=[];
+    function walk(v){
+      if(v===null || typeof v!=='object')return v;
+      if(stack.indexOf(v)>=0)return '[Circular]';
+      stack.push(v);var out;
+      if(Array.isArray(v))out=v.map(walk);
+      else {out={};Object.keys(v).sort().forEach(function(k){if(k!=='_tmp'&&k!=='_lastRender')out[k]=walk(v[k]);});}
+      stack.pop();return out;
+    }
+    return JSON.stringify(walk(value));
+  }
+  function recordHash(row){var r=clone(row||{});if(r&&typeof r==='object'){delete r._syncHash;delete r.integrityHash;}return hash(stable(r));}
+  function toast(msg,error){try{if(typeof window.toast==='function')window.toast(msg,!!error);}catch(e){}}
+  function ensure(d){
+    d=d||live();if(!d)return null;
+    d.settings=d.settings&&typeof d.settings==='object'?d.settings:{};
+    d.settings.deviceId=deviceId();
+    d.schemaVersion=Math.max(+d.schemaVersion||0,55);
+    d.ledger=arr(d.ledger);d.auditLog=arr(d.auditLog);d.txJournal=arr(d.txJournal);d.deletedIds=arr(d.deletedIds);
+    d.deletedRecords=d.deletedRecords&&typeof d.deletedRecords==='object'&&!Array.isArray(d.deletedRecords)?d.deletedRecords:{};
+    d.trash=d.trash&&typeof d.trash==='object'&&!Array.isArray(d.trash)?d.trash:{};
+    ['workers','advances','hours','absences','bonuses','debts'].forEach(function(k){if(!Array.isArray(d.trash[k]))d.trash[k]=[];});
+    d.workers=arr(d.workers);
+    ['advances','hours','absences','bonuses','debts'].forEach(function(k){if(!d[k]||typeof d[k]!=='object'||Array.isArray(d[k]))d[k]={};});
+    d.workers.forEach(function(w){if(!w)return;var wid=w.id;['advances','bonuses'].forEach(function(k){if(!d[k][wid]||typeof d[k][wid]!=='object'||Array.isArray(d[k][wid]))d[k][wid]={};});['hours','absences','debts'].forEach(function(k){if(!Array.isArray(d[k][wid]))d[k][wid]=[];});});
+    return d;
+  }
+  function tombKeys(section,rid){var sid=asText(rid);return [asText(section||'*')+'|'+sid,'*|'+sid,sid];}
+  function tombState(d,section,rid){
+    d=ensure(d);var deletedAt='',restoredAt='',latest=null;
+    tombKeys(section,rid).forEach(function(k){var t=d&&d.deletedRecords&&d.deletedRecords[k];if(!t||typeof t!=='object')return;if(stamp(t.deletedAt)>stamp(deletedAt)){deletedAt=t.deletedAt;latest=t;}if(stamp(t.restoredAt)>stamp(restoredAt))restoredAt=t.restoredAt;});
+    return {deletedAt:deletedAt,restoredAt:restoredAt,deleted:stamp(deletedAt)>stamp(restoredAt),row:latest};
+  }
+  function rebuildDeletedIds(d){
+    var active={};Object.keys(d.deletedRecords||{}).forEach(function(k){var t=d.deletedRecords[k];if(!t||typeof t!=='object'||t.id===undefined)return;var st=tombState(d,t.section||'*',t.id);if(st.deleted)active[asText(t.id)]=1;});
+    d.deletedIds=Object.keys(active);return d.deletedIds;
+  }
+  function writeTomb(d,section,rid,meta){
+    d=ensure(d);if(!d||rid===undefined||rid===null)return null;meta=meta||{};
+    var sid=asText(rid), at=meta.deletedAt||now(), tx=meta.transactionId||id('DEL'), reason=meta.reason||'حذف محمي v55';
+    ['*',section||'*'].forEach(function(sec){
+      var k=sec+'|'+sid, old=d.deletedRecords[k]&&typeof d.deletedRecords[k]==='object'?d.deletedRecords[k]:{};
+      var out={id:sid,section:sec,deletedAt:stamp(old.deletedAt)>stamp(at)?old.deletedAt:at,deviceId:meta.deviceId||deviceId(),transactionId:tx,reason:reason};
+      if(old.restoredAt&&stamp(old.restoredAt)>stamp(out.deletedAt))out.restoredAt=old.restoredAt;
+      d.deletedRecords[k]=out;
+    });
+    d.deletedRecords[sid]=clone(d.deletedRecords['*|'+sid]);
+    rebuildDeletedIds(d);return tombState(d,section,sid);
+  }
+  function writeRestoreWarrant(d,section,rid,meta){
+    d=ensure(d);if(!d||rid===undefined||rid===null)return null;meta=meta||{};
+    var sid=asText(rid), at=meta.restoredAt||now(), tx=meta.transactionId||id('RST'), reason=meta.reason||'↩️ استرجاع صريح محمي v55';
+    ['*',section||'*'].forEach(function(sec){
+      var k=sec+'|'+sid, old=d.deletedRecords[k]&&typeof d.deletedRecords[k]==='object'?d.deletedRecords[k]:{id:sid,section:sec,deletedAt:'1970-01-01T00:00:00.000Z'};
+      var out=clone(old);out.id=sid;out.section=sec;out.restoredAt=stamp(old.restoredAt)>stamp(at)?old.restoredAt:at;out.deviceId=deviceId();out.transactionId=tx;out.reason=reason;d.deletedRecords[k]=out;
+    });
+    d.deletedRecords[sid]=clone(d.deletedRecords['*|'+sid]);rebuildDeletedIds(d);return tombState(d,section,sid);
+  }
+  function addLedger(d,type,action,details,tx){
+    d=ensure(d);if(!d)return null;
+    var row={id:id('LED'),transactionId:tx||id('TX'),type:type||'audit',action:action||'',at:now(),by:(d.settings.userName||'Youcef Abdi'),deviceId:deviceId(),details:clone(details||{}),immutable:true,integrityVersion:'v55'};
+    row.integrityHash=recordHash(row);d.ledger.push(row);if(d.ledger.length>3000)d.ledger=d.ledger.slice(-3000);return row;
+  }
+  function addAudit(d,action,details,tx){
+    d=ensure(d);if(!d)return;
+    d.auditLog.unshift({id:id('AUD'),transactionId:tx||id('TX'),user:d.settings.userName||'Youcef Abdi',action:action,time:now(),at:now(),deviceId:deviceId(),details:clone(details||{}),integrityVersion:'v55'});
+    if(d.auditLog.length>1000)d.auditLog=d.auditLog.slice(0,1000);
+  }
+  function locationRows(d,section,rid){
+    var sid=asText(rid), out=[];
+    if(section==='workers')arr(d.workers).forEach(function(r,i){if(r&&asText(r.id)===sid)out.push({kind:'workers',index:i,row:r});});
+    else if(section==='advances'||section==='bonuses')Object.keys(d[section]||{}).forEach(function(wid){Object.keys(d[section][wid]||{}).forEach(function(bucket){arr(d[section][wid][bucket]).forEach(function(r,i){if(r&&asText(r.id)===sid)out.push({kind:'nested',wid:wid,bucket:bucket,index:i,row:r});});});});
+    else Object.keys(d[section]||{}).forEach(function(wid){arr(d[section][wid]).forEach(function(r,i){if(r&&asText(r.id)===sid)out.push({kind:'array',wid:wid,index:i,row:r});});});
+    return out;
+  }
+  function removeLiveById(d,section,rid){
+    var count=0,sid=asText(rid);
+    if(section==='workers'){var before=arr(d.workers).length;d.workers=arr(d.workers).filter(function(r){return !(r&&asText(r.id)===sid);});return before-d.workers.length;}
+    if(section==='advances'||section==='bonuses'){
+      Object.keys(d[section]||{}).forEach(function(wid){Object.keys(d[section][wid]||{}).forEach(function(bucket){var a=arr(d[section][wid][bucket]), kept=a.filter(function(r){return !(r&&asText(r.id)===sid);});count+=a.length-kept.length;d[section][wid][bucket]=kept;});});
+    }else Object.keys(d[section]||{}).forEach(function(wid){var a=arr(d[section][wid]), kept=a.filter(function(r){return !(r&&asText(r.id)===sid);});count+=a.length-kept.length;d[section][wid]=kept;});
+    return count;
+  }
+  function activeTypedTombs(d){
+    var seen={},out=[];Object.keys(d.deletedRecords||{}).forEach(function(k){
+      if(k.indexOf('|')<1)return;var sec=k.split('|')[0], rec=d.deletedRecords[k];if(sec==='*'||!rec||rec.id===undefined)return;var key=sec+'|'+asText(rec.id);if(seen[key])return;seen[key]=1;var st=tombState(d,sec,rec.id);if(st.deleted)out.push({section:sec,id:asText(rec.id),state:st});
+    });return out;
+  }
+  function enforceDeletionGuards(d,source){
+    d=ensure(d);if(!d)return {blocked:[],changed:false};var blocked=[];
+    activeTypedTombs(d).forEach(function(t){var n=removeLiveById(d,t.section,t.id);if(n>0)blocked.push({section:t.section,id:t.id,removed:n,deletedAt:t.state.deletedAt});});
+    if(blocked.length){
+      var tx=id('GUARD'), proof=hash(stable(blocked));
+      addLedger(d,'deletion_guard','🛡️ حارس الحذف منع عودة سجل محذوف',{source:source||'تحقق',proof:proof,records:blocked},tx);
+      addAudit(d,'🛡️ منع عودة محذوف — '+blocked.length+' سجل',{source:source||'تحقق',proof:proof,records:blocked},tx);
+      d.settings.deleteGuardV55=d.settings.deleteGuardV55||{};d.settings.deleteGuardV55.version=VERSION;d.settings.deleteGuardV55.blocked=(+d.settings.deleteGuardV55.blocked||0)+blocked.length;d.settings.deleteGuardV55.lastBlockedAt=now();d.settings.deleteGuardV55.lastProof=proof;
+    }
+    rebuildDeletedIds(d);return {blocked:blocked,changed:!!blocked.length};
+  }
+  function witnessReason(code,proof,kind){return (kind||'حذف محمي')+' v55 | شاهد '+code+' | بصمة '+proof;}
+  function sealDeletion(d,section,rid,original,meta){
+    d=ensure(d);if(!d)return null;meta=meta||{};
+    var code=id('WIT'), tx=meta.transactionId||id('DEL'), proof=hash(stable({section:section,id:asText(rid),record:clone(original||{}),at:meta.deletedAt||now(),transactionId:tx,witness:code}));
+    var reason=witnessReason(code,proof,'حذف محمي');
+    var st=writeTomb(d,section,rid,{deletedAt:meta.deletedAt||now(),transactionId:tx,reason:reason});
+    addLedger(d,'deletion_witness','🛡️ شاهد حذف — '+section,{witnessId:code,proofHash:proof,section:section,id:asText(rid),sourceHash:original?recordHash(original):'',deletedAt:st.deletedAt,reason:meta.reason||'حذف'},tx);
+    addAudit(d,'🛡️ توثيق حذف — '+section,{witnessId:code,proofHash:proof,id:asText(rid)},tx);
+    d.settings.deleteGuardV55=d.settings.deleteGuardV55||{};d.settings.deleteGuardV55.version=VERSION;d.settings.deleteGuardV55.lastWitness={id:code,proof:proof,at:now(),section:section,recordId:asText(rid)};d.settings.deleteGuardV55.sealed=(+d.settings.deleteGuardV55.sealed||0)+1;
+    return {witnessId:code,proofHash:proof,state:st,transactionId:tx};
+  }
+  function migrateLedger(d){
+    d=ensure(d);if(!d)return 0;var repaired=[], migrationAt=now();
+    d.ledger.forEach(function(row){
+      if(!row||typeof row!=='object')return;
+      var expected=recordHash(row);
+      if(!row.integrityHash || row.integrityHash!==expected){
+        var previous=row.integrityHash||'';row.legacyIntegrityHash=previous;row.integrityVersion='v55';row.integrityMigratedAt=migrationAt;row.integrityMigration='إعادة تثبيت بصمة سجل قديم بعد ترقية الحماية';row._updatedAt=migrationAt;row.integrityHash=recordHash(row);repaired.push(row.id||'بدون معرف');
+      }
+    });
+    if(repaired.length){var tx=id('LED-MIG');addLedger(d,'ledger_migration','🛠️ إعادة تثبيت بصمات Ledger القديمة',{count:repaired.length,records:repaired,reason:'ترقية v55 مع حفظ البصمة السابقة داخل كل سجل'},tx);addAudit(d,'🛠️ ترقية بصمات Ledger القديمة',{count:repaired.length,records:repaired},tx);}
+    d.settings.ledgerIntegrityV55={version:VERSION,lastCheckedAt:migrationAt,repaired:repaired.length};return repaired.length;
+  }
+  function certifyLegacyTombs(d){
+    d=ensure(d);if(!d)return 0;var sealed=0;
+    activeTypedTombs(d).forEach(function(t){
+      var reason=(t.state.row&&t.state.row.reason)||'';
+      if(reason.indexOf('شاهد')>=0)return;
+      var tx=(t.state.row&&t.state.row.transactionId)||id('LEGDEL');
+      var proof=hash(stable({section:t.section,id:t.id,deletedAt:t.state.deletedAt,legacy:true}));
+      var code=id('WIT');
+      writeTomb(d,t.section,t.id,{deletedAt:t.state.deletedAt,transactionId:tx,reason:witnessReason(code,proof,'تأمين حذف سابق')});
+      addLedger(d,'deletion_witness','🛡️ تأمين حذف سابق — '+t.section,{witnessId:code,proofHash:proof,section:t.section,id:t.id,deletedAt:t.state.deletedAt,legacy:true},tx);
+      sealed++;
+    });return sealed;
+  }
+  function childAdvanceRows(d,wid,row,bucket){
+    var out=[],seen={}, op=asText(row&& (row.operationId||row.transactionId||row.id));Object.keys((d.advances&&d.advances[wid])||{}).forEach(function(b){arr(d.advances[wid][b]).forEach(function(r){if(!r)return;var k=asText(r.operationId||r.transactionId||r.id);if(k===op&&!seen[asText(r.id)]){seen[asText(r.id)]=1;out.push({bucket:asText(b),row:clone(r)});}});});if(!out.length&&row)out=[{bucket:asText(bucket),row:clone(row)}];return out;
+  }
+  function refsFromTrash(d,type,tid){
+    var a=(d.trash&&d.trash[type])||[], item=a.find(function(x){return asText(x&&x._tid)===asText(tid);}) || a[parseInt(tid,10)];item=clone(item);var refs=[];
+    function add(sec,rid){if(rid!==undefined&&rid!==null)refs.push({section:sec,id:asText(rid)});}
+    if(!item)return refs;
+    if(type==='advances'&&Array.isArray(item._operationChildren))item._operationChildren.forEach(function(c){if(c&&c.row)add('advances',c.row.id);});
+    else if(type==='workers'){add('workers',item.id);['advances','bonuses'].forEach(function(sec){Object.keys(item['_'+sec]||{}).forEach(function(b){arr(item['_'+sec][b]).forEach(function(r){if(r)add(sec,r.id);});});});['hours','absences','debts'].forEach(function(sec){arr(item['_'+sec]).forEach(function(r){if(r)add(sec,r.id);});});}
+    else add(type,item.id);
+    var seen={};return refs.filter(function(r){var k=r.section+'|'+r.id;if(seen[k])return false;seen[k]=1;return true;});
+  }
+  function witnessRows(d){return arr(d.ledger).filter(function(r){return r&&(''+r.type).indexOf('deletion_')===0;}).slice(-250).reverse();}
+  function showWitnesses(){
+    var d=ensure(), rows=witnessRows(d), guard=(d.settings&&d.settings.deleteGuardV55)||{}, html='<div class="abox ok"><b>🛡️ حراس الحذف v55</b><br>السجلات المختومة: '+(+guard.sealed||0)+'<br>محاولات الإحياء التي مُنعت: '+(+guard.blocked||0)+'<br>آخر تحقق: '+esc((d.settings.ledgerIntegrityV55||{}).lastCheckedAt||'—')+'</div>';
+    html+=rows.length?'<div class="v50-ledger-list">'+rows.map(function(r){var x=r.details||{};return '<div class="v50-ledger-row"><b>'+esc(r.action||r.type)+'</b><br><span>'+esc(r.at||'')+' — شاهد '+esc(x.witnessId||'—')+'</span><div class="v50-ledger-alloc">'+esc(x.section||'')+' / '+esc(x.id||'')+'<br>بصمة: '+esc(x.proofHash||x.proof||'—')+'</div></div>';}).join('')+'</div>':'<div class="v50-note">لا توجد شهادات حذف بعد.</div>';
+    var title=document.getElementById('logicReportTitle'), body=document.getElementById('logicReportBody'), time=document.getElementById('logicReportTime');
+    if(title)title.textContent='🛡️ حراس الحذف والشواهد';if(body)body.innerHTML=html;if(time)time.textContent='آخر تحديث: '+now();try{if(typeof openModal==='function')openModal('mLogicReport');}catch(e){}
+  }
+  function attachAdminButton(){
+    var panel=document.getElementById('v50AdminPanel');if(!panel||document.getElementById('v55GuardBtn'))return;
+    var tools=panel.querySelector('.v50-tools');if(!tools)return;var b=document.createElement('button');b.id='v55GuardBtn';b.className='btn2';b.type='button';b.textContent='🛡️ حراس الحذف';b.onclick=showWitnesses;tools.appendChild(b);
+  }
+  function enhanceLogicReport(){
+    var old=window.showUnifiedLogicReport||window.showLogicReport;if(typeof old!=='function'||old.__v55Guard)return;
+    var wrapped=function(){var result=old.apply(this,arguments);try{var d=ensure(), g=(d.settings&&d.settings.deleteGuardV55)||{}, body=document.getElementById('logicReportBody');if(body&&!document.getElementById('v55LogicGuard')){var box=document.createElement('div');box.id='v55LogicGuard';box.className='abox ok';box.innerHTML='<b>🛡️ حارس الحذف v55: نشط</b><br>الشواهد: '+(+g.sealed||0)+' — الإحياءات الممنوعة: '+(+g.blocked||0)+'<br>لا يعود أي محذوف إلا عبر استرجاع صريح من سلة المهملات.';body.insertBefore(box,body.firstChild);}}catch(e){}return result;};wrapped.__v55Guard=true;window.showUnifiedLogicReport=wrapped;window.showLogicReport=wrapped;try{showUnifiedLogicReport=wrapped;showLogicReport=wrapped;}catch(e){}
+  }
+  function wrapSave(){
+    var base=window.saveDB;if(typeof base!=='function'||base.__v55Guard)return;
+    var wrapped=function(){
+      if(!savingGuard){savingGuard=true;try{var d=ensure(), result=enforceDeletionGuards(d,'قبل الحفظ');if(result.changed){d.settings.deleteGuardV55=d.settings.deleteGuardV55||{};}}catch(e){console.warn('v55 deletion guard',e);}finally{savingGuard=false;}}
+      return base.apply(this,arguments);
+    };
+    wrapped.__v55Guard=true;window.saveDB=wrapped;try{saveDB=wrapped;}catch(e){}
+  }
+  function wrapCloud(name){
+    var base=window[name];if(typeof base!=='function'||base.__v55Guard)return;
+    var wrapped=async function(){var result=await base.apply(this,arguments);try{var d=ensure(), check=enforceDeletionGuards(d,'بعد '+name);if(check.changed&&typeof window.saveDB==='function')window.saveDB();}catch(e){}return result;};wrapped.__v55Guard=true;window[name]=wrapped;try{eval(name+'=window["'+name+'"];');}catch(e){}
+  }
+  function wrapDeleteAdvance(){
+    var base=window.delAdv;if(typeof base!=='function'||base.__v55Guard)return;
+    var wrapped=async function(wid,bucket,entryId){
+      var d=ensure(), w=arr(d&&d.workers).find(function(x){return x&&asText(x.id)===asText(wid);}), map=d&&d.advances&&(d.advances[wid]||d.advances[asText(wid)]), row=arr(map&&map[bucket]).find(function(x){return x&&asText(x.id)===asText(entryId);});
+      var children=(d&&row)?childAdvanceRows(d,wid,row,bucket):[];
+      var result=await base.apply(this,arguments);
+      d=ensure();if(!d||!children.length)return result;
+      var removed=children.filter(function(c){return !locationRows(d,'advances',c.row.id).length;});
+      if(removed.length){
+        var tx=id('DEL'), seals=[];removed.forEach(function(c){seals.push(sealDeletion(d,'advances',c.row.id,c.row,{transactionId:tx,reason:'حذف عملية تسبيق كاملة'}));});
+        enforceDeletionGuards(d,'بعد حذف تسبيق');
+        if(typeof window.saveDB==='function')window.saveDB();
+        toast('🛡️ تم ختم الحذف بشاهد '+seals[0].witnessId);
+      }
+      return result;
+    };
+    wrapped.__v55Guard=true;window.delAdv=wrapped;window.deleteAdv=wrapped;try{delAdv=wrapped;deleteAdv=wrapped;}catch(e){}
+  }
+  function wrapRestore(){
+    var base=window.restoreFromTrash;if(typeof base!=='function'||base.__v55Guard)return;
+    var wrapped=function(type,tid){
+      var d=ensure(), refs=refsFromTrash(d,type,tid);
+      // The warrant must be written BEFORE the legacy restore calls saveDB; otherwise the
+      // save guard rightly removes the restored row as an attempted resurrection.
+      var previous={}, tx=id('RST'), code=id('WIT'), proof=hash(stable({type:type,refs:refs,at:now(),witness:code}));
+      refs.forEach(function(r){tombKeys(r.section,r.id).forEach(function(k){previous[k]=d.deletedRecords[k]===undefined?null:clone(d.deletedRecords[k]);});writeRestoreWarrant(d,r.section,r.id,{transactionId:tx,reason:'↩️ استرجاع صريح محمي v55 | شاهد '+code+' | بصمة '+proof});});
+      var result=base.apply(this,arguments);d=ensure();var restored=refs.filter(function(r){return locationRows(d,r.section,r.id).length>0;});
+      if(restored.length){addLedger(d,'deletion_restore_witness','↩️ شاهد استرجاع صريح — '+type,{witnessId:code,proofHash:proof,records:restored},tx);addAudit(d,'↩️ توثيق استرجاع صريح — '+type,{witnessId:code,records:restored},tx);if(typeof window.saveDB==='function')window.saveDB();}
+      else {
+        // Restore warrants are only valid for a real explicit restore. Put the old tombstones
+        // back if the legacy function found nothing in the trash or failed.
+        Object.keys(previous).forEach(function(k){if(previous[k]===null)delete d.deletedRecords[k];else d.deletedRecords[k]=previous[k];});rebuildDeletedIds(d);
+      }
+      return result;
+    };
+    wrapped.__v55Guard=true;window.restoreFromTrash=wrapped;try{restoreFromTrash=wrapped;}catch(e){}
+  }
+  function boot(){
+    if(booted)return;booted=true;var d=ensure();if(!d)return;
+    var repaired=migrateLedger(d), legacy=certifyLegacyTombs(d), block=enforceDeletionGuards(d,'تهيئة v55');
+    wrapSave();wrapDeleteAdvance();wrapRestore();wrapCloud('cloudSync');wrapCloud('cloudPullReplace');enhanceLogicReport();attachAdminButton();
+    try{document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v55');var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v55';}catch(e){}
+    if(repaired||legacy||block.changed){try{window.saveDB();}catch(e){}}
+    window.EGTPH_V55={version:VERSION,verify:function(){var x=ensure(),r=enforceDeletionGuards(x,'فحص يدوي');if(r.changed&&typeof window.saveDB==='function')window.saveDB();return {blocked:r.blocked,activeTombstones:activeTypedTombs(x).length,witnesses:witnessRows(x).length};},showWitnesses:showWitnesses,recordHash:recordHash};
+    setTimeout(function(){attachAdminButton();enhanceLogicReport();},600);
+  }
+  setTimeout(boot,1900);
+})();
+
+</script>
 </body></html>
