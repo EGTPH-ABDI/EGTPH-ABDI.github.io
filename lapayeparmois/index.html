@@ -10999,7 +10999,13 @@ try{
      A record may return only through an explicit restore event (restoredAt newer than deletedAt).
      We retain a legacy raw key (id) in addition to typed keys (section|id), so v40/v41 devices
      also understand the deletion while newer devices preserve the exact record section. ── */
-  function tombKey(section,id){ return String(section || '*')+'|'+String(id); }
+  function firebaseKeyComponent(value){
+    var s=String(value===undefined||value===null?'':value);
+    if(!s) return '~empty~';
+    return s.replace(/[.#$\[\]\/]/g,function(ch){return '~'+ch.charCodeAt(0).toString(16)+'~';});
+  }
+  function firebaseKeyValid(key){ return key!=='' && !(/[.#$\[\]\/]/.test(String(key))); }
+  function tombKey(section,id){ return firebaseKeyComponent(section || '*')+'|'+firebaseKeyComponent(id); }
   function tombStamp(v){ if(!v) return 0; return parseTime({deletedAt:v}); }
   function newestStampValue(a,b){ return tombStamp(b)>tombStamp(a) ? b : a; }
   function normalizeOneTomb(raw,section,id){
@@ -11035,7 +11041,7 @@ try{
     d.deletedIds.forEach(function(id){var k=tombKey('*',id);if(!out[k])out[k]=normalizeOneTomb({deletedAt:now(),legacy:true},'*',id);});
     // Any explicit restore of an id restores its wildcard compatibility tombstone too.
     var byId={};Object.keys(out).forEach(function(k){var t=out[k],id=String(t.id);byId[id]=byId[id]||{deletedAt:'',restoredAt:''};byId[id].deletedAt=newestStampValue(byId[id].deletedAt,t.deletedAt);byId[id].restoredAt=newestStampValue(byId[id].restoredAt,t.restoredAt);});
-    Object.keys(byId).forEach(function(id){var g=tombKey('*',id), gt=out[g]||normalizeOneTomb({deletedAt:byId[id].deletedAt||now()},'*',id);gt.deletedAt=newestStampValue(gt.deletedAt,byId[id].deletedAt)||gt.deletedAt;if(byId[id].restoredAt)gt.restoredAt=newestStampValue(gt.restoredAt,byId[id].restoredAt);out[g]=gt;out[id]=clone(gt);});
+    Object.keys(byId).forEach(function(id){var g=tombKey('*',id), gt=out[g]||normalizeOneTomb({deletedAt:byId[id].deletedAt||now()},'*',id);gt.deletedAt=newestStampValue(gt.deletedAt,byId[id].deletedAt)||gt.deletedAt;if(byId[id].restoredAt)gt.restoredAt=newestStampValue(gt.restoredAt,byId[id].restoredAt);out[g]=gt;var legacyKey=firebaseKeyValid(id)?String(id):tombKey('legacy',id);out[legacyKey]=clone(gt);});
     d.deletedRecords=out;
     var active={};Object.keys(out).forEach(function(k){var t=out[k];if(tombStamp(t.deletedAt)>tombStamp(t.restoredAt))active[String(t.id)]=1;});
     d.deletedIds=Object.keys(active);
@@ -11116,6 +11122,35 @@ try{
     try{if(typeof _sse!=='undefined' && _sse){_sse.close();_sse=null;}}catch(e){}
   }
 
+  function stripUnsafeTxJournal(list){
+    return asArray(list).map(function(op){
+      var o=clone(op||{});
+      if(o.patch && typeof o.patch==='object'){
+        o.patchKeys=Object.keys(o.patch).map(function(k){return String(k);});
+        delete o.patch;
+      }
+      return o;
+    });
+  }
+  function findInvalidFirebaseKeys(obj,path,out,seen){
+    out=out||[];path=path||'$';
+    if(!obj || typeof obj!=='object') return out;
+    seen=seen||[]; if(seen.indexOf(obj)>=0) return out; seen.push(obj);
+    if(Array.isArray(obj)){for(var i=0;i<obj.length;i++)findInvalidFirebaseKeys(obj[i],path+'['+i+']',out,seen);return out;}
+    Object.keys(obj).forEach(function(k){
+      var p=path+'.'+k;
+      if(!firebaseKeyValid(k)) out.push(p+' = '+JSON.stringify(k));
+      findInvalidFirebaseKeys(obj[k],p,out,seen);
+    });
+    return out;
+  }
+  function assertFirebasePayloadKeys(payload){
+    var bad=findInvalidFirebaseKeys(payload,'$',[],[]);
+    if(bad.length){
+      throw new Error('مفتاح Firebase غير صالح قبل الرفع: '+bad.slice(0,4).join(' | '));
+    }
+    return payload;
+  }
   function getCloudCfg(){try{return typeof _cloudCfg==='function'?_cloudCfg():null;}catch(e){return null;}}
   function cloudStatus(text,color){try{if(typeof _cloudStatus==='function')_cloudStatus(text,color);}catch(e){}}
   function endpointChild(endpoint,child){ return String(endpoint || '').replace(/\.json(\?.*)?$/, '/'+child+'.json$1'); }
@@ -11124,7 +11159,7 @@ try{
     if(!res.ok)throw new Error('HTTP '+res.status);
     return {data:await res.json(),etag:(res.headers&&res.headers.get('ETag'))||'*'};
   }
-  function fullSyncState(d){return {workers:clone(d.workers),advances:clone(d.advances),hours:clone(d.hours),absences:clone(d.absences),bonuses:clone(d.bonuses),debts:clone(d.debts),trash:clone(d.trash),settings:syncableSettings(d.settings),ledger:clone(d.ledger),auditLog:clone(d.auditLog),txJournal:clone(d.txJournal),cycleLocks:clone(d.cycleLocks),deletedRecords:clone(d.deletedRecords),deletedIds:clone(d.deletedIds)};}
+  function fullSyncState(d){normalizeTombstones(d);return {workers:clone(d.workers),advances:clone(d.advances),hours:clone(d.hours),absences:clone(d.absences),bonuses:clone(d.bonuses),debts:clone(d.debts),trash:clone(d.trash),settings:syncableSettings(d.settings),ledger:clone(d.ledger),auditLog:clone(d.auditLog),txJournal:stripUnsafeTxJournal(d.txJournal),cycleLocks:clone(d.cycleLocks),deletedRecords:clone(d.deletedRecords),deletedIds:clone(d.deletedIds)};}
   function clearOnlySentPending(d,sent){
     d._pendingSyncPatches=d._pendingSyncPatches && typeof d._pendingSyncPatches==='object'?d._pendingSyncPatches:{};
     Object.keys(sent||{}).forEach(function(k){if(stable(d._pendingSyncPatches[k])===stable(sent[k]))delete d._pendingSyncPatches[k];});
@@ -11139,7 +11174,7 @@ try{
     Object.keys(state).forEach(function(k){payload[k]=state[k];});
     payload.schemaVersion=V50;
     payload.syncMeta=meta;
-    return payload;
+    return assertFirebasePayloadKeys(payload);
   }
   async function firebaseFailure(res){
     var body='';
@@ -11985,8 +12020,8 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
         var d=ensure(), ledger=ledgerCheck(d), g=d.settings.deleteGuardV60||{}, body=document.getElementById('logicReportBody');
         if(body&&!document.getElementById('v60StatusReport')){
           var cls=(ledger.mismatches.length||ledger.missing.length)?'danger':'ok';
-          var textLine=(ledger.mismatches.length||ledger.missing.length)?'⚠️ Ledger v60: يوجد تغير غير موثق في '+(ledger.mismatches.length+ledger.missing.length)+' قيد.':'🛡️ اعتمادية v60: Ledger مختوم، وحارس حذف جميع الأنواع نشط.';
-          var box=document.createElement('div');box.id='v60StatusReport';box.className='abox '+cls;box.innerHTML='<b>'+textLine+'</b><br>حذوف مختومة v60: '+(+g.sealed||0)+' — إحياءات ممنوعة v60: '+(+g.blocked||0)+' — جذر Ledger: '+esc((d.settings.ledgerGuardV60||{}).rootHash||'—');body.insertBefore(box,body.firstChild);
+          var textLine=(ledger.mismatches.length||ledger.missing.length)?'⚠️ Ledger v60: يوجد تغير غير موثق في '+(ledger.mismatches.length+ledger.missing.length)+' قيد.':'🛡️ اعتمادية v61: Ledger مختوم، وحارس حذف جميع الأنواع نشط.';
+          var box=document.createElement('div');box.id='v60StatusReport';box.className='abox '+cls;box.innerHTML='<b>'+textLine+'</b><br>حذوف مختومة v61: '+(+g.sealed||0)+' — إحياءات ممنوعة v60: '+(+g.blocked||0)+' — جذر Ledger: '+esc((d.settings.ledgerGuardV60||{}).rootHash||'—');body.insertBefore(box,body.firstChild);
         }
       }catch(e){}
       return result;
@@ -11995,13 +12030,13 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   }
   function addAdmin(){
     var panel=document.getElementById('v50AdminPanel');if(!panel||document.getElementById('v60ReliabilityBtn'))return;
-    var tools=panel.querySelector('.v50-tools');if(!tools)return;var btn=document.createElement('button');btn.id='v60ReliabilityBtn';btn.className='btn2';btn.type='button';btn.textContent='🛡️ اعتمادية v60';btn.onclick=function(){
-      var d=ensure(), l=ledgerCheck(d),g=d.settings.deleteGuardV60||{},html='<div class="abox ok"><b>🛡️ طبقة الاعتمادية v60</b><br>حذف مختوم: '+(+g.sealed||0)+'<br>إحياءات ممنوعة: '+(+g.blocked||0)+'<br>قيود Ledger: '+(d.ledger||[]).length+'<br>جذر السجل: '+esc((d.settings.ledgerGuardV60||{}).rootHash||'—')+'<br>تعارضات Ledger: '+(l.mismatches.length+l.missing.length)+'</div>';
-      var title=document.getElementById('logicReportTitle'),body=document.getElementById('logicReportBody'),time=document.getElementById('logicReportTime');if(title)title.textContent='🛡️ اعتمادية v60';if(body)body.innerHTML=html;if(time)time.textContent='آخر تحقق: '+now();try{if(typeof openModal==='function')openModal('mLogicReport');}catch(e){}
+    var tools=panel.querySelector('.v50-tools');if(!tools)return;var btn=document.createElement('button');btn.id='v60ReliabilityBtn';btn.className='btn2';btn.type='button';btn.textContent='🛡️ اعتمادية v61';btn.onclick=function(){
+      var d=ensure(), l=ledgerCheck(d),g=d.settings.deleteGuardV60||{},html='<div class="abox ok"><b>🛡️ طبقة الاعتمادية v61</b><br>حذف مختوم: '+(+g.sealed||0)+'<br>إحياءات ممنوعة: '+(+g.blocked||0)+'<br>قيود Ledger: '+(d.ledger||[]).length+'<br>جذر السجل: '+esc((d.settings.ledgerGuardV60||{}).rootHash||'—')+'<br>تعارضات Ledger: '+(l.mismatches.length+l.missing.length)+'</div>';
+      var title=document.getElementById('logicReportTitle'),body=document.getElementById('logicReportBody'),time=document.getElementById('logicReportTime');if(title)title.textContent='🛡️ اعتمادية v61';if(body)body.innerHTML=html;if(time)time.textContent='آخر تحقق: '+now();try{if(typeof openModal==='function')openModal('mLogicReport');}catch(e){}
     };tools.appendChild(btn);
   }
   function ui(){
-    try{document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v60');var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v60';}catch(e){}
+    try{document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v60');var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v61';}catch(e){}
   }
   function boot(){
     if(booted)return;booted=true;var d=ensure();if(!d)return;
