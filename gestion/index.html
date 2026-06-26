@@ -186,33 +186,6 @@ input, select, textarea, button { font-family: 'Tajawal', sans-serif; }
 .tbl tbody tr:hover td { background: rgba(255,255,255,.018); }
 .tbl tr.ttr td { background: var(--bg4) !important; font-weight: 800; color: var(--gold2); border-top: 1px solid var(--bdr2); }
 .tbl tr.locked-row td { opacity: 0.88; }
-/* ── Notes / Mémoire interne ── */
-.notes-fab { position:fixed; bottom:22px; left:22px; z-index:800;
-  width:48px; height:48px; border-radius:50%; background:linear-gradient(135deg,#d4a843,#9a6800);
-  border:none; color:#fff; font-size:22px; cursor:pointer; box-shadow:0 4px 16px rgba(212,168,67,.45);
-  display:flex; align-items:center; justify-content:center; transition:transform .15s; }
-.notes-fab:hover { transform:scale(1.1); }
-.notes-panel { position:fixed; bottom:82px; left:22px; z-index:801;
-  width:320px; max-height:420px; background:var(--bg2); border:1px solid var(--bdr2);
-  border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,.5); overflow:hidden;
-  display:none; flex-direction:column; animation:mIn .18s ease; }
-.notes-panel.open { display:flex; }
-.notes-hdr { background:linear-gradient(135deg,#1a3a5c,#0f2942); padding:12px 14px;
-  color:#fff; font-weight:800; font-size:13px; display:flex; justify-content:space-between; align-items:center; }
-.notes-list { flex:1; overflow-y:auto; padding:8px; }
-.note-item { background:var(--bg3); border:1px solid var(--bdr); border-radius:10px;
-  padding:10px 12px; margin-bottom:6px; cursor:pointer; transition:border-color .12s; }
-.note-item:hover { border-color:var(--gold); }
-.note-item .ni-date { font-size:9px; color:var(--tx3); margin-bottom:3px; }
-.note-item .ni-txt  { font-size:11px; color:var(--tx); line-height:1.5; white-space:pre-wrap; }
-.notes-add { padding:8px; border-top:1px solid var(--bdr); display:flex; gap:6px; }
-.notes-add textarea { flex:1; background:var(--bg3); border:1px solid var(--bdr2); border-radius:8px;
-  color:var(--tx); font-family:'Tajawal'; font-size:12px; padding:7px 9px; resize:none; height:58px;
-  outline:none; transition:border-color .12s; }
-.notes-add textarea:focus { border-color:var(--gold); }
-.notes-add button { background:var(--gold); color:#0a0e20; border:none; border-radius:8px;
-  font-weight:900; font-size:18px; cursor:pointer; padding:0 10px; align-self:flex-end; height:34px; }
-
 .ti  { width: 100%; background: transparent; border: 1px solid transparent; border-radius: 5px; padding: 3px 5px; text-align: center; color: var(--tx); font-size: 12px; font-family: 'Tajawal'; transition: all .13s; min-width: 46px; }
 .ti:focus { outline: none; border-color: var(--gold); background: var(--bg3); }
 .ti:hover { border-color: var(--bdr2); }
@@ -2238,10 +2211,10 @@ function renderTripStats() {
 // ── Collections / تحصيلات العملاء ──
 function getClientCollections(cid) {
   const payRows = payments.filter(p=>p.clientId===cid).map(p=>({
-    id:p.id, kind:'دفعة', amount:parseFloat(p.amount)||0, date:p.date||'', method:p.method||'', note:p.note||'', createdAt:p.createdAt||''
+    id:p.id, kind:'دفعة', amount:parseFloat(p.amount)||0, date:p.date||'', method:window.financeMethodLabel?window.financeMethodLabel(p):(p.method||''), allocation:window.financeAllocationLabel?window.financeAllocationLabel(p,cid):'', note:p.note||'', createdAt:p.createdAt||''
   }));
   const advRows = advances.filter(a=>a.clientId===cid && a.status!=='X').map(a=>({
-    id:a.id, kind:a.type||'تسبيق', amount:parseFloat(a.amount)||0, date:a.date||'', method:'', note:a.note||'', createdAt:a.createdAt||''
+    id:a.id, kind:a.type||'تسبيق', amount:parseFloat(a.amount)||0, date:a.date||'', method:window.financeMethodLabel?window.financeMethodLabel(a):(a.method||''), allocation:window.financeAllocationLabel?window.financeAllocationLabel(a,cid):'', note:a.note||'', createdAt:a.createdAt||''
   }));
   const rows = payRows.concat(advRows).sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.createdAt||'').localeCompare(a.createdAt||''));
   const amount = rows.reduce((sum,x)=>sum+(parseFloat(x.amount)||0),0);
@@ -2341,7 +2314,7 @@ function renderCollections(p={}) {
             </td>
             <td><span class="num" style="color:var(--green)">${fDA(x.col.amount)}</span></td>
             <td>${fN(x.col.payCount)} دفعة${x.col.advCount?` + ${fN(x.col.advCount)} تسبيق`:''}</td>
-            <td>${last?`${fD(last.date)}<div style="font-size:10px;color:var(--tx3)">${esc(last.kind)}${last.method?' · '+esc(last.method):''}</div>`:'—'}</td>
+            <td>${last?`${fD(last.date)}<div style="font-size:10px;color:var(--tx3)">${esc(last.kind)}${last.method?' · '+esc(last.method):''}${last.allocation?' · '+esc(last.allocation):''}</div>`:'—'}</td>
             <td><span class="num ${x.t.remain>0?'rd':'gn'}">${fDA(x.t.remain)}</span></td>
             <td>${status}</td>
             <td><button class="btn btn-sec btn-xs" onclick="openCD('${x.c.id}')">فتح</button></td>
@@ -2359,7 +2332,7 @@ function renderCollections(p={}) {
         <div class="pay-sg ${x.row.kind==='دفعة'?'gn':'blu'}">${x.row.kind==='دفعة'?'💵':'💳'}</div>
         <div style="flex:1">
           <div style="font-size:13px;font-weight:800">${esc(x.client.name)} — <span style="color:var(--green)">${fDA(x.row.amount)}</span></div>
-          <div style="font-size:10px;color:var(--tx3)">${fD(x.row.date)} · ${esc(x.row.kind)}${x.row.method?' · '+esc(x.row.method):''}${x.row.note?' · '+esc(x.row.note):''}</div>
+          <div style="font-size:10px;color:var(--tx3)">${fD(x.row.date)} · ${esc(x.row.kind)}${x.row.method?' · '+esc(x.row.method):''}${x.row.allocation?' · '+esc(x.row.allocation):''}${x.row.note?' · '+esc(x.row.note):''}</div>
         </div>
         <button class="btn btn-sec btn-xs" onclick="openCD('${x.client.id}')">فتح</button>
       </div>`).join('')}
@@ -2463,14 +2436,15 @@ function renderCD(cid) {
       <div class="rtabs">
         ${crs.map(r => {
           const rt = getRT(r.id);
+          const rs = window.getRecordSettlement ? window.getRecordSettlement(r.id) : {paid:0,remain:rt.amount};
           const ic = {trucks:'🚛', machines:'🏗', stock:'📦'};
           return `<button class="rtab ${r.id===activeRid?'on':''}" data-rid="${r.id}" onclick="activeRid='${r.id}';renderCD('${cid}')">
             ${ic[r.type]||'📄'} ${esc(r.name)}
-            <span style="font-size:9px;opacity:.6;margin-right:3px">${fDA(rt.amount)}</span>
+            <span style="font-size:9px;opacity:.6;margin-right:3px">${fDA(rt.amount)} · سُدّد ${fDA(rs.paid||0)}</span>
           </button>`;
         }).join('')}
       </div>
-      ${ar ? renderRecSec(ar, cid) : ''}
+      ${ar ? ((window.renderRecordSettlementCard ? window.renderRecordSettlementCard(ar, cid) : '') + renderRecSec(ar, cid)) : ''}
     ` : `<div class="empty" style="padding:26px"><div class="empty-ic" style="font-size:28px">📋</div><h3>لا توجد سجلات</h3><p>اضغط "＋ سجل جديد"</p></div>`}
   </div>
 
@@ -2488,10 +2462,13 @@ function renderCD(cid) {
         <div class="pay-sg gn">💵</div>
         <div style="flex:1">
           <div style="font-size:13px;font-weight:700;color:var(--green)">${fDA(p.amount)}</div>
-          <div style="font-size:10px;color:var(--tx3)">${fD(p.date)}${p.method?' · '+esc(p.method):''}${p.note?' · '+esc(p.note):''}</div>
+          <div style="font-size:10px;color:var(--tx3)">${fD(p.date)}${window.financeMethodLabel?' · '+esc(window.financeMethodLabel(p)):''}${window.financeAllocationLabel?' · '+esc(window.financeAllocationLabel(p,cid)):''}${p.note?' · '+esc(p.note):''}</div>
           ${fEntryT(p.createdAt)?`<div style="font-size:9px;color:var(--teal,#0e9488)">🕒 وقت الإدخال الفعلي: ${fEntryT(p.createdAt)}</div>`:''}
         </div>
-        <button class="del-btn" onclick="delPay('${p.id}','${cid}')" ${isSecLocked('pay:'+cid)?'style="display:none"':''}>✕</button>
+        <div style="display:flex;align-items:center;gap:4px" ${isSecLocked('pay:'+cid)?'style="display:none"':''}>
+          <button class="btn btn-sec btn-xs" onclick="editPay('${p.id}','${cid}')" title="تعديل الدفعة">✏</button>
+          <button class="del-btn" onclick="delPay('${p.id}','${cid}')" title="حذف نهائي">🗑</button>
+        </div>
       </div>`).join('') :
       `<div style="padding:12px;text-align:center;color:var(--tx3);font-size:11px">لا توجد مدفوعات</div>`}
   </div>
@@ -2510,10 +2487,13 @@ function renderCD(cid) {
         <div class="pay-sg ${a.type==='دفعة'?'gn':'blu'}">${a.type==='دفعة'?'💵':'💳'}</div>
         <div style="flex:1">
           <div style="font-size:13px;font-weight:700;color:${a.type==='دفعة'?'var(--green)':'var(--blue)'}">${fDA(a.amount)}</div>
-          <div style="font-size:10px;color:var(--tx3)">${fD(a.date)} · ${esc(a.type||'تسبيق')}${a.note?' · '+esc(a.note):''}</div>
+          <div style="font-size:10px;color:var(--tx3)">${fD(a.date)} · ${esc(a.type||'تسبيق')}${window.financeMethodLabel?' · '+esc(window.financeMethodLabel(a)):''}${window.financeAllocationLabel?' · '+esc(window.financeAllocationLabel(a,cid)):''}${a.note?' · '+esc(a.note):''}</div>
           ${fEntryT(a.createdAt)?`<div style="font-size:9px;color:var(--teal,#0e9488)">🕒 وقت الإدخال الفعلي: ${fEntryT(a.createdAt)}</div>`:''}
         </div>
-        <button class="del-btn" onclick="delAdv('${a.id}','${cid}')" ${isSecLocked('adv:'+cid)?'style="display:none"':''}>✕</button>
+        <div style="display:flex;align-items:center;gap:4px" ${isSecLocked('adv:'+cid)?'style="display:none"':''}>
+          <button class="btn btn-sec btn-xs" onclick="editAdv('${a.id}','${cid}',false)" title="تعديل ${esc(a.type||'التسبيق')}">✏</button>
+          <button class="del-btn" onclick="delAdv('${a.id}','${cid}',false)" title="حذف نهائي">🗑</button>
+        </div>
       </div>`).join('') :
       `<div style="padding:12px;text-align:center;color:var(--tx3);font-size:11px">لا توجد تسبيقات</div>`}
   </div>`;
@@ -4344,13 +4324,16 @@ function renderAdvances() {
         <div class="li-ic">${a.type==='دفعة'?'💵':'💳'}</div>
         <div class="li-inf">
           <div class="li-n">${esc(c?.name||'عميل محذوف')}</div>
-          <div class="li-s">${fD(a.date)}${a.note?' · '+esc(a.note):''}</div>
+          <div class="li-s">${fD(a.date)}${window.financeMethodLabel?' · '+esc(window.financeMethodLabel(a)):''}${window.financeAllocationLabel?' · '+esc(window.financeAllocationLabel(a,a.clientId)):''}${a.note?' · '+esc(a.note):''}</div>
         </div>
         <div class="li-r" style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
           <span class="num" style="color:${a.type==='دفعة'?'var(--green)':'var(--blue)'};font-size:13px;font-weight:800">${fDA(a.amount)}</span>
           <span class="bdg ${a.status==='X'?'bx':a.type==='دفعة'?'bg':'bb'}">${a.status==='X'?'ملغى':a.type||'تسبيق'}</span>
         </div>
-        <button class="del-btn" onclick="cancelAdv('${a.id}')" ${isSecLocked('advG')?'style="display:none"':''}>✕</button>
+        <div style="display:flex;align-items:center;gap:4px" ${(isSecLocked('advG')||isSecLocked('adv:'+a.clientId))?'style="display:none"':''}>
+          <button class="btn btn-sec btn-xs" onclick="editAdv('${a.id}','${a.clientId}',true)" title="تعديل">✏</button>
+          <button class="del-btn" onclick="delAdv('${a.id}','${a.clientId}',true)" title="حذف نهائي">🗑</button>
+        </div>
       </div>`;
     }).join('') :
     `<div class="empty"><div class="empty-ic">💳</div><h3>لا توجد تسبيقات</h3><p>أضف تسبيقاً من ملف العميل أو من هنا</p></div>`}
@@ -7093,14 +7076,14 @@ function exportAllCSV() {
 
   // Sheet 3: Payments
   setTimeout(function() {
-    var payRows = [['التاريخ','العميل','النوع','الطريقة','المبلغ','ملاحظة']];
+    var payRows = [['التاريخ','العميل','النوع','الطريقة','المبلغ','السجل / التوزيع','ملاحظة']];
     payments.forEach(function(p) {
       var cl=clients.find(function(x){return x.id===p.clientId;});
-      payRows.push([p.date,cl?cl.name:'—','دفعة',p.method||'—',parseFloat(p.amount)||0,p.note||'']);
+      payRows.push([p.date,cl?cl.name:'—','دفعة',window.financeMethodLabel?window.financeMethodLabel(p):(p.method||'—'),parseFloat(p.amount)||0,window.financeAllocationLabel?window.financeAllocationLabel(p,p.clientId):'دفعة عامة للعميل',p.note||'']);
     });
     advances.filter(function(a){return a.status!=='X';}).forEach(function(a) {
       var cl=clients.find(function(x){return x.id===a.clientId;});
-      payRows.push([a.date,cl?cl.name:'—','تسبيق','—',parseFloat(a.amount)||0,a.note||'']);
+      payRows.push([a.date,cl?cl.name:'—',a.type||'تسبيق',window.financeMethodLabel?window.financeMethodLabel(a):(a.method||'—'),parseFloat(a.amount)||0,window.financeAllocationLabel?window.financeAllocationLabel(a,a.clientId):'دفعة عامة للعميل',a.note||'']);
     });
     downloadCSV(payRows, 'EGTPH_Payments_'+date+'.csv');
   }, 1600);
@@ -7146,9 +7129,9 @@ function exportClientExcel(cid) {
       }
     });
   });
-  var payRows=[['التاريخ','النوع','الطريقة','المبلغ']];
-  payments.filter(function(p){return p.clientId===cid;}).forEach(function(p){payRows.push([p.date,'دفعة',p.method||'—',parseFloat(p.amount)||0]);});
-  advances.filter(function(a){return a.clientId===cid&&a.status!=='X';}).forEach(function(a){payRows.push([a.date,'تسبيق','—',parseFloat(a.amount)||0]);});
+  var payRows=[['التاريخ','النوع','الطريقة','المبلغ','السجل / التوزيع']];
+  payments.filter(function(p){return p.clientId===cid;}).forEach(function(p){payRows.push([p.date,'دفعة',window.financeMethodLabel?window.financeMethodLabel(p):(p.method||'—'),parseFloat(p.amount)||0,window.financeAllocationLabel?window.financeAllocationLabel(p,cid):'دفعة عامة للعميل']);});
+  advances.filter(function(a){return a.clientId===cid&&a.status!=='X';}).forEach(function(a){payRows.push([a.date,a.type||'تسبيق',window.financeMethodLabel?window.financeMethodLabel(a):(a.method||'—'),parseFloat(a.amount)||0,window.financeAllocationLabel?window.financeAllocationLabel(a,cid):'دفعة عامة للعميل']);});
 
   var fn = cl.name.replace(/[^a-zA-Z0-9؀-ۿ]/g,'_');
   downloadCSV(sumRows,   'Client_'+fn+'_ملخص_'+date+'.csv');
@@ -7770,8 +7753,8 @@ function printInvoiceRecord(rec, c, inclSigns) {
   var total   = es.reduce(function(s,e){return s+(parseFloat(e.qty)||0)*(parseFloat(e.unitPrice)||0);},0);
   var tvaRate = parseFloat(info.tvaRate)||0;
   var tva     = total*tvaRate/100;
-  var acomptes= payments.filter(function(p){return p.clientId===c.id;}).reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0)
-              + advances.filter(function(a){return a.clientId===c.id&&a.status!=='X';}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  var recSettlement = window.getRecordSettlement ? window.getRecordSettlement(rec.id) : {paid:0};
+  var acomptes = parseFloat(recSettlement.paid)||0;
   var net = Math.max(0, total+tva-acomptes);
   var now = new Date();
   // Build QR data string
@@ -7808,12 +7791,13 @@ function printInvoiceRecord(rec, c, inclSigns) {
     +'<tr class="tot"><td colspan="5" style="text-align:left"><strong>TOTAL H.T. :</strong></td>'
     +'<td class="c amt"><strong>'+fDA(total)+'</strong></td></tr></tbody></table>';
 
-  var payRows = payments.filter(function(p){return p.clientId===c.id;}).map(function(p){
-    return '<tr><td class="c">'+fD(p.date)+'</td><td class="c">'+(p.method||'Versement')+'</td>'
-      +'<td class="r amt" style="color:#1d6f42;font-weight:800">'+fDA(p.amount)+'</td></tr>';}).join('');
-  var advRows = advances.filter(function(a){return a.clientId===c.id&&a.status!=='X';}).map(function(a){
-    return '<tr><td class="c">'+fD(a.date)+'</td><td class="c">Acompte</td>'
-      +'<td class="r amt" style="color:#1a5fa6;font-weight:800">'+fDA(a.amount)+'</td></tr>';}).join('');
+  var recordOps = window.getRecordSettlementOperations ? window.getRecordSettlementOperations(rec.id) : [];
+  var payRows = recordOps.filter(function(x){return x.source==='payment';}).map(function(x){
+    return '<tr><td class="c">'+fD(x.date)+'</td><td class="c">'+esc((window.financeMethodLabel?window.financeMethodLabel(x.item):(x.method||'Versement')))+'</td>'
+      +'<td class="r amt" style="color:#1d6f42;font-weight:800">'+fDA(x.amount)+'</td></tr>';}).join('');
+  var advRows = recordOps.filter(function(x){return x.source==='advance';}).map(function(x){
+    return '<tr><td class="c">'+fD(x.date)+'</td><td class="c">'+esc((x.kind||'Acompte')+' · '+(window.financeMethodLabel?window.financeMethodLabel(x.item):(x.method||'—')))+'</td>'
+      +'<td class="r amt" style="color:#1a5fa6;font-weight:800">'+fDA(x.amount)+'</td></tr>';}).join('');
   var payTbl = (payRows||advRows)
     ? '<table style="margin-bottom:16px"><thead><tr><th class="c">Date</th><th class="c">Désignation / Mode</th><th class="r" style="width:150px">Montant</th></tr></thead><tbody>'+payRows+advRows+'</tbody></table>'
     : '';
@@ -8331,7 +8315,6 @@ function startApp() {
     startAudit();
     startReminders();
     loadTrash().then(() => updateTrashBadge());
-    loadNotes();
     setTimeout(fbStartupCheck, 1200);
     fbStartLoop();
     setTimeout(fbStartStream, 1700); // بثّ مباشر لحظي
@@ -8379,78 +8362,8 @@ if (document.readyState === 'loading') {
 }
 
 
-// INTERNAL NOTES — الذاكرة الداخلية
-let _notes = [];
-
-function loadNotes() {
-  try {
-    _notes = JSON.parse(localStorage.getItem('egtph_notes_v13') || '[]');
-  } catch(e) { _notes = []; }
-  renderNotes();
-}
-
-function saveNotes() {
-  try { localStorage.setItem('egtph_notes_v13', JSON.stringify(_notes)); } catch(e) {}
-}
-
-function renderNotes() {
-  const el = document.getElementById('notes-list');
-  if (!el) return;
-  if (!_notes.length) {
-    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--tx3);font-size:11px">لا توجد ملاحظات بعد<br>اكتب ملاحظة واضغط +</div>';
-    return;
-  }
-  el.innerHTML = [..._notes].reverse().map((n,i) =>
-    `<div class="note-item" onclick="deleteNote(${_notes.length-1-i})">
-      <div class="ni-date">${new Date(n.ts).toLocaleString('fr-DZ',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} &nbsp;✕ حذف</div>
-      <div class="ni-txt">${esc(n.txt)}</div>
-    </div>`
-  ).join('');
-}
-
-function addNote() {
-  const inp = document.getElementById('notes-input');
-  const txt = (inp?.value || '').trim();
-  if (!txt) return;
-  _notes.push({ id: uid(), ts: new Date().toISOString(), txt });
-  saveNotes(); renderNotes();
-  inp.value = '';
-  inp.focus();
-  T('📝 تم حفظ الملاحظة', 'success');
-}
-
-function deleteNote(idx) {
-  if (!window.confirm('حذف هذه الملاحظة؟')) return;
-  _notes.splice(idx, 1);
-  saveNotes(); renderNotes();
-}
-
-function toggleNotesPanel() {
-  const p = document.getElementById('notes-panel');
-  if (!p) return;
-  p.classList.toggle('open');
-  if (p.classList.contains('open')) {
-    loadNotes();
-    setTimeout(() => document.getElementById('notes-input')?.focus(), 80);
-  }
-}
 
 </script>
-
-<!-- ══ ذاكرة داخلية / Notes ══ -->
-<button class="notes-fab" onclick="toggleNotesPanel()" title="الملاحظات الداخلية">📝</button>
-<div class="notes-panel" id="notes-panel">
-  <div class="notes-hdr">
-    <span>📝 الذاكرة الداخلية</span>
-    <button onclick="toggleNotesPanel()" style="background:none;border:none;color:#aaa;font-size:16px;cursor:pointer">✕</button>
-  </div>
-  <div class="notes-list" id="notes-list"><div style="text-align:center;padding:20px;color:var(--tx3);font-size:11px">لا توجد ملاحظات بعد<br>اكتب ملاحظة واضغط +</div></div>
-  <div class="notes-add">
-    <textarea id="notes-input" placeholder="اكتب ملاحظة..." onkeydown="if(event.ctrlKey&amp;&amp;event.key==='Enter')addNote()"></textarea>
-    <button onclick="addNote()" title="إضافة (Ctrl+Enter)">+</button>
-  </div>
-</div>
-
 
 <!-- EGTPH v13.1 — تسعير في انتظار الاتفاق + تدقيق محاسبي -->
 <style id="egtph-pending-price-style">
@@ -8697,5 +8610,432 @@ function toggleNotesPanel() {
   window.importInvPDF=function(){T('استيراد PDF يحتاج خدمة خادمية مؤمّنة بمفتاح API. تم تعطيل الإرسال المباشر من المتصفح لحماية الفواتير ومنع فشل الاستيراد الصامت.','warning',6500);};
 })();
 </script>
+
+
+<!-- EGTPH v13.5 — ربط الدفعات بالسجلات + نقداً/شيك -->
+<script id="egtph-record-linked-payments-v135">
+(function(){
+  'use strict';
+
+  const MONEY_EPS = 0.009;
+  const METHODS = ['نقداً','شيك'];
+  const n = v => parseFloat(v) || 0;
+  const clone = v => JSON.parse(JSON.stringify(v));
+  const activeAdvance = a => a && a.status !== 'X';
+
+  function validMethod(value) { return METHODS.includes(value) ? value : ''; }
+  function methodOptions(selected) {
+    const current = validMethod(selected);
+    return `<option value="" ${current ? '' : 'selected'} disabled>— اختر —</option>` + METHODS.map(m =>
+      `<option value="${m}" ${m===current?'selected':''}>${m==='نقداً'?'💵':'🧾'} ${m}</option>`
+    ).join('');
+  }
+
+  function recordList(cid) {
+    return records.filter(r => r.clientId === cid);
+  }
+
+  function normalizeAllocations(item, cid) {
+    if (!item || !cid) return [];
+    const raw = Array.isArray(item.allocations)
+      ? item.allocations
+      : (item.recordId ? [{recordId:item.recordId, amount:item.amount}] : []);
+    const seen = new Set();
+    const out = [];
+    raw.forEach(a => {
+      const rid = String(a?.recordId || '');
+      const amount = n(a?.amount);
+      const rec = records.find(r => r.id===rid && r.clientId===cid);
+      if (!rec || amount <= 0 || seen.has(rid)) return;
+      seen.add(rid);
+      out.push({recordId:rid, amount});
+    });
+    return out;
+  }
+
+  function allocationScope(item, cid) {
+    const all = normalizeAllocations(item,cid);
+    if (!all.length) return 'general';
+    if (all.length === 1 && Math.abs(all[0].amount - n(item?.amount)) <= MONEY_EPS) return 'record';
+    return 'split';
+  }
+
+  function allocationLabel(item, cid) {
+    const all = normalizeAllocations(item,cid);
+    if (!all.length) return 'دفعة عامة للعميل';
+    if (all.length === 1) {
+      const r = records.find(x=>x.id===all[0].recordId);
+      return r ? `سجل: ${r.name}` : 'سجل غير موجود';
+    }
+    return `موزعة على ${all.length} سجلات`;
+  }
+
+  function methodLabel(item) {
+    const m = validMethod(item?.method);
+    if (m === 'نقداً') return '💵 نقداً';
+    if (m === 'شيك') return '🧾 شيك';
+    return item?.method ? `⚪ ${item.method}` : '⚪ غير محدد';
+  }
+
+  function financeOperations(cid) {
+    const pay = payments.filter(p=>p.clientId===cid).map(p=>({source:'payment', item:p, kind:'دفعة'}));
+    const adv = advances.filter(a=>a.clientId===cid && activeAdvance(a)).map(a=>({source:'advance', item:a, kind:a.type||'تسبيق'}));
+    return pay.concat(adv);
+  }
+
+  function recordAmount(rid) {
+    return entries.filter(e=>e.recordId===rid).reduce((sum,e)=>sum+(n(calcE(e)?.amount)),0);
+  }
+
+  function settlementOperations(rid) {
+    const rec = records.find(r=>r.id===rid);
+    if (!rec) return [];
+    const rows = [];
+    financeOperations(rec.clientId).forEach(op => {
+      normalizeAllocations(op.item,rec.clientId).forEach(a => {
+        if (a.recordId===rid) rows.push({
+          source:op.source,
+          item:op.item,
+          kind:op.kind,
+          amount:a.amount,
+          date:op.item.date||'',
+          method:op.item.method||'',
+          note:op.item.note||''
+        });
+      });
+    });
+    return rows.sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.item.createdAt||'').localeCompare(a.item.createdAt||''));
+  }
+
+  function recordSettlement(rid) {
+    const total = recordAmount(rid);
+    const rows = settlementOperations(rid);
+    const paid = rows.reduce((s,x)=>s+n(x.amount),0);
+    const cash = rows.filter(x=>x.method==='نقداً').reduce((s,x)=>s+n(x.amount),0);
+    const check = rows.filter(x=>x.method==='شيك').reduce((s,x)=>s+n(x.amount),0);
+    const unknown = rows.filter(x=>!validMethod(x.method)).reduce((s,x)=>s+n(x.amount),0);
+    const balance = total - paid;
+    return {
+      total, paid, cash, check, unknown, rows,
+      remain:Math.max(0,balance),
+      overpaid:Math.max(0,-balance),
+      balance
+    };
+  }
+
+  window.financeAllocationLabel = allocationLabel;
+  window.financeMethodLabel = methodLabel;
+  window.getRecordSettlement = recordSettlement;
+  window.getRecordSettlementOperations = settlementOperations;
+
+  function allocationCard(prefix, cid, existing, preset) {
+    const scope = preset?.scope || allocationScope(existing,cid);
+    const recs = recordList(cid);
+    return `
+      <div class="fg">
+        <label>تخصيص العملية *</label>
+        <select id="${prefix}-scope">
+          <option value="general" ${scope==='general'?'selected':''}>دفعة عامة للعميل</option>
+          <option value="record" ${scope==='record'?'selected':''} ${recs.length?'':'disabled'}>دفعة تخص سجلًا واحدًا</option>
+          <option value="split" ${scope==='split'?'selected':''} ${recs.length?'':'disabled'}>دفعة موزعة على عدة سجلات</option>
+        </select>
+      </div>
+      <div id="${prefix}-alloc-wrap"></div>`;
+  }
+
+  function allocationMap(item,cid) {
+    const map = new Map();
+    normalizeAllocations(item,cid).forEach(a=>map.set(a.recordId,a.amount));
+    return map;
+  }
+
+  function bindAllocation(prefix, cid, existing, preset) {
+    const scopeEl = document.getElementById(prefix+'-scope');
+    const wrap = document.getElementById(prefix+'-alloc-wrap');
+    if (!scopeEl || !wrap) return;
+    const state = { map:allocationMap(existing,cid), recordId:preset?.recordId || normalizeAllocations(existing,cid)[0]?.recordId || '' };
+
+    function storeCurrent() {
+      wrap.querySelectorAll('[data-alloc-record]').forEach(input=>{
+        const rid=input.getAttribute('data-alloc-record');
+        state.map.set(rid,n(input.value));
+      });
+      const select=wrap.querySelector('[data-alloc-select]');
+      if (select) state.recordId=select.value||'';
+    }
+
+    function render() {
+      const recs = recordList(cid);
+      const scope = scopeEl.value;
+      if (!recs.length && scope!=='general') {
+        scopeEl.value='general';
+        return render();
+      }
+      if (scope==='general') {
+        wrap.innerHTML = `<div class="hint" style="background:var(--bg3);padding:8px 10px;border:1px solid var(--bdr);border-radius:var(--rs)">هذه دفعة عامة للعميل. تُحسب في رصيده العام ولا تخصم من رصيد أي سجل.</div>`;
+        return;
+      }
+      if (scope==='record') {
+        const opts = recs.map(r=>{
+          const s=recordSettlement(r.id);
+          const selected=(state.recordId===r.id || (!state.recordId && recs[0]?.id===r.id))?'selected':'';
+          return `<option value="${esc(r.id)}" ${selected}>${esc(r.name)} — المتبقي الحالي: ${fDA(s.remain)}</option>`;
+        }).join('');
+        wrap.innerHTML = `<div class="fg"><label>السجل التابع للعميل *</label><select data-alloc-select id="${prefix}-record">${opts}</select></div><div class="hint">سيُخصص كامل مبلغ العملية لهذا السجل.</div>`;
+        return;
+      }
+      wrap.innerHTML = `
+        <div class="hint" style="margin-bottom:6px">اكتب مبلغ الحصة أمام كل سجل. مجموع الحصص يجب أن يساوي مبلغ العملية تمامًا.</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${recs.map(r=>{
+            const s=recordSettlement(r.id);
+            return `<div style="display:grid;grid-template-columns:1fr 118px;gap:7px;align-items:center;background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--rs);padding:7px 9px">
+              <div><strong style="font-size:12px">${esc(r.name)}</strong><div style="font-size:9px;color:var(--tx3)">المتبقي الحالي: ${fDA(s.remain)}</div></div>
+              <input class="ti" type="number" min="0" step="0.01" data-alloc-record="${esc(r.id)}" value="${state.map.get(r.id)||''}" placeholder="0">
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
+
+    scopeEl.addEventListener('change',()=>{storeCurrent();render();});
+    render();
+  }
+
+  function readAllocation(prefix,cid,amount) {
+    const scope = document.getElementById(prefix+'-scope')?.value || 'general';
+    const recs = recordList(cid);
+    if (scope==='general') return {allocationScope:'general', allocations:[]};
+    if (!recs.length) throw new Error('لا توجد سجلات لهذا العميل لتخصيص الدفعة');
+    if (scope==='record') {
+      const rid=document.getElementById(prefix+'-record')?.value || '';
+      if (!recs.some(r=>r.id===rid)) throw new Error('اختر سجلاً صحيحاً تابعاً للعميل');
+      return {allocationScope:'record', allocations:[{recordId:rid,amount}]};
+    }
+    const amounts=[];
+    document.querySelectorAll('#'+prefix+'-alloc-wrap [data-alloc-record]').forEach(el=>{
+      const amt=n(el.value);
+      const rid=el.getAttribute('data-alloc-record')||'';
+      if (amt>0) amounts.push({recordId:rid,amount:amt});
+    });
+    if (!amounts.length) throw new Error('أدخل حصة واحدة على الأقل لتوزيع الدفعة');
+    if (amounts.some(x=>!recs.some(r=>r.id===x.recordId))) throw new Error('يوجد سجل غير صالح في التوزيع');
+    const sum=amounts.reduce((s,x)=>s+x.amount,0);
+    if (Math.abs(sum-amount)>MONEY_EPS) throw new Error(`مجموع الحصص (${fDA(sum)}) يجب أن يساوي مبلغ العملية (${fDA(amount)})`);
+    return {allocationScope:'split', allocations:amounts};
+  }
+
+  function applyAllocation(target,next) {
+    target.allocationScope=next.allocationScope;
+    target.allocations=next.allocations.map(a=>({recordId:a.recordId,amount:n(a.amount)}));
+    if (target.allocations.length===1) target.recordId=target.allocations[0].recordId;
+    else delete target.recordId;
+  }
+
+  async function persistUpdate(collection,item,next) {
+    const before=clone(item);
+    const oldKeys=Object.keys(item);
+    try {
+      Object.assign(item,next,{updatedAt:new Date().toISOString()});
+      applyAllocation(item,next);
+      const ok=await dbP(collection,item);
+      if (!ok) throw new Error('تعذر الحفظ');
+      scheduleAutoSaveFile();
+      return true;
+    } catch(err) {
+      oldKeys.forEach(k=>delete item[k]);
+      Object.assign(item,before);
+      T('فشل الحفظ — لم يتم تغيير البيانات','error');
+      return false;
+    }
+  }
+
+  function allocationSummary(item,cid) {
+    return `${methodLabel(item)} · ${allocationLabel(item,cid)}`;
+  }
+
+  function renderRecordSettlementCard(rec,cid) {
+    const s=recordSettlement(rec.id);
+    const lockedPay=isSecLocked('pay:'+cid);
+    const lockedAdv=isSecLocked('adv:'+cid);
+    const action = !lockedPay ? `<button class="btn btn-grn btn-sm" onclick="addPay('${cid}',{scope:'record',recordId:'${rec.id}'})">＋ دفعة لهذا السجل</button>` : '';
+    const rowHtml=s.rows.length ? s.rows.map(x=>{
+      const edit = x.source==='payment'
+        ? (!lockedPay?`<button class="btn btn-sec btn-xs" onclick="editPay('${x.item.id}','${cid}')">✏</button>`:'')
+        : (!lockedAdv?`<button class="btn btn-sec btn-xs" onclick="editAdv('${x.item.id}','${cid}',false)">✏</button>`:'');
+      return `<tr><td>${fD(x.date)}</td><td class="tl">${esc(x.kind)}</td><td>${esc(methodLabel(x.item))}</td><td class="num" style="color:var(--green)">${fDA(x.amount)}</td><td class="tl">${x.note?esc(x.note):'—'}</td><td>${edit}</td></tr>`;
+    }).join('') : `<tr><td colspan="6" style="padding:12px;color:var(--tx3);text-align:center">لا توجد دفعات مرتبطة بهذا السجل. الدفعات العامة تبقى ضمن رصيد العميل فقط.</td></tr>`;
+    return `<div class="cp" style="margin:11px 13px 0;border-color:rgba(40,217,110,.26)">
+      <div style="padding:9px 12px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <div class="sh-t">💳 تسوية السجل: ${esc(rec.name)}</div>${action}
+      </div>
+      <div class="kgrid" style="margin:10px 12px 8px;grid-template-columns:repeat(auto-fit,minmax(135px,1fr))">
+        <div class="kpi gd"><div class="kl">إجمالي السجل</div><div class="kv gd">${fDA(s.total)}</div></div>
+        <div class="kpi gn"><div class="kl">المسدّد لهذا السجل</div><div class="kv gn">${fDA(s.paid)}</div></div>
+        <div class="kpi ${s.overpaid?'pp':s.remain?'rd':'gn'}"><div class="kl">${s.overpaid?'رصيد زائد':'المتبقي'}</div><div class="kv ${s.overpaid?'pp':s.remain?'rd':'gn'}">${fDA(s.overpaid||s.remain)}</div></div>
+        <div class="kpi bl"><div class="kl">نقداً / شيك</div><div class="kv bl" style="font-size:13px">${fDA(s.cash)} / ${fDA(s.check)}</div><div class="ks">${s.rows.length} عملية مرتبطة</div></div>
+      </div>
+      ${s.unknown?`<div style="margin:0 12px 9px;padding:7px 9px;border-radius:var(--rs);background:var(--rdim);color:var(--red);font-size:11px">⚠ ${fDA(s.unknown)} من عمليات قديمة دون طريقة نقد/شيك محددة.</div>`:''}
+      <div class="tw" style="margin:0 12px 12px"><table class="tbl" style="min-width:610px"><thead><tr><th>التاريخ</th><th class="tl">النوع</th><th>التحصيل</th><th>الحصة المسددة</th><th class="tl">ملاحظة</th><th>إجراء</th></tr></thead><tbody>${rowHtml}</tbody></table></div>
+    </div>`;
+  }
+  window.renderRecordSettlementCard=renderRecordSettlementCard;
+
+  function financeForm(prefix,cid,item,opts={}) {
+    const c=clients.find(x=>x.id===cid);
+    const existing=item||{};
+    return `${opts.clientSelect ? `<div class="fg"><label>العميل *</label><select id="${prefix}-client">${clients.map(x=>`<option value="${x.id}" ${x.id===cid?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>` : `<div style="background:var(--gndim);border:1px solid rgba(40,217,110,.22);border-radius:var(--rs);padding:9px 12px;margin-bottom:11px;font-size:12px;color:var(--green)">العميل: <strong>${esc(c?.name||'')}</strong></div>`}
+      ${opts.typeSelect ? `<div class="fg"><label>النوع *</label><select id="${prefix}-type"><option value="تسبيق" ${(existing.type||'تسبيق')==='تسبيق'?'selected':''}>💳 تسبيق</option><option value="دفعة" ${existing.type==='دفعة'?'selected':''}>💵 دفعة</option></select></div>` : ''}
+      <div class="fg"><label>المبلغ (DA) *</label><input type="number" id="${prefix}-a" min="0.01" step="0.01" value="${existing.amount!=null?esc(String(existing.amount)):''}" placeholder="0"></div>
+      <div class="fgr">
+        <div class="fg"><label>التاريخ *</label><input type="date" id="${prefix}-d" value="${esc(existing.date||today())}"></div>
+        <div class="fg"><label>طريقة التحصيل *</label><select id="${prefix}-m">${methodOptions(existing.method)}</select></div>
+      </div>
+      ${allocationCard(prefix,cid,existing,opts.preset)}
+      <div class="fg" style="margin-top:12px"><label>ملاحظة</label><input type="text" id="${prefix}-n" value="${esc(existing.note||'')}" placeholder="..." ></div>`;
+  }
+
+  function bindFinanceForm(prefix,cid,item,opts={}) {
+    bindAllocation(prefix,cid,item,opts.preset);
+    if (!opts.clientSelect) return;
+    const clientEl=document.getElementById(prefix+'-client');
+    if (!clientEl) return;
+    clientEl.addEventListener('change',()=>{
+      const currentItem={...item, clientId:clientEl.value, allocations:[]};
+      bindAllocation(prefix,clientEl.value,currentItem,{scope:'general'});
+    });
+  }
+
+  function readFinanceForm(prefix,cid) {
+    const amount=n(document.getElementById(prefix+'-a')?.value);
+    const date=document.getElementById(prefix+'-d')?.value||'';
+    const method=document.getElementById(prefix+'-m')?.value||'';
+    if (amount<=0) throw new Error('أدخل مبلغاً صحيحاً');
+    if (!date) throw new Error('اختر تاريخ العملية');
+    if (!validMethod(method)) throw new Error('اختر نقداً أو شيكاً');
+    const alloc=readAllocation(prefix,cid,amount);
+    return {amount,date,method,note:(document.getElementById(prefix+'-n')?.value||'').trim(),...alloc};
+  }
+
+  window.addPay = async function(cid,preset={}) {
+    if (secGuard('pay:'+cid,'المدفوعات')) return;
+    const c=clients.find(x=>x.id===cid); if(!c) return T('العميل غير موجود','error');
+    OM('＋ دفعة جديدة',financeForm('py',cid,{}, {preset}),async()=>{
+      try {
+        const next=readFinanceForm('py',cid);
+        const p={id:uid(),clientId:cid,createdAt:new Date().toISOString(),...next};
+        applyAllocation(p,next);
+        payments.push(p);
+        const ok=await dbP('payments',p);
+        if(!ok){payments=payments.filter(x=>x.id!==p.id);return T('فشل تسجيل الدفعة — لم يتم الحفظ','error');}
+        scheduleAutoSaveFile(); CM(); renderCD(cid); T('✅ تم تسجيل الدفعة','success');
+        await logA('دفعة '+methodLabel(p)+': '+fDA(p.amount),c.name+' · '+allocationLabel(p,cid));
+      } catch(err) { T(err.message||'تحقق من البيانات','error'); }
+    },'تسجيل');
+    setTimeout(()=>{bindFinanceForm('py',cid,{}, {preset});document.getElementById('py-a')?.focus();},60);
+  };
+
+  window.editPay = async function(pid,cid) {
+    if (secGuard('pay:'+cid,'المدفوعات')) return;
+    const p=payments.find(x=>x.id===pid&&x.clientId===cid); const c=clients.find(x=>x.id===cid);
+    if(!p||!c) return T('الدفعة أو العميل غير موجود','error');
+    OM('✏ تعديل الدفعة',financeForm('ep',cid,p),async()=>{
+      try {
+        const next=readFinanceForm('ep',cid);
+        const saved=await persistUpdate('payments',p,next);
+        if(!saved) return;
+        CM(); renderCD(cid); T('✅ تم تعديل الدفعة','success');
+        await logA('تعديل دفعة '+methodLabel(p)+': '+fDA(p.amount),c.name+' · '+allocationLabel(p,cid));
+      } catch(err) { T(err.message||'تحقق من البيانات','error'); }
+    },'حفظ التعديل');
+    setTimeout(()=>bindFinanceForm('ep',cid,p),60);
+  };
+
+  window.delPay = async function(pid,cid) {
+    if(secGuard('pay:'+cid,'المدفوعات')) return;
+    const p=payments.find(x=>x.id===pid&&x.clientId===cid); const c=clients.find(x=>x.id===cid); if(!p)return T('الدفعة غير موجودة','error');
+    if(!await confirmDel(`حذف الدفعة ${fDA(p.amount)} نهائياً؟ لا تُنقل إلى سلة المهملات.`,'حذف نهائي',true))return;
+    if(!await dbD('payments',pid))return T('فشل الحذف — الدفعة بقيت محفوظة','error');
+    payments=payments.filter(x=>x.id!==pid); scheduleAutoSaveFile(); renderCD(cid); T('✅ تم حذف الدفعة نهائياً','success'); await logA('حذف نهائي لدفعة: '+fDA(p.amount),c?.name||'');
+  };
+
+  async function saveAdvance(a,next) {
+    const before=clone(a);
+    Object.assign(a,next,{updatedAt:new Date().toISOString()});
+    applyAllocation(a,next);
+    const ok=await dbP('advances',a);
+    if(!ok){Object.keys(a).forEach(k=>delete a[k]);Object.assign(a,before);T('فشل الحفظ — لم يتم تغيير البيانات','error');return false;}
+    scheduleAutoSaveFile(); return true;
+  }
+
+  window.addAdv = async function(cid,preset={}) {
+    if(secGuard('adv:'+cid,'التسبيقات'))return;
+    const c=clients.find(x=>x.id===cid);if(!c)return T('العميل غير موجود','error');
+    OM('＋ دفعة / تسبيق',financeForm('av',cid,{type:'تسبيق'}, {typeSelect:true,preset}),async()=>{
+      try {
+        const next=readFinanceForm('av',cid); next.type=document.getElementById('av-type')?.value||'تسبيق';
+        const a={id:uid(),clientId:cid,status:'active',createdAt:new Date().toISOString(),...next}; applyAllocation(a,next);
+        advances.push(a); const ok=await dbP('advances',a); if(!ok){advances=advances.filter(x=>x.id!==a.id);return T('فشل التسجيل — لم يتم الحفظ','error');}
+        scheduleAutoSaveFile();CM();renderCD(cid);T('✅ تم تسجيل '+a.type,'success');await logA(a.type+' '+methodLabel(a)+': '+fDA(a.amount),c.name+' · '+allocationLabel(a,cid));
+      }catch(err){T(err.message||'تحقق من البيانات','error');}
+    },'تسجيل');
+    setTimeout(()=>{bindFinanceForm('av',cid,{type:'تسبيق'},{typeSelect:true,preset});document.getElementById('av-a')?.focus();},60);
+  };
+
+  window.editAdv = async function(aid,cid,fromGlobal) {
+    const a=advances.find(x=>x.id===aid);if(!a)return T('التسبيق غير موجود','error');
+    const oldCid=a.clientId, globalMode=fromGlobal===true;
+    if(globalMode&&secGuard('advG','التسبيقات'))return;
+    if(secGuard('adv:'+oldCid,'التسبيقات'))return;
+    OM('✏ تعديل '+(a.type||'التسبيق'),financeForm('ea',oldCid,a,{clientSelect:globalMode,typeSelect:true}),async()=>{
+      try {
+        const newCid=globalMode?(document.getElementById('ea-client')?.value||oldCid):oldCid;
+        if(!clients.some(c=>c.id===newCid))throw new Error('اختر عميلاً صحيحاً');
+        if(newCid!==oldCid&&secGuard('adv:'+newCid,'التسبيقات'))return;
+        const next=readFinanceForm('ea',newCid); next.type=document.getElementById('ea-type')?.value||'تسبيق'; next.clientId=newCid; next.status=a.status||'active';
+        const saved=await saveAdvance(a,next);if(!saved)return;
+        CM();globalMode?renderAdvances():renderCD(newCid);T('✅ تم تعديل '+next.type,'success');await logA('تعديل '+next.type+' '+methodLabel(a)+': '+fDA(a.amount),clients.find(c=>c.id===newCid)?.name||'');
+      }catch(err){T(err.message||'تحقق من البيانات','error');}
+    },'حفظ التعديل');
+    setTimeout(()=>bindFinanceForm('ea',oldCid,a,{clientSelect:globalMode,typeSelect:true}),60);
+  };
+
+  window.delAdv = async function(aid,cid,fromGlobal) {
+    const a=advances.find(x=>x.id===aid);if(!a)return T('التسبيق غير موجود','error');const actualCid=a.clientId;
+    if(fromGlobal===true&&secGuard('advG','التسبيقات'))return;if(secGuard('adv:'+actualCid,'التسبيقات'))return;
+    if(!await confirmDel(`حذف ${(a.type||'التسبيق')} بقيمة ${fDA(a.amount)} نهائياً؟ لا تُنقل العملية إلى سلة المهملات.`,'حذف نهائي',true))return;
+    if(!await dbD('advances',aid))return T('فشل الحذف — العملية بقيت محفوظة','error');
+    advances=advances.filter(x=>x.id!==aid);scheduleAutoSaveFile();fromGlobal===true?renderAdvances():renderCD(actualCid);T('✅ تم الحذف نهائياً','success');await logA('حذف نهائي '+(a.type||'تسبيق')+': '+fDA(a.amount),clients.find(c=>c.id===actualCid)?.name||'');
+  };
+
+  window.cancelAdv = async function(aid) { const a=advances.find(x=>x.id===aid); if(a)return window.delAdv(aid,a.clientId,true); };
+
+  window.openGlobalAdv = async function() {
+    if(secGuard('advG','التسبيقات'))return;if(!clients.length)return T('لا يوجد عملاء بعد','warning');
+    const cid=clients[0].id;
+    OM('＋ دفعة / تسبيق',financeForm('ga',cid,{type:'تسبيق'},{clientSelect:true,typeSelect:true}),async()=>{
+      try {
+        const targetCid=document.getElementById('ga-client')?.value||'';if(!clients.some(c=>c.id===targetCid))throw new Error('اختر عميلاً صحيحاً');if(secGuard('adv:'+targetCid,'التسبيقات'))return;
+        const next=readFinanceForm('ga',targetCid);next.type=document.getElementById('ga-type')?.value||'تسبيق';
+        const a={id:uid(),clientId:targetCid,status:'active',createdAt:new Date().toISOString(),...next};applyAllocation(a,next);
+        advances.push(a);const ok=await dbP('advances',a);if(!ok){advances=advances.filter(x=>x.id!==a.id);return T('فشل التسجيل — لم يتم الحفظ','error');}
+        scheduleAutoSaveFile();CM();renderAdvances();T('✅ تم تسجيل '+a.type,'success');await logA(a.type+' '+methodLabel(a)+': '+fDA(a.amount),clients.find(c=>c.id===targetCid)?.name||'');
+      }catch(err){T(err.message||'تحقق من البيانات','error');}
+    },'تسجيل');
+    setTimeout(()=>{bindFinanceForm('ga',cid,{type:'تسبيق'},{clientSelect:true,typeSelect:true});document.getElementById('ga-a')?.focus();},60);
+  };
+
+  // حماية ترابط الحسابات: لا يحذف سجل توجد عمليات مالية موزعة عليه.
+  const baseDelRecord=window.delRecord;
+  window.delRecord=async function(rid,cid){
+    const rows=settlementOperations(rid);
+    if(rows.length){
+      T(`لا يمكن حذف هذا السجل: توجد ${rows.length} عملية تحصيل مرتبطة به. عدّل توزيع الدفعات أو احذفها أولاً.`,'warning',6500);
+      return;
+    }
+    return baseDelRecord.apply(this,arguments);
+  };
+})();
+</script>
+
 
 </body></html>
