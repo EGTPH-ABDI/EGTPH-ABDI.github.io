@@ -760,6 +760,36 @@ body.light-mode .theme-btn:hover { border-color: var(--gold2); background: var(-
 @media(max-width:420px){.ts-filter-grid{grid-template-columns:1fr;}.ts-filter-grid .ts-wide{grid-column:auto;}}
 </style>
 
+
+<style id="egtph-bilingual-style">
+/* EGTPH bilingual interface: Arabic RTL / Français LTR */
+.lang-btn{min-width:38px;height:36px;border-radius:9px;border:1px solid var(--glass-bdr,var(--bdr2));background:rgba(255,255,255,.06);color:var(--gold2);font-family:'Inter','Tajawal',sans-serif;font-weight:900;font-size:11px;letter-spacing:.5px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.24);transition:all .15s;flex-shrink:0}
+.lang-btn:hover{border-color:var(--gold);background:var(--gdim);transform:translateY(-1px)}
+html[dir="ltr"] body{direction:ltr;font-family:'Inter','Segoe UI',Arial,sans-serif;text-align:left}
+html[dir="ltr"] input,html[dir="ltr"] select,html[dir="ltr"] textarea,html[dir="ltr"] button{font-family:'Inter','Segoe UI',Arial,sans-serif}
+html[dir="ltr"] .sb{border-left:0;border-right:1px solid var(--glass-bdr,var(--bdr));box-shadow:4px 0 28px rgba(0,0,0,.5)}
+html[dir="ltr"] .sb-sm{padding-right:0;padding-left:43px}
+html[dir="ltr"] .si{text-align:left}
+html[dir="ltr"] .si.on::after{left:auto;right:0;border-radius:3px 0 0 3px}
+html[dir="ltr"] .tbl thead th.tl,html[dir="ltr"] .tbl tbody td.tl{text-align:left}
+html[dir="ltr"] .li-r{text-align:right}
+html[dir="ltr"] .back-btn{flex-direction:row-reverse}
+html[dir="ltr"] .ph-act{margin-left:auto;margin-right:0}
+html[dir="ltr"] .rtabs,html[dir="ltr"] .tabs,html[dir="ltr"] .tb-act{direction:ltr}
+html[dir="ltr"] .cl-top,html[dir="ltr"] .pay-it,html[dir="ltr"] .li,html[dir="ltr"] .al-it{direction:ltr}
+html[dir="ltr"] .fgr,html[dir="ltr"] .ts-filter-grid{text-align:left}
+html[dir="ltr"] .mft{justify-content:flex-end}
+html[dir="ltr"] .pedit input,html[dir="ltr"] .ti{text-align:center}
+html[dir="ltr"] .ai-m.u{flex-direction:row}
+html[dir="ltr"] .ai-m.b .ai-bub{border-radius:10px 3px 10px 10px}
+html[dir="ltr"] .ai-m.u .ai-bub{border-radius:3px 10px 10px 10px}
+html[dir="ltr"] .sb-foot,html[dir="ltr"] .dw-d{text-align:left}
+html[dir="ltr"] .trash-badge{left:auto;right:8px}
+html[dir="ltr"] .aud-badge,html[dir="ltr"] .rem-badge{right:auto!important;left:-5px!important}
+@media(max-width:720px){html[dir="ltr"] .sb{left:0;right:auto;transform:translateX(-100%);box-shadow:6px 0 28px rgba(0,0,0,.55)}html[dir="ltr"] .sb.open{transform:translateX(0)}}
+@media print{html[dir="ltr"] body{direction:ltr;text-align:left;font-family:Arial,sans-serif!important}}
+</style>
+
 </head><body class="light-mode">
 
 <div id="app">
@@ -805,6 +835,8 @@ body.light-mode .theme-btn:hover { border-color: var(--gold2); background: var(-
       <button class="aud-btn" id="aud-btn" onclick="toggleAuditPanel()" title="لوحة التنبيهات">⚠️<span class="aud-badge" id="aud-badge" style="display:none">0</span></button>
       <!-- زر تبديل الوضع النهاري/الليلي -->
       <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="التبديل إلى الوضع الليلي">🌙</button>
+      <!-- زر اللغة العربية / الفرنسية -->
+      <button class="lang-btn" id="lang-btn" onclick="toggleLanguage()" title="Passer au français" aria-label="Changer la langue">FR</button>
       <!-- زر المزامنة السحابية -->
       <button class="aud-btn" id="fb-btn" onclick="fbSyncNow()" title="المزامنة السحابية">☁️</button>
       <!-- زر الحفظ + مؤشر -->
@@ -1271,14 +1303,15 @@ const dbC = s     => _tx(s,'readwrite',(st)     => { st.clear(); }, undefined);
 // ── Helpers ──
 const uid   = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 const today = () => { const d=new Date(); const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); };
-const fD    = d => { if (!d) return '—'; return new Date(d+'T00:00:00').toLocaleDateString('fr-DZ',{day:'2-digit',month:'2-digit',year:'numeric'}); };
+const fD    = d => { if (!d) return '—'; const loc=(typeof getAppLanguage==='function'&&getAppLanguage()==='fr')?'fr-DZ':'ar-DZ'; return new Date(d+'T00:00:00').toLocaleDateString(loc,{day:'2-digit',month:'2-digit',year:'numeric'}); };
 // وقت الإدخال الفعلي للعملية (من createdAt) — يُستعمل في قوائم المدفوعات/التسبيقات
-const fEntryT = iso => { if(!iso) return ''; try{ const d=new Date(iso); if(isNaN(d.getTime()))return ''; return d.toLocaleDateString('fr-DZ',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+formatTime(d); }catch(e){ return ''; } };
+const fEntryT = iso => { if(!iso) return ''; try{ const d=new Date(iso); if(isNaN(d.getTime()))return ''; const loc=(typeof getAppLanguage==='function'&&getAppLanguage()==='fr')?'fr-DZ':'ar-DZ'; return d.toLocaleDateString(loc,{day:'2-digit',month:'2-digit',year:'numeric'})+' '+formatTime(d); }catch(e){ return ''; } };
 const fDA   = n => { const v = parseFloat(n)||0; return v.toLocaleString('fr-DZ',{minimumFractionDigits:2,maximumFractionDigits:2}); };
 const fN    = n => (parseFloat(n)||0).toLocaleString('fr-DZ',{maximumFractionDigits:2});
 // ── تحويل المبلغ إلى أحرف عربية ──
 function amountToWords(n) {
   n = Math.round(parseFloat(n)||0);
+  if (typeof getAppLanguage==='function' && getAppLanguage()==='fr' && typeof amountToFrenchWords==='function') return amountToFrenchWords(n);
   if (n === 0) return 'صفر دينار جزائري';
   const ones = ['','واحد','اثنان','ثلاثة','أربعة','خمسة','ستة','سبعة','ثمانية','تسعة',
                 'عشرة','أحد عشر','اثنا عشر','ثلاثة عشر','أربعة عشر','خمسة عشر',
@@ -1614,7 +1647,7 @@ function formatTimeShort(date) {
 }
 function renderDash() {
   const now = new Date();
-  const dateAr = now.toLocaleDateString('ar-DZ',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const dateAr = now.toLocaleDateString((typeof getAppLanguage==='function'&&getAppLanguage()==='fr')?'fr-DZ':'ar-DZ',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 
   // ── إيرادات العملاء ──
   let gTot=0, gPaid=0, gTrips=0, gHours=0;
@@ -5390,6 +5423,8 @@ function askAI(question) {
 
 function aiProcess(q) {
   var ql = q.toLowerCase().trim();
+  // Les requêtes françaises reçoivent des mots-clés arabes internes afin de réutiliser le même moteur local.
+  if (typeof frenchAIKeywords==='function') ql += ' ' + frenchAIKeywords(ql);
 
   // Live data
   var gTot   = clients.reduce(function(s,c){return s+getCT(c.id).tot;},0);
@@ -9037,5 +9072,144 @@ if (document.readyState === 'loading') {
 })();
 </script>
 
+
+
+<script id="egtph-bilingual-engine">
+(function(){
+  'use strict';
+  const LANG_KEY='egtph_ui_language';
+  const DEFAULT='ar';
+  const MAP={
+    'نظام الإدارة الشامل':'Système de gestion complet',
+    'الرئيسية':'Accueil','لوحة التحكم':'Tableau de bord','العمليات':'Opérations','العملاء':'Clients','التحصيلات':'Encaissements','إحصائيات الرحلات':'Statistiques des trajets','التسبيقات':'Avances','المخزون':'Stock','الموردون':'Fournisseurs','النظام':'Système','سلة المهملات':'Corbeille','الطباعة':'Impression','المساعد الذكي':'Assistant intelligent','الإعدادات':'Paramètres','وادي السلي، الشلف':'Oued Sly, Chlef',
+    'نظرة شاملة على النشاط':"Vue d'ensemble de l'activité",'لم يُحفظ':'Non enregistré','محفوظ':'Enregistré','تغييرات غير محفوظة':'Modifications non enregistrées','حفظ':'Enregistrer','حفظ التعديل':'Enregistrer les modifications','حفظ اليوم':'Enregistrer la journée','حفظ الملف مع البيانات':'Enregistrer le fichier avec les données','تصدير كل البيانات لـ Excel':'Exporter toutes les données vers Excel','المزامنة السحابية':'Synchronisation cloud','التبديل إلى الوضع الليلي':'Passer au mode sombre','التبديل إلى الوضع النهاري':'Passer au mode clair','التبديل إلى العربية':'Passer à l’arabe','التبديل إلى الفرنسية':'Passer au français','تذكيرات المستحقات':'Rappels des échéances','لوحة التنبيهات':'Centre des alertes','Passer au français':'Passer au français','Changer la langue':'Changer la langue',
+    'مرحباً،':'Bonjour,','الإيرادات والتحصيل':'Revenus et encaissements','إجمالي الإيرادات':'Total des revenus','المحصّل':'Encaissements','رصيد العملاء المتبقي':'Solde restant des clients','الرحلات / الساعات':'Trajets / heures','الموردون والمشتريات':'Fournisseurs et achats','إجمالي فواتير الموردين':'Total des factures fournisseurs','المدفوع للموردين':'Payé aux fournisseurs','المستحق للموردين':'À payer aux fournisseurs','هامش الربح التقريبي':'Marge bénéficiaire estimée','الإيرادات − فواتير الموردين':'Revenus − factures fournisseurs','ديون العملاء المعلقة':'Créances clients en attente','مستحقات الموردين':'Dettes fournisseurs','أفضل العملاء':'Meilleurs clients','آخر النشاطات':'Dernières activités','لا توجد بيانات بعد':'Aucune donnée pour le moment','لا يوجد نشاط بعد':'Aucune activité pour le moment','جميع العملاء مسددون':'Tous les clients sont soldés','جميع الموردين مسددون':'Tous les fournisseurs sont soldés',
+    'العميل':'Client','عميل':'Client','العملاء':'Clients','سجل':'Dossier','السجلات':'Dossiers','السجل':'Dossier','المورد':'Fournisseur','مورد':'Fournisseur','الموردون':'Fournisseurs','فاتورة':'Facture','فواتير':'Factures','الفاتورة':'La facture','دفعة':'Paiement','الدفعات':'Paiements','المدفوعات':'Paiements','تسبيق':'Avance','التسبيقات':'Avances','شاحنة':'Camion','الشاحنة':'Camion','الشاحنات':'Camions','رحلة':'Trajet','الرحلات':'Trajets','ساعة':'Heure','ساعات':'Heures','آلة':'Machine','الآلات':'Machines','مادة':'Matière','المادة':'Matière','مواد':'Matières','خدمة':'Service','الخدمة':'Service','خدمات':'Services','وحدة':'Unité','الوحدة':'Unité','وحدات':'Unités','صنف':'Article','الصنف':'Article','أصناف':'Articles','يوم':'Jour','أيام':'Jours','التاريخ':'Date','المبلغ':'Montant','الإجمالي':'Total','المدفوع':'Payé','المتبقي':'Restant','الحالة':'Statut','إجراء':'Action','النوع':'Type','الملاحظة':'Note','ملاحظة':'Note','الطريقة':'Mode','القيمة':'Valeur','الكمية':'Quantité','السعر':'Prix','الوجهة':'Destination','الاسم':'Nom','الهاتف':'Téléphone',
+    'إضافة عميل':'Ajouter un client','عميل جديد':'Nouveau client','مورد جديد':'Nouveau fournisseur','سجل جديد':'Nouveau dossier','يوم جديد':'Nouvelle journée','إدخال جديد':'Nouvelle saisie','صنف جديد':'Nouvel article','وحدة جديدة':'Nouvelle unité','مادة جديدة':'Nouvelle matière','فاتورة جديدة':'Nouvelle facture','دفعة جديدة':'Nouveau paiement','تسبيق جديد':'Nouvelle avance','فتح':'Ouvrir','إغلاق':'Fermer','تعديل':'Modifier','تعديل الدفعة':'Modifier le paiement','تعديل التسبيق':'Modifier l’avance','حذف':'Supprimer','حذف نهائي':'Suppression définitive','إلغاء':'Annuler','تسجيل':'Enregistrer','بحث':'Rechercher','طباعة':'Imprimer','تصدير':'Exporter','استيراد':'Importer','تحديد الكل':'Tout sélectionner','إنهاء التحديد':'Terminer la sélection','قفل':'Verrouiller','فتح للتعديل':'Déverrouiller pour modifier','قفل الكل':'Tout verrouiller','تصفير الفلاتر':'Réinitialiser les filtres','فحص الآن':'Vérifier maintenant','مسح المحلولة':'Effacer les éléments résolus','تصدير التقرير':'Exporter le rapport',
+    'بحث بالاسم أو الهاتف':'Rechercher par nom ou téléphone','بحث بالاسم، الهاتف، طريقة الدفع، الملاحظة':'Rechercher par nom, téléphone, mode de paiement ou note','لا يوجد عملاء بعد':'Aucun client pour le moment','لا يوجد موردون':'Aucun fournisseur pour le moment','لا توجد نتائج':'Aucun résultat','غيّر الفلتر أو عبارة البحث':'Modifiez le filtre ou le texte recherché','جرب بحثاً آخر':'Essayez une autre recherche','اضغط "عميل جديد" للبدء':'Cliquez sur « Nouveau client » pour commencer','اضغط "مورد جديد" للبدء':'Cliquez sur « Nouveau fournisseur » pour commencer','لا توجد سجلات':'Aucun dossier','لا توجد مدفوعات':'Aucun paiement','لا توجد تسبيقات':'Aucune avance','لا توجد مدفوعات أو تسبيقات':'Aucun paiement ou avance','لا توجد تذكيرات حالياً':'Aucun rappel actuellement','لا توجد تنبيهات حالياً':'Aucune alerte actuellement','لا توجد شاحنات':'Aucun camion','لا توجد آلات':'Aucune machine','لا يوجد مخزون':'Aucun stock',
+    'نقداً':'Espèces','نقدا':'Espèces','شيك':'Chèque','تحويل بنكي':'Virement bancaire','طريقة الدفع':'Mode de paiement','طريقة التحصيل':'Mode d’encaissement','دفعة عامة للعميل':'Paiement général du client','دفعة تخص سجلًا واحدًا':'Paiement affecté à un dossier','دفعة موزعة على عدة سجلات':'Paiement réparti entre plusieurs dossiers','كل سجلات العميل':'Tous les dossiers du client','السجل التابع للعميل':'Dossier du client','كل سجلات العميل المحدد':'Tous les dossiers du client sélectionné','اختر العميل أولاً':'Choisissez d’abord le client','اختر عميلاً صحيحاً':'Choisissez un client valide','اختر تاريخ العملية':'Choisissez la date de l’opération','أدخل مبلغاً صحيحاً':'Saisissez un montant valide','أدخل كمية صحيحة':'Saisissez une quantité valide','تم تسجيل الدفعة':'Paiement enregistré','تم تعديل الدفعة':'Paiement modifié','تم الحذف نهائياً':'Suppression définitive effectuée','فشل الحفظ — لم يتم تغيير البيانات':'Échec de l’enregistrement — aucune donnée modifiée','فشل التسجيل — لم يتم الحفظ':'Échec de l’enregistrement','فشل الحذف — العملية بقيت محفوظة':'Échec de la suppression — l’opération a été conservée','فشل تسجيل الدفعة':'Échec de l’enregistrement du paiement','لم يتم الحفظ':'Non enregistré','تحقق من البيانات':'Vérifiez les données',
+    'إحصائيات الرحلات':'Statistiques des trajets','نطاق الإحصاء':'Périmètre des statistiques','كل العملاء':'Tous les clients','كل المواد':'Toutes les matières','كل الشاحنات':'Tous les camions','الفترة':'Période','الكل':'Toutes','اليوم':"Aujourd’hui",'هذا الأسبوع':'Cette semaine','هذا الشهر':'Ce mois-ci','هذه السنة':'Cette année','فترة مخصصة':'Période personnalisée','من تاريخ':'Du','إلى تاريخ':'Au','من':'Du','إلى':'Au','الخدمة':'Service','الشاحنات:':'Camions :','العميل:':'Client :','السجل:':'Dossier :','المادة:':'Matière :','لا توجد شاحنات ذات رحلات داخل النطاق المختار':'Aucun camion avec des trajets dans le périmètre sélectionné','إجمالي الرحلات':'Total des trajets','إجمالي الإيراد المؤكد':'Revenu confirmé total','متوسط الرحلة المؤكدة':'Moyenne par trajet confirmé','رحلات بسعر معلّق':'Trajets à prix en attente','أيام العمل':'Jours travaillés','آخر رحلة':'Dernier trajet','النتيجة حسب الشاحنة':'Résultat par camion','النتيجة حسب السجل':'Résultat par dossier','النتيجة حسب المادة':'Résultat par matière','آخر الرحلات المطابقة':'Derniers trajets correspondants','لا توجد رحلات ضمن الاختيار الحالي':'Aucun trajet dans la sélection actuelle','غيّر الفترة أو العميل أو السجل أو المادة أو الشاحنات المختارة':'Modifiez la période, le client, le dossier, la matière ou les camions sélectionnés','إحصائيات هذا السجل':'Statistiques de ce dossier',
+    'تحصيلات العملاء':'Encaissements clients','تقرير مباشر يوضح العملاء الذين دفعوا، آخر دفعة، المجموع المحصّل، والمتبقي':'Rapport direct : clients payeurs, dernier paiement, total encaissé et solde restant','إجمالي المحصّل':'Total encaissé','عدد الدفعات':'Nombre de paiements','آخر تحصيل':'Dernier encaissement','رصيد زائد':'Crédit excédentaire','دفعوا':'Ont payé','عليهم متبقي':'Avec solde restant','عملاء دفعوا أكثر من المطلوب':'Clients ayant payé plus que le dû','فتح ملف العميل':'Ouvrir le dossier client','العميل غير موجود':'Client introuvable','الدفعة أو العميل غير موجود':'Paiement ou client introuvable','التسبيق غير موجود':'Avance introuvable',
+    'ملف العميل التفصيلي':'Fiche client détaillée','تسوية السجل':'Règlement du dossier','إجمالي السجل':'Total du dossier','المسدد لهذا السجل فقط':'Payé pour ce dossier uniquement','المتبقي الحقيقي':'Solde réel restant','مجموع النقد':'Total espèces','مجموع الشيكات':'Total chèques','العمليات المرتبطة بالسجل':'Opérations liées au dossier','لا يمكن حذف هذا السجل':'Impossible de supprimer ce dossier','توجد عملية تحصيل مرتبطة به':'Une opération d’encaissement y est liée','عدّل توزيع الدفعات أو احذفها أولاً':'Modifiez la répartition des paiements ou supprimez-les d’abord',
+    'المخزون والحركات':'Stock et mouvements','إجمالي الأصناف':'Total des articles','منخفض المخزون':'Stock faible','إجمالي الحركات':'Total des mouvements','الكمية الحالية':'Quantité actuelle','الحد الأدنى':'Minimum','زيادة المخزون':'Entrée de stock','نقصان المخزون':'Sortie de stock','بيع من المخزون':'Vente depuis le stock','إعادة الكمية للمخزون':'Retour de quantité au stock','مورد مسجّل':'Fournisseur enregistré','ملف المورد':'Fiche fournisseur','فواتير الشراء':'Factures d’achat','حساب المورد':'Compte fournisseur','دفعة للمورد':'Paiement fournisseur','تسبيق للمورد':'Avance fournisseur',
+    'خيارات الطباعة':'Options d’impression','فاتورة رسمية':'Facture officielle','كشف حساب':'Relevé de compte','ملخص العميل':'Résumé client','إجمالي بدون تفاصيل':'Total sans détails','سجل محدد':'Dossier précis','اختر السجل':'Choisir le dossier','تضمين في الطباعة':'Inclure dans l’impression','خانة التوقيعات':'Zone des signatures','تفاصيل كل شاحنة':'Détails de chaque camion','الجدول اليومي':'Tableau journalier','بالأحرف:':'En lettres :','طُبع من':'Imprimé depuis',
+    'مرحباً! أنا المساعد الذكي المحلي لنظام EGTPH.':'Bonjour ! Je suis l’assistant intelligent local d’EGTPH.','أعمل بدون إنترنت ومدرّب على كامل بياناتك.':'Je fonctionne hors ligne et exploite toutes vos données.','يمكنني مساعدتك في تحليل الإيرادات، تتبع الديون، إحصاء الرحلات، وحالة المخزون.':'Je peux analyser les revenus, suivre les dettes, compter les trajets et vérifier le stock.','أكبر عميل':'Plus grand client','الديون المتبقية':'Dettes restantes','حالة المخزون':'État du stock','ملخص شامل':'Résumé complet','إجمالي الرحلات':'Total des trajets','العملاء المتأخرون':'Clients en retard','إيرادات المشاريع':'Revenus des dossiers','اكتب سؤالك هنا...':'Écrivez votre question ici…','يمكنني مساعدتك في:':'Je peux vous aider avec :','أمثلة:':'Exemples :','لا توجد أصناف في المخزون بعد.':'Aucun article en stock pour le moment.','لا يوجد أي عميل دفع دفعات أو تسبيقات بعد.':'Aucun client n’a encore versé de paiement ou d’avance.',
+    'إدارة العملاء والسجلات':'Gestion des clients et dossiers','تحليل الرحلات حسب الشاحنة ثم العميل والسجل التابع له والمادة والفترة':'Analyse des trajets par camion, client, dossier, matière et période','تسبيقات العملاء':'Avances clients','إدارة المخزون والحركات':'Gestion du stock et des mouvements','إدارة الموردين والمشتريات':'Gestion des fournisseurs et achats','العناصر المحذوفة — استرجع أو احذف نهائياً':'Éléments supprimés — restaurer ou supprimer définitivement','محلل البيانات المحلي 🧠':'Analyseur de données local 🧠','طباعة الفواتير والتقارير':'Impression des factures et rapports','ضبط النظام والبيانات الأساسية':'Configuration du système et des données de base',
+    'تأكيد':'Confirmer','تأكيد الإجراء':'Confirmer l’action','تأكيد الحذف':'Confirmer la suppression','لا يمكن التراجع عن هذا الإجراء':'Cette action est irréversible','خطأ غير متوقع':'Erreur inattendue','خطأ في التشغيل':'Erreur de démarrage','إعادة المحاولة':'Réessayer','إعادة التحميل':'Recharger','معلّقة':'En attente','مسدد':'Soldé','متبقي:':'Restant :','مدفوع:':'Payé :','فواتير:':'Factures :','المجموع:':'Total :','الحد الأدنى:':'Minimum :','آخر فحص:':'Dernière vérification :','محدَّث تلقائياً عند الحفظ':'Mis à jour automatiquement lors de l’enregistrement',
+    'اسم العميل الكامل':'Nom complet du client','رقم الهاتف':'Numéro de téléphone','العنوان':'Adresse','الوصف':'Description','اسم السجل':'Nom du dossier','اسم المورد أو الشركة':'Nom du fournisseur ou de l’entreprise','اسم الصنف أو الخدمة':'Nom de l’article ou du service','اسم المادة':'Nom de la matière','اسم الوحدة':'Nom de l’unité','اسم الآلة':'Nom de la machine','رقم اللوحة':'Immatriculation','الرقم الضريبي':'Numéro fiscal','اختياري':'Facultatif','الدين المبدئي':'Dette initiale','تفاصيل المنتج':'Détails du produit','وصف ما يقدمه المورد':'Description de ce que fournit le fournisseur',
+    'إضافة':'Ajouter','أضف':'Ajouter','إضافة صنف':'Ajouter un article','إضافة مادة':'Ajouter une matière','إضافة وحدة':'Ajouter une unité','أضف وحدات لهذا السجل أولاً من جدول الوحدات أدناه':'Ajoutez d’abord des unités à ce dossier depuis le tableau ci-dessous','أضف مواد لهذا السجل أولاً من جدول المواد أدناه':'Ajoutez d’abord des matières à ce dossier depuis le tableau ci-dessous','لا توجد مواد':'Aucune matière','لا توجد وحدات':'Aucune unité','لا توجد مبيعات بعد':'Aucune vente pour le moment','لا توجد حركات':'Aucun mouvement','لا توجد فواتير':'Aucune facture','لا توجد أصناف بعد':'Aucun article pour le moment',
+    'يوم شاحنات':'Journée camions','تعديل يوم الشاحنات':'Modifier la journée camions','تعديل يوم آلات':'Modifier la journée machines','تغيير التاريخ':'Modifier la date','التاريخ الحالي':'Date actuelle','التاريخ الجديد':'Nouvelle date','حفظ التعديلات':'Enregistrer les modifications','حذف اليوم':'Supprimer la journée','تم حفظ وقفل اليوم':'Journée enregistrée et verrouillée','تم فتح اليوم للتعديل':'Journée ouverte à la modification','إدخال آلة':'Saisie machine','عدد الساعات':'Nombre d’heures','عدد الرحلات':'Nombre de trajets','سعر الرحلة':'Prix du trajet','السعر الافتراضي':'Prix par défaut','الوحدات والأسعار الافتراضية':'Unités et prix par défaut','ملخص حسب المادة':'Résumé par matière','ملخص حسب الشاحنة':'Résumé par camion','ملخص حسب الوحدة':'Résumé par unité',
+    'نوع المادة':'Type de matière','وحدة السعر':'Unité de prix','وحدة التسعير':'Unité de tarification','نوع التعامل':'Type de relation','سلعة':'Marchandise','كراء شاحنة':'Location de camion','كراء آلات':'Location de machines','وقود':'Carburant','نقل':'Transport','صيانة':'Maintenance','أخرى':'Autre','نوع':'Type','مغلقة':'Verrouillée','مقفل':'Verrouillé','فُتحت للتعديل':'Ouvert à la modification','تم قفل':'Verrouillé','تم فتح القفل':'Verrouillage ouvert',
+    'سلة المهملات':'Corbeille','استرجاع':'Restaurer','استرجع':'Restaurer','حذف نهائياً':'Supprimer définitivement','العناصر المحذوفة':'Éléments supprimés','لا توجد عناصر محذوفة':'Aucun élément supprimé','كل الأنواع':'Tous les types','العملاء المحذوفون':'Clients supprimés','السجلات المحذوفة':'Dossiers supprimés','حذف هذا السطر؟':'Supprimer cette ligne ?','حذف هذا الإدخال؟':'Supprimer cette saisie ?','حذف هذه الفاتورة؟':'Supprimer cette facture ?','حذف هذه الدفعة؟':'Supprimer ce paiement ?','حذف هذا التسبيق؟':'Supprimer cette avance ?',
+    'لوحة التذكيرات':'Centre des rappels','عتبة التنبيه':'Seuil d’alerte','الأيام منذ آخر دفع':'Jours depuis le dernier paiement','لوحة التنبيهات والمراجعة':'Centre des alertes et vérifications','آخر فحص':'Dernière vérification','لا توجد تنبيهات حالياً':'Aucune alerte actuellement','تنبيه':'Alerte','تحذير':'Avertissement','معلومة':'Information',
+    'معلومات النظام':'Informations système','الثيمات — المظهر':'Thèmes — apparence','الثيم الحالي':'Thème actuel','إدارة الشاحنات':'Gestion des camions','إدارة الآلات':'Gestion des machines','النسخ الاحتياطي':'Sauvegarde','تصدير نسخة احتياطية':'Exporter une sauvegarde','استيراد JSON':'Importer JSON','حفظ الملف':'Enregistrer le fichier','إعادة ضبط':'Réinitialiser','فتح الملف':'Ouvrir le fichier','إعدادات المزامنة':'Paramètres de synchronisation','المزامنة':'Synchronisation','آخر مزامنة':'Dernière synchronisation',
+    'فاتورة شراء':'Facture d’achat','معلومات الفاتورة':'Informations de facture','رقم الفاتورة':'Numéro de facture','إجمالي الفاتورة':'Total de la facture','تعديل فاتورة':'Modifier la facture','حفظ الفاتورة':'Enregistrer la facture','أصناف المورد':'Articles du fournisseur','أضف الأصناف والخدمات التي تشتريها من هذا المورد':'Ajoutez les articles et services achetés auprès de ce fournisseur','تفاصيل كل شاحنة':'Détails de chaque camion','كشف مجموع الموردين المحدّدين':'Relevé des fournisseurs sélectionnés','طباعة المجموع':'Imprimer le total',
+    'بيع مخزون':'Vente de stock','متوفر':'Disponible','سعر الوحدة':'Prix unitaire','الكمية الحالية':'Quantité actuelle','سبب النقصان':'Motif de sortie','توجيه النقصان إلى عميل':'Affecter la sortie à un client','بدون توجيه':'Sans affectation','زيادة':'Entrée','نقصان':'Sortie','من المخزون':'Depuis le stock','تمت إضافة البيع':'Vente ajoutée','تم الحذف':'Supprimé','تمت الإضافة':'Ajout effectué','تم تحديث الشاحنة':'Camion mis à jour','تم تعديل الفاتورة':'Facture modifiée',
+    'كشف حساب تفصيلي بكل الحركات':'Relevé de compte détaillé avec toutes les opérations','إجمالي بدون تفاصيل':'Total sans détails','جدول يومي':'Tableau journalier','التقرير الشامل':'Rapport complet','خيارات الطباعة':'Options d’impression','طباعة فاتورة':'Imprimer une facture','طباعة كشف الحساب':'Imprimer le relevé de compte'
+  };
+  const REPLACEMENTS=Object.entries(MAP).sort((a,b)=>b[0].length-a[0].length);
+  let current;
+  function safeStoreGet(){try{return localStorage.getItem(LANG_KEY)||DEFAULT}catch(e){return DEFAULT}}
+  function safeStoreSet(v){try{localStorage.setItem(LANG_KEY,v)}catch(e){}}
+  window.getAppLanguage=function(){return current||safeStoreGet()};
+  function replaceKnown(raw){
+    if(current!=='fr'||typeof raw!=='string'||!raw) return raw;
+    const trim=raw.trim();
+    const direct=MAP[trim];
+    if(direct){const before=raw.slice(0,raw.indexOf(trim));const after=raw.slice(raw.indexOf(trim)+trim.length);return before+direct+after;}
+    let out=raw;
+    for(const [ar,fr] of REPLACEMENTS){ if(ar.length<4) continue; out=out.split(ar).join(fr); }
+    return out;
+  }
+  function processText(node){
+    if(!node||node.nodeType!==Node.TEXT_NODE) return;
+    // Never translate source code, styles, free-form text, or the user's own chat message.
+    if(node.parentElement && node.parentElement.closest('script,style,textarea,code,pre,.ai-m.u')) return;
+    const cur=node.nodeValue;
+    if(!node.__egtphLang || (node.__egtphLang.last!==cur && node.__egtphLang.raw!==cur)) node.__egtphLang={raw:cur,last:cur};
+    const target=current==='fr'?replaceKnown(node.__egtphLang.raw):node.__egtphLang.raw;
+    if(cur!==target){node.__egtphLang.last=target;node.nodeValue=target;}
+  }
+  const ATTRS=['title','placeholder','aria-label'];
+  function processAttr(el,name){
+    if(!el.hasAttribute(name)) return;
+    const cur=el.getAttribute(name);
+    const memo=(el.__egtphLangAttrs||(el.__egtphLangAttrs={}));
+    if(!memo[name] || (memo[name].last!==cur && memo[name].raw!==cur)) memo[name]={raw:cur,last:cur};
+    const target=current==='fr'?replaceKnown(memo[name].raw):memo[name].raw;
+    if(cur!==target){memo[name].last=target;el.setAttribute(name,target);}
+  }
+  function processElement(el){
+    if(!el||el.nodeType!==Node.ELEMENT_NODE||el.closest('#egtph-bilingual-engine,script,style,textarea,code,pre,.ai-m.u')) return;
+    ATTRS.forEach(a=>processAttr(el,a));
+    el.childNodes.forEach(processText);
+  }
+  function applyTo(root=document.body){
+    if(!root) return;
+    if(root.nodeType===Node.TEXT_NODE) processText(root);
+    else {processElement(root); root.querySelectorAll&&root.querySelectorAll('*').forEach(processElement);}
+  }
+  function updateLanguageButton(){
+    const b=document.getElementById('lang-btn'); if(!b)return;
+    const fr=current==='fr'; b.textContent=fr?'ع':'FR';
+    b.title=fr?'التبديل إلى العربية':'التبديل إلى الفرنسية';
+    b.setAttribute('aria-label',fr?'التبديل إلى العربية':'التبديل إلى الفرنسية');
+  }
+  window.setAppLanguage=function(lang){
+    current=lang==='fr'?'fr':'ar'; safeStoreSet(current);
+    document.documentElement.lang=current==='fr'?'fr':'ar';
+    document.documentElement.dir=current==='fr'?'ltr':'rtl';
+    document.body.classList.toggle('lang-fr',current==='fr'); document.body.classList.toggle('lang-ar',current==='ar');
+    document.title=current==='fr'?'EGTPH Gestion Pro v13 — Système de gestion complet':'EGTPH Gestion Pro v13 — نظام الإدارة الشامل';
+    updateLanguageButton(); applyTo(document.body);
+    setTimeout(()=>applyTo(document.body),0);
+  };
+  window.toggleLanguage=function(){window.setAppLanguage(getAppLanguage()==='fr'?'ar':'fr');};
+  window.amountToFrenchWords=function(v){
+    let n=Math.round(Number(v)||0); if(n===0)return 'zéro dinar algérien';
+    const u=['zéro','un','deux','trois','quatre','cinq','six','sept','huit','neuf','dix','onze','douze','treize','quatorze','quinze','seize','dix-sept','dix-huit','dix-neuf'];
+    const d=['','','vingt','trente','quarante','cinquante','soixante'];
+    const under100=x=>{if(x<20)return u[x]; if(x<70){const t=Math.floor(x/10),r=x%10;return d[t]+(r===1?' et un':r?'-'+u[r]:'');} if(x<80){const r=x-60;return 'soixante'+(r===11?' et onze':'-'+under100(r));} const r=x-80;return 'quatre-vingt'+(r?'-'+under100(r):'s');};
+    const under1000=x=>{const h=Math.floor(x/100),r=x%100;let s='';if(h){s=h===1?'cent':u[h]+' cent'+(r===0&&h>1?'s':'');}return s+(h&&r?' ':'')+(r?under100(r):'');};
+    const part=(x,one,many)=>{if(!x)return ''; if(x===1)return one; return under1000(x)+' '+many+(x>1&&many==='million'?'s':'');};
+    const billions=Math.floor(n/1e9),millions=Math.floor((n%1e9)/1e6),thousands=Math.floor((n%1e6)/1000),rest=n%1000;
+    const a=[]; if(billions)a.push(part(billions,'un milliard','milliard')); if(millions)a.push(part(millions,'un million','million')); if(thousands)a.push(thousands===1?'mille':under1000(thousands)+' mille'); if(rest)a.push(under1000(rest));
+    return a.join(' ')+' dinars algériens';
+  };
+  window.frenchAIKeywords=function(q){
+    let a=''; const has=r=>r.test(q);
+    if(has(/fournisseur|fournisseurs/i))a+=' مورد';
+    if(has(/avance|avances/i))a+=' تسبيق';
+    if(has(/paiement|payer|pay[eé]|vers[eé]/i))a+=' دفع';
+    if(has(/total|combien|somme/i))a+=' كم مجموع';
+    if(has(/r[eé]sum[eé]|rapport|complet|aper[çc]u/i))a+=' ملخص شامل';
+    if(has(/client|clients/i))a+=' عميل';
+    if(has(/meilleur|plus grand|principal/i))a+=' أكبر';
+    if(has(/dette|dettes|impay[eé]|solde|restant/i))a+=' ديون متبقي';
+    if(has(/trajet|trajets|camion|camions/i))a+=' رحلة شاحنة';
+    if(has(/heure|heures|machine|machines/i))a+=' ساعة آلة';
+    if(has(/stock|article|articles|faible/i))a+=' مخزون صنف منخفض';
+    if(has(/revenu|recette|vente|ventes|profit/i))a+=' إيراد دخل مبيعات ربح';
+    if(has(/projet|dossier/i))a+=' مشروع سجل';
+    if(has(/encaissement|encaiss[eé]/i))a+=' تحصيل';
+    if(has(/aide|comment|que peux/i))a+=' مساعد ماذا كيف';
+    return a;
+  };
+  function translatePrintMarkup(markup){
+    if(current!=='fr'||typeof markup!=='string')return markup;
+    let out=markup.replace(/<html([^>]*)lang=["']ar["']([^>]*)dir=["']rtl["']([^>]*)>/i,'<html$1lang="fr"$2dir="ltr"$3>');
+    for(const [ar,fr] of REPLACEMENTS){ if(ar.length<4) continue; out=out.split(ar).join(fr); }
+    return out.replace(/<head>/i,'<head><style>html,body{direction:ltr!important;text-align:left!important;font-family:Arial,sans-serif!important}table{text-align:left!important}th,td{text-align:left!important}</style>');
+  }
+  function patchPrint(){
+    if(window.__egtphBilingualPrintPatched||typeof window.openPrintWin!=='function')return;
+    const base=window.openPrintWin; window.openPrintWin=function(markup){return base.call(this,translatePrintMarkup(markup));}; window.__egtphBilingualPrintPatched=true;
+  }
+  let queued=false;
+  const observer=new MutationObserver(muts=>{ if(queued)return; queued=true; requestAnimationFrame(()=>{queued=false; muts.forEach(m=>{if(m.type==='characterData')processText(m.target); else m.addedNodes.forEach(n=>applyTo(n));});});});
+  function boot(){current=safeStoreGet()==='fr'?'fr':'ar'; observer.observe(document.body,{subtree:true,childList:true,characterData:true}); setAppLanguage(current); patchPrint(); setTimeout(patchPrint,50); setTimeout(patchPrint,500);}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+})();
+</script>
 
 </body></html>
