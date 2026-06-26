@@ -20,7 +20,7 @@ var renderAdmin = window.renderAdmin;
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0" name="viewport"/>
-<title>EGTPH — سجل الأجور v53</title>
+<title>EGTPH — سجل الأجور v54</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -11072,39 +11072,88 @@ try{
     d._pendingSyncPatches=d._pendingSyncPatches && typeof d._pendingSyncPatches==='object'?d._pendingSyncPatches:{};
     Object.keys(sent||{}).forEach(function(k){if(stable(d._pendingSyncPatches[k])===stable(sent[k]))delete d._pendingSyncPatches[k];});
   }
+  function mergeFullPayload(remote,d,meta){
+    // Keep unknown top-level data that may already exist in Firebase, then replace the
+    // complete payroll state with the already-merged local state. A conditional PUT is
+    // deliberately used here because Firebase REST supports If-Match for PUT/DELETE,
+    // not PATCH. This preserves conflict safety and avoids the HTTP 400 from PATCH+ETag.
+    var payload=(remote && typeof remote==='object' && !Array.isArray(remote)) ? clone(remote) : {};
+    var state=fullSyncState(d);
+    Object.keys(state).forEach(function(k){payload[k]=state[k];});
+    payload.schemaVersion=V50;
+    payload.syncMeta=meta;
+    return payload;
+  }
+  async function firebaseFailure(res){
+    var body='';
+    try{body=await res.text();}catch(e){}
+    var msg='HTTP '+res.status;
+    if(body){
+      try{var parsed=JSON.parse(body);msg+=(parsed&&parsed.error?' — '+parsed.error:' — '+body);}catch(e){msg+=' — '+String(body).replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,220);}
+    }
+    return new Error(msg);
+  }
   async function v50CloudSync(manual){
-    var d=ensure(), cfg=getCloudCfg(); if(!d||!cfg){if(manual)toastSafe('❌ هيّئ إعدادات Firebase أولاً',true);return;}if(syncing)return;if(!navigator.onLine){if(manual)toastSafe('📡 لا يوجد اتصال',true);return;}syncing=true;
+    var d=ensure(), cfg=getCloudCfg();
+    if(!d||!cfg){if(manual)toastSafe('❌ هيّئ إعدادات Firebase أولاً',true);return;}
+    if(syncing)return;
+    if(!navigator.onLine){if(manual)toastSafe('📡 لا يوجد اتصال',true);return;}
+    syncing=true;
     try{
       normalizeTombstones(d);purgeDeleted(d);
       for(var attempt=1;attempt<=4;attempt++){
-        d=ensure();var pending=d._pendingSyncPatches && typeof d._pendingSyncPatches==='object'?d._pendingSyncPatches:{};
-        var pendingKeys=Object.keys(pending);
-        var metaRes=await fbFetch(endpointChild(cfg.endpoint,'syncMeta')); if(!metaRes.ok)throw new Error('HTTP '+metaRes.status); var remoteMeta=await metaRes.json();
+        d=ensure();
+        var pending=d._pendingSyncPatches && typeof d._pendingSyncPatches==='object' ? d._pendingSyncPatches : {};
+        var pendingAtStart=clone(pending), pendingKeys=Object.keys(pendingAtStart);
+        var metaRes=await fbFetch(endpointChild(cfg.endpoint,'syncMeta'));
+        if(!metaRes.ok)throw await firebaseFailure(metaRes);
+        var remoteMeta=await metaRes.json();
         var needsBootstrap=!(remoteMeta && remoteMeta.schemaVersion>=V50 && remoteMeta.hash);
         var remoteChanged=!!(remoteMeta && remoteMeta.hash && remoteMeta.hash!==d.settings.lastRemoteHash);
-        if(!pendingKeys.length && !remoteChanged && !needsBootstrap){d.settings.lastSyncHash=stateHash(stateWithoutPrivate(d));d.settings.lastRemoteHash=(remoteMeta&&remoteMeta.hash)||d.settings.lastRemoteHash||'';if(manual)toastSafe('☁️ لا جديد — كل شيء متزامن');return;}
-        cloudStatus('⏳ جارٍ المزامنة الذكية...','var(--teal)');
-        // Fetch the root with an ETag. PATCH below is conditional, so a concurrent device
-        // cannot overwrite a deletion or any other change between read and write.
+        if(!pendingKeys.length && !remoteChanged && !needsBootstrap){
+          d.settings.lastSyncHash=stateHash(stateWithoutPrivate(d));
+          d.settings.lastRemoteHash=(remoteMeta&&remoteMeta.hash)||d.settings.lastRemoteHash||'';
+          if(manual)toastSafe('☁️ لا جديد — كل شيء متزامن');
+          return;
+        }
+        cloudStatus('⏳ جارٍ المزامنة الآمنة '+attempt+'/4...','var(--teal)');
+        // Firebase REST conditional writes are valid with PUT/DELETE only. Fetch the
+        // current root + ETag, merge, then conditional PUT the complete merged state.
         var snap=await fetchRootWithETag(cfg), remote=snap.data;
-        if(remote && typeof remote==='object' && Array.isArray(remote.workers)){applyMerged(mergeStates(liveDB(),remote));d=ensure();reconcileLocks('دمج سحابي',true);normalizeTombstones(d);purgeDeleted(d);}
-        var forceFull=remoteChanged || needsBootstrap || !!(remote && (!remote.syncMeta || +remote.schemaVersion<V50));
-        // A Firebase multi-location PATCH may not contain both a parent path (advances)
-        // and one of its child paths (advances/worker/month). Send a clean full payload
-        // on bootstrap/reconciliation; pending child patches stay queued for a later pass.
-        var toSend=forceFull ? fullSyncState(d) : clone(d._pendingSyncPatches || {});
-        // Never allow a stale remote record to survive only because its bucket was not patched.
-        if(Object.keys(d.deletedRecords||{}).length){toSend.deletedRecords=clone(d.deletedRecords);toSend.deletedIds=clone(d.deletedIds);}
+        if(remote && typeof remote==='object' && Array.isArray(remote.workers)){
+          applyMerged(mergeStates(liveDB(),remote));
+          d=ensure();reconcileLocks('دمج سحابي',true);normalizeTombstones(d);purgeDeleted(d);
+        }
         var finalHash=stateHash(stateWithoutPrivate(d));
-        toSend.schemaVersion=V50;toSend.syncMeta={schemaVersion:V50,hash:finalHash,updatedAt:now(),deviceId:deviceId(),lastTransactionId:(d.txJournal[d.txJournal.length-1]||{}).transactionId || ''};
-        var headers={'Content-Type':'application/json'};if(snap.etag)headers['if-match']=snap.etag;
-        var up=await fbFetch(cfg.endpoint,{method:'PATCH',headers:headers,body:JSON.stringify(toSend)},1);
-        if(up.status===412){if(attempt===4)throw new Error('تعارض متكرر من جهاز آخر');continue;}
-        if(!up.ok)throw new Error('رفع HTTP '+up.status);
-        clearOnlySentPending(d,toSend);d.settings.lastSyncHash=finalHash;d.settings.lastRemoteHash=finalHash;d.settings.cloudLastSync=nowText();d.settings.cloudRemoteStamp=(toSend.syncMeta||{}).updatedAt;
-        try{if(typeof _cloudDirty!=='undefined')_cloudDirty=false;}catch(e){}cloudStatus('🟢 آخر مزامنة: '+d.settings.cloudLastSync,'var(--green1)');try{if(typeof baseSaveDB==='function')baseSaveDB();}catch(e){}lastSnapshot=businessSnapshot();try{if(typeof updateBadges==='function')updateBadges();if(typeof renderDash==='function')renderDash();if(typeof renderWorkers==='function')renderWorkers();}catch(e){}if(manual)toastSafe('☁️ تمت المزامنة الذكية');return;
+        var meta={schemaVersion:V50,hash:finalHash,updatedAt:now(),deviceId:deviceId(),lastTransactionId:(d.txJournal[d.txJournal.length-1]||{}).transactionId || ''};
+        var payload=mergeFullPayload(remote,d,meta);
+        var headers={'Content-Type':'application/json','if-match':snap.etag||'*'};
+        var up=await fbFetch(cfg.endpoint,{method:'PUT',headers:headers,body:JSON.stringify(payload)},1);
+        if(up.status===412){
+          if(attempt===4)throw new Error('تعارض متكرر من جهاز آخر؛ لم يُكتب فوق أي بيانات');
+          continue;
+        }
+        if(!up.ok)throw await firebaseFailure(up);
+        // Clear only mutations that are identical to what was sent. Any change entered
+        // while the network request was running stays queued for the following sync.
+        clearOnlySentPending(d,pendingAtStart);
+        d.settings.lastSyncHash=finalHash;
+        d.settings.lastRemoteHash=finalHash;
+        d.settings.cloudLastSync=nowText();
+        d.settings.cloudRemoteStamp=meta.updatedAt;
+        try{if(typeof _cloudDirty!=='undefined')_cloudDirty=false;}catch(e){}
+        cloudStatus('🟢 آخر مزامنة آمنة: '+d.settings.cloudLastSync,'var(--green1)');
+        try{if(typeof baseSaveDB==='function')baseSaveDB();}catch(e){}
+        lastSnapshot=businessSnapshot();
+        try{if(typeof updateBadges==='function')updateBadges();if(typeof renderDash==='function')renderDash();if(typeof renderWorkers==='function')renderWorkers();}catch(e){}
+        if(manual)toastSafe('☁️ تمت المزامنة الآمنة');
+        return;
       }
-    }catch(err){console.warn('v52 cloud sync',err);cloudStatus('🔴 فشل: '+(err.message||err),'var(--red)');if(manual)toastSafe('❌ فشلت المزامنة: '+(err.message||err),true);}finally{syncing=false;}
+    }catch(err){
+      console.warn('v54 cloud sync',err);
+      cloudStatus('🔴 فشل: '+(err.message||err),'var(--red)');
+      if(manual)toastSafe('❌ فشلت المزامنة: '+(err.message||err),true);
+    }finally{syncing=false;}
   }
 
   function enhancePrint(){
@@ -11246,8 +11295,8 @@ try{
   }
 
   function init(){
-    var boot=ensure(); normalizeTombstones(boot); purgeDeleted(boot); installAuditWrapper(); installSaveWrapper(); installDeletionGuards(); installSafeCloudTools(); installSync(); installAdvanceSave(); installAdvanceModalActions(); installSalaryRenderLock(); enhancePrint(); installFunctionAliases(); installImport(); adminPanel(); reconcileLocks('تهيئة v52',true); queueTombstoneMigration(); lastSnapshot=businessSnapshot();
-    try { document.title=(document.title || 'EGTPH').replace(/v\d+(?:\.\d+)?/,'v52'); var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v53'; } catch(e) {}
+    var boot=ensure(); normalizeTombstones(boot); purgeDeleted(boot); installAuditWrapper(); installSaveWrapper(); installDeletionGuards(); installSafeCloudTools(); installSync(); installAdvanceSave(); installAdvanceModalActions(); installSalaryRenderLock(); enhancePrint(); installFunctionAliases(); installImport(); adminPanel(); reconcileLocks('تهيئة v54',true); queueTombstoneMigration(); lastSnapshot=businessSnapshot();
+    try { document.title=(document.title || 'EGTPH').replace(/v\d+(?:\.\d+)?/,'v52'); var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v54'; } catch(e) {}
     setTimeout(function(){
       initializing=false;lastSnapshot=businessSnapshot();
       try{saveDB();}catch(e){}
@@ -11417,7 +11466,7 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
     wrap('renderDash',function(){var n=dedupeSafe();if(n){setTimeout(function(){try{if(typeof saveDB==='function')saveDB();}catch(e){}},0);}buildDashboard();refreshDashboard();});
     wrap('renderWorkers',function(){refreshDashboard();});
     wrap('showPage',function(){setTimeout(function(){buildDashboard();refreshDashboard();},0);});
-    try{document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v53');var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v53';}catch(e){}
+    try{document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v53');var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v54';}catch(e){}
     buildDashboard();refreshDashboard();
     window.EGTPH_V53={version:V53,restoreFromTrash:v53RestoreFromTrash,deleteAdvance:v53DeleteAdvance,dedupeSafe:dedupeSafe,refresh:refreshDashboard};
   }
