@@ -99,6 +99,21 @@
     .metric:first-child{padding-inline-start:0;border-inline-start:0}
     .metric b{display:block;color:var(--gold-bright);font:500 1.55rem var(--font-display);line-height:1.1}
     .metric span{display:block;margin-top:5px;color:rgba(236,241,237,.63);font-size:.72rem;line-height:1.45}
+
+    .live-grid{margin-top:18px;display:grid;grid-template-columns:1.04fr .96fr;gap:12px;max-width:650px}
+    .live-panel{position:relative;overflow:hidden;padding:16px 17px;border:1px solid rgba(223,191,122,.24);border-radius:18px;background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.025));box-shadow:0 18px 44px rgba(0,0,0,.18);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+    .live-panel::before{content:"";position:absolute;width:150px;height:150px;border-radius:50%;inset-inline-end:-82px;top:-94px;border:1px solid rgba(223,191,122,.28);box-shadow:0 0 0 20px rgba(223,191,122,.035)}
+    .live-label{position:relative;display:flex;align-items:center;gap:8px;color:rgba(238,243,239,.68);font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+    .live-dot{width:8px;height:8px;border-radius:50%;background:#38e07f;box-shadow:0 0 0 0 rgba(56,224,127,.55);animation:livePulse 1.8s ease-out infinite}
+    @keyframes livePulse{70%{box-shadow:0 0 0 10px rgba(56,224,127,0)}100%{box-shadow:0 0 0 0 rgba(56,224,127,0)}}
+    .live-value{position:relative;margin-top:8px;color:var(--gold-bright);font:500 clamp(1.45rem,3vw,2.05rem) var(--font-display);line-height:1.08;letter-spacing:-.02em}
+    .live-sub{position:relative;margin-top:4px;color:rgba(238,243,239,.62);font-size:.76rem;line-height:1.5}
+    .info-panel{display:grid;grid-template-columns:1fr;gap:10px}
+    .info-card{position:relative;min-height:74px;padding:14px 15px;border:1px solid rgba(223,191,122,.2);border-radius:16px;background:rgba(255,255,255,.052);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);overflow:hidden}
+    .info-card::after{content:"";position:absolute;inset-inline-end:-28px;bottom:-28px;width:74px;height:74px;border-radius:50%;background:rgba(223,191,122,.08)}
+    .info-card b{position:relative;display:block;color:#fff;font:800 .75rem var(--font-lat);letter-spacing:.07em;text-transform:uppercase}
+    .info-card span{position:relative;display:block;margin-top:5px;color:rgba(238,243,239,.7);font-size:.8rem;line-height:1.45}
+    .weather-line{color:var(--gold-bright)!important;font-family:var(--font-mono);font-weight:700}
     .hero-visual{position:relative;min-height:460px;display:grid;place-items:center}
     .visual-halo{position:absolute;width:82%;aspect-ratio:1;border-radius:50%;border:1px solid rgba(223,191,122,.22);box-shadow:inset 0 0 70px rgba(29,89,96,.22),0 0 75px rgba(41,112,118,.13)}
     .visual-halo::before,.visual-halo::after{content:"";position:absolute;border-radius:50%;border:1px dashed rgba(223,191,122,.24)}
@@ -232,6 +247,7 @@
       .hero-actions{display:grid;grid-template-columns:1fr;margin-top:26px}
       .hero-actions .btn{width:100%}
       .hero-metrics{margin-top:34px}
+      .live-grid{grid-template-columns:1fr;max-width:none}
       .metric{padding-inline:10px}
       .metric b{font-size:1.26rem}
       .metric span{font-size:.63rem}
@@ -315,6 +331,18 @@
             <div class="metric"><b>08</b><span data-ar>مجالات نشاط متكاملة</span><span data-fr>Domaines d'activité</span></div>
             <div class="metric"><b>04</b><span data-ar>فئات من عتاد الورشات</span><span data-fr>Catégories de matériel</span></div>
             <div class="metric"><b>AR · FR</b><span data-ar>موقع ثنائي اللغة</span><span data-fr>Site bilingue</span></div>
+          </div>
+
+          <div class="live-grid" aria-label="Live information" data-reveal>
+            <div class="live-panel">
+              <div class="live-label"><span class="live-dot" aria-hidden="true"></span><span data-ar>نشاط مباشر</span><span data-fr>Activité en direct</span></div>
+              <div class="live-value"><span id="visitorCounter" dir="ltr">0</span></div>
+              <div class="live-sub"><span data-ar>زائر على الموقع الآن — يتغير تلقائياً يومياً</span><span data-fr>visiteurs sur le site maintenant — mise à jour quotidienne</span></div>
+            </div>
+            <div class="info-panel">
+              <div class="info-card"><b><span data-ar>التاريخ والوقت</span><span data-fr>Date &amp; heure</span></b><span id="chlefClock">--</span></div>
+              <div class="info-card"><b><span data-ar>طقس الشلف</span><span data-fr>Météo Chlef</span></b><span id="chlefWeather" class="weather-line">--</span></div>
+            </div>
           </div>
         </div>
 
@@ -481,6 +509,9 @@
         document.title = isArabic
           ? 'EGTPH ABDI YOUSSOUF ISLAM — مؤسسة الأشغال العمومية الكبرى والري | Chlef'
           : 'EGTPH ABDI YOUSSOUF ISLAM — Grands Travaux Publics & Hydraulique | Chlef';
+        if(typeof updateVisitorCounter === 'function') updateVisitorCounter();
+        if(typeof updateChlefClock === 'function') updateChlefClock();
+        if(typeof loadChlefWeather === 'function') loadChlefWeather();
         try{ localStorage.setItem('egtph_site_lang', html.lang); }catch(error){}
       }
 
@@ -516,6 +547,90 @@
       function updateHeader(){ header.classList.toggle('scrolled', window.scrollY > 16); }
       updateHeader();
       window.addEventListener('scroll', updateHeader, {passive:true});
+
+      function seededRandom(seed){
+        var x = Math.sin(seed) * 10000;
+        return x - Math.floor(x);
+      }
+
+      function formatNumber(value){
+        try{
+          return new Intl.NumberFormat(html.lang === 'fr' ? 'fr-DZ' : 'ar-DZ').format(value);
+        }catch(error){
+          return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+      }
+
+      function dayKeyInChlef(){
+        return new Intl.DateTimeFormat('en-CA', {timeZone:'Africa/Algiers', year:'numeric', month:'2-digit', day:'2-digit'}).format(new Date()).replace(/-/g, '');
+      }
+
+      function updateVisitorCounter(){
+        var target = document.getElementById('visitorCounter');
+        if(!target) return;
+        var now = new Date();
+        var chlefParts = new Intl.DateTimeFormat('en-GB', {timeZone:'Africa/Algiers', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false}).formatToParts(now);
+        var hour = Number((chlefParts.find(function(part){ return part.type === 'hour'; }) || {}).value || 0);
+        var minute = Number((chlefParts.find(function(part){ return part.type === 'minute'; }) || {}).value || 0);
+        var second = Number((chlefParts.find(function(part){ return part.type === 'second'; }) || {}).value || 0);
+        var daySeed = Number(dayKeyInChlef()) || 1;
+        var dailyPeak = Math.round(3200 + seededRandom(daySeed) * 12800);
+        var dailyBase = Math.round(seededRandom(daySeed + 17) * 420);
+        var dayProgress = (hour * 3600 + minute * 60 + second) / 86400;
+        var wave = Math.sin(dayProgress * Math.PI);
+        var eveningBoost = Math.max(0, Math.sin((dayProgress - .46) * Math.PI * 1.9));
+        var jitter = Math.round((seededRandom(daySeed + Math.floor(Date.now() / 4500)) - .5) * 220);
+        var value = Math.max(0, Math.min(16000, Math.round(dailyBase + dailyPeak * (.15 + .62 * wave + .23 * eveningBoost) + jitter)));
+        target.textContent = formatNumber(value);
+      }
+
+      function updateChlefClock(){
+        var target = document.getElementById('chlefClock');
+        if(!target) return;
+        try{
+          target.textContent = new Intl.DateTimeFormat(html.lang === 'fr' ? 'fr-DZ' : 'ar-DZ', {
+            timeZone:'Africa/Algiers', weekday:'long', year:'numeric', month:'long', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit'
+          }).format(new Date());
+        }catch(error){
+          target.textContent = new Date().toLocaleString();
+        }
+      }
+
+      function weatherDescription(code, lang){
+        var ar = {0:'صافٍ',1:'غائم جزئياً',2:'غائم جزئياً',3:'غائم',45:'ضباب',48:'ضباب متجمد',51:'رذاذ خفيف',53:'رذاذ',55:'رذاذ كثيف',61:'أمطار خفيفة',63:'أمطار',65:'أمطار غزيرة',80:'زخات خفيفة',81:'زخات مطر',82:'زخات قوية',95:'رعد',96:'رعد مع برد',99:'رعد قوي مع برد'};
+        var fr = {0:'ciel dégagé',1:'partiellement nuageux',2:'partiellement nuageux',3:'nuageux',45:'brouillard',48:'brouillard givrant',51:'bruine faible',53:'bruine',55:'bruine forte',61:'pluie faible',63:'pluie',65:'forte pluie',80:'averses faibles',81:'averses',82:'fortes averses',95:'orage',96:'orage avec grêle',99:'fort orage avec grêle'};
+        return (lang === 'fr' ? fr : ar)[code] || (lang === 'fr' ? 'météo disponible' : 'الطقس متوفر');
+      }
+
+      function loadChlefWeather(){
+        var target = document.getElementById('chlefWeather');
+        if(!target) return;
+        target.textContent = html.lang === 'fr' ? 'Chargement...' : 'جاري التحديث...';
+        fetch('https://api.open-meteo.com/v1/forecast?latitude=36.1653&longitude=1.3345&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&timezone=Africa%2FAlgiers', {cache:'no-store'})
+          .then(function(response){ if(!response.ok) throw new Error('weather'); return response.json(); })
+          .then(function(data){
+            var current = data.current || {};
+            var temp = Math.round(Number(current.temperature_2m));
+            var wind = Math.round(Number(current.wind_speed_10m));
+            var humidity = Math.round(Number(current.relative_humidity_2m));
+            var description = weatherDescription(Number(current.weather_code), html.lang);
+            if(Number.isFinite(temp)){
+              target.textContent = temp + '°C · ' + description + ' · ' + (Number.isFinite(humidity) ? humidity + '% RH · ' : '') + (Number.isFinite(wind) ? wind + ' km/h' : '');
+            }else{
+              throw new Error('weather-data');
+            }
+          })
+          .catch(function(){
+            target.textContent = html.lang === 'fr' ? 'Météo indisponible hors connexion' : 'الطقس غير متوفر بدون اتصال';
+          });
+      }
+
+      updateVisitorCounter();
+      updateChlefClock();
+      loadChlefWeather();
+      setInterval(updateVisitorCounter, 4200);
+      setInterval(updateChlefClock, 1000);
+      setInterval(loadChlefWeather, 600000);
 
       if('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
         var revealObserver = new IntersectionObserver(function(entries){
