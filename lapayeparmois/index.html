@@ -14225,18 +14225,30 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
       '<div style="font-weight:900;color:'+col+';font-size:11px">'+title+'<br><b>'+money(Math.abs(bal))+'</b></div>'+
       '<div style="font-size:8px;color:var(--gray);line-height:1.55">'+Math.max(0,Math.round(n(fs.actualDays)))+' يوم · مستحق '+money(fs.earnedSal)+' − تسبيقات '+money(fs.totalAdv)+' − دين '+money(fs.debtBalance)+'<br>عرض فقط — لا أمر دفع ولا إغلاق دورة ('+sign+')</div>';
   }
+  var _v80mo=null, _v80patching=false;
   function patchTable(){
+    if(_v80patching) return; // حماية ضد إعادة الدخول
+    _v80patching=true;
+    try{ if(_v80mo) _v80mo.disconnect(); }catch(e){}
     try{
-      var body=document.getElementById('settlBody');if(!body)return;
+      var body=document.getElementById('settlBody');if(!body){return;}
       Array.prototype.forEach.call(body.querySelectorAll('tr'),function(row){
         var w=workerByRow(row);if(!w||w.exitDate)return;
         var fs=preview(w);if(!fs)return;
         var cells=row.children;if(!cells||!cells.length)return;
         var target=cells[cells.length-1];
-        target.innerHTML=html(fs);
+        var next=html(fs);
+        // لا نكتب إلا إذا تغيّر المحتوى فعلاً — يمنع تكرار التعديل والوميض.
+        if(target.getAttribute('data-v80-preview')==='1' && target.innerHTML===next) return;
+        target.innerHTML=next;
         target.setAttribute('data-v80-preview','1');
       });
     }catch(e){console.error('v80 settlement render',e);}
+    finally{
+      // إعادة ربط المراقب بعد انتهاء الكتابة (خارج دورة الـmutations الحالية).
+      try{ if(_v80mo){ var b=document.getElementById('settlBody'); if(b) _v80mo.observe(b,{childList:true,subtree:true}); } }catch(e){}
+      _v80patching=false;
+    }
   }
   var old=window.renderSettlement;
   if(typeof old==='function'&&!old.__v80ForcedPreview){
@@ -14245,8 +14257,9 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   }
   function observe(){
     try{var body=document.getElementById('settlBody');if(!body)return;
-      var mo=new MutationObserver(function(){patchTable();});
-      mo.observe(body,{childList:true,subtree:true});
+      if(_v80mo){try{_v80mo.disconnect();}catch(e){}}
+      _v80mo=new MutationObserver(function(){ if(_v80patching) return; patchTable(); });
+      _v80mo.observe(body,{childList:true,subtree:true});
     }catch(e){}
   }
   function meta(){try{if(!DB)return;DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};DB.version='80.0';DB.schemaVersion=Math.max(80,+DB.schemaVersion||0);DB.settings.syncSchemaVersion=Math.max(80,+DB.settings.syncSchemaVersion||0);DB.settings.migrationVersion='80.0';DB.settings.settlementPreviewMode='active-cycle-authoritative-display';}catch(e){}}
