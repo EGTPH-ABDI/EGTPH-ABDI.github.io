@@ -2562,7 +2562,7 @@ function renderCD(cid) {
           </button>`;
         }).join('')}
       </div>
-      ${ar ? ((window.renderRecordSettlementCard ? window.renderRecordSettlementCard(ar, cid) : '') + (window.renderStagePanel ? window.renderStagePanel(ar, cid) : '') + renderRecSec(ar, cid)) : ''}
+      ${ar ? ((window.renderRecordSettlementCard ? window.renderRecordSettlementCard(ar, cid) : '') + (window.renderRecSec ? window.renderRecSec(ar, cid) : renderRecSec(ar, cid))) : ''}
     ` : `<div class="empty" style="padding:26px"><div class="empty-ic" style="font-size:28px">📋</div><h3>لا توجد سجلات</h3><p>اضغط "＋ سجل جديد"</p></div>`}
   </div>
 
@@ -10008,11 +10008,6 @@ if (document.readyState === 'loading') {
     openPrintWin(printHeader('كشف مرحلة أعمال — '+stage.name, client.name+' · '+rec.name)+body+'</body></html>');
   };
 
-  // Exported deliberately: renderCD is defined in the main application scope and
-  // reads this hook during each render, so the panel appears between record settlement
-  // and the daily work table.
-  window.renderStagePanel = renderStagePanel;
-
   function refreshStagePanel(recId,cid) {
     const rec = records.find(r=>r && r.id===recId); if (!rec) return;
     const node = Array.from(document.querySelectorAll('[data-stage-panel]')).find(el=>el.getAttribute('data-stage-panel')===recId);
@@ -10027,12 +10022,35 @@ if (document.readyState === 'loading') {
     return out;
   };
 
+  // واجهة مراحل الأعمال يجب أن تُحقن مرة واحدة فقط. هذا الحارس يمنع تكرارها
+  // إذا كان العرض الأساسي قد تضمّنها مسبقاً، أو إذا أُعيد تطبيق ملف ترقيع قديم.
   const baseRenderRecSec = window.renderRecSec;
   window.renderRecSec = function(rec,cid){
     const rendered = baseRenderRecSec ? baseRenderRecSec.apply(this,arguments) : '';
     if (!rec || !['trucks','machines','stock','invoice'].includes(rec.type)) return rendered;
-    return renderStagePanel(rec,cid) + rendered;
+    const marker = 'data-stage-panel="'+escH(rec.id)+'"';
+    return String(rendered).includes(marker) ? rendered : (renderStagePanel(rec,cid) + rendered);
   };
+
+  // طبقة أمان على DOM: إذا وصل المحتوى من ترقية سابقة وفيه لوحتان لنفس السجل،
+  // تُبقي الأولى فقط. لا تمس بيانات المرحلة أو الرحلات أو الدفعات.
+  function dedupeStagePanels(){
+    const seen = new Set();
+    document.querySelectorAll('[data-stage-panel]').forEach(node=>{
+      const rid = node.getAttribute('data-stage-panel') || '';
+      if (!rid) return;
+      if (seen.has(rid)) node.remove(); else seen.add(rid);
+    });
+  }
+  if (!window.__EGTPH_STAGE_PANEL_DEDUPER__) {
+    const baseRenderCDForStage = window.renderCD;
+    window.renderCD = function(){
+      const out = baseRenderCDForStage ? baseRenderCDForStage.apply(this,arguments) : undefined;
+      setTimeout(dedupeStagePanels,0);
+      return out;
+    };
+    window.__EGTPH_STAGE_PANEL_DEDUPER__ = true;
+  }
 
   // Add an optional work-phase boundary at this day. It never represents a payment,
   // does not bind rows to a financial settlement, and cannot interrupt vehicle numbering.
@@ -10084,6 +10102,7 @@ if (document.readyState === 'loading') {
 })();
 
 </script>
-<!-- EGTPH v13.4.1 — stage panel visibility fix + print integrity patch -->
+<!-- EGTPH v13.4.2 — stage panel de-duplication patch -->
+<!-- EGTPH v13.4 — print integrity patch -->
 
 </body></html>
