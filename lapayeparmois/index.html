@@ -20,7 +20,7 @@ var renderAdmin = window.renderAdmin;
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0" name="viewport"/>
-<title>EGTPH — سجل الأجور v66</title>
+<title>EGTPH — سجل الأجور v73</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -854,7 +854,7 @@ body.theme-blue .sec,body.theme-purple .sec,body.theme-red .sec,body.theme-sand 
 <div class="" id="toast">✅ تم التعديل</div>
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div class="topbar">
-<div class="tlogo">EGTPH <span>| سجل الأجور v66</span></div>
+<div class="tlogo">EGTPH <span>| سجل الأجور v73</span></div>
 <div id="autoSv" style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--gray)">
 <span class="auto-save-dot" id="saveDot"></span>
 <span id="saveLabel">—</span>
@@ -8800,6 +8800,73 @@ async function fbFetch(url,opts,tries){
   }
   throw lastErr;
 }
+// ── v73: حماية تحميل ملف المصادقة ──
+// إذا لم يُحمّل egtph-auth.js بسبب اختلاف المسار/الاسم، لا ينهار البرنامج.
+// يتم إنشاء نفس مساعد المصادقة داخلياً، ويبقى Firebase Auth هو مصدر الدخول.
+(function(global){
+  if(global.EGTPHAuth && typeof global.EGTPHAuth.init==='function') return;
+  function storageKey(appId){ return "egtph_auth_"+appId; }
+  function saveSession(appId,data){
+    try{ localStorage.setItem(storageKey(appId), JSON.stringify({
+      idToken:data.idToken,
+      refreshToken:data.refreshToken,
+      expiresAt:Date.now()+(parseInt(data.expiresIn||"3600",10)*1000)-60000,
+      uid:data.localId||data.uid||null
+    })); }catch(e){}
+  }
+  function loadSession(appId){ try{return JSON.parse(localStorage.getItem(storageKey(appId)));}catch(e){return null;} }
+  function clearSession(appId){ try{localStorage.removeItem(storageKey(appId));}catch(e){} }
+  function signIn(apiKey,email,password){
+    return fetch("https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key="+apiKey,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email,password:password,returnSecureToken:true})}).then(function(r){
+      if(!r.ok) return r.json().then(function(e){throw new Error((e.error&&e.error.message)||"AUTH_FAILED");});
+      return r.json();
+    });
+  }
+  function refreshToken(apiKey,refreshTok){
+    var body="grant_type=refresh_token&refresh_token="+encodeURIComponent(refreshTok);
+    return fetch("https://securetoken.googleapis.com/v1/token?key="+apiKey,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:body}).then(function(r){
+      if(!r.ok) throw new Error("REFRESH_FAILED");
+      return r.json();
+    }).then(function(d){return{idToken:d.id_token,refreshToken:d.refresh_token,expiresIn:d.expires_in,uid:d.user_id};});
+  }
+  function buildOverlay(){
+    var existing=document.getElementById("egtphAuthOverlay"); if(existing) return existing;
+    var css=document.createElement("style");
+    css.textContent="#egtphAuthOverlay{position:fixed;inset:0;z-index:99999;background:rgba(10,10,12,.92);display:flex;align-items:center;justify-content:center;padding:20px;font-family:Arial,sans-serif}#egtphAuthOverlay .eg-card{background:#1c1e24;border:1px solid #2c2f38;border-radius:14px;padding:26px 22px;width:100%;max-width:280px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.5)}#egtphAuthOverlay h2{color:#f0f0f0;font-size:15px;margin-bottom:4px}#egtphAuthOverlay p{color:#9a9ea6;font-size:12px;margin-bottom:14px}#egtphAuthOverlay input{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #333740;background:#262932;color:#f0f0f0;font-size:15px;text-align:center;box-sizing:border-box}#egtphAuthOverlay button{width:100%;margin-top:10px;padding:10px;border:0;border-radius:8px;background:#ff7a1a;color:#1a0f06;font-weight:700;font-size:13px;cursor:pointer}#egtphAuthOverlay .eg-err{color:#ff8a78;font-size:12px;margin-top:8px;min-height:1em}";
+    document.head.appendChild(css);
+    var wrap=document.createElement("div"); wrap.id="egtphAuthOverlay";
+    wrap.innerHTML='<div class="eg-card"><h2>EGTPH — تسجيل الدخول</h2><p>ملف المصادقة الخارجي لم يُحمّل، وتم تشغيل مصادقة داخلية احتياطية.</p><form id="egtphAuthForm"><input type="password" id="egtphAuthPass" autocomplete="current-password" autofocus><button type="submit">دخول</button></form><div class="eg-err" id="egtphAuthErr"></div></div>';
+    document.body.appendChild(wrap); return wrap;
+  }
+  function promptLogin(opts){return new Promise(function(resolve){
+    var overlay=buildOverlay(), form=document.getElementById("egtphAuthForm"), passInput=document.getElementById("egtphAuthPass"), errBox=document.getElementById("egtphAuthErr");
+    overlay.style.display="flex"; setTimeout(function(){try{passInput.focus();}catch(e){}},50);
+    function onSubmit(e){
+      e.preventDefault(); var pw=passInput.value; errBox.textContent="...";
+      signIn(opts.apiKey,opts.email,pw).then(function(d){saveSession(opts.appId,d);form.removeEventListener("submit",onSubmit);overlay.style.display="none";passInput.value="";resolve(d.idToken);}).catch(function(){errBox.textContent="كلمة السر غير صحيحة أو الاتصال غير متاح.";passInput.value="";passInput.focus();});
+    }
+    form.addEventListener("submit",onSubmit);
+  });}
+  var sessions={};
+  function scheduleRefresh(appId){
+    var s=sessions[appId]; if(!s) return; if(s.refreshTimer) clearTimeout(s.refreshTimer);
+    var sess=loadSession(appId); if(!sess) return;
+    var delay=Math.max(5000,sess.expiresAt-Date.now()-5000);
+    s.refreshTimer=setTimeout(function(){var cur=loadSession(appId); if(!cur||!cur.refreshToken) return; refreshToken(s.opts.apiKey,cur.refreshToken).then(function(d){saveSession(appId,d);s.token=d.idToken;if(s.opts.onTokenChange)s.opts.onTokenChange(d.idToken);scheduleRefresh(appId);}).catch(function(){clearSession(appId);ensureLogin(appId,s.opts);});},delay);
+  }
+  function ensureLogin(appId,opts){
+    var sess=loadSession(appId);
+    if(sess&&sess.idToken&&Date.now()<sess.expiresAt){sessions[appId]={token:sess.idToken,opts:opts};scheduleRefresh(appId);if(opts.onReady)opts.onReady(sess.idToken);return Promise.resolve(sess.idToken);}
+    if(sess&&sess.refreshToken){return refreshToken(opts.apiKey,sess.refreshToken).then(function(d){saveSession(appId,d);sessions[appId]={token:d.idToken,opts:opts};scheduleRefresh(appId);if(opts.onReady)opts.onReady(d.idToken);return d.idToken;}).catch(function(){clearSession(appId);return promptLogin(opts).then(function(token){sessions[appId]={token:token,opts:opts};scheduleRefresh(appId);if(opts.onReady)opts.onReady(token);return token;});});}
+    return promptLogin(opts).then(function(token){sessions[appId]={token:token,opts:opts};scheduleRefresh(appId);if(opts.onReady)opts.onReady(token);return token;});
+  }
+  global.EGTPHAuth={
+    init:function(opts){if(!opts||!opts.appId||!opts.apiKey||!opts.email){console.error("EGTPHAuth.init: appId, apiKey و email مطلوبون");return;}ensureLogin(opts.appId,opts);},
+    getToken:function(appId){var s=sessions[appId];return s?s.token:null;},
+    authParam:function(appId){var t=this.getToken(appId);return t?("?auth="+t):"";},
+    logout:function(appId){clearSession(appId);delete sessions[appId];}
+  };
+})(window);
 // ── حماية حقيقية: تسجيل دخول بكلمة سر (مرة واحدة لكل جهاز)، الرمز يتجدد وحده ──
 // كلمة السر لا تُكتب هنا أبداً — تُكتب من المستخدم في النافذة التي تظهر.
 EGTPHAuth.init({
@@ -10489,7 +10556,7 @@ try{
     if(DB && DB.settings){ DB.settings.syncSchemaVersion = V41_SCHEMA; }
     if(document && document.title) document.title = document.title.replace(/v\d+/,'v41');
     var logo = document.querySelector('.tlogo span');
-    if(logo) logo.textContent = '| سجل الأجور v66';
+    if(logo) logo.textContent = '| سجل الأجور v73';
     v41NormalizeShape(DB);
     saveDB();
     if(typeof _cloudDirty !== 'undefined') _cloudDirty = false;
@@ -11822,7 +11889,7 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
     if(booted)return;booted=true;var d=ensure();if(!d)return;
     var repaired=migrateLedger(d), legacy=certifyLegacyTombs(d), block=enforceDeletionGuards(d,'تهيئة v55');
     wrapSave();wrapDeleteAdvance();wrapRestore();wrapCloud('cloudSync');wrapCloud('cloudPullReplace');enhanceLogicReport();attachAdminButton();
-    try{document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v66');var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v66';}catch(e){}
+    try{document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v66');var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v73';}catch(e){}
     if(repaired||legacy||block.changed){try{window.saveDB();}catch(e){}}
     window.EGTPH_V55={version:VERSION,verify:function(){var x=ensure(),r=enforceDeletionGuards(x,'فحص يدوي');if(r.changed&&typeof window.saveDB==='function')window.saveDB();return {blocked:r.blocked,activeTombstones:activeTypedTombs(x).length,witnesses:witnessRows(x).length};},showWitnesses:showWitnesses,recordHash:recordHash};
     setTimeout(function(){attachAdminButton();enhanceLogicReport();},600);
@@ -13161,6 +13228,17 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   meta();title();setTimeout(function(){meta();title();},2600);
   window.EGTPH_V71_PREVIEW_TO_TODAY={version:72,calculate:settlementV71,preview:previewToToday,verify:selfTest};
   window.EGTPH_V72_PREVIEW_TO_TODAY={version:72,calculate:settlementV71,preview:previewToToday,verify:selfTest};
+})();
+</script>
+
+<script id="v73AuthFallbackMarker">
+(function(){
+  try{
+    window.APP_VERSION='v73.0';
+    if(window.DB){ DB.version='73.0'; DB.schema=73; }
+    var logo=document.querySelector('.tlogo span'); if(logo) logo.textContent='| سجل الأجور v73';
+    console.log('EGTPH Payroll v73 auth fallback loaded');
+  }catch(e){console.error('v73 marker error',e);}
 })();
 </script>
 </body></html>
