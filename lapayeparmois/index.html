@@ -14054,4 +14054,145 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
 })();
 </script>
 
+
+<script id="egtph-v79-authoritative-temporary-preview">
+/* ═══════════════════════════════════════════════════════════════
+   EGTPH Payroll v79 — التصفية المؤقتة من دفتر الدورة الفعلي
+   - النشط: رصيد حتى اليوم من الدورة التقويمية الحالية فقط، مع التسبيقات
+     المسندة فعلياً لهذه الدورة، الإضافات غير المدفوعة، الغيابات، ورصيد الدين.
+   - لا تدخل أي دورة مسددة سابقاً.
+   - التصفية النهائية ومنطق أقل/15 يوم يبقيان حصراً عند وجود تاريخ خروج.
+═══════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  if(window.__EGTPH_V79_AUTHORITATIVE_PREVIEW__) return;
+  window.__EGTPH_V79_AUTHORITATIVE_PREVIEW__=true;
+  var VERSION=79, DAY=864e5;
+  var finalExitCalc=(window.EGTPH_V70_EXIT_ONLY_SETTLEMENT&&window.EGTPH_V70_EXIT_ONLY_SETTLEMENT.calculate)||window.calcFinalSettlement;
+
+  function n(v){v=Number(v);return isFinite(v)?v:0;}
+  function arr(v){return Array.isArray(v)?v:[];}
+  function vals(v){try{return Object.values(v||{});}catch(e){return [];}}
+  function d(v){try{return typeof _toDate==='function'?_toDate(v):null;}catch(e){return null;}}
+  function iso(x){return x?x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'):'';}
+  function today(){return d(typeof todayISO==='function'?todayISO():new Date());}
+  function allAdv(wid){return vals(((window.DB||{}).advances||{})[wid]||{}).reduce(function(out,list){return out.concat(arr(list));},[]);}
+  function gross(a){try{return typeof advGross==='function'?n(advGross(a)):n(a&&a.amount);}catch(e){return n(a&&a.amount);}}
+  function inWin(value,win){try{return typeof _inCycle==='function'?_inCycle(value,win):(function(x){var z=d(x);return !!(z&&z>=win.from&&z<win.to);})(value);}catch(e){return false;}}
+  function debtOutstanding(wid){
+    var db=(window.DB||{}), ds=arr((db.debts||{})[wid]);
+    var principal=ds.filter(function(x){return x&&x.type==='debt';}).reduce(function(s,x){return s+n(x.amount);},0);
+    var returned=ds.filter(function(x){return x&&x.type==='return';}).reduce(function(s,x){return s+n(x.amount);},0);
+    var returnTags=new Set(ds.filter(function(x){return x&&x.type==='return'&&x._instTag;}).map(function(x){return String(x._instTag);}));
+    var seen=new Set(), embedded=0, legacy=0;
+    allAdv(wid).forEach(function(a){
+      if(!a) return;
+      if(a._isInstDeduction){
+        var lt=a._instTag?String(a._instTag):'';
+        if(!lt||!returnTags.has(lt)) legacy+=n(a.amount);
+      }
+      arr(a.deductions).forEach(function(x){
+        if(!x||x.type!=='debt') return;
+        var tag=x._instTag?String(x._instTag):'';
+        var key=tag||('adv:'+String(a.id||'')+':'+String(x.debtId||'')+':'+String(x.amount||0));
+        if(seen.has(key)|| (tag&&returnTags.has(tag))) return;
+        seen.add(key); embedded+=n(x.amount);
+      });
+    });
+    return Math.max(0,principal-returned-legacy-embedded);
+  }
+  function sameCycleAdvance(a,win){
+    if(!a) return false;
+    // عند وجود إسناد دورة صريح، هو المرجع المحاسبي حتى لو كان تاريخ الإدخال مختلفاً.
+    if(a.cycleStart||a.cycleEnd){
+      var s=String(a.cycleStart||''), e=String(a.cycleEnd||'');
+      if(s&&s===iso(win.from)) return true;
+      if(e&&e===iso(win.to)) return true;
+    }
+    return inWin((a.realDate||a.date||''),win);
+  }
+  function currentCycle(w,ref){
+    var anchor=(typeof cycleAnchorForDate==='function')?cycleAnchorForDate(w,ref):{m:ref.getMonth(),yr:ref.getFullYear()};
+    var win=(typeof cycleWindow==='function')?cycleWindow(w,anchor.m,anchor.yr):null;
+    if(!win||!win.from||!win.to){
+      var day=Math.max(1,Math.min(31,Math.round(n(w&&w.day)||1))),last;
+      last=new Date(anchor.yr,anchor.m+1,0).getDate();
+      var from=new Date(anchor.yr,anchor.m,Math.min(day,last));
+      last=new Date(anchor.yr,anchor.m+2,0).getDate();
+      var to=new Date(anchor.yr,anchor.m+1,Math.min(day,last));
+      win={from:from,to:to};
+    }
+    return {m:anchor.m,yr:anchor.yr,win:win};
+  }
+  function oldOpenBalance(w,cur,ref){
+    var joined=d(w.startDate), total=0, m=cur.m,yr=cur.yr,guard=0;
+    while(guard++<36){
+      m=(m+11)%12;if(m===11)yr--;
+      var win=typeof cycleWindow==='function'?cycleWindow(w,m,yr):null;
+      if(!win||!win.from||!win.to||win.to>ref||(joined&&win.to<=joined)) break;
+      var ms=typeof calcMonthStatus==='function'?calcMonthStatus(w.id,m,yr):null;
+      if(!ms) break;
+      // التسديد الكامل للتسبيقات هو حاجز: لا تُعاد دورة مسددة ولا ما قبلها.
+      if(ms.salaryPaid) break;
+      var amount=n(ms.netSal)-n(ms.totAbsNow)+n(ms.hrsUnpaid)+n(ms.bonUnpaid);
+      if(!amount) break;
+      total+=amount;
+    }
+    return total;
+  }
+  function previewV79(w){
+    if(!w||!w.startDate) return null;
+    var ref=today(), joined=d(w.startDate); if(!ref||!joined||ref<joined) return null;
+    var cur=currentCycle(w,ref), win=cur.win, start=joined>win.from?joined:win.from;
+    var elapsed=Math.max(0,Math.min(30,Math.round((ref-start)/DAY)));
+    var salary=n(w.salary), earned=Math.round(salary*elapsed/30);
+    var ms=typeof calcMonthStatus==='function'?calcMonthStatus(w.id,cur.m,cur.yr):null;
+    var advances=allAdv(w.id).filter(function(a){return sameCycleAdvance(a,win);}).reduce(function(s,a){return s+gross(a);},0);
+    // calcMonthStatus هو المرجع للساعات/المكافآت/غيابات الدورة؛ لا نعيد حسابها بمنطق موازٍ.
+    var unpaidHrs=ms?n(ms.hrsUnpaid):0, unpaidBon=ms?n(ms.bonUnpaid):0, abs=ms?n(ms.totAbsNow):0;
+    var prior=oldOpenBalance(w,cur,ref), debt=debtOutstanding(w.id);
+    var cycleBalance=earned+unpaidHrs+unpaidBon-advances-abs;
+    var balance=prior+cycleBalance-debt;
+    return {
+      isFinal:false,previewOnly:true,previewPayable:false,notPayable:true,settlementScope:'active-cycle-ledger-v79',
+      refDate:iso(ref),exitDate:'',actualDays:elapsed,daily:salary/30,
+      earnedSal:earned,unpaidHrs:unpaidHrs,unpaidBon:unpaidBon,totalAdv:advances,totalAbs:abs,debtBalance:debt,
+      previousOpenBalance:prior,cycleBalanceBeforeDebt:cycleBalance,previewBalance:balance,netFinal:0,
+      currentCycleStart:iso(win.from),currentCycleEnd:iso(win.to),lastCycleStart:iso(win.from),lastCycleEnd:iso(win.to),lastCycleDays:elapsed,lastCycleSalary:earned,
+      lastCycleMode:'active_cycle_authoritative_preview',lastCycleRuleLabel:'تصفية مؤقتة حتى اليوم حسب دفتر الدورة الفعلي — لا تشمل دورة مسددة',
+      lastCycleRange:(typeof cycleRangeStr==='function'?cycleRangeStr(w,cur.m,cur.yr):iso(win.from)+' → '+iso(win.to)),
+      normalCycleDays:elapsed,normalCycleSalary:earned
+    };
+  }
+  function calcV79(w){
+    if(!w||!w.startDate) return null;
+    if(w.exitDate){
+      var r=typeof finalExitCalc==='function'?finalExitCalc(w):null;
+      if(r){r.isFinal=true;r.previewOnly=false;r.previewPayable=true;r.notPayable=false;r.settlementScope='final_exit_date';}
+      return r;
+    }
+    return previewV79(w);
+  }
+  window.calcSettlementPreviewToToday=previewV79;
+  window.calcFinalSettlement=calcV79; try{calcFinalSettlement=calcV79;}catch(e){}
+  window.EGTPH_V79_AUTHORITATIVE_PREVIEW={version:VERSION,preview:previewV79,calculate:calcV79,verify:function(){
+    var errors=[];
+    try{
+      var w=(window.DB&&arr(DB.workers).find(function(x){return x&&String(x.id)==='4';}))||null;
+      if(w){var p=previewV79(w);if(!p)errors.push('لم تُحسب معاينة العامل 4.');else if(p.totalAdv<=0)errors.push('تسبيقات الدورة الحالية للعامل 4 لم تدخل في التصفية المؤقتة.');else if(p.debtBalance<=0)errors.push('رصيد دين العامل 4 لم يدخل في التصفية المؤقتة.');else if(p.previewBalance>=0)errors.push('رصيد العامل 4 يجب أن يكون لصالح المؤسسة وفق التسبيقات والدين الحاليين.');}
+    }catch(e){errors.push((e&&e.message)||String(e));}
+    return errors;
+  }};
+  function rerender(){
+    try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}
+    try{if(typeof renderWFinTable==='function')renderWFinTable();}catch(e){}
+    try{if(typeof renderSideFinStatus==='function')renderSideFinStatus();}catch(e){}
+    try{if(typeof renderSalContent==='function')renderSalContent();}catch(e){}
+  }
+  function title(){try{document.title='EGTPH — سجل الأجور v79';var x=document.querySelector('.tlogo span');if(x)x.textContent='| سجل الأجور v79';}catch(e){}}
+  title();
+  setTimeout(rerender,0);setTimeout(rerender,800);setTimeout(rerender,2600);
+})();
+</script>
+
 </body></html>
