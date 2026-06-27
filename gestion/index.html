@@ -1399,7 +1399,8 @@ async function loadAll() {
   const tc = await dbG('settings','trucks');
   trucks = tc ? tc.list : [...DT];
   const mc = await dbG('settings','machines');
-  machines = mc ? mc.list : DMC.map(m => ({...m, tools: m.tools.map(t => ({...t}))}));
+  const _embMC = (typeof __EMBEDDED_DATA__!=='undefined' && __EMBEDDED_DATA__ && Array.isArray(__EMBEDDED_DATA__.machinesConfig) && __EMBEDDED_DATA__.machinesConfig.length) ? __EMBEDDED_DATA__.machinesConfig : null;
+  machines = mc ? mc.list : (_embMC ? _embMC.map(m => ({...m, tools:(m.tools||[]).map(t => ({...t}))})) : DMC.map(m => ({...m, tools: m.tools.map(t => ({...t}))})));
   const sl = await dbG('settings','secLocks');
   secLocks = (sl && sl.map) ? sl.map : {};
   const tb = await dbG('settings','tombstones');
@@ -6130,7 +6131,7 @@ async function applyBK(data) {
         await dbC('locked_days');
         lockedDays = data.lockedDays;
         for (const x of lockedDays) await dbP('locked_days', x);
-      } else { lockedDays = []; }
+      } else { await dbC('locked_days'); lockedDays = []; }
       secLocks = (data.secLocks && typeof data.secLocks==='object') ? data.secLocks : {};
       await dbP('settings', { id:'secLocks', map: secLocks });
       try { localStorage.setItem('egtph_file_ts_v13', data.savedAt||new Date().toISOString()); } catch(e) {}
@@ -7405,16 +7406,32 @@ async function publishToGitHub(){
   }
 }
 
+// طابع زمني مقاوم للتسميم — متطابق مع منطق المزامنة السحابية (_modOf)
+function embModOf(x){
+  const NOWMAX = Date.now() + 120000;
+  let v = 0;
+  if (x.createdAt){ const t = Date.parse(x.createdAt); if (t) v = Math.max(v, t); }
+  if (x._saved){   const t = Date.parse(x._saved);    if (t) v = Math.max(v, t); }
+  if (x.lockedAt){ const t = Date.parse(x.lockedAt);  if (t) v = Math.max(v, t); }
+  if (x._uedit && x._uedit <= NOWMAX) v = Math.max(v, x._uedit);
+  return v;
+}
 async function mergeStore(storeName, embArr, currentArr) {
   if (!embArr?.length) return currentArr;
   const map = Object.fromEntries(currentArr.map(x=>[x.id,x]));
   for (const item of embArr) {
-    if (map[item.id]) continue;
-    // ⚠️ حارس الحذف: لا تُعِد أبداً عنصراً مضمّناً في الملف إن كان معرّفه ضمن شواهد الحذف —
-    //    وإلا يعود المحذوف عند كل فتح للملف لأن البيانات المضمّنة تُدمج دائماً.
+    // ⚠️ حارس الحذف: لا تُعِد أبداً عنصراً مضمّناً إن كان معرّفه ضمن شواهد الحذف.
     if (tombstones.some(x => x.s===storeName && x.id===item.id)) continue;
-    map[item.id] = item;
-    await dbP(storeName, item);
+    const ex = map[item.id];
+    if (!ex) {
+      // غير موجود محلياً → أضِفه
+      map[item.id] = item;
+      await dbP(storeName, item);
+    } else if (embModOf(item) > embModOf(ex)) {
+      // نسخة الملف أحدث زمنياً → حدّث المحلي الأقدم (التعديل المحلي الأحدث لا يُمسّ)
+      Object.assign(ex, item);
+      await dbP(storeName, ex);
+    }
   }
   return Object.values(map);
 }
@@ -7469,7 +7486,15 @@ async function mergeEmbeddedData(emb) {
     window._supInvs = await mergeStore('sup_invoices', emb.supInvoices, window._supInvs||[]);
   // trucksConfig و machinesConfig: لا تُعيد كتابة DB إذا موجودة
   if (emb.trucksConfig?.length && !trucks.length)   { trucks=emb.trucksConfig;   await dbP('settings',{id:'trucks',list:trucks}); }
-  if (emb.machinesConfig?.length && !machines.length) { machines=emb.machinesConfig; await dbP('settings',{id:'machines',list:machines}); }
+  if (emb.machinesConfig?.length) {
+    if (!machines.length) { machines = emb.machinesConfig; await dbP('settings',{id:'machines',list:machines}); }
+    else {
+      const _mids = new Set(machines.map(m=>m.id));
+      let _mch = false;
+      for (const m of emb.machinesConfig) if (m && m.id && !_mids.has(m.id)) { machines.push(m); _mch = true; }
+      if (_mch) await dbP('settings',{id:'machines',list:machines});
+    }
+  }
   // النشاط: union بدون كتابة مكرر
   if (emb.activity?.length) {
     activity = await mergeStore('activity', emb.activity, activity);
