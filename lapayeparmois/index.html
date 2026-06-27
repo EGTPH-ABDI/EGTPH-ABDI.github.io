@@ -4240,9 +4240,9 @@ function renderSettlement(){
     // الموقف المالي
     let finCol,finTxt,finBg;
     if(curAdv===0&&curAbs===0){finCol='var(--gray)';finTxt='لا حركات';finBg='transparent';}
-    else if(balance>0){finCol='var(--amber)';finTxt='⏳ تدين له<br>'+fmt(balance);finBg='rgba(255,170,0,.06)';}
-    else if(balance<0){finCol='var(--red)';finTxt='⚠️ مدين لك<br>'+fmt(Math.abs(balance));finBg='rgba(255,68,102,.06)';}
-    else{finCol='var(--green1)';finTxt='✅ صافي صفر';finBg='rgba(0,255,136,.06)';}
+    else if(balance>0){finCol='var(--amber)';finTxt='⏳ متبقٍ بالدورة<br>'+fmt(balance);finBg='rgba(255,170,0,.06)';}
+    else if(balance<0){finCol='var(--red)';finTxt='⚠️ تسبيق زائد بالدورة<br>'+fmt(Math.abs(balance));finBg='rgba(255,68,102,.06)';}
+    else{finCol='var(--green1)';finTxt='✅ الراتب الأساسي مغطى';finBg='rgba(0,255,136,.06)';}
 
     // التصفية
     let daysHtml='<span style="color:var(--gray)">—</span>';
@@ -4250,12 +4250,18 @@ function renderSettlement(){
     if(fs){
       daysHtml='<div style="font-weight:800;color:var(--blue);font-size:12px">'+fs.actualDays+'</div>'+
         '<div style="font-size:9px;color:var(--gray)">'+(w.startDate?isoToD(w.startDate):'')+(w.exitDate?' → '+isoToD(w.exitDate):' → اليوم')+'</div>';
-      const sc=fs.netFinal>0?'var(--amber)':fs.netFinal<0?'var(--red)':'var(--green1)';
-      const sl=fs.isFinal?'🚪 نهائية':'📊 مؤقتة';
-      const st=fs.netFinal>0?'تدفع له<br><b>'+fmt(fs.netFinal)+'</b>':
-               fs.netFinal<0?'يدفعك<br><b>'+fmt(Math.abs(fs.netFinal))+'</b>':'✅ صفر';
-      settleHtml='<div style="font-size:10px;color:var(--gray)">'+sl+'</div>'+
-        '<div style="font-weight:800;color:'+sc+';font-size:11px">'+st+'</div>';
+      if(fs.previewOnly&&!fs.isFinal){
+        settleHtml='<div style="font-size:10px;color:var(--gray)">📊 متابعة فقط</div>'+
+          '<div style="font-weight:800;color:var(--blue);font-size:11px">— لا تصفية بدون خروج</div>'+
+          '<div style="font-size:9px;color:var(--gray)">راجع الموقف اليوم</div>';
+      }else{
+        const sc=fs.netFinal>0?'var(--amber)':fs.netFinal<0?'var(--red)':'var(--green1)';
+        const sl='🚪 نهائية';
+        const st=fs.netFinal>0?'تدفع له<br><b>'+fmt(fs.netFinal)+'</b>':
+                 fs.netFinal<0?'يدفعك<br><b>'+fmt(Math.abs(fs.netFinal))+'</b>':'✅ صفر';
+        settleHtml='<div style="font-size:10px;color:var(--gray)">'+sl+'</div>'+
+          '<div style="font-weight:800;color:'+sc+';font-size:11px">'+st+'</div>';
+      }
     }
 
     const bg=w.exitDate?'rgba(255,68,102,.03)':i%2===0?'transparent':'rgba(0,255,136,.02)';
@@ -4294,9 +4300,9 @@ function renderSettlement(){
   if(summEl)summEl.innerHTML=
     '<div style="display:flex;gap:12px;flex-wrap:wrap;background:var(--surface2);border-radius:12px;padding:12px 16px;font-size:11px">'+
     '<span>👷 <b>'+filtered.length+'</b> عامل</span>'+
-    (totalOwed>0?'<span style="color:var(--amber)">⏳ تدين لهم: <b>'+fmt(totalOwed)+'</b></span>':'')+
-    (totalDebt>0?'<span style="color:var(--red)">⚠️ مدينون لك: <b>'+fmt(totalDebt)+'</b></span>':'')+
-    '<span style="color:'+(totalOwed-totalDebt>0?'var(--amber)':totalOwed-totalDebt<0?'var(--green1)':'var(--gray)')+'">الصافي: <b>'+fmt(Math.abs(totalOwed-totalDebt))+' '+(totalOwed>totalDebt?'(تدفع)':'(تقبض)')+'</b></span>'+
+    (totalOwed>0?'<span style="color:var(--amber)">⏳ متبقٍ داخل الدورات: <b>'+fmt(totalOwed)+'</b></span>':'')+
+    (totalDebt>0?'<span style="color:var(--red)">⚠️ تسبيق زائد داخل الدورات: <b>'+fmt(totalDebt)+'</b></span>':'')+
+    '<span style="color:'+(totalOwed-totalDebt>0?'var(--amber)':totalOwed-totalDebt<0?'var(--green1)':'var(--gray)')+'">صافي المتابعة: <b>'+fmt(Math.abs(totalOwed-totalDebt))+'</b></span>'+
     '</div>';
 }
 
@@ -4323,7 +4329,10 @@ function printSettlementReport(){
     let oldHtml=pms&&pms.totAdv>0?(pms.salaryPaid?'✅ مسددة':'⏳ '+fmtN(pms.netSal)):'—';
     let balHtml=balance>0?'⏳ '+fmtN(balance):balance<0?'⚠️ '+fmtN(Math.abs(balance)):'✅ صافي';
     let settleHtml='—';
-    if(fs){const sl=fs.isFinal?'🚪':'📊';const net=fs.netFinal;settleHtml=sl+(net>0?' تدفع له '+fmtN(net):net<0?' يدفعك '+fmtN(Math.abs(net)):' ✅ صفر');}
+    if(fs){
+      if(fs.previewOnly&&!fs.isFinal)settleHtml='📊 متابعة فقط — لا تصفية بدون خروج';
+      else{const net=fs.netFinal;settleHtml='🚪'+(net>0?' تدفع له '+fmtN(net):net<0?' يدفعك '+fmtN(Math.abs(net)):' ✅ صفر');}
+    }
     if(balance>0)totOwed+=balance;else if(balance<0)totDebt+=Math.abs(balance);
     const bg=wi%2===0?'#fff':'#f7f9fc';
     bodyHtml+=`<tr style="background:${bg}">
@@ -4411,22 +4420,29 @@ function renderSideFinStatus(){
     const balance=ms?ms.netSal:(baseSal-curAdv);
     let finIco,finCol,finTxt;
     if(taken===0){finIco='⚪';finCol='var(--gray)';finTxt='لا حركات';}
-    else if(balance>0){finIco='⏳';finCol='var(--amber)';finTxt='تدين له '+fmt(balance);}
-    else if(balance<0){finIco='⚠️';finCol='var(--red)';finTxt='مدين لك '+fmt(Math.abs(balance));}
-    else{finIco='✅';finCol='var(--green1)';finTxt='صافي صفر';}
+    else if(balance>0){finIco='⏳';finCol='var(--amber)';finTxt='متبقٍ بالدورة '+fmt(balance);}
+    else if(balance<0){finIco='⚠️';finCol='var(--red)';finTxt='تسبيق زائد بالدورة '+fmt(Math.abs(balance));}
+    else{finIco='✅';finCol='var(--green1)';finTxt='الراتب الأساسي مغطى';}
 
     // ── التصفية: دائماً — مؤقتة حتى اليوم أو نهائية حتى exitDate ──
     let exitBlock='';
     if(w.startDate){
       const fs=calcFinalSettlement(w);
       if(fs){
-        const ec=fs.netFinal>0?'var(--amber)':fs.netFinal<0?'var(--red)':'var(--green1)';
-        const et=fs.netFinal>0?'تدفع له '+fmt(fs.netFinal):fs.netFinal<0?'يدفعك '+fmt(Math.abs(fs.netFinal)):'صافي صفر';
-        const lbl=fs.isFinal?'🚪 تصفية نهائية':'📊 تصفية مؤقتة حتى اليوم';
-        exitBlock='<div style="background:rgba(68,170,255,.07);border-right:2px solid var(--blue);border-radius:4px;padding:3px 6px;margin-top:3px;font-size:9px">'+
-          '<div style="color:var(--gray);margin-bottom:1px">'+lbl+'</div>'+
-          '<div style="color:'+ec+';font-weight:800">'+et+' ('+fs.actualDays+' يوم)</div>'+
-        '</div>';
+        if(fs.previewOnly&&!fs.isFinal){
+          exitBlock='<div style="background:rgba(68,170,255,.07);border-right:2px solid var(--blue);border-radius:4px;padding:3px 6px;margin-top:3px;font-size:9px">'+
+            '<div style="color:var(--gray);margin-bottom:1px">📊 متابعة الدورة حتى اليوم</div>'+
+            '<div style="color:var(--blue);font-weight:800">لا تصفية قبل تاريخ الخروج</div>'+
+          '</div>';
+        }else{
+          const ec=fs.netFinal>0?'var(--amber)':fs.netFinal<0?'var(--red)':'var(--green1)';
+          const et=fs.netFinal>0?'تدفع له '+fmt(fs.netFinal):fs.netFinal<0?'يدفعك '+fmt(Math.abs(fs.netFinal)):'صافي صفر';
+          const lbl='🚪 تصفية نهائية';
+          exitBlock='<div style="background:rgba(68,170,255,.07);border-right:2px solid var(--blue);border-radius:4px;padding:3px 6px;margin-top:3px;font-size:9px">'+
+            '<div style="color:var(--gray);margin-bottom:1px">'+lbl+'</div>'+
+            '<div style="color:'+ec+';font-weight:800">'+et+' ('+fs.actualDays+' يوم)</div>'+
+          '</div>';
+        }
       }
     }
 
@@ -4646,13 +4662,13 @@ function renderFinancialTable(workers){
       finHtml = '<span style="color:var(--gray);font-size:10px">لا حركات</span>';
       finBg   = 'transparent';
     } else if(balance>0){
-      finHtml = '<span style="color:var(--amber);font-weight:800">⏳ أنت مدين له<br>'+fmt(balance)+'</span>';
+      finHtml = '<span style="color:var(--amber);font-weight:800">⏳ متبقٍ بالدورة<br>'+fmt(balance)+'</span>';
       finBg   = 'rgba(255,170,0,.07)';
     } else if(balance<0){
-      finHtml = '<span style="color:var(--red);font-weight:800">⚠️ هو مدين لك<br>'+fmt(Math.abs(balance))+'</span>';
+      finHtml = '<span style="color:var(--red);font-weight:800">⚠️ تسبيق زائد بالدورة<br>'+fmt(Math.abs(balance))+'</span>';
       finBg   = 'rgba(255,68,102,.07)';
     } else {
-      finHtml = '<span style="color:var(--green1);font-weight:800">✅ صافي صفر<br>متساوٍ</span>';
+      finHtml = '<span style="color:var(--green1);font-weight:800">✅ الراتب الأساسي مغطى</span>';
       finBg   = 'rgba(0,255,136,.07)';
     }
 
@@ -4791,18 +4807,22 @@ function renderWFinTable(workers){
     const balance=ms?ms.netSal:(baseSal-curAdv);
     let finCol,finTxt;
     if(taken===0){finCol='var(--gray)';finTxt='لا حركات';}
-    else if(balance>0){finCol='var(--amber)';finTxt='⏳ تدين له '+fmt(balance);}
-    else if(balance<0){finCol='var(--red)';finTxt='⚠️ مدين لك '+fmt(Math.abs(balance));}
-    else{finCol='var(--green1)';finTxt='✅ صافي';}
+    else if(balance>0){finCol='var(--amber)';finTxt='⏳ متبقٍ بالدورة '+fmt(balance);}
+    else if(balance<0){finCol='var(--red)';finTxt='⚠️ تسبيق زائد بالدورة '+fmt(Math.abs(balance));}
+    else{finCol='var(--green1)';finTxt='✅ الراتب الأساسي مغطى';}
     // التصفية الكاملة
     let settleHtml='<span style="color:var(--gray);font-size:10px">—</span>';
     if(w.startDate){
       const fs=calcFinalSettlement(w);
       if(fs){
-        const sc=fs.netFinal>0?'var(--amber)':fs.netFinal<0?'var(--red)':'var(--green1)';
-        const st=fs.netFinal>0?'↑ تدفع له '+fmt(fs.netFinal):fs.netFinal<0?'↓ يدفعك '+fmt(Math.abs(fs.netFinal)):'✅ صفر';
-        const sl=fs.isFinal?'🚪 نهائية':'📊 مؤقتة';
-        settleHtml='<div style="font-size:10px"><span style="color:var(--gray)">'+sl+'</span><br><span style="font-weight:800;color:'+sc+'">'+st+'</span><br><span style="color:var(--gray);font-size:9px">'+fs.actualDays+' يوم</span></div>';
+        if(fs.previewOnly&&!fs.isFinal){
+          settleHtml='<div style="font-size:10px"><span style="color:var(--gray)">📊 متابعة فقط</span><br><span style="font-weight:800;color:var(--blue)">— لا تصفية بدون خروج</span><br><span style="color:var(--gray);font-size:9px">'+fs.actualDays+' يوم متابعة</span></div>';
+        }else{
+          const sc=fs.netFinal>0?'var(--amber)':fs.netFinal<0?'var(--red)':'var(--green1)';
+          const st=fs.netFinal>0?'↑ تدفع له '+fmt(fs.netFinal):fs.netFinal<0?'↓ يدفعك '+fmt(Math.abs(fs.netFinal)):'✅ صفر';
+          const sl='🚪 نهائية';
+          settleHtml='<div style="font-size:10px"><span style="color:var(--gray)">'+sl+'</span><br><span style="font-weight:800;color:'+sc+'">'+st+'</span><br><span style="color:var(--gray);font-size:9px">'+fs.actualDays+' يوم</span></div>';
+        }
       }
     }
     const bg=i%2===0?'transparent':'rgba(0,255,136,.02)';
@@ -5249,7 +5269,7 @@ function renderSalContent(){
   let settlementBlock='';
   if(w.startDate){
     const fs=calcFinalSettlement(w);
-    if(fs){
+    if(fs&&fs.isFinal){
       const netCol=fs.netFinal>0?'#1a7a4a':fs.netFinal<0?'#c0392b':'#1a5276';
       const netBg =fs.netFinal>0?'rgba(0,255,136,.08)':fs.netFinal<0?'rgba(255,68,102,.08)':'rgba(68,170,255,.08)';
       const netTxt=fs.netFinal>0
@@ -13473,4 +13493,143 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   window.addEventListener('error', function(){ setTimeout(ensureVisible,0); });
 })();
 </script>
+
+<script id="egtph-v76-active-cycle-status">
+/* ═══════════════════════════════════════════════════════════════
+   EGTPH Payroll v76
+   - العامل النشط: متابعة دورة حالية فقط، وليست تصفية.
+   - لا يظهر "صفر" أو "تدفع له / يدفعك" في خانة التصفية قبل تاريخ خروج.
+   - أرقام الدورة الحالية تبقى مرئية: قبل الخصم، الخصومات، الصافي،
+     التسبيقات، النقد المدفوع، والمتبقي لإغلاق الراتب الأساسي.
+═══════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  if(window.__EGTPH_V76_ACTIVE_CYCLE_STATUS__) return;
+  window.__EGTPH_V76_ACTIVE_CYCLE_STATUS__=true;
+  var VERSION=76;
+
+  function money(v){
+    try{return typeof fmt==='function'?fmt(Math.round(Number(v)||0)):Math.round(Number(v)||0).toLocaleString('fr-FR')+' دج';}
+    catch(e){return String(Math.round(Number(v)||0))+' دج';}
+  }
+  function esc(v){
+    return String(v==null?'':v).replace(/[&<>"']/g,function(c){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+    });
+  }
+  function workerPreviewCycleCard(){
+    try{
+      var holder=document.getElementById('salContent');
+      var worker=(window.S&&typeof getW==='function')?getW(S.sw):null;
+      var old=document.getElementById('v76ActiveCyclePreview');
+      if(old) old.remove();
+      if(!holder||!worker||!worker.startDate||worker.exitDate) return;
+
+      var active=typeof getActiveCycle==='function'?getActiveCycle(worker.id):null;
+      var fin=active&&typeof v64CycleFinance==='function'?v64CycleFinance(worker.id,active.m,active.yr):null;
+      if(!fin) return;
+
+      var range='';
+      try{range=typeof cycleRangeStr==='function'?cycleRangeStr(worker,active.m,active.yr):'';}catch(e){}
+      var cashRemain=Number(fin.cashRemaining)||0;
+      var cashRemainTxt=cashRemain<0
+        ? 'دُفع زائدًا '+money(Math.abs(cashRemain))
+        : money(cashRemain);
+      var box=document.createElement('div');
+      box.id='v76ActiveCyclePreview';
+      box.className='abox ok';
+      box.style.marginTop='-8px';
+      box.innerHTML=
+        '<b>📊 متابعة الدورة الحالية حتى اليوم — ليست تصفية</b><br>'+
+        '<span style="font-size:10px;color:var(--gray)">الدورة: '+esc(range||'—')+'. لا تُطبق قاعدة أقل/أكثر من 15 يومًا إلا عند إدخال تاريخ خروج.</span>'+
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:7px;margin-top:8px;font-size:10px">'+
+          '<span>المستحق قبل الخصم: <b style="color:var(--blue)">'+money(fin.gross)+'</b></span>'+
+          '<span>إجمالي الخصومات: <b style="color:var(--red)">−'+money(fin.deductions)+'</b></span>'+
+          '<span>الصافي بعد الخصم: <b style="color:var(--teal)">'+money(fin.net)+'</b></span>'+
+          '<span>التسبيقات المحاسبية: <b>'+money(fin.advanceGross)+'</b></span>'+
+          '<span>نقد دُفع فعليًا: <b>'+money(fin.cashPaid)+'</b></span>'+
+          '<span>المتبقي نقدًا: <b style="color:'+(cashRemain<0?'var(--red)':'var(--green1)')+'">'+cashRemainTxt+'</b></span>'+
+          '<span>المتبقي لإغلاق الراتب الأساسي: <b style="color:var(--amber)">'+money(fin.salaryLockRemaining)+'</b></span>'+
+        '</div>';
+      holder.insertBefore(box,holder.firstChild);
+    }catch(e){console.warn('v76 active-cycle preview',e);}
+  }
+
+  var oldRender=window.renderSalContent;
+  if(typeof oldRender==='function'&&!oldRender.__v76ActiveCycleWrapped){
+    var wrapped=function(){
+      var result=oldRender.apply(this,arguments);
+      workerPreviewCycleCard();
+      return result;
+    };
+    wrapped.__v76ActiveCycleWrapped=true;
+    window.renderSalContent=wrapped;
+    try{renderSalContent=wrapped;}catch(e){}
+  }
+
+  function test(){
+    var fail=[];
+    try{
+      var worker={id:'__v76__',startDate:'2026-05-02',salary:40000,exitDate:''};
+      var fs=typeof calcFinalSettlement==='function'?calcFinalSettlement(worker):null;
+      if(!fs||!fs.previewOnly||fs.isFinal) fail.push({type:'error',section:'V76',msg:'العامل بلا تاريخ خروج يجب أن يبقى متابعة فقط.'});
+      if(fs&&fs.netFinal!==0) fail.push({type:'error',section:'V76',msg:'المتابعة لا يجب أن تتحول إلى صافي تصفية.'});
+    }catch(e){fail.push({type:'error',section:'V76',msg:'فشل اختبار المتابعة: '+((e&&e.message)||e)});}
+    return fail;
+  }
+  window.__EGTPH_V76_ACTIVE_CYCLE_STATUS={version:VERSION,refresh:workerPreviewCycleCard,verify:test};
+
+  function reportWrap(){
+    var old=window.showUnifiedLogicReport||window.showLogicReport;
+    if(typeof old!=='function'||old.__v76ActiveCycleWrapped) return;
+    var wrapped=function(){
+      var result=old.apply(this,arguments);
+      try{
+        var body=document.getElementById('logicReportBody');
+        var oldBox=document.getElementById('v76ActiveCycleReport');
+        if(oldBox) oldBox.remove();
+        if(body){
+          var checks=test();
+          var box=document.createElement('div');
+          box.id='v76ActiveCycleReport';
+          box.className='abox '+(checks.length?'danger':'ok');
+          box.innerHTML='<b>📊 v76 — فصل المتابعة عن التصفية</b><br>'+
+            (checks.length?checks.map(function(x){return '⚠️ '+x.msg;}).join('<br>'):
+            '✅ العامل بلا تاريخ خروج: تظهر له متابعة الدورة الحالية فقط، ولا تظهر "صفر" كتصفية ولا "تدفع له / يدفعك".');
+          body.insertBefore(box,body.firstChild);
+        }
+      }catch(e){}
+      return result;
+    };
+    wrapped.__v76ActiveCycleWrapped=true;
+    window.showUnifiedLogicReport=wrapped;
+    window.showLogicReport=wrapped;
+    try{showUnifiedLogicReport=wrapped;showLogicReport=wrapped;}catch(e){}
+  }
+  reportWrap();
+
+  function meta(){
+    try{
+      if(!DB) return;
+      DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};
+      DB.version='76.0';
+      DB.schemaVersion=Math.max(VERSION,+DB.schemaVersion||0);
+      DB.settings.syncSchemaVersion=Math.max(VERSION,+DB.settings.syncSchemaVersion||0);
+      DB.settings.migrationVersion='76.0';
+      DB.settings.settlementPreviewMode='today-preview-cycle-status-not-final';
+      DB.settings.finalSettlement15DayRuleScope='exit-date-only';
+    }catch(e){}
+  }
+  function title(){
+    try{
+      document.title='EGTPH — سجل الأجور v76';
+      var x=document.querySelector('.tlogo span');
+      if(x)x.textContent='| سجل الأجور v76';
+    }catch(e){}
+  }
+  meta();title();
+  setTimeout(function(){meta();title();workerPreviewCycleCard();},1800);
+})();
+</script>
+
 </body></html>
