@@ -3846,77 +3846,7 @@ function printHrsReport(){
     <td style="text-align:center;font-weight:800">${gH} سا</td><td></td>
     <td style="text-align:center;font-weight:800">+${fmtN(gAmt)}</td>
     <td style="text-align:center;font-size:10px">مسدود: ${fmtN(gPaid)}</td>
-  </tr></tbody></table>
-  
-<script id="egtph-v80-forced-preview-render">
-/* v80 — مصدر واحد إلزامي لعرض التصفية المؤقتة
-   يعالج طبقات الواجهة القديمة: لا يسمح بعرض earnedSal وحده كرصيد. */
-(function(){
-  'use strict';
-  if(window.__EGTPH_V80_FORCED_PREVIEW_RENDER__) return;
-  window.__EGTPH_V80_FORCED_PREVIEW_RENDER__=true;
-  var VERSION=80;
-  function n(v){v=Number(v);return isFinite(v)?v:0;}
-  function money(v){try{return typeof fmt==='function'?fmt(Math.round(n(v))):Math.round(n(v)).toLocaleString('fr-FR')+' دج';}catch(e){return Math.round(n(v))+' دج';}}
-  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function workerByRow(row){
-    try{
-      var cells=row&&row.children;if(!cells||cells.length<2)return null;
-      var text=(cells[1].textContent||'').trim();
-      var ws=(typeof sw==='function'?sw():((window.DB&&DB.workers)||[]));
-      return ws.find(function(w){return w&&w.name&&text.indexOf(String(w.name))>=0;})||null;
-    }catch(e){return null;}
-  }
-  function preview(w){
-    try{
-      if(w&&window.EGTPH_V79_AUTHORITATIVE_PREVIEW&&typeof window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview==='function') return window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview(w);
-      if(w&&typeof window.calcSettlementPreviewToToday==='function') return window.calcSettlementPreviewToToday(w);
-    }catch(e){}
-    return null;
-  }
-  function html(fs){
-    if(!fs)return '<span style="color:var(--gray);font-size:10px">لا بيانات دورة</span>';
-    var bal=n(fs.previewBalance), col=bal>0?'var(--amber)':bal<0?'var(--red)':'var(--green1)';
-    var title=bal>0?'رصيد مؤقت لصالح العامل':bal<0?'رصيد مؤقت لصالح المؤسسة':'رصيد مؤقت متوازن';
-    var sign=bal>0?'له مؤقتًا':bal<0?'عليه مؤقتًا':'متوازن';
-    return '<div style="font-size:10px;color:var(--blue)">📊 تصفية مؤقتة حتى '+esc(fs.refDate||'اليوم')+'</div>'+
-      '<div style="font-weight:900;color:'+col+';font-size:11px">'+title+'<br><b>'+money(Math.abs(bal))+'</b></div>'+
-      '<div style="font-size:8px;color:var(--gray);line-height:1.55">'+Math.max(0,Math.round(n(fs.actualDays)))+' يوم · مستحق '+money(fs.earnedSal)+' − تسبيقات '+money(fs.totalAdv)+' − دين '+money(fs.debtBalance)+'<br>عرض فقط — لا أمر دفع ولا إغلاق دورة ('+sign+')</div>';
-  }
-  function patchTable(){
-    try{
-      var body=document.getElementById('settlBody');if(!body)return;
-      Array.prototype.forEach.call(body.querySelectorAll('tr'),function(row){
-        var w=workerByRow(row);if(!w||w.exitDate)return;
-        var fs=preview(w);if(!fs)return;
-        var cells=row.children;if(!cells||!cells.length)return;
-        var target=cells[cells.length-1];
-        target.innerHTML=html(fs);
-        target.setAttribute('data-v80-preview','1');
-      });
-    }catch(e){console.error('v80 settlement render',e);}
-  }
-  var old=window.renderSettlement;
-  if(typeof old==='function'&&!old.__v80ForcedPreview){
-    var wrapped=function(){var r=old.apply(this,arguments);setTimeout(patchTable,0);setTimeout(patchTable,80);return r;};
-    wrapped.__v80ForcedPreview=true;window.renderSettlement=wrapped;try{renderSettlement=wrapped;}catch(e){}
-  }
-  function observe(){
-    try{var body=document.getElementById('settlBody');if(!body)return;
-      var mo=new MutationObserver(function(){patchTable();});
-      mo.observe(body,{childList:true,subtree:true});
-    }catch(e){}
-  }
-  function meta(){try{if(!DB)return;DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};DB.version='80.0';DB.schemaVersion=Math.max(80,+DB.schemaVersion||0);DB.settings.syncSchemaVersion=Math.max(80,+DB.settings.syncSchemaVersion||0);DB.settings.migrationVersion='80.0';DB.settings.settlementPreviewMode='active-cycle-authoritative-display';}catch(e){}}
-  function verify(){
-    var out=[];try{var ws=(window.DB&&DB.workers)||[],w=ws.find(function(x){return x&&String(x.id)==='4';});if(w){var p=preview(w);if(!p)out.push('لم تحسب معاينة العامل 4.');else if(n(p.previewBalance)>=0)out.push('دق ملياني يجب أن يبقى رصيده المؤقت لصالح المؤسسة.');else if(n(p.totalAdv)!==35000)out.push('تسبيقات دق ملياني الحالية ليست 35 000 دج.');else if(n(p.debtBalance)!==13500)out.push('دين دق ملياني ليس 13 500 دج.');}}catch(e){out.push((e&&e.message)||String(e));}return out;}
-  window.EGTPH_V80_FORCED_PREVIEW_RENDER={version:VERSION,patch:patchTable,verify:verify};
-  try{document.title='EGTPH — سجل الأجور v80';var x=document.querySelector('.tlogo span');if(x)x.textContent='| سجل الأجور v80';}catch(e){}
-  meta();setTimeout(function(){observe();patchTable();try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}setTimeout(patchTable,200);},1000);
-})();
-</script>
-
-</body></html>`);
+  </tr></tbody></table></body></html>`);
 }
 
 // ══════════════════════════════════════════════════════
@@ -3993,77 +3923,7 @@ function printDebtsReport(){
     <td colspan="3"></td>
     <td style="text-align:center;font-weight:800">${fmtN(gPaid)}</td>
     <td style="text-align:center;font-weight:800">${fmtN(gRem)} متبقي</td>
-  </tr></tbody></table>
-  
-<script id="egtph-v80-forced-preview-render">
-/* v80 — مصدر واحد إلزامي لعرض التصفية المؤقتة
-   يعالج طبقات الواجهة القديمة: لا يسمح بعرض earnedSal وحده كرصيد. */
-(function(){
-  'use strict';
-  if(window.__EGTPH_V80_FORCED_PREVIEW_RENDER__) return;
-  window.__EGTPH_V80_FORCED_PREVIEW_RENDER__=true;
-  var VERSION=80;
-  function n(v){v=Number(v);return isFinite(v)?v:0;}
-  function money(v){try{return typeof fmt==='function'?fmt(Math.round(n(v))):Math.round(n(v)).toLocaleString('fr-FR')+' دج';}catch(e){return Math.round(n(v))+' دج';}}
-  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function workerByRow(row){
-    try{
-      var cells=row&&row.children;if(!cells||cells.length<2)return null;
-      var text=(cells[1].textContent||'').trim();
-      var ws=(typeof sw==='function'?sw():((window.DB&&DB.workers)||[]));
-      return ws.find(function(w){return w&&w.name&&text.indexOf(String(w.name))>=0;})||null;
-    }catch(e){return null;}
-  }
-  function preview(w){
-    try{
-      if(w&&window.EGTPH_V79_AUTHORITATIVE_PREVIEW&&typeof window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview==='function') return window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview(w);
-      if(w&&typeof window.calcSettlementPreviewToToday==='function') return window.calcSettlementPreviewToToday(w);
-    }catch(e){}
-    return null;
-  }
-  function html(fs){
-    if(!fs)return '<span style="color:var(--gray);font-size:10px">لا بيانات دورة</span>';
-    var bal=n(fs.previewBalance), col=bal>0?'var(--amber)':bal<0?'var(--red)':'var(--green1)';
-    var title=bal>0?'رصيد مؤقت لصالح العامل':bal<0?'رصيد مؤقت لصالح المؤسسة':'رصيد مؤقت متوازن';
-    var sign=bal>0?'له مؤقتًا':bal<0?'عليه مؤقتًا':'متوازن';
-    return '<div style="font-size:10px;color:var(--blue)">📊 تصفية مؤقتة حتى '+esc(fs.refDate||'اليوم')+'</div>'+
-      '<div style="font-weight:900;color:'+col+';font-size:11px">'+title+'<br><b>'+money(Math.abs(bal))+'</b></div>'+
-      '<div style="font-size:8px;color:var(--gray);line-height:1.55">'+Math.max(0,Math.round(n(fs.actualDays)))+' يوم · مستحق '+money(fs.earnedSal)+' − تسبيقات '+money(fs.totalAdv)+' − دين '+money(fs.debtBalance)+'<br>عرض فقط — لا أمر دفع ولا إغلاق دورة ('+sign+')</div>';
-  }
-  function patchTable(){
-    try{
-      var body=document.getElementById('settlBody');if(!body)return;
-      Array.prototype.forEach.call(body.querySelectorAll('tr'),function(row){
-        var w=workerByRow(row);if(!w||w.exitDate)return;
-        var fs=preview(w);if(!fs)return;
-        var cells=row.children;if(!cells||!cells.length)return;
-        var target=cells[cells.length-1];
-        target.innerHTML=html(fs);
-        target.setAttribute('data-v80-preview','1');
-      });
-    }catch(e){console.error('v80 settlement render',e);}
-  }
-  var old=window.renderSettlement;
-  if(typeof old==='function'&&!old.__v80ForcedPreview){
-    var wrapped=function(){var r=old.apply(this,arguments);setTimeout(patchTable,0);setTimeout(patchTable,80);return r;};
-    wrapped.__v80ForcedPreview=true;window.renderSettlement=wrapped;try{renderSettlement=wrapped;}catch(e){}
-  }
-  function observe(){
-    try{var body=document.getElementById('settlBody');if(!body)return;
-      var mo=new MutationObserver(function(){patchTable();});
-      mo.observe(body,{childList:true,subtree:true});
-    }catch(e){}
-  }
-  function meta(){try{if(!DB)return;DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};DB.version='80.0';DB.schemaVersion=Math.max(80,+DB.schemaVersion||0);DB.settings.syncSchemaVersion=Math.max(80,+DB.settings.syncSchemaVersion||0);DB.settings.migrationVersion='80.0';DB.settings.settlementPreviewMode='active-cycle-authoritative-display';}catch(e){}}
-  function verify(){
-    var out=[];try{var ws=(window.DB&&DB.workers)||[],w=ws.find(function(x){return x&&String(x.id)==='4';});if(w){var p=preview(w);if(!p)out.push('لم تحسب معاينة العامل 4.');else if(n(p.previewBalance)>=0)out.push('دق ملياني يجب أن يبقى رصيده المؤقت لصالح المؤسسة.');else if(n(p.totalAdv)!==35000)out.push('تسبيقات دق ملياني الحالية ليست 35 000 دج.');else if(n(p.debtBalance)!==13500)out.push('دين دق ملياني ليس 13 500 دج.');}}catch(e){out.push((e&&e.message)||String(e));}return out;}
-  window.EGTPH_V80_FORCED_PREVIEW_RENDER={version:VERSION,patch:patchTable,verify:verify};
-  try{document.title='EGTPH — سجل الأجور v80';var x=document.querySelector('.tlogo span');if(x)x.textContent='| سجل الأجور v80';}catch(e){}
-  meta();setTimeout(function(){observe();patchTable();try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}setTimeout(patchTable,200);},1000);
-})();
-</script>
-
-</body></html>`);
+  </tr></tbody></table></body></html>`);
 }
 
 // ══════════════════════════════════════════════════════
@@ -4514,77 +4374,7 @@ function printSettlementReport(){
         <td></td>
       </tr>
     </tbody>
-  </table>
-  
-<script id="egtph-v80-forced-preview-render">
-/* v80 — مصدر واحد إلزامي لعرض التصفية المؤقتة
-   يعالج طبقات الواجهة القديمة: لا يسمح بعرض earnedSal وحده كرصيد. */
-(function(){
-  'use strict';
-  if(window.__EGTPH_V80_FORCED_PREVIEW_RENDER__) return;
-  window.__EGTPH_V80_FORCED_PREVIEW_RENDER__=true;
-  var VERSION=80;
-  function n(v){v=Number(v);return isFinite(v)?v:0;}
-  function money(v){try{return typeof fmt==='function'?fmt(Math.round(n(v))):Math.round(n(v)).toLocaleString('fr-FR')+' دج';}catch(e){return Math.round(n(v))+' دج';}}
-  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function workerByRow(row){
-    try{
-      var cells=row&&row.children;if(!cells||cells.length<2)return null;
-      var text=(cells[1].textContent||'').trim();
-      var ws=(typeof sw==='function'?sw():((window.DB&&DB.workers)||[]));
-      return ws.find(function(w){return w&&w.name&&text.indexOf(String(w.name))>=0;})||null;
-    }catch(e){return null;}
-  }
-  function preview(w){
-    try{
-      if(w&&window.EGTPH_V79_AUTHORITATIVE_PREVIEW&&typeof window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview==='function') return window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview(w);
-      if(w&&typeof window.calcSettlementPreviewToToday==='function') return window.calcSettlementPreviewToToday(w);
-    }catch(e){}
-    return null;
-  }
-  function html(fs){
-    if(!fs)return '<span style="color:var(--gray);font-size:10px">لا بيانات دورة</span>';
-    var bal=n(fs.previewBalance), col=bal>0?'var(--amber)':bal<0?'var(--red)':'var(--green1)';
-    var title=bal>0?'رصيد مؤقت لصالح العامل':bal<0?'رصيد مؤقت لصالح المؤسسة':'رصيد مؤقت متوازن';
-    var sign=bal>0?'له مؤقتًا':bal<0?'عليه مؤقتًا':'متوازن';
-    return '<div style="font-size:10px;color:var(--blue)">📊 تصفية مؤقتة حتى '+esc(fs.refDate||'اليوم')+'</div>'+
-      '<div style="font-weight:900;color:'+col+';font-size:11px">'+title+'<br><b>'+money(Math.abs(bal))+'</b></div>'+
-      '<div style="font-size:8px;color:var(--gray);line-height:1.55">'+Math.max(0,Math.round(n(fs.actualDays)))+' يوم · مستحق '+money(fs.earnedSal)+' − تسبيقات '+money(fs.totalAdv)+' − دين '+money(fs.debtBalance)+'<br>عرض فقط — لا أمر دفع ولا إغلاق دورة ('+sign+')</div>';
-  }
-  function patchTable(){
-    try{
-      var body=document.getElementById('settlBody');if(!body)return;
-      Array.prototype.forEach.call(body.querySelectorAll('tr'),function(row){
-        var w=workerByRow(row);if(!w||w.exitDate)return;
-        var fs=preview(w);if(!fs)return;
-        var cells=row.children;if(!cells||!cells.length)return;
-        var target=cells[cells.length-1];
-        target.innerHTML=html(fs);
-        target.setAttribute('data-v80-preview','1');
-      });
-    }catch(e){console.error('v80 settlement render',e);}
-  }
-  var old=window.renderSettlement;
-  if(typeof old==='function'&&!old.__v80ForcedPreview){
-    var wrapped=function(){var r=old.apply(this,arguments);setTimeout(patchTable,0);setTimeout(patchTable,80);return r;};
-    wrapped.__v80ForcedPreview=true;window.renderSettlement=wrapped;try{renderSettlement=wrapped;}catch(e){}
-  }
-  function observe(){
-    try{var body=document.getElementById('settlBody');if(!body)return;
-      var mo=new MutationObserver(function(){patchTable();});
-      mo.observe(body,{childList:true,subtree:true});
-    }catch(e){}
-  }
-  function meta(){try{if(!DB)return;DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};DB.version='80.0';DB.schemaVersion=Math.max(80,+DB.schemaVersion||0);DB.settings.syncSchemaVersion=Math.max(80,+DB.settings.syncSchemaVersion||0);DB.settings.migrationVersion='80.0';DB.settings.settlementPreviewMode='active-cycle-authoritative-display';}catch(e){}}
-  function verify(){
-    var out=[];try{var ws=(window.DB&&DB.workers)||[],w=ws.find(function(x){return x&&String(x.id)==='4';});if(w){var p=preview(w);if(!p)out.push('لم تحسب معاينة العامل 4.');else if(n(p.previewBalance)>=0)out.push('دق ملياني يجب أن يبقى رصيده المؤقت لصالح المؤسسة.');else if(n(p.totalAdv)!==35000)out.push('تسبيقات دق ملياني الحالية ليست 35 000 دج.');else if(n(p.debtBalance)!==13500)out.push('دين دق ملياني ليس 13 500 دج.');}}catch(e){out.push((e&&e.message)||String(e));}return out;}
-  window.EGTPH_V80_FORCED_PREVIEW_RENDER={version:VERSION,patch:patchTable,verify:verify};
-  try{document.title='EGTPH — سجل الأجور v80';var x=document.querySelector('.tlogo span');if(x)x.textContent='| سجل الأجور v80';}catch(e){}
-  meta();setTimeout(function(){observe();patchTable();try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}setTimeout(patchTable,200);},1000);
-})();
-</script>
-
-</body></html>`);
+  </table></body></html>`);
 }
 
 function renderSideFinStatus(){
@@ -6285,77 +6075,7 @@ function printAbsReport(){
         <td style="text-align:center;font-size:10px">معلق: ${gPend}</td>
       </tr>
     </tbody>
-  </table>
-  
-<script id="egtph-v80-forced-preview-render">
-/* v80 — مصدر واحد إلزامي لعرض التصفية المؤقتة
-   يعالج طبقات الواجهة القديمة: لا يسمح بعرض earnedSal وحده كرصيد. */
-(function(){
-  'use strict';
-  if(window.__EGTPH_V80_FORCED_PREVIEW_RENDER__) return;
-  window.__EGTPH_V80_FORCED_PREVIEW_RENDER__=true;
-  var VERSION=80;
-  function n(v){v=Number(v);return isFinite(v)?v:0;}
-  function money(v){try{return typeof fmt==='function'?fmt(Math.round(n(v))):Math.round(n(v)).toLocaleString('fr-FR')+' دج';}catch(e){return Math.round(n(v))+' دج';}}
-  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function workerByRow(row){
-    try{
-      var cells=row&&row.children;if(!cells||cells.length<2)return null;
-      var text=(cells[1].textContent||'').trim();
-      var ws=(typeof sw==='function'?sw():((window.DB&&DB.workers)||[]));
-      return ws.find(function(w){return w&&w.name&&text.indexOf(String(w.name))>=0;})||null;
-    }catch(e){return null;}
-  }
-  function preview(w){
-    try{
-      if(w&&window.EGTPH_V79_AUTHORITATIVE_PREVIEW&&typeof window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview==='function') return window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview(w);
-      if(w&&typeof window.calcSettlementPreviewToToday==='function') return window.calcSettlementPreviewToToday(w);
-    }catch(e){}
-    return null;
-  }
-  function html(fs){
-    if(!fs)return '<span style="color:var(--gray);font-size:10px">لا بيانات دورة</span>';
-    var bal=n(fs.previewBalance), col=bal>0?'var(--amber)':bal<0?'var(--red)':'var(--green1)';
-    var title=bal>0?'رصيد مؤقت لصالح العامل':bal<0?'رصيد مؤقت لصالح المؤسسة':'رصيد مؤقت متوازن';
-    var sign=bal>0?'له مؤقتًا':bal<0?'عليه مؤقتًا':'متوازن';
-    return '<div style="font-size:10px;color:var(--blue)">📊 تصفية مؤقتة حتى '+esc(fs.refDate||'اليوم')+'</div>'+
-      '<div style="font-weight:900;color:'+col+';font-size:11px">'+title+'<br><b>'+money(Math.abs(bal))+'</b></div>'+
-      '<div style="font-size:8px;color:var(--gray);line-height:1.55">'+Math.max(0,Math.round(n(fs.actualDays)))+' يوم · مستحق '+money(fs.earnedSal)+' − تسبيقات '+money(fs.totalAdv)+' − دين '+money(fs.debtBalance)+'<br>عرض فقط — لا أمر دفع ولا إغلاق دورة ('+sign+')</div>';
-  }
-  function patchTable(){
-    try{
-      var body=document.getElementById('settlBody');if(!body)return;
-      Array.prototype.forEach.call(body.querySelectorAll('tr'),function(row){
-        var w=workerByRow(row);if(!w||w.exitDate)return;
-        var fs=preview(w);if(!fs)return;
-        var cells=row.children;if(!cells||!cells.length)return;
-        var target=cells[cells.length-1];
-        target.innerHTML=html(fs);
-        target.setAttribute('data-v80-preview','1');
-      });
-    }catch(e){console.error('v80 settlement render',e);}
-  }
-  var old=window.renderSettlement;
-  if(typeof old==='function'&&!old.__v80ForcedPreview){
-    var wrapped=function(){var r=old.apply(this,arguments);setTimeout(patchTable,0);setTimeout(patchTable,80);return r;};
-    wrapped.__v80ForcedPreview=true;window.renderSettlement=wrapped;try{renderSettlement=wrapped;}catch(e){}
-  }
-  function observe(){
-    try{var body=document.getElementById('settlBody');if(!body)return;
-      var mo=new MutationObserver(function(){patchTable();});
-      mo.observe(body,{childList:true,subtree:true});
-    }catch(e){}
-  }
-  function meta(){try{if(!DB)return;DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};DB.version='80.0';DB.schemaVersion=Math.max(80,+DB.schemaVersion||0);DB.settings.syncSchemaVersion=Math.max(80,+DB.settings.syncSchemaVersion||0);DB.settings.migrationVersion='80.0';DB.settings.settlementPreviewMode='active-cycle-authoritative-display';}catch(e){}}
-  function verify(){
-    var out=[];try{var ws=(window.DB&&DB.workers)||[],w=ws.find(function(x){return x&&String(x.id)==='4';});if(w){var p=preview(w);if(!p)out.push('لم تحسب معاينة العامل 4.');else if(n(p.previewBalance)>=0)out.push('دق ملياني يجب أن يبقى رصيده المؤقت لصالح المؤسسة.');else if(n(p.totalAdv)!==35000)out.push('تسبيقات دق ملياني الحالية ليست 35 000 دج.');else if(n(p.debtBalance)!==13500)out.push('دين دق ملياني ليس 13 500 دج.');}}catch(e){out.push((e&&e.message)||String(e));}return out;}
-  window.EGTPH_V80_FORCED_PREVIEW_RENDER={version:VERSION,patch:patchTable,verify:verify};
-  try{document.title='EGTPH — سجل الأجور v80';var x=document.querySelector('.tlogo span');if(x)x.textContent='| سجل الأجور v80';}catch(e){}
-  meta();setTimeout(function(){observe();patchTable();try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}setTimeout(patchTable,200);},1000);
-})();
-</script>
-
-</body></html>`);
+  </table></body></html>`);
 }
 function renderAbsContent(){
   refreshWt('absWt','aw');refreshMt('absMt','am');
@@ -8254,78 +7974,7 @@ function printWorkerDetail(wid,fM,tM){
   <div class="sig">
     <div>توقيع المدير<br>Youcef Abdi<br><br>__________</div>
     <div>توقيع العامل<br>${w.name}<br><br>__________</div>
-  </div>
-
-
-<script id="egtph-v80-forced-preview-render">
-/* v80 — مصدر واحد إلزامي لعرض التصفية المؤقتة
-   يعالج طبقات الواجهة القديمة: لا يسمح بعرض earnedSal وحده كرصيد. */
-(function(){
-  'use strict';
-  if(window.__EGTPH_V80_FORCED_PREVIEW_RENDER__) return;
-  window.__EGTPH_V80_FORCED_PREVIEW_RENDER__=true;
-  var VERSION=80;
-  function n(v){v=Number(v);return isFinite(v)?v:0;}
-  function money(v){try{return typeof fmt==='function'?fmt(Math.round(n(v))):Math.round(n(v)).toLocaleString('fr-FR')+' دج';}catch(e){return Math.round(n(v))+' دج';}}
-  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function workerByRow(row){
-    try{
-      var cells=row&&row.children;if(!cells||cells.length<2)return null;
-      var text=(cells[1].textContent||'').trim();
-      var ws=(typeof sw==='function'?sw():((window.DB&&DB.workers)||[]));
-      return ws.find(function(w){return w&&w.name&&text.indexOf(String(w.name))>=0;})||null;
-    }catch(e){return null;}
-  }
-  function preview(w){
-    try{
-      if(w&&window.EGTPH_V79_AUTHORITATIVE_PREVIEW&&typeof window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview==='function') return window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview(w);
-      if(w&&typeof window.calcSettlementPreviewToToday==='function') return window.calcSettlementPreviewToToday(w);
-    }catch(e){}
-    return null;
-  }
-  function html(fs){
-    if(!fs)return '<span style="color:var(--gray);font-size:10px">لا بيانات دورة</span>';
-    var bal=n(fs.previewBalance), col=bal>0?'var(--amber)':bal<0?'var(--red)':'var(--green1)';
-    var title=bal>0?'رصيد مؤقت لصالح العامل':bal<0?'رصيد مؤقت لصالح المؤسسة':'رصيد مؤقت متوازن';
-    var sign=bal>0?'له مؤقتًا':bal<0?'عليه مؤقتًا':'متوازن';
-    return '<div style="font-size:10px;color:var(--blue)">📊 تصفية مؤقتة حتى '+esc(fs.refDate||'اليوم')+'</div>'+
-      '<div style="font-weight:900;color:'+col+';font-size:11px">'+title+'<br><b>'+money(Math.abs(bal))+'</b></div>'+
-      '<div style="font-size:8px;color:var(--gray);line-height:1.55">'+Math.max(0,Math.round(n(fs.actualDays)))+' يوم · مستحق '+money(fs.earnedSal)+' − تسبيقات '+money(fs.totalAdv)+' − دين '+money(fs.debtBalance)+'<br>عرض فقط — لا أمر دفع ولا إغلاق دورة ('+sign+')</div>';
-  }
-  function patchTable(){
-    try{
-      var body=document.getElementById('settlBody');if(!body)return;
-      Array.prototype.forEach.call(body.querySelectorAll('tr'),function(row){
-        var w=workerByRow(row);if(!w||w.exitDate)return;
-        var fs=preview(w);if(!fs)return;
-        var cells=row.children;if(!cells||!cells.length)return;
-        var target=cells[cells.length-1];
-        target.innerHTML=html(fs);
-        target.setAttribute('data-v80-preview','1');
-      });
-    }catch(e){console.error('v80 settlement render',e);}
-  }
-  var old=window.renderSettlement;
-  if(typeof old==='function'&&!old.__v80ForcedPreview){
-    var wrapped=function(){var r=old.apply(this,arguments);setTimeout(patchTable,0);setTimeout(patchTable,80);return r;};
-    wrapped.__v80ForcedPreview=true;window.renderSettlement=wrapped;try{renderSettlement=wrapped;}catch(e){}
-  }
-  function observe(){
-    try{var body=document.getElementById('settlBody');if(!body)return;
-      var mo=new MutationObserver(function(){patchTable();});
-      mo.observe(body,{childList:true,subtree:true});
-    }catch(e){}
-  }
-  function meta(){try{if(!DB)return;DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};DB.version='80.0';DB.schemaVersion=Math.max(80,+DB.schemaVersion||0);DB.settings.syncSchemaVersion=Math.max(80,+DB.settings.syncSchemaVersion||0);DB.settings.migrationVersion='80.0';DB.settings.settlementPreviewMode='active-cycle-authoritative-display';}catch(e){}}
-  function verify(){
-    var out=[];try{var ws=(window.DB&&DB.workers)||[],w=ws.find(function(x){return x&&String(x.id)==='4';});if(w){var p=preview(w);if(!p)out.push('لم تحسب معاينة العامل 4.');else if(n(p.previewBalance)>=0)out.push('دق ملياني يجب أن يبقى رصيده المؤقت لصالح المؤسسة.');else if(n(p.totalAdv)!==35000)out.push('تسبيقات دق ملياني الحالية ليست 35 000 دج.');else if(n(p.debtBalance)!==13500)out.push('دين دق ملياني ليس 13 500 دج.');}}catch(e){out.push((e&&e.message)||String(e));}return out;}
-  window.EGTPH_V80_FORCED_PREVIEW_RENDER={version:VERSION,patch:patchTable,verify:verify};
-  try{document.title='EGTPH — سجل الأجور v80';var x=document.querySelector('.tlogo span');if(x)x.textContent='| سجل الأجور v80';}catch(e){}
-  meta();setTimeout(function(){observe();patchTable();try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}setTimeout(patchTable,200);},1000);
-})();
-</script>
-
-</body></html>`);
+  </div></body></html>`);
 }
 
 // ═══════════════════════════════════════════════════
@@ -8481,73 +8130,6 @@ function printTodayAdvances(){
   </div>
 
 
-<script id="egtph-v80-forced-preview-render">
-/* v80 — مصدر واحد إلزامي لعرض التصفية المؤقتة
-   يعالج طبقات الواجهة القديمة: لا يسمح بعرض earnedSal وحده كرصيد. */
-(function(){
-  'use strict';
-  if(window.__EGTPH_V80_FORCED_PREVIEW_RENDER__) return;
-  window.__EGTPH_V80_FORCED_PREVIEW_RENDER__=true;
-  var VERSION=80;
-  function n(v){v=Number(v);return isFinite(v)?v:0;}
-  function money(v){try{return typeof fmt==='function'?fmt(Math.round(n(v))):Math.round(n(v)).toLocaleString('fr-FR')+' دج';}catch(e){return Math.round(n(v))+' دج';}}
-  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function workerByRow(row){
-    try{
-      var cells=row&&row.children;if(!cells||cells.length<2)return null;
-      var text=(cells[1].textContent||'').trim();
-      var ws=(typeof sw==='function'?sw():((window.DB&&DB.workers)||[]));
-      return ws.find(function(w){return w&&w.name&&text.indexOf(String(w.name))>=0;})||null;
-    }catch(e){return null;}
-  }
-  function preview(w){
-    try{
-      if(w&&window.EGTPH_V79_AUTHORITATIVE_PREVIEW&&typeof window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview==='function') return window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview(w);
-      if(w&&typeof window.calcSettlementPreviewToToday==='function') return window.calcSettlementPreviewToToday(w);
-    }catch(e){}
-    return null;
-  }
-  function html(fs){
-    if(!fs)return '<span style="color:var(--gray);font-size:10px">لا بيانات دورة</span>';
-    var bal=n(fs.previewBalance), col=bal>0?'var(--amber)':bal<0?'var(--red)':'var(--green1)';
-    var title=bal>0?'رصيد مؤقت لصالح العامل':bal<0?'رصيد مؤقت لصالح المؤسسة':'رصيد مؤقت متوازن';
-    var sign=bal>0?'له مؤقتًا':bal<0?'عليه مؤقتًا':'متوازن';
-    return '<div style="font-size:10px;color:var(--blue)">📊 تصفية مؤقتة حتى '+esc(fs.refDate||'اليوم')+'</div>'+
-      '<div style="font-weight:900;color:'+col+';font-size:11px">'+title+'<br><b>'+money(Math.abs(bal))+'</b></div>'+
-      '<div style="font-size:8px;color:var(--gray);line-height:1.55">'+Math.max(0,Math.round(n(fs.actualDays)))+' يوم · مستحق '+money(fs.earnedSal)+' − تسبيقات '+money(fs.totalAdv)+' − دين '+money(fs.debtBalance)+'<br>عرض فقط — لا أمر دفع ولا إغلاق دورة ('+sign+')</div>';
-  }
-  function patchTable(){
-    try{
-      var body=document.getElementById('settlBody');if(!body)return;
-      Array.prototype.forEach.call(body.querySelectorAll('tr'),function(row){
-        var w=workerByRow(row);if(!w||w.exitDate)return;
-        var fs=preview(w);if(!fs)return;
-        var cells=row.children;if(!cells||!cells.length)return;
-        var target=cells[cells.length-1];
-        target.innerHTML=html(fs);
-        target.setAttribute('data-v80-preview','1');
-      });
-    }catch(e){console.error('v80 settlement render',e);}
-  }
-  var old=window.renderSettlement;
-  if(typeof old==='function'&&!old.__v80ForcedPreview){
-    var wrapped=function(){var r=old.apply(this,arguments);setTimeout(patchTable,0);setTimeout(patchTable,80);return r;};
-    wrapped.__v80ForcedPreview=true;window.renderSettlement=wrapped;try{renderSettlement=wrapped;}catch(e){}
-  }
-  function observe(){
-    try{var body=document.getElementById('settlBody');if(!body)return;
-      var mo=new MutationObserver(function(){patchTable();});
-      mo.observe(body,{childList:true,subtree:true});
-    }catch(e){}
-  }
-  function meta(){try{if(!DB)return;DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};DB.version='80.0';DB.schemaVersion=Math.max(80,+DB.schemaVersion||0);DB.settings.syncSchemaVersion=Math.max(80,+DB.settings.syncSchemaVersion||0);DB.settings.migrationVersion='80.0';DB.settings.settlementPreviewMode='active-cycle-authoritative-display';}catch(e){}}
-  function verify(){
-    var out=[];try{var ws=(window.DB&&DB.workers)||[],w=ws.find(function(x){return x&&String(x.id)==='4';});if(w){var p=preview(w);if(!p)out.push('لم تحسب معاينة العامل 4.');else if(n(p.previewBalance)>=0)out.push('دق ملياني يجب أن يبقى رصيده المؤقت لصالح المؤسسة.');else if(n(p.totalAdv)!==35000)out.push('تسبيقات دق ملياني الحالية ليست 35 000 دج.');else if(n(p.debtBalance)!==13500)out.push('دين دق ملياني ليس 13 500 دج.');}}catch(e){out.push((e&&e.message)||String(e));}return out;}
-  window.EGTPH_V80_FORCED_PREVIEW_RENDER={version:VERSION,patch:patchTable,verify:verify};
-  try{document.title='EGTPH — سجل الأجور v80';var x=document.querySelector('.tlogo span');if(x)x.textContent='| سجل الأجور v80';}catch(e){}
-  meta();setTimeout(function(){observe();patchTable();try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}setTimeout(patchTable,200);},1000);
-})();
-</script>
 
 </body></html>`);}
 
@@ -8651,77 +8233,7 @@ function printTodayOnly(){
       <div>توقيع المدير<br>Youcef Abdi<br><br>____________</div>
       <div>توقيع المحاسب<br><br><br>____________</div>
       <div>الختم<br><br><br>____________</div>
-    </div>
-  
-<script id="egtph-v80-forced-preview-render">
-/* v80 — مصدر واحد إلزامي لعرض التصفية المؤقتة
-   يعالج طبقات الواجهة القديمة: لا يسمح بعرض earnedSal وحده كرصيد. */
-(function(){
-  'use strict';
-  if(window.__EGTPH_V80_FORCED_PREVIEW_RENDER__) return;
-  window.__EGTPH_V80_FORCED_PREVIEW_RENDER__=true;
-  var VERSION=80;
-  function n(v){v=Number(v);return isFinite(v)?v:0;}
-  function money(v){try{return typeof fmt==='function'?fmt(Math.round(n(v))):Math.round(n(v)).toLocaleString('fr-FR')+' دج';}catch(e){return Math.round(n(v))+' دج';}}
-  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function workerByRow(row){
-    try{
-      var cells=row&&row.children;if(!cells||cells.length<2)return null;
-      var text=(cells[1].textContent||'').trim();
-      var ws=(typeof sw==='function'?sw():((window.DB&&DB.workers)||[]));
-      return ws.find(function(w){return w&&w.name&&text.indexOf(String(w.name))>=0;})||null;
-    }catch(e){return null;}
-  }
-  function preview(w){
-    try{
-      if(w&&window.EGTPH_V79_AUTHORITATIVE_PREVIEW&&typeof window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview==='function') return window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview(w);
-      if(w&&typeof window.calcSettlementPreviewToToday==='function') return window.calcSettlementPreviewToToday(w);
-    }catch(e){}
-    return null;
-  }
-  function html(fs){
-    if(!fs)return '<span style="color:var(--gray);font-size:10px">لا بيانات دورة</span>';
-    var bal=n(fs.previewBalance), col=bal>0?'var(--amber)':bal<0?'var(--red)':'var(--green1)';
-    var title=bal>0?'رصيد مؤقت لصالح العامل':bal<0?'رصيد مؤقت لصالح المؤسسة':'رصيد مؤقت متوازن';
-    var sign=bal>0?'له مؤقتًا':bal<0?'عليه مؤقتًا':'متوازن';
-    return '<div style="font-size:10px;color:var(--blue)">📊 تصفية مؤقتة حتى '+esc(fs.refDate||'اليوم')+'</div>'+
-      '<div style="font-weight:900;color:'+col+';font-size:11px">'+title+'<br><b>'+money(Math.abs(bal))+'</b></div>'+
-      '<div style="font-size:8px;color:var(--gray);line-height:1.55">'+Math.max(0,Math.round(n(fs.actualDays)))+' يوم · مستحق '+money(fs.earnedSal)+' − تسبيقات '+money(fs.totalAdv)+' − دين '+money(fs.debtBalance)+'<br>عرض فقط — لا أمر دفع ولا إغلاق دورة ('+sign+')</div>';
-  }
-  function patchTable(){
-    try{
-      var body=document.getElementById('settlBody');if(!body)return;
-      Array.prototype.forEach.call(body.querySelectorAll('tr'),function(row){
-        var w=workerByRow(row);if(!w||w.exitDate)return;
-        var fs=preview(w);if(!fs)return;
-        var cells=row.children;if(!cells||!cells.length)return;
-        var target=cells[cells.length-1];
-        target.innerHTML=html(fs);
-        target.setAttribute('data-v80-preview','1');
-      });
-    }catch(e){console.error('v80 settlement render',e);}
-  }
-  var old=window.renderSettlement;
-  if(typeof old==='function'&&!old.__v80ForcedPreview){
-    var wrapped=function(){var r=old.apply(this,arguments);setTimeout(patchTable,0);setTimeout(patchTable,80);return r;};
-    wrapped.__v80ForcedPreview=true;window.renderSettlement=wrapped;try{renderSettlement=wrapped;}catch(e){}
-  }
-  function observe(){
-    try{var body=document.getElementById('settlBody');if(!body)return;
-      var mo=new MutationObserver(function(){patchTable();});
-      mo.observe(body,{childList:true,subtree:true});
-    }catch(e){}
-  }
-  function meta(){try{if(!DB)return;DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};DB.version='80.0';DB.schemaVersion=Math.max(80,+DB.schemaVersion||0);DB.settings.syncSchemaVersion=Math.max(80,+DB.settings.syncSchemaVersion||0);DB.settings.migrationVersion='80.0';DB.settings.settlementPreviewMode='active-cycle-authoritative-display';}catch(e){}}
-  function verify(){
-    var out=[];try{var ws=(window.DB&&DB.workers)||[],w=ws.find(function(x){return x&&String(x.id)==='4';});if(w){var p=preview(w);if(!p)out.push('لم تحسب معاينة العامل 4.');else if(n(p.previewBalance)>=0)out.push('دق ملياني يجب أن يبقى رصيده المؤقت لصالح المؤسسة.');else if(n(p.totalAdv)!==35000)out.push('تسبيقات دق ملياني الحالية ليست 35 000 دج.');else if(n(p.debtBalance)!==13500)out.push('دين دق ملياني ليس 13 500 دج.');}}catch(e){out.push((e&&e.message)||String(e));}return out;}
-  window.EGTPH_V80_FORCED_PREVIEW_RENDER={version:VERSION,patch:patchTable,verify:verify};
-  try{document.title='EGTPH — سجل الأجور v80';var x=document.querySelector('.tlogo span');if(x)x.textContent='| سجل الأجور v80';}catch(e){}
-  meta();setTimeout(function(){observe();patchTable();try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}setTimeout(patchTable,200);},1000);
-})();
-</script>
-
-</body></html>`);
+    </div></body></html>`);
 }
 function printDailyReport(){printTodayAdvances();}
 
@@ -8813,78 +8325,7 @@ function printMonthReport(){
     <div>توقيع المدير<br>Youcef Abdi<br><br>_______________</div>
     <div>توقيع المحاسب<br><br><br>_______________</div>
     <div>الختم والتوقيع الرسمي<br><br><br>_______________</div>
-  </div>
-
-
-<script id="egtph-v80-forced-preview-render">
-/* v80 — مصدر واحد إلزامي لعرض التصفية المؤقتة
-   يعالج طبقات الواجهة القديمة: لا يسمح بعرض earnedSal وحده كرصيد. */
-(function(){
-  'use strict';
-  if(window.__EGTPH_V80_FORCED_PREVIEW_RENDER__) return;
-  window.__EGTPH_V80_FORCED_PREVIEW_RENDER__=true;
-  var VERSION=80;
-  function n(v){v=Number(v);return isFinite(v)?v:0;}
-  function money(v){try{return typeof fmt==='function'?fmt(Math.round(n(v))):Math.round(n(v)).toLocaleString('fr-FR')+' دج';}catch(e){return Math.round(n(v))+' دج';}}
-  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function workerByRow(row){
-    try{
-      var cells=row&&row.children;if(!cells||cells.length<2)return null;
-      var text=(cells[1].textContent||'').trim();
-      var ws=(typeof sw==='function'?sw():((window.DB&&DB.workers)||[]));
-      return ws.find(function(w){return w&&w.name&&text.indexOf(String(w.name))>=0;})||null;
-    }catch(e){return null;}
-  }
-  function preview(w){
-    try{
-      if(w&&window.EGTPH_V79_AUTHORITATIVE_PREVIEW&&typeof window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview==='function') return window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview(w);
-      if(w&&typeof window.calcSettlementPreviewToToday==='function') return window.calcSettlementPreviewToToday(w);
-    }catch(e){}
-    return null;
-  }
-  function html(fs){
-    if(!fs)return '<span style="color:var(--gray);font-size:10px">لا بيانات دورة</span>';
-    var bal=n(fs.previewBalance), col=bal>0?'var(--amber)':bal<0?'var(--red)':'var(--green1)';
-    var title=bal>0?'رصيد مؤقت لصالح العامل':bal<0?'رصيد مؤقت لصالح المؤسسة':'رصيد مؤقت متوازن';
-    var sign=bal>0?'له مؤقتًا':bal<0?'عليه مؤقتًا':'متوازن';
-    return '<div style="font-size:10px;color:var(--blue)">📊 تصفية مؤقتة حتى '+esc(fs.refDate||'اليوم')+'</div>'+
-      '<div style="font-weight:900;color:'+col+';font-size:11px">'+title+'<br><b>'+money(Math.abs(bal))+'</b></div>'+
-      '<div style="font-size:8px;color:var(--gray);line-height:1.55">'+Math.max(0,Math.round(n(fs.actualDays)))+' يوم · مستحق '+money(fs.earnedSal)+' − تسبيقات '+money(fs.totalAdv)+' − دين '+money(fs.debtBalance)+'<br>عرض فقط — لا أمر دفع ولا إغلاق دورة ('+sign+')</div>';
-  }
-  function patchTable(){
-    try{
-      var body=document.getElementById('settlBody');if(!body)return;
-      Array.prototype.forEach.call(body.querySelectorAll('tr'),function(row){
-        var w=workerByRow(row);if(!w||w.exitDate)return;
-        var fs=preview(w);if(!fs)return;
-        var cells=row.children;if(!cells||!cells.length)return;
-        var target=cells[cells.length-1];
-        target.innerHTML=html(fs);
-        target.setAttribute('data-v80-preview','1');
-      });
-    }catch(e){console.error('v80 settlement render',e);}
-  }
-  var old=window.renderSettlement;
-  if(typeof old==='function'&&!old.__v80ForcedPreview){
-    var wrapped=function(){var r=old.apply(this,arguments);setTimeout(patchTable,0);setTimeout(patchTable,80);return r;};
-    wrapped.__v80ForcedPreview=true;window.renderSettlement=wrapped;try{renderSettlement=wrapped;}catch(e){}
-  }
-  function observe(){
-    try{var body=document.getElementById('settlBody');if(!body)return;
-      var mo=new MutationObserver(function(){patchTable();});
-      mo.observe(body,{childList:true,subtree:true});
-    }catch(e){}
-  }
-  function meta(){try{if(!DB)return;DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};DB.version='80.0';DB.schemaVersion=Math.max(80,+DB.schemaVersion||0);DB.settings.syncSchemaVersion=Math.max(80,+DB.settings.syncSchemaVersion||0);DB.settings.migrationVersion='80.0';DB.settings.settlementPreviewMode='active-cycle-authoritative-display';}catch(e){}}
-  function verify(){
-    var out=[];try{var ws=(window.DB&&DB.workers)||[],w=ws.find(function(x){return x&&String(x.id)==='4';});if(w){var p=preview(w);if(!p)out.push('لم تحسب معاينة العامل 4.');else if(n(p.previewBalance)>=0)out.push('دق ملياني يجب أن يبقى رصيده المؤقت لصالح المؤسسة.');else if(n(p.totalAdv)!==35000)out.push('تسبيقات دق ملياني الحالية ليست 35 000 دج.');else if(n(p.debtBalance)!==13500)out.push('دين دق ملياني ليس 13 500 دج.');}}catch(e){out.push((e&&e.message)||String(e));}return out;}
-  window.EGTPH_V80_FORCED_PREVIEW_RENDER={version:VERSION,patch:patchTable,verify:verify};
-  try{document.title='EGTPH — سجل الأجور v80';var x=document.querySelector('.tlogo span');if(x)x.textContent='| سجل الأجور v80';}catch(e){}
-  meta();setTimeout(function(){observe();patchTable();try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}setTimeout(patchTable,200);},1000);
-})();
-</script>
-
-</body></html>`);
+  </div></body></html>`);
 }
 
 // ═══ PRINT ALL WORKERS ═══
@@ -8996,76 +8437,7 @@ function _printBulkMonths(workers,months,fM,tM,yr,multiMonth){
     <div>توقيع المدير<br>Youcef Abdi<br><br>__________</div>
     <div>توقيع المحاسب<br><br><br>__________</div>
   </div>`;
-  pWin(PB.replace('@media print{@page{size:A4;margin:1cm}}','@media print{@page{size:A4;margin:.6cm}}')+bodyHtml+'
-<script id="egtph-v80-forced-preview-render">
-/* v80 — مصدر واحد إلزامي لعرض التصفية المؤقتة
-   يعالج طبقات الواجهة القديمة: لا يسمح بعرض earnedSal وحده كرصيد. */
-(function(){
-  'use strict';
-  if(window.__EGTPH_V80_FORCED_PREVIEW_RENDER__) return;
-  window.__EGTPH_V80_FORCED_PREVIEW_RENDER__=true;
-  var VERSION=80;
-  function n(v){v=Number(v);return isFinite(v)?v:0;}
-  function money(v){try{return typeof fmt==='function'?fmt(Math.round(n(v))):Math.round(n(v)).toLocaleString('fr-FR')+' دج';}catch(e){return Math.round(n(v))+' دج';}}
-  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function workerByRow(row){
-    try{
-      var cells=row&&row.children;if(!cells||cells.length<2)return null;
-      var text=(cells[1].textContent||'').trim();
-      var ws=(typeof sw==='function'?sw():((window.DB&&DB.workers)||[]));
-      return ws.find(function(w){return w&&w.name&&text.indexOf(String(w.name))>=0;})||null;
-    }catch(e){return null;}
-  }
-  function preview(w){
-    try{
-      if(w&&window.EGTPH_V79_AUTHORITATIVE_PREVIEW&&typeof window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview==='function') return window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview(w);
-      if(w&&typeof window.calcSettlementPreviewToToday==='function') return window.calcSettlementPreviewToToday(w);
-    }catch(e){}
-    return null;
-  }
-  function html(fs){
-    if(!fs)return '<span style="color:var(--gray);font-size:10px">لا بيانات دورة</span>';
-    var bal=n(fs.previewBalance), col=bal>0?'var(--amber)':bal<0?'var(--red)':'var(--green1)';
-    var title=bal>0?'رصيد مؤقت لصالح العامل':bal<0?'رصيد مؤقت لصالح المؤسسة':'رصيد مؤقت متوازن';
-    var sign=bal>0?'له مؤقتًا':bal<0?'عليه مؤقتًا':'متوازن';
-    return '<div style="font-size:10px;color:var(--blue)">📊 تصفية مؤقتة حتى '+esc(fs.refDate||'اليوم')+'</div>'+
-      '<div style="font-weight:900;color:'+col+';font-size:11px">'+title+'<br><b>'+money(Math.abs(bal))+'</b></div>'+
-      '<div style="font-size:8px;color:var(--gray);line-height:1.55">'+Math.max(0,Math.round(n(fs.actualDays)))+' يوم · مستحق '+money(fs.earnedSal)+' − تسبيقات '+money(fs.totalAdv)+' − دين '+money(fs.debtBalance)+'<br>عرض فقط — لا أمر دفع ولا إغلاق دورة ('+sign+')</div>';
-  }
-  function patchTable(){
-    try{
-      var body=document.getElementById('settlBody');if(!body)return;
-      Array.prototype.forEach.call(body.querySelectorAll('tr'),function(row){
-        var w=workerByRow(row);if(!w||w.exitDate)return;
-        var fs=preview(w);if(!fs)return;
-        var cells=row.children;if(!cells||!cells.length)return;
-        var target=cells[cells.length-1];
-        target.innerHTML=html(fs);
-        target.setAttribute('data-v80-preview','1');
-      });
-    }catch(e){console.error('v80 settlement render',e);}
-  }
-  var old=window.renderSettlement;
-  if(typeof old==='function'&&!old.__v80ForcedPreview){
-    var wrapped=function(){var r=old.apply(this,arguments);setTimeout(patchTable,0);setTimeout(patchTable,80);return r;};
-    wrapped.__v80ForcedPreview=true;window.renderSettlement=wrapped;try{renderSettlement=wrapped;}catch(e){}
-  }
-  function observe(){
-    try{var body=document.getElementById('settlBody');if(!body)return;
-      var mo=new MutationObserver(function(){patchTable();});
-      mo.observe(body,{childList:true,subtree:true});
-    }catch(e){}
-  }
-  function meta(){try{if(!DB)return;DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};DB.version='80.0';DB.schemaVersion=Math.max(80,+DB.schemaVersion||0);DB.settings.syncSchemaVersion=Math.max(80,+DB.settings.syncSchemaVersion||0);DB.settings.migrationVersion='80.0';DB.settings.settlementPreviewMode='active-cycle-authoritative-display';}catch(e){}}
-  function verify(){
-    var out=[];try{var ws=(window.DB&&DB.workers)||[],w=ws.find(function(x){return x&&String(x.id)==='4';});if(w){var p=preview(w);if(!p)out.push('لم تحسب معاينة العامل 4.');else if(n(p.previewBalance)>=0)out.push('دق ملياني يجب أن يبقى رصيده المؤقت لصالح المؤسسة.');else if(n(p.totalAdv)!==35000)out.push('تسبيقات دق ملياني الحالية ليست 35 000 دج.');else if(n(p.debtBalance)!==13500)out.push('دين دق ملياني ليس 13 500 دج.');}}catch(e){out.push((e&&e.message)||String(e));}return out;}
-  window.EGTPH_V80_FORCED_PREVIEW_RENDER={version:VERSION,patch:patchTable,verify:verify};
-  try{document.title='EGTPH — سجل الأجور v80';var x=document.querySelector('.tlogo span');if(x)x.textContent='| سجل الأجور v80';}catch(e){}
-  meta();setTimeout(function(){observe();patchTable();try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}setTimeout(patchTable,200);},1000);
-})();
-</script>
-
-</body></html>');
+  pWin(PB.replace('@media print{@page{size:A4;margin:1cm}}','@media print{@page{size:A4;margin:.6cm}}')+bodyHtml+'</body></html>');
 }
 
 // ═══ PRINT SUMMARY / ANNUAL ═══
@@ -9099,77 +8471,7 @@ function printSummary(){
     </tr>`).join('')}
     <tr class="total"><td colspan="3">المجموع</td><td>${fmtN(tS)}</td><td>-${fmtN(tA)}</td><td>-${fmtN(tAb)}</td><td>${fmtN(tInst)}</td><td>${fmtN(tN)}</td><td>+${fmtN(tH)}</td><td>+${fmtN(tB)}</td><td>—</td></tr>
     </tbody></table>
-    <div class="sig"><div>توقيع المدير<br>Youcef Abdi<br><br>__________</div><div>توقيع المحاسب<br><br><br>__________</div></div>
-
-<script id="egtph-v80-forced-preview-render">
-/* v80 — مصدر واحد إلزامي لعرض التصفية المؤقتة
-   يعالج طبقات الواجهة القديمة: لا يسمح بعرض earnedSal وحده كرصيد. */
-(function(){
-  'use strict';
-  if(window.__EGTPH_V80_FORCED_PREVIEW_RENDER__) return;
-  window.__EGTPH_V80_FORCED_PREVIEW_RENDER__=true;
-  var VERSION=80;
-  function n(v){v=Number(v);return isFinite(v)?v:0;}
-  function money(v){try{return typeof fmt==='function'?fmt(Math.round(n(v))):Math.round(n(v)).toLocaleString('fr-FR')+' دج';}catch(e){return Math.round(n(v))+' دج';}}
-  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function workerByRow(row){
-    try{
-      var cells=row&&row.children;if(!cells||cells.length<2)return null;
-      var text=(cells[1].textContent||'').trim();
-      var ws=(typeof sw==='function'?sw():((window.DB&&DB.workers)||[]));
-      return ws.find(function(w){return w&&w.name&&text.indexOf(String(w.name))>=0;})||null;
-    }catch(e){return null;}
-  }
-  function preview(w){
-    try{
-      if(w&&window.EGTPH_V79_AUTHORITATIVE_PREVIEW&&typeof window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview==='function') return window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview(w);
-      if(w&&typeof window.calcSettlementPreviewToToday==='function') return window.calcSettlementPreviewToToday(w);
-    }catch(e){}
-    return null;
-  }
-  function html(fs){
-    if(!fs)return '<span style="color:var(--gray);font-size:10px">لا بيانات دورة</span>';
-    var bal=n(fs.previewBalance), col=bal>0?'var(--amber)':bal<0?'var(--red)':'var(--green1)';
-    var title=bal>0?'رصيد مؤقت لصالح العامل':bal<0?'رصيد مؤقت لصالح المؤسسة':'رصيد مؤقت متوازن';
-    var sign=bal>0?'له مؤقتًا':bal<0?'عليه مؤقتًا':'متوازن';
-    return '<div style="font-size:10px;color:var(--blue)">📊 تصفية مؤقتة حتى '+esc(fs.refDate||'اليوم')+'</div>'+
-      '<div style="font-weight:900;color:'+col+';font-size:11px">'+title+'<br><b>'+money(Math.abs(bal))+'</b></div>'+
-      '<div style="font-size:8px;color:var(--gray);line-height:1.55">'+Math.max(0,Math.round(n(fs.actualDays)))+' يوم · مستحق '+money(fs.earnedSal)+' − تسبيقات '+money(fs.totalAdv)+' − دين '+money(fs.debtBalance)+'<br>عرض فقط — لا أمر دفع ولا إغلاق دورة ('+sign+')</div>';
-  }
-  function patchTable(){
-    try{
-      var body=document.getElementById('settlBody');if(!body)return;
-      Array.prototype.forEach.call(body.querySelectorAll('tr'),function(row){
-        var w=workerByRow(row);if(!w||w.exitDate)return;
-        var fs=preview(w);if(!fs)return;
-        var cells=row.children;if(!cells||!cells.length)return;
-        var target=cells[cells.length-1];
-        target.innerHTML=html(fs);
-        target.setAttribute('data-v80-preview','1');
-      });
-    }catch(e){console.error('v80 settlement render',e);}
-  }
-  var old=window.renderSettlement;
-  if(typeof old==='function'&&!old.__v80ForcedPreview){
-    var wrapped=function(){var r=old.apply(this,arguments);setTimeout(patchTable,0);setTimeout(patchTable,80);return r;};
-    wrapped.__v80ForcedPreview=true;window.renderSettlement=wrapped;try{renderSettlement=wrapped;}catch(e){}
-  }
-  function observe(){
-    try{var body=document.getElementById('settlBody');if(!body)return;
-      var mo=new MutationObserver(function(){patchTable();});
-      mo.observe(body,{childList:true,subtree:true});
-    }catch(e){}
-  }
-  function meta(){try{if(!DB)return;DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};DB.version='80.0';DB.schemaVersion=Math.max(80,+DB.schemaVersion||0);DB.settings.syncSchemaVersion=Math.max(80,+DB.settings.syncSchemaVersion||0);DB.settings.migrationVersion='80.0';DB.settings.settlementPreviewMode='active-cycle-authoritative-display';}catch(e){}}
-  function verify(){
-    var out=[];try{var ws=(window.DB&&DB.workers)||[],w=ws.find(function(x){return x&&String(x.id)==='4';});if(w){var p=preview(w);if(!p)out.push('لم تحسب معاينة العامل 4.');else if(n(p.previewBalance)>=0)out.push('دق ملياني يجب أن يبقى رصيده المؤقت لصالح المؤسسة.');else if(n(p.totalAdv)!==35000)out.push('تسبيقات دق ملياني الحالية ليست 35 000 دج.');else if(n(p.debtBalance)!==13500)out.push('دين دق ملياني ليس 13 500 دج.');}}catch(e){out.push((e&&e.message)||String(e));}return out;}
-  window.EGTPH_V80_FORCED_PREVIEW_RENDER={version:VERSION,patch:patchTable,verify:verify};
-  try{document.title='EGTPH — سجل الأجور v80';var x=document.querySelector('.tlogo span');if(x)x.textContent='| سجل الأجور v80';}catch(e){}
-  meta();setTimeout(function(){observe();patchTable();try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}setTimeout(patchTable,200);},1000);
-})();
-</script>
-
-</body></html>`);
+    <div class="sig"><div>توقيع المدير<br>Youcef Abdi<br><br>__________</div><div>توقيع المحاسب<br><br><br>__________</div></div></body></html>`);
 }
 function printAnnual(){
   const w=getW(S.anw);if(!w)return;const n=wNum(w.id);const yr=new Date().getFullYear();
@@ -9194,77 +8496,7 @@ function printAnnual(){
       <td style="color:${r.bon?'purple':'#999'}">${r.bon?'+'+fmtN(r.bon):'—'}</td>
     </tr>`).join('')}
     <tr class="total"><td>المجموع</td><td>${fmtN(tSal)}</td><td>-${fmtN(tA)}</td><td>-${fmtN(tAb)}</td><td>${fmtN(tInst)}</td><td>${fmtN(tN)}</td><td>+${fmtN(tH)}</td><td>+${fmtN(tB)}</td></tr>
-    </tbody></table>
-
-<script id="egtph-v80-forced-preview-render">
-/* v80 — مصدر واحد إلزامي لعرض التصفية المؤقتة
-   يعالج طبقات الواجهة القديمة: لا يسمح بعرض earnedSal وحده كرصيد. */
-(function(){
-  'use strict';
-  if(window.__EGTPH_V80_FORCED_PREVIEW_RENDER__) return;
-  window.__EGTPH_V80_FORCED_PREVIEW_RENDER__=true;
-  var VERSION=80;
-  function n(v){v=Number(v);return isFinite(v)?v:0;}
-  function money(v){try{return typeof fmt==='function'?fmt(Math.round(n(v))):Math.round(n(v)).toLocaleString('fr-FR')+' دج';}catch(e){return Math.round(n(v))+' دج';}}
-  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function workerByRow(row){
-    try{
-      var cells=row&&row.children;if(!cells||cells.length<2)return null;
-      var text=(cells[1].textContent||'').trim();
-      var ws=(typeof sw==='function'?sw():((window.DB&&DB.workers)||[]));
-      return ws.find(function(w){return w&&w.name&&text.indexOf(String(w.name))>=0;})||null;
-    }catch(e){return null;}
-  }
-  function preview(w){
-    try{
-      if(w&&window.EGTPH_V79_AUTHORITATIVE_PREVIEW&&typeof window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview==='function') return window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview(w);
-      if(w&&typeof window.calcSettlementPreviewToToday==='function') return window.calcSettlementPreviewToToday(w);
-    }catch(e){}
-    return null;
-  }
-  function html(fs){
-    if(!fs)return '<span style="color:var(--gray);font-size:10px">لا بيانات دورة</span>';
-    var bal=n(fs.previewBalance), col=bal>0?'var(--amber)':bal<0?'var(--red)':'var(--green1)';
-    var title=bal>0?'رصيد مؤقت لصالح العامل':bal<0?'رصيد مؤقت لصالح المؤسسة':'رصيد مؤقت متوازن';
-    var sign=bal>0?'له مؤقتًا':bal<0?'عليه مؤقتًا':'متوازن';
-    return '<div style="font-size:10px;color:var(--blue)">📊 تصفية مؤقتة حتى '+esc(fs.refDate||'اليوم')+'</div>'+
-      '<div style="font-weight:900;color:'+col+';font-size:11px">'+title+'<br><b>'+money(Math.abs(bal))+'</b></div>'+
-      '<div style="font-size:8px;color:var(--gray);line-height:1.55">'+Math.max(0,Math.round(n(fs.actualDays)))+' يوم · مستحق '+money(fs.earnedSal)+' − تسبيقات '+money(fs.totalAdv)+' − دين '+money(fs.debtBalance)+'<br>عرض فقط — لا أمر دفع ولا إغلاق دورة ('+sign+')</div>';
-  }
-  function patchTable(){
-    try{
-      var body=document.getElementById('settlBody');if(!body)return;
-      Array.prototype.forEach.call(body.querySelectorAll('tr'),function(row){
-        var w=workerByRow(row);if(!w||w.exitDate)return;
-        var fs=preview(w);if(!fs)return;
-        var cells=row.children;if(!cells||!cells.length)return;
-        var target=cells[cells.length-1];
-        target.innerHTML=html(fs);
-        target.setAttribute('data-v80-preview','1');
-      });
-    }catch(e){console.error('v80 settlement render',e);}
-  }
-  var old=window.renderSettlement;
-  if(typeof old==='function'&&!old.__v80ForcedPreview){
-    var wrapped=function(){var r=old.apply(this,arguments);setTimeout(patchTable,0);setTimeout(patchTable,80);return r;};
-    wrapped.__v80ForcedPreview=true;window.renderSettlement=wrapped;try{renderSettlement=wrapped;}catch(e){}
-  }
-  function observe(){
-    try{var body=document.getElementById('settlBody');if(!body)return;
-      var mo=new MutationObserver(function(){patchTable();});
-      mo.observe(body,{childList:true,subtree:true});
-    }catch(e){}
-  }
-  function meta(){try{if(!DB)return;DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};DB.version='80.0';DB.schemaVersion=Math.max(80,+DB.schemaVersion||0);DB.settings.syncSchemaVersion=Math.max(80,+DB.settings.syncSchemaVersion||0);DB.settings.migrationVersion='80.0';DB.settings.settlementPreviewMode='active-cycle-authoritative-display';}catch(e){}}
-  function verify(){
-    var out=[];try{var ws=(window.DB&&DB.workers)||[],w=ws.find(function(x){return x&&String(x.id)==='4';});if(w){var p=preview(w);if(!p)out.push('لم تحسب معاينة العامل 4.');else if(n(p.previewBalance)>=0)out.push('دق ملياني يجب أن يبقى رصيده المؤقت لصالح المؤسسة.');else if(n(p.totalAdv)!==35000)out.push('تسبيقات دق ملياني الحالية ليست 35 000 دج.');else if(n(p.debtBalance)!==13500)out.push('دين دق ملياني ليس 13 500 دج.');}}catch(e){out.push((e&&e.message)||String(e));}return out;}
-  window.EGTPH_V80_FORCED_PREVIEW_RENDER={version:VERSION,patch:patchTable,verify:verify};
-  try{document.title='EGTPH — سجل الأجور v80';var x=document.querySelector('.tlogo span');if(x)x.textContent='| سجل الأجور v80';}catch(e){}
-  meta();setTimeout(function(){observe();patchTable();try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}setTimeout(patchTable,200);},1000);
-})();
-</script>
-
-</body></html>`);
+    </tbody></table></body></html>`);
 }
 function printAuditReport(){
   if(!DB.auditLog.length){toast('⚠️ لا توجد سجلات','#e8a020');return;}
@@ -9272,77 +8504,7 @@ function printAuditReport(){
     <p style="text-align:center;font-size:10px;color:#666">طُبع: ${todayStr()}</p>
     <table><thead><tr><th>#</th><th>التاريخ</th><th>المستخدم</th><th>العملية</th></tr></thead>
     <tbody>${DB.auditLog.map((l,i)=>`<tr><td>${i+1}</td><td>${l.time}</td><td><b>${l.user}</b></td><td>${l.action}</td></tr>`).join('')}</tbody>
-    </table>
-
-<script id="egtph-v80-forced-preview-render">
-/* v80 — مصدر واحد إلزامي لعرض التصفية المؤقتة
-   يعالج طبقات الواجهة القديمة: لا يسمح بعرض earnedSal وحده كرصيد. */
-(function(){
-  'use strict';
-  if(window.__EGTPH_V80_FORCED_PREVIEW_RENDER__) return;
-  window.__EGTPH_V80_FORCED_PREVIEW_RENDER__=true;
-  var VERSION=80;
-  function n(v){v=Number(v);return isFinite(v)?v:0;}
-  function money(v){try{return typeof fmt==='function'?fmt(Math.round(n(v))):Math.round(n(v)).toLocaleString('fr-FR')+' دج';}catch(e){return Math.round(n(v))+' دج';}}
-  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function workerByRow(row){
-    try{
-      var cells=row&&row.children;if(!cells||cells.length<2)return null;
-      var text=(cells[1].textContent||'').trim();
-      var ws=(typeof sw==='function'?sw():((window.DB&&DB.workers)||[]));
-      return ws.find(function(w){return w&&w.name&&text.indexOf(String(w.name))>=0;})||null;
-    }catch(e){return null;}
-  }
-  function preview(w){
-    try{
-      if(w&&window.EGTPH_V79_AUTHORITATIVE_PREVIEW&&typeof window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview==='function') return window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview(w);
-      if(w&&typeof window.calcSettlementPreviewToToday==='function') return window.calcSettlementPreviewToToday(w);
-    }catch(e){}
-    return null;
-  }
-  function html(fs){
-    if(!fs)return '<span style="color:var(--gray);font-size:10px">لا بيانات دورة</span>';
-    var bal=n(fs.previewBalance), col=bal>0?'var(--amber)':bal<0?'var(--red)':'var(--green1)';
-    var title=bal>0?'رصيد مؤقت لصالح العامل':bal<0?'رصيد مؤقت لصالح المؤسسة':'رصيد مؤقت متوازن';
-    var sign=bal>0?'له مؤقتًا':bal<0?'عليه مؤقتًا':'متوازن';
-    return '<div style="font-size:10px;color:var(--blue)">📊 تصفية مؤقتة حتى '+esc(fs.refDate||'اليوم')+'</div>'+
-      '<div style="font-weight:900;color:'+col+';font-size:11px">'+title+'<br><b>'+money(Math.abs(bal))+'</b></div>'+
-      '<div style="font-size:8px;color:var(--gray);line-height:1.55">'+Math.max(0,Math.round(n(fs.actualDays)))+' يوم · مستحق '+money(fs.earnedSal)+' − تسبيقات '+money(fs.totalAdv)+' − دين '+money(fs.debtBalance)+'<br>عرض فقط — لا أمر دفع ولا إغلاق دورة ('+sign+')</div>';
-  }
-  function patchTable(){
-    try{
-      var body=document.getElementById('settlBody');if(!body)return;
-      Array.prototype.forEach.call(body.querySelectorAll('tr'),function(row){
-        var w=workerByRow(row);if(!w||w.exitDate)return;
-        var fs=preview(w);if(!fs)return;
-        var cells=row.children;if(!cells||!cells.length)return;
-        var target=cells[cells.length-1];
-        target.innerHTML=html(fs);
-        target.setAttribute('data-v80-preview','1');
-      });
-    }catch(e){console.error('v80 settlement render',e);}
-  }
-  var old=window.renderSettlement;
-  if(typeof old==='function'&&!old.__v80ForcedPreview){
-    var wrapped=function(){var r=old.apply(this,arguments);setTimeout(patchTable,0);setTimeout(patchTable,80);return r;};
-    wrapped.__v80ForcedPreview=true;window.renderSettlement=wrapped;try{renderSettlement=wrapped;}catch(e){}
-  }
-  function observe(){
-    try{var body=document.getElementById('settlBody');if(!body)return;
-      var mo=new MutationObserver(function(){patchTable();});
-      mo.observe(body,{childList:true,subtree:true});
-    }catch(e){}
-  }
-  function meta(){try{if(!DB)return;DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};DB.version='80.0';DB.schemaVersion=Math.max(80,+DB.schemaVersion||0);DB.settings.syncSchemaVersion=Math.max(80,+DB.settings.syncSchemaVersion||0);DB.settings.migrationVersion='80.0';DB.settings.settlementPreviewMode='active-cycle-authoritative-display';}catch(e){}}
-  function verify(){
-    var out=[];try{var ws=(window.DB&&DB.workers)||[],w=ws.find(function(x){return x&&String(x.id)==='4';});if(w){var p=preview(w);if(!p)out.push('لم تحسب معاينة العامل 4.');else if(n(p.previewBalance)>=0)out.push('دق ملياني يجب أن يبقى رصيده المؤقت لصالح المؤسسة.');else if(n(p.totalAdv)!==35000)out.push('تسبيقات دق ملياني الحالية ليست 35 000 دج.');else if(n(p.debtBalance)!==13500)out.push('دين دق ملياني ليس 13 500 دج.');}}catch(e){out.push((e&&e.message)||String(e));}return out;}
-  window.EGTPH_V80_FORCED_PREVIEW_RENDER={version:VERSION,patch:patchTable,verify:verify};
-  try{document.title='EGTPH — سجل الأجور v80';var x=document.querySelector('.tlogo span');if(x)x.textContent='| سجل الأجور v80';}catch(e){}
-  meta();setTimeout(function(){observe();patchTable();try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}setTimeout(patchTable,200);},1000);
-})();
-</script>
-
-</body></html>`);
+    </table></body></html>`);
 }
 
 // ═══════════════════════════════════════════════════
@@ -9433,77 +8595,7 @@ function printTodayByType(type){
     @page{size:A4;margin:1cm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     body{font-family:Arial,Tahoma,sans-serif;font-size:11px;padding:10px}
     table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:6px 8px}
-  </style></head><body>${bodyHtml}
-
-<script id="egtph-v80-forced-preview-render">
-/* v80 — مصدر واحد إلزامي لعرض التصفية المؤقتة
-   يعالج طبقات الواجهة القديمة: لا يسمح بعرض earnedSal وحده كرصيد. */
-(function(){
-  'use strict';
-  if(window.__EGTPH_V80_FORCED_PREVIEW_RENDER__) return;
-  window.__EGTPH_V80_FORCED_PREVIEW_RENDER__=true;
-  var VERSION=80;
-  function n(v){v=Number(v);return isFinite(v)?v:0;}
-  function money(v){try{return typeof fmt==='function'?fmt(Math.round(n(v))):Math.round(n(v)).toLocaleString('fr-FR')+' دج';}catch(e){return Math.round(n(v))+' دج';}}
-  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function workerByRow(row){
-    try{
-      var cells=row&&row.children;if(!cells||cells.length<2)return null;
-      var text=(cells[1].textContent||'').trim();
-      var ws=(typeof sw==='function'?sw():((window.DB&&DB.workers)||[]));
-      return ws.find(function(w){return w&&w.name&&text.indexOf(String(w.name))>=0;})||null;
-    }catch(e){return null;}
-  }
-  function preview(w){
-    try{
-      if(w&&window.EGTPH_V79_AUTHORITATIVE_PREVIEW&&typeof window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview==='function') return window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview(w);
-      if(w&&typeof window.calcSettlementPreviewToToday==='function') return window.calcSettlementPreviewToToday(w);
-    }catch(e){}
-    return null;
-  }
-  function html(fs){
-    if(!fs)return '<span style="color:var(--gray);font-size:10px">لا بيانات دورة</span>';
-    var bal=n(fs.previewBalance), col=bal>0?'var(--amber)':bal<0?'var(--red)':'var(--green1)';
-    var title=bal>0?'رصيد مؤقت لصالح العامل':bal<0?'رصيد مؤقت لصالح المؤسسة':'رصيد مؤقت متوازن';
-    var sign=bal>0?'له مؤقتًا':bal<0?'عليه مؤقتًا':'متوازن';
-    return '<div style="font-size:10px;color:var(--blue)">📊 تصفية مؤقتة حتى '+esc(fs.refDate||'اليوم')+'</div>'+
-      '<div style="font-weight:900;color:'+col+';font-size:11px">'+title+'<br><b>'+money(Math.abs(bal))+'</b></div>'+
-      '<div style="font-size:8px;color:var(--gray);line-height:1.55">'+Math.max(0,Math.round(n(fs.actualDays)))+' يوم · مستحق '+money(fs.earnedSal)+' − تسبيقات '+money(fs.totalAdv)+' − دين '+money(fs.debtBalance)+'<br>عرض فقط — لا أمر دفع ولا إغلاق دورة ('+sign+')</div>';
-  }
-  function patchTable(){
-    try{
-      var body=document.getElementById('settlBody');if(!body)return;
-      Array.prototype.forEach.call(body.querySelectorAll('tr'),function(row){
-        var w=workerByRow(row);if(!w||w.exitDate)return;
-        var fs=preview(w);if(!fs)return;
-        var cells=row.children;if(!cells||!cells.length)return;
-        var target=cells[cells.length-1];
-        target.innerHTML=html(fs);
-        target.setAttribute('data-v80-preview','1');
-      });
-    }catch(e){console.error('v80 settlement render',e);}
-  }
-  var old=window.renderSettlement;
-  if(typeof old==='function'&&!old.__v80ForcedPreview){
-    var wrapped=function(){var r=old.apply(this,arguments);setTimeout(patchTable,0);setTimeout(patchTable,80);return r;};
-    wrapped.__v80ForcedPreview=true;window.renderSettlement=wrapped;try{renderSettlement=wrapped;}catch(e){}
-  }
-  function observe(){
-    try{var body=document.getElementById('settlBody');if(!body)return;
-      var mo=new MutationObserver(function(){patchTable();});
-      mo.observe(body,{childList:true,subtree:true});
-    }catch(e){}
-  }
-  function meta(){try{if(!DB)return;DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};DB.version='80.0';DB.schemaVersion=Math.max(80,+DB.schemaVersion||0);DB.settings.syncSchemaVersion=Math.max(80,+DB.settings.syncSchemaVersion||0);DB.settings.migrationVersion='80.0';DB.settings.settlementPreviewMode='active-cycle-authoritative-display';}catch(e){}}
-  function verify(){
-    var out=[];try{var ws=(window.DB&&DB.workers)||[],w=ws.find(function(x){return x&&String(x.id)==='4';});if(w){var p=preview(w);if(!p)out.push('لم تحسب معاينة العامل 4.');else if(n(p.previewBalance)>=0)out.push('دق ملياني يجب أن يبقى رصيده المؤقت لصالح المؤسسة.');else if(n(p.totalAdv)!==35000)out.push('تسبيقات دق ملياني الحالية ليست 35 000 دج.');else if(n(p.debtBalance)!==13500)out.push('دين دق ملياني ليس 13 500 دج.');}}catch(e){out.push((e&&e.message)||String(e));}return out;}
-  window.EGTPH_V80_FORCED_PREVIEW_RENDER={version:VERSION,patch:patchTable,verify:verify};
-  try{document.title='EGTPH — سجل الأجور v80';var x=document.querySelector('.tlogo span');if(x)x.textContent='| سجل الأجور v80';}catch(e){}
-  meta();setTimeout(function(){observe();patchTable();try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}setTimeout(patchTable,200);},1000);
-})();
-</script>
-
-</body></html>`);
+  </style></head><body>${bodyHtml}</body></html>`);
 }
 // ═══════════════════════════════════════════════════
 //  BACKUP & AUTO-BACKUP
@@ -12259,76 +11351,7 @@ try{
     window.pWin=function(html){
       var title=(String(html||'').match(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i)||[])[1]||'تقرير EGTPH';title=title.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
       var safeTitle=esc(title), toolbar='<style>#egtphV50Toolbar{position:sticky;top:0;z-index:9999;background:#071726;color:#fff;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:10px;font-family:Arial,Tahoma,sans-serif;direction:rtl}#egtphV50Toolbar button{border:0;border-radius:9px;padding:10px 14px;font-weight:800;cursor:pointer}#egtphV50Print{background:#d59a19}#egtphV50Mail{background:#fff;color:#b3261e}@media print{#egtphV50Toolbar{display:none!important}}</style><div id="egtphV50Toolbar"><button id="egtphV50Print" onclick="window.print()">🖨️ طباعة</button><button id="egtphV50Mail" onclick="window.opener&&window.opener.sendPrintViaGmail(document.documentElement.outerHTML,document.title)">📧 إرسال نسخة عبر Gmail</button></div>';
-      var out=String(html||''); if(/<body[^>]*>/i.test(out))out=out.replace(/<body([^>]*)>/i,'<body$1>'+toolbar);else out='<html dir="rtl"><head><meta charset="UTF-8"><title>EGTPH — '+safeTitle+'</title></head><body>'+toolbar+out+'
-<script id="egtph-v80-forced-preview-render">
-/* v80 — مصدر واحد إلزامي لعرض التصفية المؤقتة
-   يعالج طبقات الواجهة القديمة: لا يسمح بعرض earnedSal وحده كرصيد. */
-(function(){
-  'use strict';
-  if(window.__EGTPH_V80_FORCED_PREVIEW_RENDER__) return;
-  window.__EGTPH_V80_FORCED_PREVIEW_RENDER__=true;
-  var VERSION=80;
-  function n(v){v=Number(v);return isFinite(v)?v:0;}
-  function money(v){try{return typeof fmt==='function'?fmt(Math.round(n(v))):Math.round(n(v)).toLocaleString('fr-FR')+' دج';}catch(e){return Math.round(n(v))+' دج';}}
-  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function workerByRow(row){
-    try{
-      var cells=row&&row.children;if(!cells||cells.length<2)return null;
-      var text=(cells[1].textContent||'').trim();
-      var ws=(typeof sw==='function'?sw():((window.DB&&DB.workers)||[]));
-      return ws.find(function(w){return w&&w.name&&text.indexOf(String(w.name))>=0;})||null;
-    }catch(e){return null;}
-  }
-  function preview(w){
-    try{
-      if(w&&window.EGTPH_V79_AUTHORITATIVE_PREVIEW&&typeof window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview==='function') return window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview(w);
-      if(w&&typeof window.calcSettlementPreviewToToday==='function') return window.calcSettlementPreviewToToday(w);
-    }catch(e){}
-    return null;
-  }
-  function html(fs){
-    if(!fs)return '<span style="color:var(--gray);font-size:10px">لا بيانات دورة</span>';
-    var bal=n(fs.previewBalance), col=bal>0?'var(--amber)':bal<0?'var(--red)':'var(--green1)';
-    var title=bal>0?'رصيد مؤقت لصالح العامل':bal<0?'رصيد مؤقت لصالح المؤسسة':'رصيد مؤقت متوازن';
-    var sign=bal>0?'له مؤقتًا':bal<0?'عليه مؤقتًا':'متوازن';
-    return '<div style="font-size:10px;color:var(--blue)">📊 تصفية مؤقتة حتى '+esc(fs.refDate||'اليوم')+'</div>'+
-      '<div style="font-weight:900;color:'+col+';font-size:11px">'+title+'<br><b>'+money(Math.abs(bal))+'</b></div>'+
-      '<div style="font-size:8px;color:var(--gray);line-height:1.55">'+Math.max(0,Math.round(n(fs.actualDays)))+' يوم · مستحق '+money(fs.earnedSal)+' − تسبيقات '+money(fs.totalAdv)+' − دين '+money(fs.debtBalance)+'<br>عرض فقط — لا أمر دفع ولا إغلاق دورة ('+sign+')</div>';
-  }
-  function patchTable(){
-    try{
-      var body=document.getElementById('settlBody');if(!body)return;
-      Array.prototype.forEach.call(body.querySelectorAll('tr'),function(row){
-        var w=workerByRow(row);if(!w||w.exitDate)return;
-        var fs=preview(w);if(!fs)return;
-        var cells=row.children;if(!cells||!cells.length)return;
-        var target=cells[cells.length-1];
-        target.innerHTML=html(fs);
-        target.setAttribute('data-v80-preview','1');
-      });
-    }catch(e){console.error('v80 settlement render',e);}
-  }
-  var old=window.renderSettlement;
-  if(typeof old==='function'&&!old.__v80ForcedPreview){
-    var wrapped=function(){var r=old.apply(this,arguments);setTimeout(patchTable,0);setTimeout(patchTable,80);return r;};
-    wrapped.__v80ForcedPreview=true;window.renderSettlement=wrapped;try{renderSettlement=wrapped;}catch(e){}
-  }
-  function observe(){
-    try{var body=document.getElementById('settlBody');if(!body)return;
-      var mo=new MutationObserver(function(){patchTable();});
-      mo.observe(body,{childList:true,subtree:true});
-    }catch(e){}
-  }
-  function meta(){try{if(!DB)return;DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};DB.version='80.0';DB.schemaVersion=Math.max(80,+DB.schemaVersion||0);DB.settings.syncSchemaVersion=Math.max(80,+DB.settings.syncSchemaVersion||0);DB.settings.migrationVersion='80.0';DB.settings.settlementPreviewMode='active-cycle-authoritative-display';}catch(e){}}
-  function verify(){
-    var out=[];try{var ws=(window.DB&&DB.workers)||[],w=ws.find(function(x){return x&&String(x.id)==='4';});if(w){var p=preview(w);if(!p)out.push('لم تحسب معاينة العامل 4.');else if(n(p.previewBalance)>=0)out.push('دق ملياني يجب أن يبقى رصيده المؤقت لصالح المؤسسة.');else if(n(p.totalAdv)!==35000)out.push('تسبيقات دق ملياني الحالية ليست 35 000 دج.');else if(n(p.debtBalance)!==13500)out.push('دين دق ملياني ليس 13 500 دج.');}}catch(e){out.push((e&&e.message)||String(e));}return out;}
-  window.EGTPH_V80_FORCED_PREVIEW_RENDER={version:VERSION,patch:patchTable,verify:verify};
-  try{document.title='EGTPH — سجل الأجور v80';var x=document.querySelector('.tlogo span');if(x)x.textContent='| سجل الأجور v80';}catch(e){}
-  meta();setTimeout(function(){observe();patchTable();try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}setTimeout(patchTable,200);},1000);
-})();
-</script>
-
-</body></html>';
+      var out=String(html||''); if(/<body[^>]*>/i.test(out))out=out.replace(/<body([^>]*)>/i,'<body$1>'+toolbar);else out='<html dir="rtl"><head><meta charset="UTF-8"><title>EGTPH — '+safeTitle+'</title></head><body>'+toolbar+out+'</body></html>';
       var win=window.open('','_blank','width=1050,height=780'); if(!win){toastSafe('⚠️ المتصفح منع المعاينة',true);return null;}win.document.open();win.document.write(out);win.document.close();return win;
     };
   }
@@ -14795,76 +13818,7 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
       else if(fs){var net=num(fs.netFinal);settle='🚪 نهائية<br><b style="color:'+(net>0?'#b45309':net<0?'#7b241c':'#1a7a4a')+'">'+(net>0?'تدفع له ':net<0?'يدفعك ':'صفر ')+moneyN(Math.abs(net))+'</b>';if(net>0)finalWorker+=net;else finalCompany+=Math.abs(net);}
       rows+='<tr style="background:'+(wi%2===0?'#fff':'#f7f9fc')+'"><td>'+ (wi+1)+'</td><td style="text-align:right;font-weight:800">'+esc(w.name)+(w.exitDate?'<br><small style="color:#c0392b">🚪 خرج</small>':'')+'</td><td>'+esc(cyc.lblR||cyc.lbl)+'</td><td>'+old+'</td><td>'+ (fin.adv?'-'+moneyN(fin.adv):'—')+'</td><td>'+((fin.hrs? '+'+moneyN(fin.hrs):'')+(fin.bon?' 🎁+'+moneyN(fin.bon):'')||'—')+'</td><td>'+((fin.abs?'-'+moneyN(fin.abs):'')+(fin.inst?' 📋-'+moneyN(fin.inst):'')||'—')+'</td><td style="color:'+pos+';font-weight:800">'+balance+'</td><td>'+settle+'</td></tr>';
     });
-    var html='<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>@page{size:A4;margin:.7cm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{font-family:Arial,Tahoma,sans-serif;font-size:10px;margin:0;padding:8px}.hdr{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #1a3a6b;padding-bottom:6px;margin-bottom:8px}table{width:100%;border-collapse:collapse;border:2px solid #1a3a6b}thead tr{background:#1a3a6b}thead th{color:#fff;padding:6px 5px;font-size:9px;font-weight:800;text-align:center;border-left:1px solid rgba(255,255,255,.2)}td{padding:6px 5px;border:1px solid #d9e0ea;text-align:center;vertical-align:top}.note{padding:8px;background:#eef7ff;border:1px solid #b9d7f5;border-radius:6px;margin:8px 0;font-size:9px;color:#173f67}@media print{body{padding:0}}</style></head><body><div class="hdr"><b style="font-size:16px;color:#1a3a6b">🏗️ EGTPH</b><div style="text-align:center"><b style="font-size:12px">💳 التصفية المالية المؤقتة / النهائية</b></div><span style="font-size:11px">طُبع: '+(typeof todayStr==='function'?todayStr():'')+'</span></div><div class="note"><b>📊 التصفية المؤقتة:</b> عرض تقديري حتى تاريخ اليوم للعمال النشطين فقط، لا تعتبر أمر دفع ولا تغلق أي دورة. <b>🚪 التصفية النهائية:</b> تظهر فقط بعد إدخال تاريخ خروج.</div><table><thead><tr><th>#</th><th>العامل</th><th>الدورة</th><th>القديمة</th><th>تسبيقات</th><th>ساعات+مكافآت</th><th>غيابات+أقساط</th><th>الموقف اليوم</th><th>التصفية المؤقتة/النهائية</th></tr></thead><tbody>'+rows+'</tbody></table><div class="note">إجمالي مؤقت للعرض: لصالح العمال '+moneyN(temporaryWorker)+' دج · لصالح المؤسسة '+moneyN(temporaryCompany)+' دج. إجمالي نهائي للخارجين: له '+moneyN(finalWorker)+' دج · للمؤسسة '+moneyN(finalCompany)+' دج.</div>
-<script id="egtph-v80-forced-preview-render">
-/* v80 — مصدر واحد إلزامي لعرض التصفية المؤقتة
-   يعالج طبقات الواجهة القديمة: لا يسمح بعرض earnedSal وحده كرصيد. */
-(function(){
-  'use strict';
-  if(window.__EGTPH_V80_FORCED_PREVIEW_RENDER__) return;
-  window.__EGTPH_V80_FORCED_PREVIEW_RENDER__=true;
-  var VERSION=80;
-  function n(v){v=Number(v);return isFinite(v)?v:0;}
-  function money(v){try{return typeof fmt==='function'?fmt(Math.round(n(v))):Math.round(n(v)).toLocaleString('fr-FR')+' دج';}catch(e){return Math.round(n(v))+' دج';}}
-  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function workerByRow(row){
-    try{
-      var cells=row&&row.children;if(!cells||cells.length<2)return null;
-      var text=(cells[1].textContent||'').trim();
-      var ws=(typeof sw==='function'?sw():((window.DB&&DB.workers)||[]));
-      return ws.find(function(w){return w&&w.name&&text.indexOf(String(w.name))>=0;})||null;
-    }catch(e){return null;}
-  }
-  function preview(w){
-    try{
-      if(w&&window.EGTPH_V79_AUTHORITATIVE_PREVIEW&&typeof window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview==='function') return window.EGTPH_V79_AUTHORITATIVE_PREVIEW.preview(w);
-      if(w&&typeof window.calcSettlementPreviewToToday==='function') return window.calcSettlementPreviewToToday(w);
-    }catch(e){}
-    return null;
-  }
-  function html(fs){
-    if(!fs)return '<span style="color:var(--gray);font-size:10px">لا بيانات دورة</span>';
-    var bal=n(fs.previewBalance), col=bal>0?'var(--amber)':bal<0?'var(--red)':'var(--green1)';
-    var title=bal>0?'رصيد مؤقت لصالح العامل':bal<0?'رصيد مؤقت لصالح المؤسسة':'رصيد مؤقت متوازن';
-    var sign=bal>0?'له مؤقتًا':bal<0?'عليه مؤقتًا':'متوازن';
-    return '<div style="font-size:10px;color:var(--blue)">📊 تصفية مؤقتة حتى '+esc(fs.refDate||'اليوم')+'</div>'+
-      '<div style="font-weight:900;color:'+col+';font-size:11px">'+title+'<br><b>'+money(Math.abs(bal))+'</b></div>'+
-      '<div style="font-size:8px;color:var(--gray);line-height:1.55">'+Math.max(0,Math.round(n(fs.actualDays)))+' يوم · مستحق '+money(fs.earnedSal)+' − تسبيقات '+money(fs.totalAdv)+' − دين '+money(fs.debtBalance)+'<br>عرض فقط — لا أمر دفع ولا إغلاق دورة ('+sign+')</div>';
-  }
-  function patchTable(){
-    try{
-      var body=document.getElementById('settlBody');if(!body)return;
-      Array.prototype.forEach.call(body.querySelectorAll('tr'),function(row){
-        var w=workerByRow(row);if(!w||w.exitDate)return;
-        var fs=preview(w);if(!fs)return;
-        var cells=row.children;if(!cells||!cells.length)return;
-        var target=cells[cells.length-1];
-        target.innerHTML=html(fs);
-        target.setAttribute('data-v80-preview','1');
-      });
-    }catch(e){console.error('v80 settlement render',e);}
-  }
-  var old=window.renderSettlement;
-  if(typeof old==='function'&&!old.__v80ForcedPreview){
-    var wrapped=function(){var r=old.apply(this,arguments);setTimeout(patchTable,0);setTimeout(patchTable,80);return r;};
-    wrapped.__v80ForcedPreview=true;window.renderSettlement=wrapped;try{renderSettlement=wrapped;}catch(e){}
-  }
-  function observe(){
-    try{var body=document.getElementById('settlBody');if(!body)return;
-      var mo=new MutationObserver(function(){patchTable();});
-      mo.observe(body,{childList:true,subtree:true});
-    }catch(e){}
-  }
-  function meta(){try{if(!DB)return;DB.settings=DB.settings&&typeof DB.settings==='object'?DB.settings:{};DB.version='80.0';DB.schemaVersion=Math.max(80,+DB.schemaVersion||0);DB.settings.syncSchemaVersion=Math.max(80,+DB.settings.syncSchemaVersion||0);DB.settings.migrationVersion='80.0';DB.settings.settlementPreviewMode='active-cycle-authoritative-display';}catch(e){}}
-  function verify(){
-    var out=[];try{var ws=(window.DB&&DB.workers)||[],w=ws.find(function(x){return x&&String(x.id)==='4';});if(w){var p=preview(w);if(!p)out.push('لم تحسب معاينة العامل 4.');else if(n(p.previewBalance)>=0)out.push('دق ملياني يجب أن يبقى رصيده المؤقت لصالح المؤسسة.');else if(n(p.totalAdv)!==35000)out.push('تسبيقات دق ملياني الحالية ليست 35 000 دج.');else if(n(p.debtBalance)!==13500)out.push('دين دق ملياني ليس 13 500 دج.');}}catch(e){out.push((e&&e.message)||String(e));}return out;}
-  window.EGTPH_V80_FORCED_PREVIEW_RENDER={version:VERSION,patch:patchTable,verify:verify};
-  try{document.title='EGTPH — سجل الأجور v80';var x=document.querySelector('.tlogo span');if(x)x.textContent='| سجل الأجور v80';}catch(e){}
-  meta();setTimeout(function(){observe();patchTable();try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}setTimeout(patchTable,200);},1000);
-})();
-</script>
-
-</body></html>';
+    var html='<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>@page{size:A4;margin:.7cm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{font-family:Arial,Tahoma,sans-serif;font-size:10px;margin:0;padding:8px}.hdr{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #1a3a6b;padding-bottom:6px;margin-bottom:8px}table{width:100%;border-collapse:collapse;border:2px solid #1a3a6b}thead tr{background:#1a3a6b}thead th{color:#fff;padding:6px 5px;font-size:9px;font-weight:800;text-align:center;border-left:1px solid rgba(255,255,255,.2)}td{padding:6px 5px;border:1px solid #d9e0ea;text-align:center;vertical-align:top}.note{padding:8px;background:#eef7ff;border:1px solid #b9d7f5;border-radius:6px;margin:8px 0;font-size:9px;color:#173f67}@media print{body{padding:0}}</style></head><body><div class="hdr"><b style="font-size:16px;color:#1a3a6b">🏗️ EGTPH</b><div style="text-align:center"><b style="font-size:12px">💳 التصفية المالية المؤقتة / النهائية</b></div><span style="font-size:11px">طُبع: '+(typeof todayStr==='function'?todayStr():'')+'</span></div><div class="note"><b>📊 التصفية المؤقتة:</b> عرض تقديري حتى تاريخ اليوم للعمال النشطين فقط، لا تعتبر أمر دفع ولا تغلق أي دورة. <b>🚪 التصفية النهائية:</b> تظهر فقط بعد إدخال تاريخ خروج.</div><table><thead><tr><th>#</th><th>العامل</th><th>الدورة</th><th>القديمة</th><th>تسبيقات</th><th>ساعات+مكافآت</th><th>غيابات+أقساط</th><th>الموقف اليوم</th><th>التصفية المؤقتة/النهائية</th></tr></thead><tbody>'+rows+'</tbody></table><div class="note">إجمالي مؤقت للعرض: لصالح العمال '+moneyN(temporaryWorker)+' دج · لصالح المؤسسة '+moneyN(temporaryCompany)+' دج. إجمالي نهائي للخارجين: له '+moneyN(finalWorker)+' دج · للمؤسسة '+moneyN(finalCompany)+' دج.</div></body></html>';
     try{pWin(html);}catch(e){try{toast('❌ تعذر فتح الطباعة',true);}catch(x){}}
   }
 
@@ -15138,12 +14092,17 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   }
   function sameCycleAdvance(a,win){
     if(!a) return false;
-    // عند وجود إسناد دورة صريح، هو المرجع المحاسبي حتى لو كان تاريخ الإدخال مختلفاً.
+    // الإسناد الصريح للدورة هو المرجع المحاسبي النهائي: إذا كان التسبيق معيّناً صراحةً
+    // لدورة (cycleStart/cycleEnd)، فإنه ينتمي لتلك الدورة فقط — حتى لو وقع تاريخ الدفع
+    // الفعلي (realDate) في الدورة التالية. هذا يمنع احتساب نفس الدفعة مرتين: مرة عند
+    // إغلاق الدورة القديمة ومرة كتسبيق في الدورة الحالية.
     if(a.cycleStart||a.cycleEnd){
       var s=String(a.cycleStart||''), e=String(a.cycleEnd||'');
       if(s&&s===iso(win.from)) return true;
       if(e&&e===iso(win.to)) return true;
+      return false; // إسناد صريح موجود لكنه لا يطابق هذه الدورة → لا ينتمي إليها
     }
+    // بدون إسناد صريح فقط: نعتمد على التاريخ.
     return inWin((a.realDate||a.date||''),win);
   }
   function currentCycle(w,ref){
@@ -15375,6 +14334,103 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
     var d=data();if(d){d.settings=d.settings&&typeof d.settings==='object'?d.settings:{};d.version='81.0';d.schemaVersion=Math.max(81,+d.schemaVersion||0);d.settings.syncSchemaVersion=Math.max(81,+d.settings.syncSchemaVersion||0);d.settings.migrationVersion='81.0';d.settings.syncEngine='single-coordinated-background-v81';}
     document.title='EGTPH — سجل الأجور v81';var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v81';
   }catch(e){}
+})();
+</script>
+
+<script id="egtph-v82-realtime-sse-bridge">
+/* ═══════════════════════════════════════════════════════════════
+   v82 — بثّ مباشر لحظي (SSE) مربوط بمنسّق v81
+   الهدف: رجوع المزامنة شبه الفورية (فارق ثوانٍ) بين الأجهزة، بدون
+   إرجاع التذبذب القديم. نراقب طابع syncedAt الخفيف فقط؛ وعند تغيّره
+   من جهاز آخر نطلب مزامنة فورية عبر EGTPHSyncCoordinator مع تجاوز
+   فترة التهدئة (لأن هذا تغيير بعيد حقيقي، لا دفع محلي مكرر).
+   لا يغيّر منطق الأجور/الدورات/التصفية إطلاقاً.
+═══════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  if(window.__EGTPH_V82_REALTIME__) return;
+  window.__EGTPH_V82_REALTIME__=true;
+  var VERSION=82;
+  var es=null, retry=null, deb=null, lastRemote='', started=false;
+
+  function DBref(){try{return window.DB||DB||null;}catch(e){return window.DB||null;}}
+  function cfg(){try{return (typeof _cloudCfg==='function')?_cloudCfg():null;}catch(e){return null;}}
+  function configured(){try{var d=DBref();return !!(d&&d.settings&&d.settings.cloudAuto&&cfg());}catch(e){return false;}}
+  function streamUrl(){
+    var c=cfg(); if(!c||!c.endpoint) return null;
+    // endpoint مثل: https://.../egtph/KEY.json?auth=...
+    // نريد بثّ المسار الفرعي syncedAt فقط (طابع خفيف جداً).
+    return c.endpoint.replace(/\.json(\?|$)/, '/syncedAt.json$1');
+  }
+  // طلب مزامنة فورية للتغيّرات البعيدة، متجاوزاً فترة التهدئة بأمان.
+  function pullNow(reason){
+    try{
+      // نمرّر manual=true حتى يتخطّى cooldown منسّق v81 (مزامنة آمنة واحدة فقط، debounced هنا).
+      if(window.EGTPHSyncCoordinator&&typeof EGTPHSyncCoordinator.request==='function'){
+        EGTPHSyncCoordinator.request(true, reason||'sse-remote');
+      } else if(typeof cloudSync==='function'){
+        cloudSync(false);
+      }
+    }catch(e){}
+  }
+  function onChange(ev){
+    try{
+      var j=JSON.parse((ev&&ev.data)||'{}');
+      var val=(j&&typeof j.data!=='undefined')?j.data:null;
+      // تجاهل الصدى: إن كان نفس الطابع الذي رفعناه نحن للتو.
+      var mine=''; try{var d=DBref(); mine=(d&&d.settings&&d.settings.cloudRemoteStamp)||'';}catch(e){}
+      if(val!=null && String(val)===String(mine)) return;
+      if(val!=null && String(val)===String(lastRemote)) return; // نفس التغيّر، عولج سابقاً
+      if(val!=null) lastRemote=String(val);
+    }catch(e){}
+    // debounce قصير: يجمّع عدة أحداث put/patch متتالية في طلب واحد.
+    if(deb) clearTimeout(deb);
+    deb=setTimeout(function(){ deb=null; if(configured()&&navigator.onLine) pullNow('sse-change'); }, 400);
+  }
+  function stop(){
+    if(es){ try{es.close();}catch(e){} es=null; }
+    if(retry){ clearTimeout(retry); retry=null; }
+  }
+  function start(){
+    if(!configured() || !navigator.onLine) return;
+    if(!('EventSource' in window)) return; // متصفّح قديم → يبقى الفحص الدوري لمنسّق v81 كافياً
+    var url=streamUrl(); if(!url) return;
+    stop();
+    try{
+      es=new EventSource(url);
+      es.addEventListener('put', onChange);
+      es.addEventListener('patch', onChange);
+      es.onerror=function(){
+        try{es.close();}catch(e){} es=null;
+        if(retry) clearTimeout(retry);
+        // إعادة اتصال هادئة (الفحص الدوري لمنسّق v81 يسدّ الفجوة بينهما).
+        retry=setTimeout(start, 8000);
+      };
+      started=true;
+    }catch(e){ es=null; }
+  }
+
+  // إقلاع بعد استقرار كل الطبقات السابقة (منسّق v81 يقلع عند 3800ms).
+  setTimeout(function(){ if(configured()) start(); }, 4200);
+  // إعادة الاتصال عند رجوع الشبكة أو الرجوع لواجهة التطبيق.
+  try{ window.addEventListener('online', function(){ if(configured()) start(); }); }catch(e){}
+  try{ document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState==='visible' && configured()){ start(); }
+    else if(document.visibilityState==='hidden'){ /* نُبقي الاتصال؛ المتصفح يعلّقه تلقائياً */ }
+  }); }catch(e){}
+
+  window.EGTPH_V82_REALTIME={
+    version:VERSION, start:start, stop:stop, isLive:function(){return !!(es&&es.readyState!==2);},
+    status:function(){return {configured:configured(), online:navigator.onLine, hasES:('EventSource' in window), live:!!(es&&es.readyState!==2), lastRemote:lastRemote};},
+    verify:function(){
+      var out=[];
+      if(!('EventSource' in window)) out.push('المتصفّح لا يدعم EventSource (سيُعتمد الفحص الدوري).');
+      if(!window.EGTPHSyncCoordinator) out.push('منسّق المزامنة v81 غير موجود — البثّ المباشر سيستعمل cloudSync مباشرة.');
+      if(typeof _cloudCfg!=='function') out.push('إعداد السحابة غير مهيأ.');
+      return out;
+    }
+  };
+  try{ var d=DBref(); if(d){ d.settings=d.settings&&typeof d.settings==='object'?d.settings:{}; d.settings.syncEngine='single-coordinated-realtime-sse-v82'; d.settings.realtimeMode='sse-bridge-coordinated'; } }catch(e){}
 })();
 </script>
 </body></html>
