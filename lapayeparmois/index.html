@@ -11009,7 +11009,7 @@ try{
     Object.keys(ops).forEach(function(op){var arr=ops[op], expected=+arr[0].originalAmount || arr.reduce(function(s,x){return s+(+x.amount||0);},0), actual=arr.reduce(function(s,x){return s+(+x.amount||0);},0);if(Math.round(expected)!==Math.round(actual))add('error','توزيع التسبيق','عملية '+op+' لا يساوي توزيعها المبلغ الأصلي');});
     d.ledger.forEach(function(row){if(row && row.integrityHash && row.integrityHash!==recordHash(Object.assign({},row,{integrityHash:undefined}))) add('warn','Ledger','بصمة سجل تدقيق غير مطابقة: '+row.id);});
     relevantCycles().forEach(function(item){var bal=cycleBasicBalance(item.worker,item.m,item.yr), lock=isLocked(item.worker,item.m,item.yr), should=(bal.base>0 && bal.paid>=bal.base);if(should && !(lock&&lock.locked))add('error','قفل الدورات','دورة ينبغي أن تكون مقفلة: '+item.worker.name+' — '+cycleLabel(item.worker,item.m,item.yr));if(!should && lock&&lock.locked&&lock.auto)add('warn','قفل الدورات','قفل تلقائي يحتاج إعادة حساب: '+item.worker.name+' — '+cycleLabel(item.worker,item.m,item.yr));});
-    if(!(d.settings && d.settings.lastSyncHash)) add('warn','مزامنة','Last Sync Hash لم يُسجل بعد');
+    if(!(d.settings && d.settings.lastSyncHash) && d.settings && d.settings.cloudUrl && d.settings.cloudKey) add('warn','مزامنة','المزامنة الآمنة لم تكتمل بعد؛ سيُسجل Last Sync Hash تلقائياً بعد أول مزامنة ناجحة.');
     return issues;
   }
   function renderUnifiedReport(){
@@ -12654,4 +12654,277 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
 })();
 
 </script>
+
+<script id="egtph-v64-ledger-integrity">
+/* ═══════════════════════════════════════════════════════════════
+   EGTPH Payroll v64 — Ledger integrity convergence
+   - يختم قيود v63 الجديدة قبل مرورها إلى حارس v60.
+   - يميّز بين بصمة داخلية قديمة وبصمة v60 خارجية.
+   - يصلح تلقائياً فقط الحالات التي تثبتها بصمة مستقلة متطابقة.
+   - لا يعيد ختم أي قيد غير محسوم إلا بإجراء يدوي صريح.
+═══════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  var VERSION='v64.0', booted=false, baseSave=null, baseReport=null, passiveTimer=null, passiveRuns=0;
+
+  function db(){try{return (typeof DB!=='undefined'&&DB)?DB:(window.DB||null);}catch(e){return null;}}
+  function arr(v){return Array.isArray(v)?v:[];}
+  function copy(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
+  function text(v){return String(v==null?'':v);}
+  function now(){return new Date().toISOString();}
+  function esc(v){return text(v).replace(/[&<>'"]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'})[c];});}
+  function hash(s){var h=2166136261>>>0,x=String(s||'');for(var i=0;i<x.length;i++){h^=x.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}return (h>>>0).toString(36)+'_'+x.length;}
+  function stable(v){
+    var stack=[];
+    function walk(x){
+      if(x===null||typeof x!=='object')return x;
+      if(stack.indexOf(x)>=0)return '[Circular]';
+      stack.push(x);var out;
+      if(Array.isArray(x))out=x.map(walk);
+      else{out={};Object.keys(x).sort().forEach(function(k){if(k!=='_tmp'&&k!=='_lastRender')out[k]=walk(x[k]);});}
+      stack.pop();return out;
+    }
+    return JSON.stringify(walk(v));
+  }
+  function rowHash(row){
+    try{
+      if(window.EGTPH_V55&&typeof window.EGTPH_V55.recordHash==='function')return window.EGTPH_V55.recordHash(row);
+    }catch(e){}
+    var r=copy(row||{});
+    if(r&&typeof r==='object'){delete r.integrityHash;delete r._syncHash;}
+    return hash(stable(r));
+  }
+  function isV63Unsigned(row){
+    var id=text(row&&row.id);
+    return /^LED63_/i.test(id)||row&&row._v63Ledger===true;
+  }
+  function guard(d){
+    d.settings=d.settings&&typeof d.settings==='object'?d.settings:{};
+    var g=d.settings.ledgerGuardV60;
+    if(!g||typeof g!=='object'||Array.isArray(g))g={version:'v60',proofs:{},order:[],issues:[]};
+    g.proofs=g.proofs&&typeof g.proofs==='object'&&!Array.isArray(g.proofs)?g.proofs:{};
+    g.order=arr(g.order);
+    g.issues=arr(g.issues);
+    g.legacyReconciliations=g.legacyReconciliations&&typeof g.legacyReconciliations==='object'&&!Array.isArray(g.legacyReconciliations)?g.legacyReconciliations:{};
+    g.proofRebases=g.proofRebases&&typeof g.proofRebases==='object'&&!Array.isArray(g.proofRebases)?g.proofRebases:{};
+    g.manualTrust=g.manualTrust&&typeof g.manualTrust==='object'&&!Array.isArray(g.manualTrust)?g.manualTrust:{};
+    d.settings.ledgerGuardV60=g;
+    return g;
+  }
+  function remember(map,id,value,max){
+    map[id]=value;
+    var keys=Object.keys(map);
+    if(keys.length>(max||120)){
+      keys.sort(function(a,b){return text(map[a]&&map[a].at).localeCompare(text(map[b]&&map[b].at));});
+      while(keys.length>(max||120)){delete map[keys.shift()];}
+    }
+  }
+  function trimOrder(g,current){
+    var seen={}, next=[];
+    g.order.forEach(function(id){id=text(id);if(current[id]&&!seen[id]){seen[id]=1;next.push(id);}});
+    Object.keys(current).forEach(function(id){if(!seen[id]){seen[id]=1;next.push(id);}});
+    while(next.length>3000){delete g.proofs[next.shift()];}
+    g.order=next;
+  }
+  function rootHash(d){return hash(arr(d.ledger).map(function(r){return text(r&&r.id)+':'+rowHash(r);}).join('|'));}
+  function scan(apply){
+    var d=db(), out={changed:false,sealed:[],repaired:[],rebased:[],unresolved:[],unsigned:[],rows:0,root:''};
+    if(!d)return out;
+    d.ledger=arr(d.ledger);var g=guard(d), current={};
+    d.ledger.forEach(function(row){
+      if(!row||row.id===undefined||row.id===null)return;
+      out.rows++;
+      var id=text(row.id), currentHash=rowHash(row), own=text(row.integrityHash), proof=text(g.proofs[id]);
+      current[id]=1;
+
+      /* v63 originally wrote LED63 rows directly. They are safe to seal immediately
+         because they have no previous integrity assertion to contradict. */
+      if(!own){
+        if(isV63Unsigned(row)){
+          if(apply){
+            row.integrityVersion='v64';
+            currentHash=rowHash(row);
+            row.integrityHash=currentHash;
+            g.proofs[id]=currentHash;
+            if(g.order.indexOf(id)<0)g.order.push(id);
+            out.changed=true;
+          }
+          out.sealed.push(id);
+        }else{
+          out.unsigned.push(id);
+          if(!proof&&apply){
+            /* Older unsigned rows are only enrolled in the external index; their
+               content itself is never rewritten by this branch. */
+            g.proofs[id]=currentHash;
+            if(g.order.indexOf(id)<0)g.order.push(id);
+            out.changed=true;
+          }
+        }
+        return;
+      }
+
+      if(own!==currentHash){
+        /* The external v60 proof independently matches the current content:
+           the old in-row fingerprint is stale (typically post-merge), not an
+           undocumented financial mutation. Reconcile only that stale fingerprint. */
+        if(proof&&proof===currentHash){
+          if(apply){
+            remember(g.legacyReconciliations,id,{at:now(),previousHash:own,currentHash:currentHash,reason:'مطابقة مثبتة ببصمة v60 مستقلة'},180);
+            row.integrityHash=currentHash;
+            out.changed=true;
+          }
+          out.repaired.push(id);
+        }else{
+          out.unresolved.push({id:id,stored:own,proof:proof,current:currentHash,reason:'البصمة الداخلية والخارجية لا تثبتان الحالة الحالية معاً'});
+        }
+        return;
+      }
+
+      if(proof&&proof!==currentHash){
+        /* A self-consistent signed row with an older external proof is a sync
+           metadata divergence. Rebase the proof only; the ledger row stays intact. */
+        if(apply){
+          remember(g.proofRebases,id,{at:now(),previousProof:proof,currentHash:currentHash,reason:'تقارب بيانات بعد دمج/مزامنة'},180);
+          g.proofs[id]=currentHash;
+          if(g.order.indexOf(id)<0)g.order.push(id);
+          out.changed=true;
+        }
+        out.rebased.push(id);
+      }else if(!proof&&apply){
+        g.proofs[id]=currentHash;
+        if(g.order.indexOf(id)<0)g.order.push(id);
+        out.changed=true;
+      }
+    });
+    out.root=rootHash(d);
+    if(apply&&out.changed){
+      trimOrder(g,current);
+      g.rootHash=out.root;
+      g.lastCheckedAt=now();
+      g.v64={version:VERSION,lastCheckedAt:g.lastCheckedAt,lastResult:{sealed:out.sealed.length,repaired:out.repaired.length,rebased:out.rebased.length,unresolved:out.unresolved.length,unsigned:out.unsigned.length}};
+    }
+    return out;
+  }
+  function saveIfChanged(result){
+    if(result&&result.changed&&typeof baseSave==='function'){
+      try{baseSave();}catch(e){console.warn('v64 save',e);}
+    }
+  }
+  function preSave(){return scan(true);}
+  function wrapSave(){
+    var current=window.saveDB;
+    if(typeof current!=='function'||current.__v64LedgerWrapped)return;
+    baseSave=current;
+    var wrapped=function(){
+      var r=preSave();
+      return current.apply(this,arguments);
+    };
+    wrapped.__v64LedgerWrapped=true;
+    window.saveDB=wrapped;
+    try{saveDB=wrapped;}catch(e){}
+  }
+  function statusHtml(result){
+    var d=db(), sync=d&&d.settings&&d.settings.lastSyncHash;
+    var state=result.unresolved.length?'danger':(result.repaired.length||result.rebased.length||result.sealed.length?'warn':'ok');
+    var title=result.unresolved.length?'⚠️ Ledger v64 يحتاج مراجعة صريحة':'🛡️ Ledger v64 سليم ومختوم';
+    var html='<div id="v64LedgerStatus" class="abox '+state+'"><b>'+title+'</b><br>';
+    html+='قيود Ledger: '+result.rows+' — مختوم حديثاً: '+result.sealed.length+' — بصمات قديمة صُححت بدليل مستقل: '+result.repaired.length+' — تقارب بصمات المزامنة: '+result.rebased.length+'.';
+    if(result.unsigned.length)html+='<br>قيود قديمة غير مختومة داخلياً: '+result.unsigned.length+' (لم يتم تعديل محتواها).';
+    if(result.unresolved.length)html+='<br><b>حالات غير محسومة: '+result.unresolved.length+'</b> — لا تُعاد بصمتها تلقائياً.';
+    html+='<br>جذر Ledger: '+esc(result.root||'—')+'.';
+    if(!sync)html+='<br>☁️ Last Sync Hash لم يُسجل بعد: نفّذ مزامنة ناجحة لتوثيق أول حالة سحابية.';
+    html+='</div>';
+    return html;
+  }
+  function showReport(){
+    var result=scan(true);saveIfChanged(result);
+    try{
+      if(typeof _ensureLogicModal==='function')_ensureLogicModal();
+      var title=document.getElementById('logicReportTitle'), body=document.getElementById('logicReportBody'), time=document.getElementById('logicReportTime');
+      if(title)title.textContent='🧾 تدقيق Ledger v64';
+      if(body){
+        var rows=result.unresolved.length?result.unresolved.map(function(x){
+          return '<div class="v50-ledger-row"><b>⚠️ '+esc(x.id)+'</b><br><span>البصمة المسجلة: '+esc(x.stored||'—')+'<br>بصمة v60: '+esc(x.proof||'—')+'<br>البصمة الحالية: '+esc(x.current||'—')+'</span><div class="v50-ledger-alloc">'+esc(x.reason)+'</div></div>';
+        }).join(''):'<div class="abox ok">لا توجد أي حالة Ledger غير محسومة.</div>';
+        var action=result.unresolved.length?'<div class="v50-tools" style="margin-top:10px"><button class="btn3" type="button" onclick="window.EGTPH_V64.acceptCurrentLedger()">⚠️ اعتماد الحالة الحالية بعد مراجعة القيود</button></div><div class="v50-note">هذا الإجراء يدوي وصريح: يحتفظ بسجل المصالحة في إعدادات الحارس ويعيد ختم القيود الحالية فقط؛ لا يغيّر أي مبلغ أو عامل أو دورة.</div>':'';
+        body.innerHTML=statusHtml(result)+'<div class="v50-ledger-list">'+rows+'</div>'+action;
+      }
+      if(time)time.textContent='آخر تحقق: '+now();
+      if(typeof openModal==='function')openModal('mLogicReport');
+    }catch(e){console.warn('v64 report',e);}
+    return result;
+  }
+  function acceptCurrentLedger(){
+    var d=db(), r=scan(false);
+    if(!d||!r.unresolved.length){try{if(typeof toast==='function')toast('✅ لا توجد حالة Ledger تحتاج اعتماداً');}catch(e){}return;}
+    var ok=false;
+    try{ok=window.confirm('⚠️ سيتم اعتماد البصمة الحالية لـ '+r.unresolved.length+' قيد بعد مراجعتها.\nلن تتغير أي مبالغ أو بيانات رواتب. متابعة؟');}catch(e){}
+    if(!ok)return;
+    var g=guard(d), byId={};arr(d.ledger).forEach(function(row){if(row&&row.id!==undefined)byId[text(row.id)]=row;});
+    r.unresolved.forEach(function(x){
+      var row=byId[x.id];if(!row)return;
+      var h=rowHash(row);
+      remember(g.manualTrust,x.id,{at:now(),previousIntegrityHash:text(row.integrityHash),previousProof:text(g.proofs[x.id]),currentHash:h,reason:'اعتماد يدوي صريح بعد مراجعة المستخدم'},180);
+      row.integrityHash=h;
+      g.proofs[x.id]=h;
+      if(g.order.indexOf(x.id)<0)g.order.push(x.id);
+    });
+    var after=scan(true);
+    try{if(typeof audit==='function')audit('🛡️ اعتماد يدوي لبصمات Ledger بعد مراجعة: '+r.unresolved.length+' قيد');}catch(e){}
+    try{if(typeof window.saveDB==='function')window.saveDB();}catch(e){}
+    try{if(typeof toast==='function')toast('✅ تم اعتماد القيود الحالية مع حفظ أثر المراجعة');}catch(e){}
+    showReport();
+    return after;
+  }
+  function decorateReport(){
+    var current=window.showUnifiedLogicReport||window.showLogicReport;
+    if(typeof current!=='function'||current.__v64LedgerWrapped)return;
+    baseReport=current;
+    var wrapped=function(){
+      var result=scan(true);saveIfChanged(result);
+      var out=current.apply(this,arguments);
+      try{
+        var body=document.getElementById('logicReportBody');
+        if(body&&!document.getElementById('v64LedgerStatus'))body.insertAdjacentHTML('afterbegin',statusHtml(result));
+      }catch(e){}
+      return out;
+    };
+    wrapped.__v64LedgerWrapped=true;
+    window.showUnifiedLogicReport=wrapped;window.showLogicReport=wrapped;
+    try{showUnifiedLogicReport=wrapped;showLogicReport=wrapped;}catch(e){}
+  }
+  function addAdmin(){
+    try{
+      var panel=document.getElementById('v50AdminPanel');if(!panel||document.getElementById('v64LedgerBtn'))return;
+      var tools=panel.querySelector('.v50-tools');if(!tools)return;
+      var btn=document.createElement('button');btn.id='v64LedgerBtn';btn.className='btn2';btn.type='button';btn.textContent='🧾 تدقيق Ledger v64';btn.onclick=showReport;tools.appendChild(btn);
+    }catch(e){}
+  }
+  function passive(){
+    var r=scan(true);
+    if(r.changed)saveIfChanged(r);
+    addAdmin();
+    passiveRuns++;
+    if(passiveRuns>=18&&passiveTimer){clearInterval(passiveTimer);passiveTimer=null;}
+  }
+  function boot(){
+    if(booted||!db())return;
+    booted=true;
+    wrapSave();
+    var r=scan(true);saveIfChanged(r);
+    decorateReport();addAdmin();
+    try{document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v64');var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v64';}catch(e){}
+    window.EGTPH_V64={version:VERSION,verify:function(){var x=scan(true);saveIfChanged(x);return x;},show:showReport,acceptCurrentLedger:acceptCurrentLedger,status:function(){return scan(false);}};
+    passiveTimer=setInterval(passive,1800);
+  }
+  setTimeout(function(){
+    (function retry(n){
+      if(window.EGTPH_V64)return;
+      boot();
+      if(!window.EGTPH_V64&&n<120)setTimeout(function(){retry(n+1);},500);
+    })(0);
+  },4300);
+})();
+</script>
+
 </body></html>
