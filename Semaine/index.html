@@ -793,7 +793,7 @@ table tbody tr:last-child td{border-bottom:none}
     <div class="card" style="padding:0">
       <div class="table-container">
         <table>
-          <thead><tr><th>الأسبوع</th><th>المشروع</th><th>العمال</th><th>الأجور</th><th>خصم الدين</th><th>معلّق جديد</th><th>المصاريف</th><th>المجموع المحاسبي</th><th>إجراءات</th></tr></thead>
+          <thead><tr><th>الأسبوع</th><th>المشروع</th><th>العمال</th><th>أجور الأسبوع</th><th>خصم الدين</th><th>معلّق جديد</th><th>معلّق سابق مسدَّد</th><th>المصاريف</th><th>المجموع المحاسبي</th><th>المجموع المالي بعد تسديد المعلّق</th><th>إجراءات</th></tr></thead>
           <tbody id="archiveTableBody"></tbody>
         </table>
       </div>
@@ -2226,25 +2226,52 @@ function updateWeekExpense(id,f,v){
 /* ----- ملخص الأسبوع ----- */
 function computeWeekTotals(){
   const cw=DB.currentWeek;
-  let dailyCount=0,pieceCount=0,dailyTotal=0,pieceTotal=0,overtimeTotal=0,bonusTotal=0,deductionTotal=0,baseDailyTotal=0,settledPendingTotal=0,paidNowTotal=0,pendingCreatedTotal=0,postArchiveAdjustmentTotal=0;
+  let dailyCount=0,pieceCount=0,dailyTotal=0,pieceTotal=0,overtimeTotal=0,bonusTotal=0,deductionTotal=0,baseDailyTotal=0;
+  let settledPendingTotal=0,paidNowTotal=0,pendingCreatedTotal=0,postArchiveAdjustmentTotal=0;
+  let dailyPaidNowTotal=0,piecePaidNowTotal=0,dailyPendingCreatedTotal=0,piecePendingCreatedTotal=0,dailySettledPendingTotal=0,pieceSettledPendingTotal=0;
   cw.entries.forEach(e=>{
     const w=DB.workers.find(x=>x.id===e.workerId); if(!w)return;
     const p=calcEntryParts(e);
-    if(w.type==='قطعة'){pieceCount++;pieceTotal+=p.net;}else{dailyCount++;dailyTotal+=p.net;baseDailyTotal+=p.base;overtimeTotal+=p.overtime;}
+    const workerType=e.workerType||p.type||w.type;
+    const paidNow=Math.min(Math.max(0,num(e.paidNow??p.net)),p.net);
+    const pendingCreated=Math.max(0,p.net-paidNow);
+    /* تسديد معلّق سابق هو حركة مستقلة تضاف إلى المبلغ المالي لهذا الأسبوع،
+       أما المعلّق الجديد فهو جزء من أجر الأسبوع نفسه ولا يُضاف مرة ثانية. */
+    const settledPending=Math.min(Math.max(0,num(e.settlePending)),getPendingSettlementLimitForEntry(e));
+    if(workerType==='قطعة'){
+      pieceCount++; pieceTotal+=p.net;
+      piecePaidNowTotal+=paidNow; piecePendingCreatedTotal+=pendingCreated; pieceSettledPendingTotal+=settledPending;
+    }else{
+      dailyCount++; dailyTotal+=p.net; baseDailyTotal+=p.base; overtimeTotal+=p.overtime;
+      dailyPaidNowTotal+=paidNow; dailyPendingCreatedTotal+=pendingCreated; dailySettledPendingTotal+=settledPending;
+    }
     bonusTotal+=p.bonus;
     deductionTotal+=p.deduction;
-    const paidNow=Math.min(Math.max(0,num(e.paidNow??p.net)),p.net);
     paidNowTotal+=paidNow;
-    pendingCreatedTotal+=Math.max(0,p.net-paidNow);
-    settledPendingTotal+=Math.min(Math.max(0,num(e.settlePending)),getPendingSettlementLimitForEntry(e));
+    pendingCreatedTotal+=pendingCreated;
+    settledPendingTotal+=settledPending;
     const initial=DB.currentWeek?._archiveFinancePosting?.entries?.[e.id];
     if(isArchivedEdit()&&initial) postArchiveAdjustmentTotal+=num(p.net)-num(initial.net);
   });
   const wagesTotal=dailyTotal+pieceTotal;
   const expensesTotal=(cw.expenses||[]).reduce((a,e)=>a+num(e.qty)*num(e.price),0);
   const accountingTotal=wagesTotal+expensesTotal;
-  const cashOutTotal=paidNowTotal+expensesTotal+settledPendingTotal;
-  return {dailyCount,pieceCount,dailyTotal,pieceTotal,wagesTotal,expensesTotal,settledPendingTotal,paidNowTotal,pendingCreatedTotal,overtimeTotal,bonusTotal,deductionTotal,baseDailyTotal,grandTotal:accountingTotal,accountingTotal,cashOutTotal,postArchiveAdjustmentTotal:Math.round(postArchiveAdjustmentTotal)};
+  const workersFinancialTotal=wagesTotal+settledPendingTotal;
+  const financialTotalAfterPendingSettlement=accountingTotal+settledPendingTotal;
+  const dailyWorkersFinancialTotal=dailyTotal+dailySettledPendingTotal;
+  const pieceWorkersFinancialTotal=pieceTotal+pieceSettledPendingTotal;
+  const dailyCashPaidTotal=dailyPaidNowTotal+dailySettledPendingTotal;
+  const pieceCashPaidTotal=piecePaidNowTotal+pieceSettledPendingTotal;
+  const workersCashOutTotal=paidNowTotal+settledPendingTotal;
+  const cashOutTotal=workersCashOutTotal+expensesTotal;
+  return {
+    dailyCount,pieceCount,dailyTotal,pieceTotal,wagesTotal,expensesTotal,
+    settledPendingTotal,paidNowTotal,pendingCreatedTotal,overtimeTotal,bonusTotal,deductionTotal,baseDailyTotal,
+    dailyPaidNowTotal,piecePaidNowTotal,dailyPendingCreatedTotal,piecePendingCreatedTotal,dailySettledPendingTotal,pieceSettledPendingTotal,
+    dailyWorkersFinancialTotal,pieceWorkersFinancialTotal,dailyCashPaidTotal,pieceCashPaidTotal,
+    workersFinancialTotal,financialTotalAfterPendingSettlement,workersCashOutTotal,cashOutTotal,
+    grandTotal:accountingTotal,accountingTotal,postArchiveAdjustmentTotal:Math.round(postArchiveAdjustmentTotal)
+  };
 }
 function renderWeekSummary(){
   const t=computeWeekTotals();
@@ -2253,17 +2280,21 @@ function renderWeekSummary(){
   el.innerHTML=`
     <div class="summary-box"><div class="lbl">👷 يومي / آلة / شاحنة</div><div class="val">${t.dailyCount}</div></div>
     <div class="summary-box"><div class="lbl">🧱 عمال قطعة</div><div class="val">${t.pieceCount}</div></div>
-    <div class="summary-box success"><div class="lbl">💵 الأجر الأساسي</div><div class="val">${money(t.baseDailyTotal||t.dailyTotal)}</div></div>
-    <div class="summary-box success"><div class="lbl">أجور عمال القطعة</div><div class="val">${money(t.pieceTotal)}</div></div>
+    <div class="summary-box success"><div class="lbl">💵 أجر اليومي / الآلة / الشاحنة لهذا الأسبوع</div><div class="val">${money(t.dailyTotal)}</div></div>
+    <div class="summary-box success"><div class="lbl">🧱 أجور عمال القطعة لهذا الأسبوع</div><div class="val">${money(t.pieceTotal)}</div></div>
     <div class="summary-box" style="background:var(--gold-soft);border-color:var(--gold)"><div class="lbl">⏱️ ساعات إضافية</div><div class="val" style="color:var(--gold)">${money(t.overtimeTotal)}</div></div>
     <div class="summary-box" style="background:var(--success-soft);border-color:var(--success)"><div class="lbl">🎁 مجموع المكافآت</div><div class="val" style="color:var(--success)">${money(t.bonusTotal)}</div></div>
     <div class="summary-box danger"><div class="lbl">⬇️ خصومات الديون</div><div class="val">${money(t.deductionTotal)}</div></div>
-    ${t.pendingCreatedTotal>0?`<div class="summary-box danger"><div class="lbl">⏳ أجر جديد معلّق</div><div class="val">${money(t.pendingCreatedTotal)}</div></div>`:''}
-    ${t.settledPendingTotal>0?`<div class="summary-box" style="background:var(--gold-soft);border-color:var(--gold)"><div class="lbl">⏱️ تسديد أجور معلّقة سابقة</div><div class="val" style="color:var(--gold-dk)">${money(t.settledPendingTotal)}</div></div>`:''}
+    ${t.pendingCreatedTotal>0?`<div class="summary-box danger"><div class="lbl">⏳ أجر جديد معلّق — جزء من أجور هذا الأسبوع، لا يُضاف مرة ثانية</div><div class="val">${money(t.pendingCreatedTotal)}</div></div>`:''}
+    ${t.settledPendingTotal>0?`<div class="summary-box" style="background:var(--gold-soft);border-color:var(--gold)"><div class="lbl">⏱️ تسديد أجور معلّقة سابقة — يضاف إلى المبلغ المالي</div><div class="val" style="color:var(--gold-dk)">${money(t.settledPendingTotal)}</div></div>`:''}
+    ${t.pieceCount>0?`<div class="summary-box" style="background:var(--gold-soft);border:1.5px solid var(--gold)"><div class="lbl">🧱 معلّق سابق مسدَّد لعمال القطعة</div><div class="val" style="color:var(--gold-dk)">${money(t.pieceSettledPendingTotal)}</div></div>
+    <div class="summary-box" style="background:#fff7ed;border:1.5px solid #ea580c"><div class="lbl">🧱 إجمالي عمال القطعة بعد إضافة المعلّق السابق</div><div class="val" style="color:#c2410c">${money(t.pieceWorkersFinancialTotal)}</div><div class="text-muted">${money(t.pieceTotal)} أجور الأسبوع + ${money(t.pieceSettledPendingTotal)} معلّق سابق</div></div>
+    <div class="summary-box" style="background:var(--accent-soft);border:1.5px solid var(--accent)"><div class="lbl">🧱 النقد المدفوع الآن لعمال القطعة</div><div class="val" style="color:var(--accent)">${money(t.pieceCashPaidTotal)}</div><div class="text-muted">مدفوع الأسبوع + تسديد معلّق سابق</div></div>`:''}
     ${isArchivedEdit()&&t.postArchiveAdjustmentTotal!==0?`<div class="summary-box" style="background:#ede9fe;border:1.5px solid #7c3aed"><div class="lbl">✏️ فرق الأجر بعد التعديل — سيُسوّى في سجل الأسبوع والسجلات التابعة عند الحفظ</div><div class="val" style="color:#7c3aed">${t.postArchiveAdjustmentTotal>0?'+':''}${money(t.postArchiveAdjustmentTotal)} دج</div></div>`:''}
     <div class="summary-box warning"><div class="lbl">🧾 مصاريف الأسبوع</div><div class="val">${money(t.expensesTotal)}</div></div>
-    <div class="summary-box primary" style="grid-column:1/-1"><div class="lbl" style="font-size:13px">💰 المجموع المحاسبي للأسبوع (الأجور الصافية + المصاريف فقط)</div><div class="val" style="font-size:24px">${money(t.grandTotal)} دج</div></div>
-    <div class="summary-box" style="grid-column:1/-1;background:var(--accent-soft);border:1.5px solid var(--accent)"><div class="lbl">💸 المدفوع نقداً الآن = المدفوع من أجور الأسبوع + المصاريف + تسديد المعلّق السابق</div><div class="val" style="color:var(--accent)">${money(t.cashOutTotal)} دج</div></div>`;
+    <div class="summary-box primary" style="grid-column:1/-1"><div class="lbl" style="font-size:13px">📒 المجموع المحاسبي للأسبوع = أجور هذا الأسبوع + المصاريف</div><div class="val" style="font-size:24px">${money(t.accountingTotal)} دج</div><div class="text-muted">لا يضاف إليه المعلّق الجديد لأنه جزء من أجر الأسبوع.</div></div>
+    <div class="summary-box" style="grid-column:1/-1;background:#fff7ed;border:2px solid #ea580c"><div class="lbl" style="font-size:13px;color:#9a3412">🧮 المجموع المالي بعد تسديد الأجور المعلّقة السابقة = المجموع المحاسبي + المعلّق السابق المسدَّد</div><div class="val" style="font-size:24px;color:#c2410c">${money(t.financialTotalAfterPendingSettlement)} دج</div><div class="text-muted">${money(t.accountingTotal)} + ${money(t.settledPendingTotal)} دج</div></div>
+    <div class="summary-box" style="grid-column:1/-1;background:var(--accent-soft);border:1.5px solid var(--accent)"><div class="lbl">💸 النقد الخارج فعلياً الآن = المدفوع من أجور الأسبوع + تسديد المعلّق السابق + المصاريف</div><div class="val" style="color:var(--accent)">${money(t.cashOutTotal)} دج</div><div class="text-muted">نقد العمال: ${money(t.workersCashOutTotal)} دج + المصاريف: ${money(t.expensesTotal)} دج</div></div>`;
 }
 
 /* ---- بدء أسبوع جديد (من شاشة idle) ---- */
@@ -2517,21 +2548,42 @@ function reconcileArchivedWeekFinancialEffects(weekId,entriesWithTotals,previous
 }
 function computeSavedWeekTotals(entries,expenses){
   let dailyCount=0,pieceCount=0,dailyTotal=0,pieceTotal=0,overtimeTotal=0,bonusTotal=0,deductionTotal=0,baseDailyTotal=0,settledPendingTotal=0,paidNowTotal=0,pendingCreatedTotal=0;
+  let dailyPaidNowTotal=0,piecePaidNowTotal=0,dailyPendingCreatedTotal=0,piecePendingCreatedTotal=0,dailySettledPendingTotal=0,pieceSettledPendingTotal=0;
   (entries||[]).forEach(e=>{
     const parts=e.parts||{};
     const type=e.workerType||parts.type||DB.workers.find(w=>w.id===e.workerId)?.type||'';
     const net=num(parts.net??e.total);
-    if(type==='قطعة'){pieceCount++;pieceTotal+=net;}else{dailyCount++;dailyTotal+=net;baseDailyTotal+=num(parts.base);overtimeTotal+=num(parts.overtime);}
+    const paidNow=Math.min(Math.max(0,num(e.paidNow)),net);
+    const pendingCreated=Math.min(Math.max(0,num(e.pendingAmount)),net);
+    const settledPending=Math.max(0,num(e.settlePending));
+    if(type==='قطعة'){
+      pieceCount++;pieceTotal+=net;
+      piecePaidNowTotal+=paidNow;piecePendingCreatedTotal+=pendingCreated;pieceSettledPendingTotal+=settledPending;
+    }else{
+      dailyCount++;dailyTotal+=net;baseDailyTotal+=num(parts.base);overtimeTotal+=num(parts.overtime);
+      dailyPaidNowTotal+=paidNow;dailyPendingCreatedTotal+=pendingCreated;dailySettledPendingTotal+=settledPending;
+    }
     bonusTotal+=num(parts.bonus??e.bonus);
     deductionTotal+=num(e.debtDeduction??parts.deduction);
-    paidNowTotal+=num(e.paidNow);
-    pendingCreatedTotal+=num(e.pendingAmount);
-    settledPendingTotal+=num(e.settlePending);
+    paidNowTotal+=paidNow;
+    pendingCreatedTotal+=pendingCreated;
+    settledPendingTotal+=settledPending;
   });
   const wagesTotal=dailyTotal+pieceTotal;
   const expensesTotal=(expenses||[]).reduce((sum,e)=>sum+num(e.amount??(num(e.qty)*num(e.price))),0);
-  const grandTotal=wagesTotal+expensesTotal;
-  return {dailyCount,pieceCount,dailyTotal,pieceTotal,wagesTotal,expensesTotal,settledPendingTotal,paidNowTotal,pendingCreatedTotal,overtimeTotal,bonusTotal,deductionTotal,baseDailyTotal,grandTotal,accountingTotal:grandTotal,cashOutTotal:paidNowTotal+settledPendingTotal+expensesTotal,postArchiveAdjustmentTotal:0};
+  const accountingTotal=wagesTotal+expensesTotal;
+  const workersFinancialTotal=wagesTotal+settledPendingTotal;
+  const financialTotalAfterPendingSettlement=accountingTotal+settledPendingTotal;
+  const workersCashOutTotal=paidNowTotal+settledPendingTotal;
+  const cashOutTotal=workersCashOutTotal+expensesTotal;
+  return {
+    dailyCount,pieceCount,dailyTotal,pieceTotal,wagesTotal,expensesTotal,settledPendingTotal,paidNowTotal,pendingCreatedTotal,overtimeTotal,bonusTotal,deductionTotal,baseDailyTotal,
+    dailyPaidNowTotal,piecePaidNowTotal,dailyPendingCreatedTotal,piecePendingCreatedTotal,dailySettledPendingTotal,pieceSettledPendingTotal,
+    dailyWorkersFinancialTotal:dailyTotal+dailySettledPendingTotal,pieceWorkersFinancialTotal:pieceTotal+pieceSettledPendingTotal,
+    dailyCashPaidTotal:dailyPaidNowTotal+dailySettledPendingTotal,pieceCashPaidTotal:piecePaidNowTotal+pieceSettledPendingTotal,
+    workersFinancialTotal,financialTotalAfterPendingSettlement,workersCashOutTotal,cashOutTotal,
+    grandTotal:accountingTotal,accountingTotal,postArchiveAdjustmentTotal:0
+  };
 }
 function makeArchivedEntriesWithTotals(weekId){
   return (DB.currentWeek.entries||[]).filter(e=>e.workerId).map(e=>{
@@ -2624,6 +2676,9 @@ function saveWeek(){
     total:t.wagesTotal,
     expensesTotal:t.expensesTotal,
     grandTotal:t.grandTotal,
+    financialTotalAfterPendingSettlement:t.financialTotalAfterPendingSettlement,
+    workersFinancialTotal:t.workersFinancialTotal,
+    workersCashOutTotal:t.workersCashOutTotal,
     cashOutTotal:t.cashOutTotal,
     debtDeductionTotal:t.deductionTotal,
     pendingCreatedTotal:t.pendingCreatedTotal,
@@ -2879,13 +2934,16 @@ function renderArchive(){
   const s=(document.getElementById('archiveSearch')?.value||'').toLowerCase();
   let weeks=[...DB.weeks].sort((a,b)=>new Date(b.startDate)-new Date(a.startDate));
   if(s){ weeks=weeks.filter(w=>{ const p=DB.projects.find(x=>x.id===w.projectId); return formatDateAR(w.startDate).includes(s)||(p?.name||'').toLowerCase().includes(s); }); }
-  if(!weeks.length){ tb.innerHTML='<tr><td colspan="9"><div class="empty-state"><i class="fas fa-box-open"></i><h4>الأرشيف فارغ</h4><p>الأسابيع المحفوظة تظهر هنا تلقائياً</p></div></td></tr>'; return; }
+  if(!weeks.length){ tb.innerHTML='<tr><td colspan="11"><div class="empty-state"><i class="fas fa-box-open"></i><h4>الأرشيف فارغ</h4><p>الأسابيع المحفوظة تظهر هنا تلقائياً</p></div></td></tr>'; return; }
   tb.innerHTML=weeks.map(w=>{
     const project=DB.projects.find(p=>p.id===w.projectId);
     const exp=w.expensesTotal!=null?w.expensesTotal:(w.expenses||[]).reduce((s,e)=>s+(e.amount||0),0);
     const grand=w.grandTotal!=null?w.grandTotal:(w.total+exp);
-    const debtDed=w.debtDeductionTotal!=null?w.debtDeductionTotal:(w.entries||[]).reduce((s,e)=>s+num(e.debtDeduction||e.parts?.deduction),0);
-    const pendNew=w.pendingCreatedTotal!=null?w.pendingCreatedTotal:(w.entries||[]).reduce((s,e)=>s+num(e.pendingAmount),0);
+    const posting=buildWeekFinancialPosting(w);
+    const debtDed=w.debtDeductionTotal!=null?w.debtDeductionTotal:(posting.totals?.debtDeductionTotal??(w.entries||[]).reduce((s,e)=>s+num(e.debtDeduction||e.parts?.deduction),0));
+    const pendNew=w.pendingCreatedTotal!=null?w.pendingCreatedTotal:(posting.totals?.pendingCreatedTotal??(w.entries||[]).reduce((s,e)=>s+num(e.pendingAmount),0));
+    const settledOld=w.settledPendingTotal!=null?w.settledPendingTotal:num(posting.totals?.settledPendingTotal);
+    const financialTotal=w.financialTotalAfterPendingSettlement!=null?w.financialTotalAfterPendingSettlement:(grand+settledOld);
     return `<tr>
       <td><b>${formatDateAR(w.startDate)}</b><br><span class="text-muted">إلى ${formatDateAR(w.endDate)}</span></td>
       <td>${project?.name||'<span class="text-muted">عام</span>'}</td>
@@ -2893,8 +2951,10 @@ function renderArchive(){
       <td>${money(w.total)} دج</td>
       <td><span class="badge badge-debt">${money(debtDed)} دج</span></td>
       <td><span class="badge ${pendNew>0?'badge-warning':'badge-paid'}">${money(pendNew)} دج</span></td>
+      <td><span class="badge ${settledOld>0?'badge-gold':'badge-paid'}">${money(settledOld)} دج</span></td>
       <td>${money(exp)} دج</td>
       <td><b style="color:var(--primary)">${money(grand)} دج</b></td>
+      <td><b style="color:#c2410c">${money(financialTotal)} دج</b><br><small class="text-muted">${money(grand)} + ${money(settledOld)}</small></td>
       <td><button class="btn btn-info btn-xs" onclick="printArchivedWeek('${w.id}')"><i class="fas fa-print"></i></button> <button class="btn btn-outline btn-xs" onclick="editWeek('${w.id}')"><i class="fas fa-edit"></i></button> <button class="btn btn-warning btn-xs" onclick="assignArchivedWeekProject('${w.id}')" title="تحويل لمشروع"><i class="fas fa-folder-tree"></i></button> <button class="btn btn-danger btn-xs" onclick="deleteWeek('${w.id}')"><i class="fas fa-trash"></i></button></td>
     </tr>`;
   }).join('');
@@ -2919,6 +2979,9 @@ function deleteWeek(id){
 function buildPrintHTML(weekObj,fromArchive){
   const c=DB.company;
   const entries=weekObj.entries.filter(e=>e.workerId);
+  /* للأسبوع الجاري نحسب من القيم المحررة الآن؛ للأسبوع المؤرشف نقرأ البصمة المالية المحفوظة. */
+  const posting=fromArchive?buildWeekFinancialPosting(weekObj):(isArchivedEdit()&&DB.currentWeek===weekObj?null:buildWeekFinancialPosting(weekObj,{refresh:true}));
+  const entryFinance={};
   const daily=[], piece=[];
 
   entries.forEach(e=>{
@@ -2927,18 +2990,27 @@ function buildPrintHTML(weekObj,fromArchive){
     const wnum=e.workerNumber||w?.number||0;
     const wname=e.workerName||w?.name||'—';
     const wdays=e.days||0;
-    let p=(fromArchive&&e.parts)?e.parts:calcEntryParts(e);
-    if(wtype==='قطعة') piece.push({num:wnum,name:wname,parts:p,note:e.note||''});
-    else daily.push({num:wnum,name:wname,type:wtype,days:wdays,parts:p,note:e.note||''});
+    const p=(fromArchive&&e.parts)?e.parts:calcEntryParts(e);
+    const saved=posting?.entries?.[e.id];
+    const net=num(p.net);
+    const paidNow=Math.min(Math.max(0,saved?.paidNow!==undefined?num(saved.paidNow):(e.paidNow!==undefined&&e.paidNow!==null?num(e.paidNow):Math.max(0,net-num(e.pendingAmount)))),net);
+    const pending=Math.max(0,saved?.pendingAmount!==undefined?num(saved.pendingAmount):(e.pendingAmount!==undefined?num(e.pendingAmount):net-paidNow));
+    const settle=Math.max(0,saved?.settlePending!==undefined?num(saved.settlePending):num(e.settlePending));
+    entryFinance[e.id]={paidNow,pending,settle,workerTotalWithSettled:net+settle,cashPaidNow:paidNow+settle};
+    if(wtype==='قطعة') piece.push({entryId:e.id,num:wnum,name:wname,parts:p,note:e.note||'',finance:entryFinance[e.id]});
+    else daily.push({entryId:e.id,num:wnum,name:wname,type:wtype,days:wdays,parts:p,note:e.note||'',finance:entryFinance[e.id]});
   });
   daily.sort((a,b)=>a.num-b.num);
   piece.sort((a,b)=>a.num-b.num);
 
   const exps=(weekObj.expenses||[]).map(x=>({...x,amount:x.amount!=null?x.amount:num(x.qty)*num(x.price)}));
-  const dailyTotal=daily.reduce((s,d)=>s+d.parts.net,0);
-  const pieceTotal=piece.reduce((s,d)=>s+d.parts.net,0);
-  const expTotal=exps.reduce((s,e)=>s+e.amount,0);
+  const dailyTotal=daily.reduce((s,d)=>s+num(d.parts.net),0);
+  const pieceTotal=piece.reduce((s,d)=>s+num(d.parts.net),0);
+  const expTotal=exps.reduce((s,e)=>s+num(e.amount),0);
   const grand=dailyTotal+pieceTotal+expTotal;
+  const pieceSettledPendingTotal=piece.reduce((s,d)=>s+num(d.finance.settle),0);
+  const pieceWorkersFinancialTotal=pieceTotal+pieceSettledPendingTotal;
+  const pieceCashPaidTotal=piece.reduce((s,d)=>s+num(d.finance.cashPaidNow),0);
   const proj=DB.projects.find(p=>p.id===weekObj.projectId);
 
   /* ---- جدول العمال اليوميين ---- */
@@ -2980,13 +3052,16 @@ function buildPrintHTML(weekObj,fromArchive){
 
   /* ---- جدول عمال القطعة ---- */
   const pieceTable=piece.length?`
-<div class="print-section-title" style="background:#ca8a04;margin-top:12px">▪ عمال القطعة</div>
+<div class="print-section-title" style="background:#ca8a04;margin-top:12px">▪ عمال القطعة — أجور الأسبوع وتسديد المعلّق</div>
 <table style="width:100%;border-collapse:collapse">
-  <colgroup><col style="width:8%"><col style="width:52%"><col style="width:40%"></colgroup>
+  <colgroup><col style="width:7%"><col style="width:31%"><col style="width:16%"><col style="width:15%"><col style="width:16%"><col style="width:15%"></colgroup>
   <thead>
     <tr style="background:#ca8a04;color:#fff">
       <th>#</th><th style="text-align:right">اسم العامل</th>
-      <th style="background:#92400e">المبلغ الإجمالي (دج)</th>
+      <th>أجر الأسبوع<br><small>(دج)</small></th>
+      <th>معلّق سابق<br><small>مسدَّد الآن</small></th>
+      <th style="background:#92400e">إجمالي المستحقات<br><small>بعد التسديد</small></th>
+      <th style="background:#78350f">النقد المدفوع الآن</th>
     </tr>
   </thead>
   <tbody>
@@ -2994,14 +3069,21 @@ function buildPrintHTML(weekObj,fromArchive){
     <tr>
       <td style="text-align:center;font-weight:800">${d.num}</td>
       <td style="text-align:right;font-weight:700">${d.name}${d.note?'<br><small style="color:#666">'+d.note+'</small>':''}</td>
-      <td style="text-align:center;font-weight:800;font-size:13px;background:#fef9c3">${money(d.parts.net)} دج</td>
+      <td style="text-align:center;font-weight:800;background:#fef9c3">${money(d.parts.net)} دج</td>
+      <td style="text-align:center;color:#a16207;font-weight:800">${d.finance.settle>0?money(d.finance.settle)+' دج':'—'}</td>
+      <td style="text-align:center;font-weight:900;background:#fff7ed;color:#c2410c">${money(d.finance.workerTotalWithSettled)} دج</td>
+      <td style="text-align:center;font-weight:800;background:#fffbeb">${money(d.finance.cashPaidNow)} دج</td>
     </tr>`).join('')}
     <tr style="background:#e2e8f0;font-weight:800;border-top:2px solid #ca8a04">
-      <td colspan="2" style="text-align:right;padding-right:8px">مجموع أجور عمال القطعة</td>
-      <td style="text-align:center;font-size:12px;background:#fef3c7">${money(pieceTotal)} دج</td>
+      <td colspan="2" style="text-align:right;padding-right:8px">مجموع أجور عمال القطعة لهذا الأسبوع</td>
+      <td style="text-align:center;background:#fef3c7">${money(pieceTotal)} دج</td>
+      <td style="text-align:center;color:#a16207">${money(pieceSettledPendingTotal)} دج</td>
+      <td style="text-align:center;background:#fff7ed;color:#c2410c">${money(pieceWorkersFinancialTotal)} دج</td>
+      <td style="text-align:center;background:#fffbeb">${money(pieceCashPaidTotal)} دج</td>
     </tr>
   </tbody>
-</table>`:'';
+</table>
+<div style="margin-top:6px;padding:7px 10px;border:1px dashed #ca8a04;border-radius:6px;background:#fffbeb;font-size:10.5px;color:#713f12">المعلّق السابق المسدَّد يُضاف إلى إجمالي عمال القطعة. أمّا الأجر المعلّق الجديد من نفس الأسبوع فهو جزء من أجر الأسبوع أعلاه، ولا يُضاف مرة ثانية.</div>`:'';
 
   /* ---- جدول المصاريف ---- */
   const expTable=exps.length?`
@@ -3034,23 +3116,20 @@ function buildPrintHTML(weekObj,fromArchive){
 </table>`:'';
 
   /* كشف مستقل للحركات المالية حتى يظهر تسديد الأجر المعلّق السابق في الطباعة. */
-  const posting=fromArchive?buildWeekFinancialPosting(weekObj):(isArchivedEdit()&&DB.currentWeek===weekObj?getArchivedFinancePosting():null);
-  const movementRows=entries.map(e=>{
+  const allMovementRows=entries.map(e=>{
     const p=(fromArchive&&e.parts)?e.parts:calcEntryParts(e);
-    const f=posting?.entries?.[e.id]||{paidNow:Math.min(Math.max(0,num(e.paidNow??p.net)),p.net),pendingAmount:Math.max(0,p.net-num(e.paidNow??p.net)),settlePending:num(e.settlePending)};
-    return {name:e.workerName||DB.workers.find(w=>w.id===e.workerId)?.name||'—',net:num(p.net),paidNow:num(f.paidNow),pending:num(f.pendingAmount),settle:num(f.settlePending)};
-  }).filter(x=>x.pending>0||x.settle>0||x.paidNow!==x.net);
-  const financeTotals=posting?.totals||{
-    paidNowTotal:num(weekObj.paidNowTotal),pendingCreatedTotal:num(weekObj.pendingCreatedTotal),
-    settledPendingTotal:num(weekObj.settledPendingTotal),debtDeductionTotal:num(weekObj.debtDeductionTotal)
+    const f=entryFinance[e.id]||{paidNow:Math.min(Math.max(0,num(e.paidNow??p.net)),p.net),pending:Math.max(0,p.net-num(e.paidNow??p.net)),settle:num(e.settlePending)};
+    return {name:e.workerName||DB.workers.find(w=>w.id===e.workerId)?.name||'—',net:num(p.net),paidNow:num(f.paidNow),pending:num(f.pending),settle:num(f.settle)};
+  });
+  const movementRows=allMovementRows.filter(x=>x.pending>0||x.settle>0||x.paidNow!==x.net);
+  const financeTotals=posting?.totals?{...posting.totals}:{
+    paidNowTotal:allMovementRows.reduce((a,x)=>a+x.paidNow,0),
+    pendingCreatedTotal:allMovementRows.reduce((a,x)=>a+x.pending,0),
+    settledPendingTotal:allMovementRows.reduce((a,x)=>a+x.settle,0),
+    debtDeductionTotal:entries.reduce((a,e)=>a+num(e.debtDeduction??e.parts?.deduction),0)
   };
-  if(!posting){
-    financeTotals.paidNowTotal=movementRows.reduce((a,x)=>a+x.paidNow,0);
-    financeTotals.pendingCreatedTotal=movementRows.reduce((a,x)=>a+x.pending,0);
-    financeTotals.settledPendingTotal=movementRows.reduce((a,x)=>a+x.settle,0);
-    financeTotals.debtDeductionTotal=entries.reduce((a,e)=>a+num(e.debtDeduction??e.parts?.deduction),0);
-  }
   const financeCashOut=financeTotals.paidNowTotal+financeTotals.settledPendingTotal+expTotal;
+  const financialTotalAfterPendingSettlement=grand+financeTotals.settledPendingTotal;
   const financeTable=(movementRows.length||financeTotals.settledPendingTotal>0||financeTotals.pendingCreatedTotal>0||financeTotals.debtDeductionTotal>0)?`
 <div class="print-section-title" style="background:#1d4ed8;margin-top:12px">▪ الحركات المالية المسوّاة للأسبوع</div>
 <table style="width:100%;border-collapse:collapse">
@@ -3102,10 +3181,14 @@ ${num(weekObj.postArchiveAdjustmentTotal)!==0?`<div style="margin-top:7px;paddin
       ${daily.length?`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #ccc;font-size:11px"><span>أجور العمال اليوميين (${daily.length} عامل)</span><span style="font-weight:700">${money(dailyTotal)} دج</span></div>`:''}
       ${piece.length?`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #ccc;font-size:11px"><span>أجور عمال القطعة (${piece.length} عامل)</span><span style="font-weight:700">${money(pieceTotal)} دج</span></div>`:''}
       ${exps.length?`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #ccc;font-size:11px"><span>مجموع المصاريف (${exps.length} بند)</span><span style="font-weight:700">${money(expTotal)} دج</span></div>`:''}
-      ${financeTotals.settledPendingTotal>0?`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #ccc;font-size:11px;color:#a16207"><span>تسديد أجور معلّقة من أسابيع سابقة (حركة نقدية مستقلة)</span><span style="font-weight:800">${money(financeTotals.settledPendingTotal)} دج</span></div>`:''}
-      <div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid #0f766e;font-size:15px;font-weight:900;color:#0f766e">
-        <span>المجموع الكلي للأسبوع</span><span>${money(grand)} دج</span>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #ccc;font-size:11px;color:#a16207"><span>تسديد أجور معلّقة من أسابيع سابقة (يُضاف إلى المبلغ المالي)</span><span style="font-weight:800">${money(financeTotals.settledPendingTotal)} دج</span></div>
+      <div style="display:flex;justify-content:space-between;padding:7px 0;margin-top:4px;border-top:2px solid #0f766e;font-size:13px;font-weight:900;color:#0f766e">
+        <span>المجموع المحاسبي للأسبوع (أجور الأسبوع + المصاريف)</span><span>${money(grand)} دج</span>
       </div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid #ea580c;font-size:15px;font-weight:900;color:#c2410c">
+        <span>المجموع المالي بعد تسديد الأجور المعلّقة السابقة</span><span>${money(financialTotalAfterPendingSettlement)} دج</span>
+      </div>
+      <div style="font-size:10px;color:#666;margin-top:4px">${money(grand)} (المجموع المحاسبي) + ${money(financeTotals.settledPendingTotal)} (معلّق سابق مسدَّد). المعلّق الجديد لا يُضاف مرتين لأنه جزء من أجور الأسبوع.</div>
     </div>
   </div>
 
@@ -3916,11 +3999,11 @@ function aiAnswer(q){
   }
   // المجموع الكلي
   if((s.includes('مجموع')||s.includes('اجمالي')||s.includes('إجمالي')||s.includes('كم'))&&(s.includes('اسبوع')||s.includes('أسبوع')||s.includes('كلي'))){
-    return `📊 ملخص الأسبوع الحالي:<br>• أجور العمال اليوميين: <b>${money(t.dailyTotal)} دج</b> (${t.dailyCount} عامل)<br>• أجور عمال القطعة: <b>${money(t.pieceTotal)} دج</b> (${t.pieceCount} عامل)<br>• المصاريف: <b>${money(t.expensesTotal)} دج</b><br>• الساعات الإضافية: <b>${money(t.overtimeTotal)} دج</b><br>━━━━━━<br>💰 المجموع الكلي: <b>${money(t.grandTotal)} دج</b>`;
+    return `📊 ملخص الأسبوع الحالي:<br>• أجور العمال اليوميين: <b>${money(t.dailyTotal)} دج</b> (${t.dailyCount} عامل)<br>• أجور عمال القطعة: <b>${money(t.pieceTotal)} دج</b> (${t.pieceCount} عامل)<br>• معلّق سابق مسدَّد: <b>${money(t.settledPendingTotal)} دج</b><br>• المصاريف: <b>${money(t.expensesTotal)} دج</b><br>• الساعات الإضافية: <b>${money(t.overtimeTotal)} دج</b><br>━━━━━━<br>📒 المجموع المحاسبي: <b>${money(t.accountingTotal)} دج</b><br>🧮 بعد تسديد المعلّق السابق: <b>${money(t.financialTotalAfterPendingSettlement)} دج</b>`;
   }
   // ملخص
   if(s.includes('ملخص')){
-    return `📋 الأسبوع: ${formatDateAR(DB.currentWeek.startDate)} → ${formatDateAR(DB.currentWeek.endDate)}<br>• ${t.dailyCount} عامل يومي + ${t.pieceCount} عامل قطعة<br>• الأجور: ${money(t.wagesTotal)} دج<br>• المصاريف: ${money(t.expensesTotal)} دج<br>• <b>الكلي: ${money(t.grandTotal)} دج</b>`;
+    return `📋 الأسبوع: ${formatDateAR(DB.currentWeek.startDate)} → ${formatDateAR(DB.currentWeek.endDate)}<br>• ${t.dailyCount} عامل يومي + ${t.pieceCount} عامل قطعة<br>• الأجور: ${money(t.wagesTotal)} دج<br>• تسديد معلّق سابق: ${money(t.settledPendingTotal)} دج<br>• المصاريف: ${money(t.expensesTotal)} دج<br>• <b>المحاسبي: ${money(t.accountingTotal)} دج</b><br>• <b>بعد تسديد المعلّق: ${money(t.financialTotalAfterPendingSettlement)} دج</b>`;
   }
   // عدد العمال
   if(s.includes('عدد عمال')||s.includes('كم عامل')||(s.includes('عدد')&&s.includes('عمال'))){
