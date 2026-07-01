@@ -20,7 +20,7 @@ var renderAdmin = window.renderAdmin;
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0" name="viewport"/>
-<title>EGTPH — سجل الأجور v63</title>
+<title>EGTPH — سجل الأجور v66</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -854,7 +854,7 @@ body.theme-blue .sec,body.theme-purple .sec,body.theme-red .sec,body.theme-sand 
 <div class="" id="toast">✅ تم التعديل</div>
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div class="topbar">
-<div class="tlogo">EGTPH <span>| سجل الأجور v63</span></div>
+<div class="tlogo">EGTPH <span>| سجل الأجور v66</span></div>
 <div id="autoSv" style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--gray)">
 <span class="auto-save-dot" id="saveDot"></span>
 <span id="saveLabel">—</span>
@@ -12924,6 +12924,661 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
       if(!window.EGTPH_V64&&n<120)setTimeout(function(){retry(n+1);},500);
     })(0);
   },4300);
+})();
+</script>
+
+
+<script id="egtph-v65-trash-restore-atomic">
+/* ═══════════════════════════════════════════════════════════════
+   EGTPH Payroll v65 — استرجاع سلة مهملات ذري ومحدد
+   - يسترجع عنصراً واحداً فقط بالـ _tid المطابق حرفياً.
+   - لا يستخدم فهارس رقمية بديلة يمكن أن تشير إلى عنصر آخر.
+   - يكتب إذن استرجاع أحدث من ختم الحذف لكل سجل مرتبط قبل الحفظ.
+   - يدمج بيانات العامل المرتبطة حسب المعرّف، ولا يستبدل خرائط عمال آخرين.
+═══════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+
+  var VERSION='v65.0';
+  var booted=false;
+  var busy={};
+  var TYPES={workers:1,advances:1,hours:1,absences:1,bonuses:1,debts:1};
+
+  function db(){try{return (typeof DB!=='undefined'&&DB)?DB:(window.DB||null);}catch(e){return null;}}
+  function arr(v){return Array.isArray(v)?v:[];}
+  function copy(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
+  function text(v){return String(v==null?'':v);}
+  function same(a,b){return text(a)===text(b);}
+  function nowMs(){return Date.now();}
+  function iso(ms){return new Date(ms==null?nowMs():ms).toISOString();}
+  function stamp(v){var n=Date.parse(v||'');return isNaN(n)?0:n;}
+  function safeToast(msg,error){try{if(typeof window.toast==='function')window.toast(msg,!!error);}catch(e){}}
+  function safeAudit(msg){try{if(typeof window.audit==='function')window.audit(msg);return;}catch(e){}var d=db();if(!d)return;d.auditLog=arr(d.auditLog);d.auditLog.unshift({id:'AUD65_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),user:(d.settings||{}).userName||'Youcef Abdi',action:msg,time:iso(),at:iso(),integrityVersion:'v65'});}
+  function ensure(d){
+    d=d||db();if(!d)return null;
+    d.settings=d.settings&&typeof d.settings==='object'?d.settings:{};
+    d.workers=arr(d.workers);
+    ['advances','hours','absences','bonuses','debts'].forEach(function(k){if(!d[k]||typeof d[k]!=='object'||Array.isArray(d[k]))d[k]={};});
+    d.trash=d.trash&&typeof d.trash==='object'&&!Array.isArray(d.trash)?d.trash:{};
+    Object.keys(TYPES).forEach(function(k){if(!Array.isArray(d.trash[k]))d.trash[k]=[];});
+    d.deletedRecords=d.deletedRecords&&typeof d.deletedRecords==='object'&&!Array.isArray(d.deletedRecords)?d.deletedRecords:{};
+    d.deletedIds=arr(d.deletedIds);
+    d.ledger=arr(d.ledger);
+    d.auditLog=arr(d.auditLog);
+    return d;
+  }
+  function device(d){
+    d=ensure(d);if(!d)return 'unknown';
+    var id=(d.settings&&d.settings.deviceId)||'';
+    if(!id){try{id=localStorage.getItem('egtph_pay_device_id_v50')||'';}catch(e){}}
+    if(!id){id='dev65_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10);try{localStorage.setItem('egtph_pay_device_id_v50',id);}catch(e){}}
+    d.settings.deviceId=id;return id;
+  }
+  function tx(prefix,d){return (prefix||'TX65')+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10)+'_'+device(d).slice(-5);}
+  function key(section,id){return text(section)+'|'+text(id);}
+  function trashId(){return 'TR65_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10);}
+  function clean(v){
+    var x=copy(v)||{};
+    ['_tid','_wid','_deletedAt','_operationChildren','_operationId','_archiveLabel','_restorePending'].forEach(function(k){delete x[k];});
+    return x;
+  }
+  function workerPayload(item){
+    var w=clean(item);
+    ['_advances','_hours','_absences','_bonuses','_debts'].forEach(function(k){delete w[k];});
+    return w;
+  }
+  function latestDeleted(d,section,id){
+    var max=0;
+    [key(section,id),key('*',id),text(id)].forEach(function(k){var t=d.deletedRecords[k];if(t&&typeof t==='object')max=Math.max(max,stamp(t.deletedAt));});
+    return max;
+  }
+  function latestRestored(d,section,id){
+    var max=0;
+    [key(section,id),key('*',id),text(id)].forEach(function(k){var t=d.deletedRecords[k];if(t&&typeof t==='object')max=Math.max(max,stamp(t.restoredAt));});
+    return max;
+  }
+  function restoreMoment(d,refs){
+    var m=nowMs();
+    refs.forEach(function(r){m=Math.max(m,latestDeleted(d,r.section,r.id)+1,latestRestored(d,r.section,r.id));});
+    return iso(m);
+  }
+  function deletionMoment(d,refs){
+    var m=nowMs();
+    refs.forEach(function(r){m=Math.max(m,latestRestored(d,r.section,r.id)+1,latestDeleted(d,r.section,r.id));});
+    return iso(m);
+  }
+  function rebuildDeletedIds(d){
+    var active={};
+    Object.keys(d.deletedRecords||{}).forEach(function(k){
+      var row=d.deletedRecords[k];if(!row||typeof row!=='object')return;
+      var id=row.id!==undefined?text(row.id):(k.indexOf('|')>=0?k.slice(k.indexOf('|')+1):text(k));
+      var del=stamp(row.deletedAt),res=stamp(row.restoredAt);
+      if(del>res)active[id]=1;
+    });
+    d.deletedIds=Object.keys(active);
+  }
+  function writeRestore(d,section,id,at,transactionId,witness){
+    var sid=text(id), wildcard=key('*',sid), typed=key(section,sid);
+    [wildcard,typed].forEach(function(k){
+      var sec=k===wildcard?'*':section;
+      var old=d.deletedRecords[k]&&typeof d.deletedRecords[k]==='object'?copy(d.deletedRecords[k]):{id:sid,section:sec,deletedAt:'1970-01-01T00:00:00.000Z'};
+      old.id=sid;old.section=sec;
+      old.deletedAt=old.deletedAt||'1970-01-01T00:00:00.000Z';
+      old.restoredAt=stamp(old.restoredAt)>stamp(at)?old.restoredAt:at;
+      old.deviceId=device(d);old.transactionId=transactionId;
+      old.reason='↩️ استرجاع ذري صريح v65 | شاهد '+witness;
+      old.restoreWitnessId=witness;old.restoreVersion=VERSION;
+      d.deletedRecords[k]=old;
+    });
+    d.deletedRecords[sid]=copy(d.deletedRecords[wildcard]);
+  }
+  function writeDeletion(d,section,id,at,transactionId,witness,reason){
+    var sid=text(id),wildcard=key('*',sid),typed=key(section,sid);
+    [wildcard,typed].forEach(function(k){
+      var sec=k===wildcard?'*':section;
+      var old=d.deletedRecords[k]&&typeof d.deletedRecords[k]==='object'?copy(d.deletedRecords[k]):{id:sid,section:sec};
+      old.id=sid;old.section=sec;
+      old.deletedAt=stamp(old.deletedAt)>stamp(at)?old.deletedAt:at;
+      old.deviceId=device(d);old.transactionId=transactionId;
+      old.reason=(reason||'حذف ذري محمي')+' v65 | شاهد '+witness;
+      old.witnessId=witness;old.witnessVersion=VERSION;
+      d.deletedRecords[k]=old;
+    });
+    d.deletedRecords[sid]=copy(d.deletedRecords[wildcard]);
+  }
+  function recordLocations(d,section,id){
+    var sid=text(id),out=[];
+    if(section==='workers'){arr(d.workers).forEach(function(w,i){if(w&&same(w.id,sid))out.push({workerId:w.id,index:i,row:w});});return out;}
+    if(section==='advances'||section==='bonuses'){
+      Object.keys(d[section]||{}).forEach(function(wid){Object.keys(d[section][wid]||{}).forEach(function(bucket){arr(d[section][wid][bucket]).forEach(function(row,i){if(row&&same(row.id,sid))out.push({workerId:wid,bucket:bucket,index:i,row:row});});});});
+      return out;
+    }
+    Object.keys(d[section]||{}).forEach(function(wid){arr(d[section][wid]).forEach(function(row,i){if(row&&same(row.id,sid))out.push({workerId:wid,index:i,row:row});});});
+    return out;
+  }
+  function refsFromItem(type,item){
+    var refs=[],seen={};
+    function add(section,id){if(id===undefined||id===null||text(id)==='')return;var k=section+'|'+text(id);if(!seen[k]){seen[k]=1;refs.push({section:section,id:text(id)});}}
+    if(type==='workers'){
+      add('workers',item.id);
+      ['advances','bonuses'].forEach(function(section){Object.keys(item['_'+section]||{}).forEach(function(bucket){arr(item['_'+section][bucket]).forEach(function(row){if(row)add(section,row.id);});});});
+      ['hours','absences','debts'].forEach(function(section){arr(item['_'+section]).forEach(function(row){if(row)add(section,row.id);});});
+    }else if(type==='advances'&&Array.isArray(item._operationChildren)){
+      item._operationChildren.forEach(function(child){if(child&&child.row)add('advances',child.row.id);});
+    }else add(type,item.id);
+    return refs;
+  }
+  function childRows(type,item,wid){
+    var out=[];
+    if(type==='workers'){
+      ['advances','bonuses'].forEach(function(section){Object.keys(item['_'+section]||{}).forEach(function(bucket){arr(item['_'+section][bucket]).forEach(function(row){out.push({section:section,wid:wid,bucket:String(bucket),row:clean(row)});});});});
+      ['hours','absences','debts'].forEach(function(section){arr(item['_'+section]).forEach(function(row){out.push({section:section,wid:wid,row:clean(row)});});});
+    }else if(type==='advances'&&Array.isArray(item._operationChildren)){
+      item._operationChildren.forEach(function(child){if(child&&child.row)out.push({section:'advances',wid:item._wid,bucket:String(child.bucket),row:clean(child.row)});});
+    }else out.push({section:type,wid:item._wid,bucket:item.month!==undefined?String(item.month):null,row:clean(item)});
+    return out;
+  }
+  function restoreRow(d,entry){
+    var section=entry.section,wid=entry.wid,row=entry.row;
+    if(!row||row.id===undefined||row.id===null)return {ok:false,skipped:true,reason:'بدون معرّف'};
+    var existing=recordLocations(d,section,row.id);
+    if(existing.length){
+      var wrong=existing.some(function(x){return wid!==undefined&&wid!==null&&!same(x.workerId,wid);});
+      if(wrong)return {ok:false,error:'تعارض معرف في '+section+' للسجل '+text(row.id)};
+      return {ok:true,skipped:true};
+    }
+    if(section==='advances'||section==='bonuses'){
+      if(!d[section]||typeof d[section]!=='object')d[section]={};
+      var wk=text(wid),bucket=text(entry.bucket==null?'0':entry.bucket);
+      if(!d[section][wk]||typeof d[section][wk]!=='object'||Array.isArray(d[section][wk]))d[section][wk]={};
+      if(!Array.isArray(d[section][wk][bucket]))d[section][wk][bucket]=[];
+      d[section][wk][bucket].push(row);
+      return {ok:true,inserted:true};
+    }
+    if(!d[section]||typeof d[section]!=='object')d[section]={};
+    var keyWid=text(wid);
+    if(!Array.isArray(d[section][keyWid]))d[section][keyWid]=[];
+    d[section][keyWid].push(row);
+    return {ok:true,inserted:true};
+  }
+  function queuePatches(d,wid){
+    d._pendingSyncPatches=d._pendingSyncPatches&&typeof d._pendingSyncPatches==='object'?d._pendingSyncPatches:{};
+    var p=d._pendingSyncPatches,sid=text(wid);
+    p.workers=copy(d.workers);p.trash=copy(d.trash);
+    ['advances','bonuses'].forEach(function(section){p[section+'/'+sid]=copy((d[section]||{})[sid]||{});});
+    ['hours','absences','debts'].forEach(function(section){p[section+'/'+sid]=copy((d[section]||{})[sid]||[]);});
+    p.deletedRecords=copy(d.deletedRecords);p.deletedIds=copy(d.deletedIds);
+    p.ledger=copy(d.ledger);p.auditLog=copy(d.auditLog);
+  }
+  function refresh(){
+    try{if(typeof window.renderTrash==='function')window.renderTrash();}catch(e){}
+    try{if(typeof window.renderWorkers==='function')window.renderWorkers();}catch(e){}
+    try{if(typeof window.renderDash==='function')window.renderDash();}catch(e){}
+    try{if(typeof window.updateBadges==='function')window.updateBadges();}catch(e){}
+  }
+
+  function restoreOne(type,tid){
+    var d=ensure();
+    if(!d||!TYPES[type]){safeToast('❌ نوع عنصر غير صالح في سلة المهملات',true);return false;}
+    var lock=type+'|'+text(tid);
+    if(busy[lock]){safeToast('⏳ عملية الاسترجاع قيد التنفيذ');return false;}
+    var source=d.trash[type];
+    /* لا يوجد fallback بفهرس رقمي: الاسترجاع لا يقبل إلا الـ _tid المطابق تماماً. */
+    var idx=source.findIndex(function(row){return row&&same(row._tid,tid);});
+    if(idx<0){safeToast('❌ هذا العنصر لم يعد موجوداً في السلة أو تم استرجاعه سابقاً',true);refresh();return false;}
+    busy[lock]=true;
+    try{
+      var item=copy(source[idx]);
+      if(!item||typeof item!=='object'){safeToast('❌ سجل السلة تالف',true);return false;}
+      var refs=refsFromItem(type,item);
+      if(type==='workers'&&(item.id===undefined||item.id===null||text(item.id)==='')){safeToast('❌ لا يمكن استرجاع عامل بلا معرّف',true);return false;}
+      var wid=type==='workers'?item.id:item._wid;
+      if((type!=='workers')&&(wid===undefined||wid===null||text(wid)==='')){safeToast('❌ عنصر السلة لا يحمل معرّف العامل',true);return false;}
+
+      /* تحقق كامل قبل أي تغيير: يمنع مزج قيد عامل مع عامل آخر. */
+      if(type==='workers'){
+        var liveWorker=recordLocations(d,'workers',item.id);
+        if(liveWorker.length&&text(liveWorker[0].row.name)!==text(item.name)){safeToast('❌ تعارض: معرّف العامل مستخدم باسم مختلف',true);return false;}
+      }
+      var children=childRows(type,item,wid);
+      for(var ci=0;ci<children.length;ci++){
+        var child=children[ci];
+        if(!child.row||child.row.id===undefined||child.row.id===null)continue;
+        var loc=recordLocations(d,child.section,child.row.id);
+        if(loc.some(function(x){return !same(x.workerId,child.wid);})){safeToast('❌ تعارض في سجل مرتبط: لن يتم استرجاع أي شيء',true);return false;}
+      }
+
+      var transactionId=tx('RST65',d),witness=tx('WIT65',d),at=restoreMoment(d,refs);
+      /* الإذن أولاً: حراس v55/v60 يرون الاسترجاع مشروعاً أثناء saveDB. */
+      refs.forEach(function(ref){writeRestore(d,ref.section,ref.id,at,transactionId,witness);});
+      rebuildDeletedIds(d);
+
+      var inserted=0,already=0;
+      if(type==='workers'){
+        var wp=workerPayload(item);
+        if(!recordLocations(d,'workers',wp.id).length){d.workers.push(wp);inserted++;}else already++;
+      }
+      children.forEach(function(child){
+        var r=restoreRow(d,child);
+        if(r&&r.inserted)inserted++;
+        else if(r&&r.skipped)already++;
+        else if(r&&r.error)throw new Error(r.error);
+      });
+
+      /* إزالة عنصر واحد فقط بعد نجاح دمج العامل وقيوده المرتبطة. */
+      source.splice(idx,1);
+      safeAudit('↩️ استرجاع ذري من السلة — '+type+' — '+(type==='workers'?(item.name||item.id):item.id)+' | شاهد '+witness);
+      queuePatches(d,wid);
+      try{if(typeof window.saveDB==='function')window.saveDB();}catch(e){throw e;}
+      refresh();
+      safeToast('↩️ تم استرجاع '+(type==='workers'?'عامل واحد فقط: '+(item.name||'—'):'العنصر المحدد فقط')+' — '+inserted+' سجل أُعيد، '+already+' موجود سابقاً');
+      return true;
+    }catch(err){
+      console.error('v65 restore failed',err);
+      safeToast('❌ فشل الاسترجاع الذري: '+(err&&err.message?err.message:'خطأ غير متوقع'),true);
+      return false;
+    }finally{delete busy[lock];}
+  }
+
+  function deleteWorkerOne(id){
+    var d=ensure(),wid=text(id);
+    if(!d)return false;
+    var w=arr(d.workers).find(function(row){return row&&same(row.id,wid);});
+    if(!w){safeToast('❌ العامل غير موجود',true);return false;}
+    var busyKey='DEL|'+wid;if(busy[busyKey])return false;busy[busyKey]=true;
+    try{
+      var snapshot=copy(w);
+      snapshot._advances=copy((d.advances||{})[w.id]||((d.advances||{})[wid])||{});
+      snapshot._hours=copy((d.hours||{})[w.id]||((d.hours||{})[wid])||[]);
+      snapshot._absences=copy((d.absences||{})[w.id]||((d.absences||{})[wid])||[]);
+      snapshot._bonuses=copy((d.bonuses||{})[w.id]||((d.bonuses||{})[wid])||{});
+      snapshot._debts=copy((d.debts||{})[w.id]||((d.debts||{})[wid])||[]);
+      snapshot._tid=trashId();snapshot._wid=w.id;snapshot._deletedAt=iso();
+      var refs=refsFromItem('workers',snapshot),transactionId=tx('DEL65',d),witness=tx('WIT65',d),at=deletionMoment(d,refs);
+      refs.forEach(function(ref){writeDeletion(d,ref.section,ref.id,at,transactionId,witness,'حذف عامل من السلة');});
+      d.trash.workers.push(snapshot);
+      d.workers=d.workers.filter(function(row){return !(row&&same(row.id,wid));});
+      ['advances','hours','absences','bonuses','debts'].forEach(function(section){delete d[section][w.id];delete d[section][wid];});
+      rebuildDeletedIds(d);
+      safeAudit('🗑️ حذف ذري إلى السلة — '+(w.name||w.id)+' | شاهد '+witness);
+      queuePatches(d,w.id);
+      try{if(typeof window.saveDB==='function')window.saveDB();}catch(e){throw e;}
+      refresh();
+      safeToast('🗑️ تم نقل '+(w.name||'العامل')+' وحده إلى السلة مع بياناته المرتبطة');
+      return true;
+    }catch(err){
+      console.error('v65 delete worker failed',err);
+      safeToast('❌ فشل حذف العامل: '+(err&&err.message?err.message:'خطأ غير متوقع'),true);
+      return false;
+    }finally{delete busy[busyKey];}
+  }
+
+  function install(){
+    if(booted||!ensure())return;
+    booted=true;
+    window.restoreFromTrash=restoreOne;try{restoreFromTrash=restoreOne;}catch(e){}
+    window.delW=deleteWorkerOne;try{delW=deleteWorkerOne;}catch(e){}
+    window.EGTPH_V65={
+      version:VERSION,
+      restore:restoreOne,
+      deleteWorker:deleteWorkerOne,
+      status:function(){var d=ensure();return {version:VERSION,workers:arr(d&&d.workers).length,trashWorkers:arr(d&&d.trash&&d.trash.workers).length};}
+    };
+    try{
+      var label=document.querySelector('.tlogo span');
+      if(label)label.textContent='| سجل الأجور v65';
+      document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v65');
+    }catch(e){}
+  }
+  setTimeout(function(){
+    (function retry(n){
+      if(window.EGTPH_V65)return;
+      install();
+      if(!window.EGTPH_V65&&n<120)setTimeout(function(){retry(n+1);},500);
+    })(0);
+  },5600);
+})();
+</script>
+
+
+<script id="egtph-v66-stable-tombstones">
+/* ═══════════════════════════════════════════════════════════════
+   EGTPH Payroll v66 — إصلاح جذري لختم الحذف والاسترجاع
+   - يمنع تضخم مفاتيح Tombstones من نمط *|*|... الذي كان يعيد إنشاء حذف وهمي.
+   - الاسترجاع يبقى ذرياً: عنصر سلة واحد بالـ _tid المطابق فقط.
+   - إذن الاسترجاع يُسجل قبل الدمج ويحمي العامل وسجلاته المرتبطة من ختم قديم.
+   - لا يعيد أي عامل تلقائياً؛ الاسترجاع يتم فقط بالنقر الصريح من سلة المهملات.
+═══════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+
+  var VERSION='v66.0';
+  var TYPES={workers:1,advances:1,hours:1,absences:1,bonuses:1,debts:1};
+  var installed=false, repairQueued=false, saveDepth=0;
+
+  function db(){try{return (typeof DB!=='undefined'&&DB)?DB:(window.DB||null);}catch(e){return null;}}
+  function arr(v){return Array.isArray(v)?v:[];}
+  function copy(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
+  function text(v){return String(v==null?'':v);}
+  function same(a,b){return text(a)===text(b);}
+  function nowMs(){return Date.now();}
+  function iso(ms){return new Date(ms==null?nowMs():ms).toISOString();}
+  function stamp(v){var n=Date.parse(v||'');return isNaN(n)?0:n;}
+  function maxStamp(a,b){return stamp(b)>stamp(a)?b:a;}
+  function toast(msg,error){try{if(typeof window.toast==='function')window.toast(msg,!!error);}catch(e){}}
+  function validSection(s){s=text(s);return s==='*'||!!TYPES[s];}
+  function validId(id){
+    id=text(id);
+    /* سجلات الأجور لا تستعمل | داخل معرفاتها؛ وجوده هنا هو أثر فساد Tombstone القديم. */
+    return !!id && id.length<=220 && id.indexOf('|')<0 && id.indexOf('\n')<0 && id.indexOf('\r')<0;
+  }
+  function k(section,id){return text(section)+'|'+text(id);}
+  function canonicalItem(section,id,del,res,meta){
+    var row={
+      id:text(id),
+      section:text(section),
+      deletedAt:del||'1970-01-01T00:00:00.000Z',
+      version:VERSION
+    };
+    if(res)row.restoredAt=res;
+    if(meta&&meta.deviceId)row.deviceId=meta.deviceId;
+    if(meta&&meta.transactionId)row.transactionId=meta.transactionId;
+    if(meta&&meta.reason)row.reason=meta.reason;
+    if(meta&&meta.restoreWitnessId)row.restoreWitnessId=meta.restoreWitnessId;
+    if(meta&&meta.restoreVersion)row.restoreVersion=meta.restoreVersion;
+    if(meta&&meta.witnessId)row.witnessId=meta.witnessId;
+    if(meta&&meta.witnessVersion)row.witnessVersion=meta.witnessVersion;
+    return row;
+  }
+  function ensure(d){
+    d=d||db();if(!d)return null;
+    d.settings=d.settings&&typeof d.settings==='object'?d.settings:{};
+    d.workers=arr(d.workers);
+    ['advances','hours','absences','bonuses','debts'].forEach(function(sec){
+      if(!d[sec]||typeof d[sec]!=='object'||Array.isArray(d[sec]))d[sec]={};
+    });
+    d.trash=d.trash&&typeof d.trash==='object'&&!Array.isArray(d.trash)?d.trash:{};
+    Object.keys(TYPES).forEach(function(sec){if(!Array.isArray(d.trash[sec]))d.trash[sec]=[];});
+    d.deletedRecords=d.deletedRecords&&typeof d.deletedRecords==='object'&&!Array.isArray(d.deletedRecords)?d.deletedRecords:{};
+    d.deletedIds=arr(d.deletedIds);
+    d._pendingSyncPatches=d._pendingSyncPatches&&typeof d._pendingSyncPatches==='object'?d._pendingSyncPatches:{};
+    d.settings.restoreAuthorityV66=d.settings.restoreAuthorityV66&&typeof d.settings.restoreAuthorityV66==='object'&&!Array.isArray(d.settings.restoreAuthorityV66)?d.settings.restoreAuthorityV66:{};
+    return d;
+  }
+  function childRefs(type,item){
+    var refs=[], seen={};
+    function add(section,id){
+      if(!validSection(section)||section==='*'||!validId(id))return;
+      var x=k(section,id);if(!seen[x]){seen[x]=1;refs.push({section:section,id:text(id)});}
+    }
+    if(!item||typeof item!=='object')return refs;
+    if(type==='workers'){
+      add('workers',item.id);
+      ['advances','bonuses'].forEach(function(section){
+        var map=item['_'+section]||{};
+        Object.keys(map).forEach(function(bucket){arr(map[bucket]).forEach(function(row){if(row)add(section,row.id);});});
+      });
+      ['hours','absences','debts'].forEach(function(section){
+        arr(item['_'+section]).forEach(function(row){if(row)add(section,row.id);});
+      });
+    }else if(type==='advances'&&Array.isArray(item._operationChildren)){
+      item._operationChildren.forEach(function(child){if(child&&child.row)add('advances',child.row.id);});
+    }else add(type,item.id);
+    return refs;
+  }
+  function refsForLiveWorker(d,wid){
+    var w=arr(d.workers).find(function(row){return row&&same(row.id,wid);});
+    if(!w)return [];
+    var snapshot=copy(w)||{};
+    snapshot._advances=copy((d.advances||{})[w.id]||((d.advances||{})[text(w.id)])||{});
+    snapshot._hours=copy((d.hours||{})[w.id]||((d.hours||{})[text(w.id)])||[]);
+    snapshot._absences=copy((d.absences||{})[w.id]||((d.absences||{})[text(w.id)])||[]);
+    snapshot._bonuses=copy((d.bonuses||{})[w.id]||((d.bonuses||{})[text(w.id)])||{});
+    snapshot._debts=copy((d.debts||{})[w.id]||((d.debts||{})[text(w.id)])||[]);
+    return childRefs('workers',snapshot);
+  }
+  function parseCanonicalKey(rawKey){
+    var txt=text(rawKey), p=txt.split('|');
+    if(p.length===2 && validSection(p[0]) && validId(p[1]))return {section:p[0],id:p[1]};
+    return null;
+  }
+  function tailId(rawKey){
+    var p=text(rawKey).split('|');
+    return p.length?p[p.length-1]:'';
+  }
+  function authorityMap(d){return d.settings.restoreAuthorityV66;}
+  function registerRestoreAuthority(d,refs,at,witness,transactionId){
+    var auth=authorityMap(d);
+    refs.forEach(function(ref){
+      if(!ref||!validSection(ref.section)||ref.section==='*'||!validId(ref.id))return;
+      var name=k(ref.section,ref.id), old=auth[name]&&typeof auth[name]==='object'?auth[name]:{};
+      if(stamp(old.restoredAt)>stamp(at))at=old.restoredAt;
+      auth[name]={
+        section:ref.section,id:text(ref.id),restoredAt:at,
+        restoreWitnessId:witness,transactionId:transactionId,
+        version:VERSION,reason:'↩️ استرجاع صريح ثابت v66'
+      };
+    });
+  }
+  function clearRestoreAuthority(d,refs){
+    var auth=authorityMap(d);
+    refs.forEach(function(ref){if(ref&&validSection(ref.section)&&validId(ref.id))delete auth[k(ref.section,ref.id)];});
+  }
+  function maximumRelevantStamp(d,refs){
+    var ids={}, max=nowMs();
+    refs.forEach(function(ref){if(ref&&validId(ref.id))ids[text(ref.id)]=1;});
+    Object.keys(d.deletedRecords||{}).forEach(function(rawKey){
+      var row=d.deletedRecords[rawKey];if(!row||typeof row!=='object')return;
+      var candidates=[row.id,tailId(rawKey)];
+      for(var i=0;i<candidates.length;i++){
+        var id=text(candidates[i]);
+        if(ids[id])max=Math.max(max,stamp(row.deletedAt),stamp(row.restoredAt));
+      }
+    });
+    Object.keys(authorityMap(d)).forEach(function(name){
+      var row=authorityMap(d)[name];if(row&&ids[text(row.id)])max=Math.max(max,stamp(row.restoredAt));
+    });
+    return max;
+  }
+  /*
+    يحوّل خريطة Tombstones إلى ثلاثة مفاتيح مستقرة فقط لكل سجل:
+    section|id ، *|id ، id.
+    أي مفتاح متداخل من النسخ القديمة لا يُعامل كسجل حقيقي.
+  */
+  function canonicalizeTombs(d){
+    d=ensure(d);if(!d)return false;
+    var before=JSON.stringify({r:d.deletedRecords,i:d.deletedIds,a:d.settings.restoreAuthorityV66});
+    var states={}, pairs={};
+    function take(section,id,row){
+      if(!validSection(section)||!validId(id))return;
+      var pair=k(section,id), st=states[pair]||{section:section,id:text(id),deletedAt:'',restoredAt:'',meta:{}};
+      st.deletedAt=maxStamp(st.deletedAt,row&&row.deletedAt);
+      st.restoredAt=maxStamp(st.restoredAt,row&&row.restoredAt);
+      if(row&&typeof row==='object'){
+        ['deviceId','transactionId','reason','restoreWitnessId','restoreVersion','witnessId','witnessVersion'].forEach(function(name){
+          if(row[name]!==undefined)st.meta[name]=row[name];
+        });
+      }
+      states[pair]=st;pairs[pair]=1;
+    }
+    Object.keys(d.deletedRecords||{}).forEach(function(rawKey){
+      var row=d.deletedRecords[rawKey];
+      if(!row||typeof row!=='object')return;
+      /* المصدر الأقوى: صف صحيح يحمل section و id صالحين. */
+      if(validSection(row.section)&&validId(row.id))take(row.section,row.id,row);
+      /* المصدر الثاني: مفتاح قانوني واحد section|id. */
+      var parsed=parseCanonicalKey(rawKey);
+      if(parsed)take(parsed.section,parsed.id,row);
+      /* المفتاح المباشر id مسموح فقط إن كان بسيطاً، لا مركباً. */
+      if(validId(rawKey)&&validSection(row.section||'*'))take(row.section||'*',rawKey,row);
+    });
+    /* deletedIds القديم يُقرأ فقط للمعرفات البسيطة؛ القيم المركبة هي أثر الخطأ القديم. */
+    d.deletedIds.forEach(function(id){
+      id=text(id);if(!validId(id))return;
+      if(!states[k('*',id)])take('*',id,{deletedAt:iso(nowMs()-1),legacy:true,reason:'ختم قديم مُعاد تنظيمه v66'});
+    });
+    /* إذن الاسترجاع v66 أعلى من ختم سابق للعنصر نفسه. */
+    Object.keys(authorityMap(d)).forEach(function(name){
+      var a=authorityMap(d)[name];if(!a||!validSection(a.section)||a.section==='*'||!validId(a.id))return;
+      take(a.section,a.id,{deletedAt:'1970-01-01T00:00:00.000Z',restoredAt:a.restoredAt,transactionId:a.transactionId,reason:a.reason,restoreWitnessId:a.restoreWitnessId,restoreVersion:a.version});
+    });
+    /*
+      توافق v50/v55/v60: ارفع أحدث حذف/استرجاع معروف إلى wildcard والـ typed
+      لنفس المعرّف. لا يوجد في هذا التطبيق معرف سجل مشترك بين أقسام مختلفة.
+    */
+    var perId={};
+    Object.keys(states).forEach(function(name){
+      var st=states[name], ag=perId[st.id]||{id:st.id,deletedAt:'',restoredAt:'',meta:{}};
+      ag.deletedAt=maxStamp(ag.deletedAt,st.deletedAt);
+      ag.restoredAt=maxStamp(ag.restoredAt,st.restoredAt);
+      Object.keys(st.meta||{}).forEach(function(n){if(st.meta[n]!==undefined)ag.meta[n]=st.meta[n];});
+      perId[st.id]=ag;
+    });
+    var out={}, active=[];
+    Object.keys(perId).sort().forEach(function(id){
+      var ag=perId[id], secs={};
+      secs['*']=1;
+      Object.keys(states).forEach(function(name){var st=states[name];if(st.id===id&&st.section!=='*')secs[st.section]=1;});
+      Object.keys(secs).sort().forEach(function(section){
+        out[k(section,id)]=canonicalItem(section,id,ag.deletedAt,ag.restoredAt,ag.meta);
+      });
+      /* التوافق مع العملاء القديمة التي تقرأ deletedRecords[id]. */
+      out[id]=copy(out[k('*',id)]);
+      if(stamp(ag.deletedAt)>stamp(ag.restoredAt))active.push(id);
+    });
+    d.deletedRecords=out;
+    d.deletedIds=active;
+    d.settings.tombstoneSchemaV66={version:VERSION,lastNormalizedAt:iso(),active:active.length};
+    var after=JSON.stringify({r:d.deletedRecords,i:d.deletedIds,a:d.settings.restoreAuthorityV66});
+    return before!==after;
+  }
+  function queue(d,refs){
+    d._pendingSyncPatches.deletedRecords=copy(d.deletedRecords);
+    d._pendingSyncPatches.deletedIds=copy(d.deletedIds);
+    d._pendingSyncPatches.settings=copy(d.settings);
+    if(refs&&refs.length){
+      var wid=refs.find(function(r){return r.section==='workers';});
+      if(wid){
+        var id=text(wid.id);
+        d._pendingSyncPatches.workers=copy(d.workers);
+        d._pendingSyncPatches.trash=copy(d.trash);
+        ['advances','bonuses'].forEach(function(sec){d._pendingSyncPatches[sec+'/'+id]=copy((d[sec]||{})[id]||{});});
+        ['hours','absences','debts'].forEach(function(sec){d._pendingSyncPatches[sec+'/'+id]=copy((d[sec]||{})[id]||[]);});
+      }
+    }
+  }
+  function refresh(){
+    try{if(typeof window.renderTrash==='function')window.renderTrash();}catch(e){}
+    try{if(typeof window.renderWorkers==='function')window.renderWorkers();}catch(e){}
+    try{if(typeof window.renderDash==='function')window.renderDash();}catch(e){}
+    try{if(typeof window.updateBadges==='function')window.updateBadges();}catch(e){}
+  }
+  function scheduleRepairSave(){
+    if(repairQueued)return;repairQueued=true;
+    setTimeout(function(){
+      repairQueued=false;
+      var d=ensure();if(!d)return;
+      if(canonicalizeTombs(d)){
+        queue(d,[]);
+        try{if(typeof window.saveDB==='function')window.saveDB();}catch(e){}
+      }
+    },80);
+  }
+  function install(){
+    if(installed||!ensure()||!window.EGTPH_V65)return;
+    installed=true;
+    var baseRestore=window.restoreFromTrash;
+    var baseDelete=window.delW;
+    var baseSave=window.saveDB;
+
+    function restoreOne(type,tid){
+      var d=ensure();
+      if(!d||!TYPES[type]){toast('❌ نوع عنصر غير صالح',true);return false;}
+      var item=arr(d.trash[type]).find(function(row){return row&&same(row._tid,tid);});
+      if(!item){toast('❌ العنصر غير موجود في السلة أو استُرجع سابقاً',true);refresh();return false;}
+      var refs=childRefs(type,item);
+      if(type==='workers'&&!refs.some(function(r){return r.section==='workers';})){toast('❌ بيانات العامل في السلة غير صالحة',true);return false;}
+      var beforeAuth=copy(authorityMap(d));
+      try{
+        canonicalizeTombs(d);
+        var at=iso(maximumRelevantStamp(d,refs)+1);
+        var transactionId='RST66_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10);
+        var witness='WIT66_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10);
+        registerRestoreAuthority(d,refs,at,witness,transactionId);
+        canonicalizeTombs(d);
+        queue(d,refs);
+        /*
+          V65 ينفذ الدمج الذري نفسه، بعد أن أصبح ختم الاسترجاع أعلى من أي
+          ختم قديم. لا يوجد أي مسار رقمي بديل أو استرجاع لبقية عناصر السلة.
+        */
+        var result=typeof baseRestore==='function'?baseRestore.call(window,type,tid):false;
+        if(!result){
+          d.settings.restoreAuthorityV66=beforeAuth;
+          canonicalizeTombs(d);queue(d,refs);
+          return false;
+        }
+        canonicalizeTombs(d);queue(d,refs);refresh();
+        toast('✅ استرجاع ثابت v66: '+(type==='workers'?'العامل المحدد فقط: '+(item.name||'—'):'العنصر المحدد فقط'));
+        return result;
+      }catch(err){
+        d.settings.restoreAuthorityV66=beforeAuth;
+        canonicalizeTombs(d);queue(d,refs);
+        console.error('v66 restore',err);
+        toast('❌ فشل استرجاع v66: '+(err&&err.message?err.message:'خطأ غير متوقع'),true);
+        return false;
+      }
+    }
+    function deleteOne(id){
+      var d=ensure(),refs=refsForLiveWorker(d,id);
+      clearRestoreAuthority(d,refs);
+      canonicalizeTombs(d);queue(d,refs);
+      return typeof baseDelete==='function'?baseDelete.call(window,id):false;
+    }
+    function saveWrapped(){
+      var d=ensure();
+      if(d&&saveDepth===0){saveDepth++;try{canonicalizeTombs(d);queue(d,[]);}finally{saveDepth--;}}
+      return typeof baseSave==='function'?baseSave.apply(this,arguments):undefined;
+    }
+    saveWrapped.__v66StableTombs=true;
+    window.saveDB=saveWrapped;try{saveDB=saveWrapped;}catch(e){}
+    window.restoreFromTrash=restoreOne;try{restoreFromTrash=restoreOne;}catch(e){}
+    window.delW=deleteOne;try{delW=deleteOne;}catch(e){}
+
+    ['cloudPullReplace','cloudSync'].forEach(function(name){
+      var base=window[name];
+      if(typeof base!=='function'||base.__v66StableTombs)return;
+      var wrapped=function(){
+        var d=ensure();if(d){canonicalizeTombs(d);queue(d,[]);}
+        var result=base.apply(this,arguments);
+        if(result&&typeof result.then==='function'){
+          return result.then(function(value){scheduleRepairSave();return value;},function(error){throw error;});
+        }
+        scheduleRepairSave();return result;
+      };
+      wrapped.__v66StableTombs=true;window[name]=wrapped;
+      try{eval(name+'=window["'+name+'"];');}catch(e){}
+    });
+
+    window.EGTPH_V66={
+      version:VERSION,
+      restore:restoreOne,
+      deleteWorker:deleteOne,
+      normalize:function(){var d=ensure();var changed=canonicalizeTombs(d);if(changed){queue(d,[]);try{window.saveDB();}catch(e){}}return {changed:changed,active:arr(d.deletedIds),trashWorkers:arr(d.trash.workers).map(function(w){return {id:w.id,name:w.name,tid:w._tid};})};},
+      workerInTrash:function(name){var d=ensure(),n=text(name);return arr(d.trash.workers).filter(function(w){return w&&text(w.name)===n;});}
+    };
+    try{
+      var label=document.querySelector('.tlogo span');
+      if(label)label.textContent='| سجل الأجور v66';
+      document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v66');
+    }catch(e){}
+  }
+  setTimeout(function(){
+    (function retry(n){
+      if(window.EGTPH_V66)return;
+      install();
+      if(!window.EGTPH_V66&&n<160)setTimeout(function(){retry(n+1);},500);
+    })(0);
+  },6400);
 })();
 </script>
 
