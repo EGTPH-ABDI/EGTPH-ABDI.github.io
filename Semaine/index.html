@@ -182,6 +182,7 @@ pointer-events:none;z-index:0}
 .btn-sm{padding:6px 11px;font-size:12px}
 .btn-xs{padding:4px 9px;font-size:11px;border-radius:6px}
 .btn-block{width:100%;justify-content:center}
+.btn:disabled{opacity:.58;cursor:not-allowed;transform:none!important;box-shadow:none!important}
 
 /* === FORMS === */
 .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
@@ -788,7 +789,7 @@ table tbody tr:last-child td{border-bottom:none}
   <div class="page" id="page-archive">
     <div class="toolbar">
       <input type="text" id="archiveSearch" placeholder="بحث في الأرشيف..." oninput="renderArchive()">
-      <span class="text-muted">الأسابيع المحفوظة تلقائياً</span>
+      <span class="text-muted">الأسابيع المحفوظة تلقائياً · زر PDF يحفظ الملف · زر مشاركة PDF يحفظه ثم يفتح قائمة مشاركة الهاتف لاختيار WhatsApp والشخص</span>
     </div>
     <div class="card" style="padding:0">
       <div class="table-container">
@@ -1616,7 +1617,7 @@ function openModal(t,html,cb){
   document.getElementById('modalContent').innerHTML=`<h3><i class="fas fa-pen-to-square"></i> ${t}</h3><div>${html}</div><div class="modal-actions"><button class="btn btn-outline" onclick="closeModal()">إلغاء</button><button class="btn btn-primary" id="modalSaveBtn"><i class="fas fa-check"></i> حفظ</button></div>`;
   document.getElementById('modalSaveBtn').onclick=()=>{ if(cb){ if(cb()===false) return; } closeModal(); };
 }
-function closeModal(){ document.getElementById('modalOverlay').classList.remove('show'); }
+function closeModal(){ document.getElementById('modalOverlay').classList.remove('show'); try{ if(typeof _preparedPdfShare!=='undefined') _preparedPdfShare=null; }catch(e){} }
 function confirmDelete(title,callback){
   deleteCallback=callback;
   document.getElementById('deleteConfirmTitle').textContent=title||'تأكيد الحذف';
@@ -1789,7 +1790,7 @@ function renderProjectWeeks(){
       <td>${money(w.total)} دج</td>
       <td>${money(exp)} دج</td>
       <td><b>${money(w.total+exp)} دج</b></td>
-      <td><button class="btn btn-outline btn-xs" onclick="editWeek('${w.id}')"><i class="fas fa-edit"></i></button> <button class="btn btn-info btn-xs" onclick="printArchivedWeek('${w.id}')"><i class="fas fa-print"></i></button> <button class="btn btn-danger btn-xs" onclick="deleteWeek('${w.id}')"><i class="fas fa-trash"></i></button></td>
+      <td><div style="display:flex;gap:5px;flex-wrap:wrap;min-width:172px"><button class="btn btn-outline btn-xs" onclick="editWeek('${w.id}')" title="تعديل"><i class="fas fa-edit"></i></button> <button class="btn btn-info btn-xs" onclick="printArchivedWeek('${w.id}')" title="طباعة"><i class="fas fa-print"></i></button> <button class="btn btn-danger btn-xs" data-export-week="${w.id}" onclick="exportArchivedWeekPDF('${w.id}')" title="PDF"><i class="fas fa-file-pdf"></i></button> <button class="btn btn-success btn-xs" data-export-week="${w.id}" onclick="shareArchivedWeekPDF('${w.id}')" title="مشاركة PDF"><i class="fas fa-share-nodes"></i></button> <button class="btn btn-danger btn-xs" onclick="deleteWeek('${w.id}')" title="حذف"><i class="fas fa-trash"></i></button></div></td>
     </tr>`;
   }).join('');
 }
@@ -3069,7 +3070,16 @@ function renderArchive(){
       <td>${money(exp)} دج</td>
       <td><b style="color:var(--primary)">${money(grand)} دج</b></td>
       <td><b style="color:#c2410c">${money(financialTotal)} دج</b><br><small class="text-muted">${money(grand)} + ${money(settledOld)}</small></td>
-      <td><button class="btn btn-info btn-xs" onclick="printArchivedWeek('${w.id}')"><i class="fas fa-print"></i></button> <button class="btn btn-outline btn-xs" onclick="editWeek('${w.id}')"><i class="fas fa-edit"></i></button> <button class="btn btn-warning btn-xs" onclick="assignArchivedWeekProject('${w.id}')" title="تحويل لمشروع"><i class="fas fa-folder-tree"></i></button> <button class="btn btn-danger btn-xs" onclick="deleteWeek('${w.id}')"><i class="fas fa-trash"></i></button></td>
+      <td>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;min-width:196px">
+          <button class="btn btn-info btn-xs" onclick="printArchivedWeek('${w.id}')" title="طباعة كشف الأسبوع" aria-label="طباعة كشف الأسبوع"><i class="fas fa-print"></i> طباعة</button>
+          <button class="btn btn-danger btn-xs" data-export-week="${w.id}" onclick="exportArchivedWeekPDF('${w.id}')" title="تصدير نفس كشف الطباعة PDF" aria-label="تصدير PDF"><i class="fas fa-file-pdf"></i> PDF</button>
+          <button class="btn btn-success btn-xs" data-export-week="${w.id}" onclick="shareArchivedWeekPDF('${w.id}')" title="يحفظ PDF ثم يفتح قائمة المشاركة لاختيار WhatsApp والشخص" aria-label="مشاركة ملف PDF"><i class="fas fa-share-nodes"></i> مشاركة PDF</button>
+          <button class="btn btn-outline btn-xs" onclick="editWeek('${w.id}')" title="تعديل"><i class="fas fa-edit"></i></button>
+          <button class="btn btn-warning btn-xs" onclick="assignArchivedWeekProject('${w.id}')" title="تحويل لمشروع"><i class="fas fa-folder-tree"></i></button>
+          <button class="btn btn-danger btn-xs" onclick="deleteWeek('${w.id}')" title="حذف"><i class="fas fa-trash"></i></button>
+        </div>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -3354,6 +3364,186 @@ function printArchivedWeek(weekId){
   const w=DB.weeks.find(x=>x.id===weekId);
   if(!w){ showToast('الأسبوع غير موجود','error'); return; }
   printViaIframe(buildPrintHTML(w,true));
+}
+
+
+/* ====================================================
+   تصدير PDF ومشاركة واتساب للأسابيع المؤرشفة
+   - المصدر هو buildPrintHTML نفسه: نفس كشف الطباعة والحسابات.
+   - عند طلب المشاركة: يُنزّل PDF أولاً، ثم تفتح مشاركة iPhone/Android الأصلية
+     ليختار المستخدم التطبيق (مثل WhatsApp) ثم الشخص أو المجموعة المستلمة.
+   ==================================================== */
+const PDF_EXPORT_LIBRARY_URL='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+let _pdfExportLibraryPromise=null;
+let _preparedPdfShare=null;
+const _pdfExportLocks=new Set();
+
+function setArchivedWeekExportBusy(weekId,busy){
+  Array.from(document.querySelectorAll('[data-export-week]')).forEach(btn=>{
+    if(btn.dataset.exportWeek===String(weekId)){
+      btn.disabled=!!busy;
+      btn.style.opacity=busy?'.62':'';
+      btn.style.pointerEvents=busy?'none':'';
+    }
+  });
+}
+function loadPdfExportLibrary(){
+  if(window.html2pdf) return Promise.resolve(window.html2pdf);
+  if(_pdfExportLibraryPromise) return _pdfExportLibraryPromise;
+  _pdfExportLibraryPromise=new Promise((resolve,reject)=>{
+    const old=document.getElementById('egtphHtml2PdfLibrary');
+    if(old){
+      old.addEventListener('load',()=>window.html2pdf?resolve(window.html2pdf):reject(new Error('PDF library unavailable')),{once:true});
+      old.addEventListener('error',()=>reject(new Error('PDF library download failed')),{once:true});
+      return;
+    }
+    const script=document.createElement('script');
+    script.id='egtphHtml2PdfLibrary';
+    script.src=PDF_EXPORT_LIBRARY_URL;
+    script.async=true;
+    script.onload=()=>window.html2pdf?resolve(window.html2pdf):reject(new Error('PDF library unavailable'));
+    script.onerror=()=>reject(new Error('PDF library download failed'));
+    document.head.appendChild(script);
+  }).catch(err=>{ _pdfExportLibraryPromise=null; throw err; });
+  return _pdfExportLibraryPromise;
+}
+function cleanPdfFilePart(value){
+  return String(value||'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,48)||'week';
+}
+function archivedWeekPdfFileName(week){
+  const start=cleanPdfFilePart(week.startDate||'start');
+  const end=cleanPdfFilePart(week.endDate||'end');
+  return `EGTPH_Semaine_${start}_au_${end}.pdf`;
+}
+function archivedWeekShareText(week){
+  const project=DB.projects.find(p=>p.id===week.projectId);
+  const projectText=project?.name?` — ${project.name}`:'';
+  return `كشف الأجرة الأسبوعي EGTPH: ${formatDateAR(week.startDate)} إلى ${formatDateAR(week.endDate)}${projectText}`;
+}
+function downloadPdfBlob(blob,fileName){
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=url;
+  link.download=fileName;
+  link.style.display='none';
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(()=>{ link.remove(); URL.revokeObjectURL(url); },1200);
+}
+async function createArchivedWeekPdf(week){
+  const html2pdf=await loadPdfExportLibrary();
+  const stage=document.createElement('div');
+  stage.id='egtphPdfExportStage';
+  stage.setAttribute('dir','rtl');
+  stage.setAttribute('aria-hidden','true');
+  stage.style.cssText='position:fixed;top:0;right:-10000px;width:794px;min-height:1123px;padding:0;background:#fff;color:#000;z-index:-1;overflow:visible;pointer-events:none';
+  /* buildPrintHTML هو نفس المصدر المستعمل في الطباعة، دون أي إعادة حساب مستقلة. */
+  stage.innerHTML=`<div style="width:794px;background:#fff;color:#000;direction:rtl;font-family:Cairo,Tajawal,Tahoma,Arial,sans-serif">${buildPrintHTML(week,true)}</div>`;
+  document.body.appendChild(stage);
+  try{
+    if(document.fonts?.ready) await document.fonts.ready;
+    await new Promise(resolve=>setTimeout(resolve,160));
+    const options={
+      margin:[8,8,8,8],
+      filename:archivedWeekPdfFileName(week),
+      image:{type:'jpeg',quality:0.98},
+      html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false,scrollX:0,scrollY:0,windowWidth:794},
+      jsPDF:{unit:'mm',format:'a4',orientation:'portrait',compress:true},
+      pagebreak:{mode:['css','legacy'],avoid:['tr','.print-section-title']}
+    };
+    const worker=html2pdf().set(options).from(stage).toPdf();
+    const blob=await worker.outputPdf('blob');
+    if(!(blob instanceof Blob)||blob.size<800) throw new Error('invalid PDF output');
+    return {blob,fileName:options.filename,weekId:week.id,title:archivedWeekShareText(week)};
+  }finally{
+    stage.remove();
+  }
+}
+async function exportArchivedWeekPDF(weekId){
+  const week=DB.weeks.find(x=>x.id===weekId);
+  if(!week){ showToast('الأسبوع غير موجود','error'); return; }
+  if(_pdfExportLocks.has(weekId)){ showToast('يتم تجهيز ملف PDF بالفعل…','warning'); return; }
+  _pdfExportLocks.add(weekId); setArchivedWeekExportBusy(weekId,true);
+  try{
+    showToast('يتم تجهيز ملف PDF من كشف الطباعة…','warning');
+    const pdf=await createArchivedWeekPdf(week);
+    downloadPdfBlob(pdf.blob,pdf.fileName);
+    logActivity(`تصدير PDF للأسبوع: ${formatDateAR(week.startDate)}`);
+    showToast('تم إنشاء ملف PDF وحفظه على الجهاز.','success');
+  }catch(err){
+    console.error('PDF export failed:',err);
+    showToast('تعذر إنشاء PDF. تحقق من الإنترنت ثم أعد المحاولة، أو استخدم زر الطباعة واختر “حفظ كـ PDF”.','error');
+  }finally{
+    _pdfExportLocks.delete(weekId); setArchivedWeekExportBusy(weekId,false);
+  }
+}
+function closePreparedPdfShare(){
+  _preparedPdfShare=null;
+  closeModal();
+}
+function showPreparedPdfShareModal(pdf){
+  _preparedPdfShare=pdf;
+  const overlay=document.getElementById('modalOverlay');
+  const content=document.getElementById('modalContent');
+  overlay.classList.add('show');
+  content.innerHTML=`
+    <h3><i class="fas fa-share-nodes" style="color:var(--primary)"></i> مشاركة كشف الأسبوع PDF</h3>
+    <div style="line-height:1.9;color:var(--text2)">
+      <p style="margin-bottom:10px"><b style="color:var(--text)">تم تحميل الملف إلى جهازك:</b> ${pdf.fileName}</p>
+      <p><b style="color:var(--primary)">1.</b> اضغط <b>اختيار تطبيق للمشاركة</b>.</p>
+      <p><b style="color:var(--primary)">2.</b> من قائمة مشاركة الهاتف اختر <b>WhatsApp</b>.</p>
+      <p><b style="color:var(--primary)">3.</b> داخل واتساب اختر الشخص أو المجموعة ثم أرسل الملف.</p>
+      <p style="font-size:12px;color:var(--text3);margin-top:10px">لا يرسل البرنامج الملف تلقائياً إلى أي شخص؛ الاختيار يبقى لك بالكامل من شاشة مشاركة الهاتف.</p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" type="button" onclick="downloadPreparedPdfShare()"><i class="fas fa-download"></i> تنزيل مرة أخرى</button>
+      <button class="btn btn-outline" type="button" onclick="closePreparedPdfShare()">إغلاق</button>
+      <button class="btn btn-success" id="preparedPdfShareBtn" type="button"><i class="fas fa-share-nodes"></i> اختيار تطبيق للمشاركة</button>
+    </div>`;
+  document.getElementById('preparedPdfShareBtn').onclick=sharePreparedPdfNow;
+}
+function downloadPreparedPdfShare(){
+  if(!_preparedPdfShare){ showToast('لا يوجد ملف PDF جاهز','error'); return; }
+  downloadPdfBlob(_preparedPdfShare.blob,_preparedPdfShare.fileName);
+  showToast('تم حفظ ملف PDF على الجهاز.','success');
+}
+async function sharePreparedPdfNow(){
+  const pdf=_preparedPdfShare;
+  if(!pdf){ showToast('لا يوجد ملف PDF جاهز','error'); return; }
+  const file=new File([pdf.blob],pdf.fileName,{type:'application/pdf'});
+  const shareData={title:pdf.title,text:pdf.title,files:[file]};
+  try{
+    const supportsFiles=!!(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]})));
+    if(!supportsFiles) throw new Error('native file sharing unavailable');
+    await navigator.share(shareData);
+    logActivity(`مشاركة PDF للأسبوع عبر قائمة الهاتف: ${pdf.fileName}`);
+    _preparedPdfShare=null;
+    closeModal();
+    showToast('تم فتح المشاركة. اختر واتساب وأرسل الملف.','success');
+  }catch(err){
+    if(err?.name==='AbortError'){ showToast('تم إلغاء المشاركة. ملف PDF ما زال جاهزاً للحفظ.','warning'); return; }
+    console.warn('Native file share unavailable:',err);
+    downloadPdfBlob(pdf.blob,pdf.fileName);
+    showToast('تم تنزيل PDF. افتح تطبيق الملفات، ثم اختر مشاركة > WhatsApp > الشخص أو المجموعة.','warning');
+  }
+}
+async function shareArchivedWeekPDF(weekId){
+  const week=DB.weeks.find(x=>x.id===weekId);
+  if(!week){ showToast('الأسبوع غير موجود','error'); return; }
+  if(_pdfExportLocks.has(weekId)){ showToast('يتم تجهيز ملف PDF بالفعل…','warning'); return; }
+  _pdfExportLocks.add(weekId); setArchivedWeekExportBusy(weekId,true);
+  try{
+    showToast('يتم تجهيز PDF ثم تنزيله للمشاركة…','warning');
+    const pdf=await createArchivedWeekPdf(week);
+    downloadPdfBlob(pdf.blob,pdf.fileName);
+    logActivity(`تصدير PDF للمشاركة للأسبوع: ${formatDateAR(week.startDate)}`);
+    showPreparedPdfShareModal(pdf);
+  }catch(err){
+    console.error('PDF share preparation failed:',err);
+    showToast('تعذر تجهيز PDF للمشاركة. تحقق من الإنترنت ثم أعد المحاولة.','error');
+  }finally{
+    _pdfExportLocks.delete(weekId); setArchivedWeekExportBusy(weekId,false);
+  }
 }
 
 /* ====================================================
