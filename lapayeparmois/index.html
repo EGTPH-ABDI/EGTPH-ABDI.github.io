@@ -25,7 +25,7 @@ var renderAdmin = window.renderAdmin;
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0" name="viewport"/>
-<title>EGTPH — سجل الأجور v66</title>
+<title>EGTPH — سجل الأجور v78</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -859,7 +859,7 @@ body.theme-blue .sec,body.theme-purple .sec,body.theme-red .sec,body.theme-sand 
 <div class="" id="toast">✅ تم التعديل</div>
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div class="topbar">
-<div class="tlogo">EGTPH <span>| سجل الأجور v66</span></div>
+<div class="tlogo">EGTPH <span>| سجل الأجور v78</span></div>
 <div id="autoSv" style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--gray)">
 <span class="auto-save-dot" id="saveDot"></span>
 <span id="saveLabel">—</span>
@@ -3313,11 +3313,21 @@ function advNetPaid(e){return Math.max(0,(+((e||{}).amount)||0)-advDedTotal(e));
 function advDedNote(e){
   var ds=(e&&Array.isArray(e.deductions))?e.deductions:[];
   if(!ds.length)return '';
-  return ds.map(function(d){
-    var lbl=d.type==='debt'?'قسط دين':(d.type==='absence'?'خصم غياب':'خصم');
-    return '−'+fmtN(+d.amount||0)+' دج '+lbl;
-  }).join(' | ');
+  var debt=0,abs=0,other=[];
+  ds.forEach(function(d){
+    var amount=Math.max(0,+((d||{}).amount)||0);
+    if(!amount)return;
+    if(d.type==='debt')debt+=amount;
+    else if(d.type==='absence')abs+=amount;
+    else other.push('−'+fmtN(amount)+' دج خصم');
+  });
+  var parts=[];
+  if(debt)parts.push('قسط دين مُسدَّد من الراتب: −'+fmtN(debt)+' دج');
+  if(abs)parts.push('خصم غياب من الراتب: −'+fmtN(abs)+' دج');
+  return parts.concat(other).join(' | ');
 }
+// المبلغ النقدي الحقيقي الذي سُلِّم للعامل. مبلغ amount يبقى مبلغاً محاسبياً من الراتب.
+function advCashPaid(e){return advNetPaid(e);}
 function _appendNote(base,extra){base=(base||'').trim();return base?base+' — '+extra:extra;}
 function advDedCapacity(e){return Math.max(0,advGross(e)-advDedTotal(e));}
 function attachDeductionToAdvance(adv,ded){
@@ -5289,8 +5299,14 @@ function renderSalContent(){
             '<div style="font-size:16px;font-weight:900;color:var(--purple)">+'+fmt(fs.unpaidBon)+'</div>'+
             '</div>':'')+
           '<div style="background:rgba(255,68,102,.06);border:1px solid rgba(255,68,102,.2);border-radius:8px;padding:10px;text-align:center">'+
-            '<div style="font-size:10px;color:var(--gray);font-weight:700;margin-bottom:4px">💸 إجمالي التسبيقات</div>'+
+            '<div style="font-size:10px;color:var(--gray);font-weight:700;margin-bottom:4px">💸 تسبيقات محاسبية من الراتب</div>'+
             '<div style="font-size:16px;font-weight:900;color:var(--red)">-'+fmt(fs.totalAdv)+'</div>'+
+            '<div style="font-size:9px;color:var(--gray)">تدخل مرة واحدة في حساب الراتب</div>'+
+          '</div>'+
+          '<div style="background:rgba(13,148,136,.06);border:1px solid rgba(13,148,136,.22);border-radius:8px;padding:10px;text-align:center">'+
+            '<div style="font-size:10px;color:var(--gray);font-weight:700;margin-bottom:4px">💵 نقد سُلِّم فعلياً</div>'+
+            '<div style="font-size:16px;font-weight:900;color:var(--teal)">'+fmt(fs.cashAdvances||0)+'</div>'+
+            ((fs.debtRecoveredFromSalary||0)>0?'<div style="font-size:9px;color:var(--gray)">قسط دين داخل التسبيق: '+fmt(fs.debtRecoveredFromSalary)+' — ليس حركة نقدية ثانية</div>':'')+
           '</div>'+
           (fs.totalAbs>0?
             '<div style="background:rgba(255,68,102,.06);border:1px solid rgba(255,68,102,.2);border-radius:8px;padding:10px;text-align:center">'+
@@ -5311,7 +5327,8 @@ function renderSalContent(){
             fmt(fs.earnedSal)+
             (fs.unpaidHrs>0?' + '+fmt(fs.unpaidHrs)+'(سا)':'')+
             (fs.unpaidBon>0?' + '+fmt(fs.unpaidBon)+'(مكافأة)':'')+
-            ' − '+fmt(fs.totalAdv)+'(تسبيقات)'+
+            ' − '+fmt(fs.totalAdv)+'(تسبيقات محاسبية)'+
+            ((fs.cashAdvances!=null)?' [نقد فعلي '+fmt(fs.cashAdvances)+']':'')+
             (fs.totalAbs>0?' − '+fmt(fs.totalAbs)+'(غياب)':'')+
             (fs.debtBalance>0?' − '+fmt(fs.debtBalance)+'(دين)':'')+
             ' = '+fmt(fs.netFinal)+
@@ -7255,7 +7272,7 @@ function renderAdvAudit(q,mFilter){
           rows+='<div style="display:flex;justify-content:space-between;gap:8px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--border)'+(dim?';opacity:.4':'')+'">'+
             '<div style="font-size:10px;color:var(--gray);line-height:1.75;flex:1;min-width:0">'+
               '<span style="color:'+k.col+';font-weight:700">'+k.lbl+'</span> ← دورة <b style="color:var(--amber)">'+MN[x.ck]+'</b>'+(range?' ('+range+')':'')+'<br>'+
-              '🗓️ محاسبي: '+(e.date||'—')+(diffReal?' · 💵 فعلي: <b style="color:var(--teal)">'+e.realDate+'</b>':'')+(e.note?'<br>📝 '+e.note+_carryWhy(e.note):'')+(advDedNote(e)?'<br><span style="color:var(--red)">'+advDedNote(e)+' · الصافي المدفوع '+fmt(advNetPaid(e))+'</span>':'')+
+              '🗓️ محاسبي: '+(e.date||'—')+(diffReal?' · 💵 فعلي: <b style="color:var(--teal)">'+e.realDate+'</b>':'')+(e.note?'<br>📝 '+e.note+_carryWhy(e.note):'')+(advDedNote(e)?'<br><span style="color:var(--red)">'+advDedNote(e)+' · النقد المسلّم فعلياً '+fmt(advNetPaid(e))+'</span>':'')+
             '</div>'+
             '<div style="font-size:12px;font-weight:900;color:'+k.col+';white-space:nowrap">'+fmt(e.amount)+(advDedTotal(e)>0?'<br><span style="color:var(--red);font-size:10px">صافي '+fmt(advNetPaid(e))+'</span>':'')+'</div>'+
           '</div>';
@@ -7833,7 +7850,9 @@ function printWorkerDetail(wid,fM,tM){
         '<tr><td style="font-weight:700">المستحق قبل الخصم</td><td style="font-weight:900;text-align:left;color:#155e75">'+fmtN(gross)+' دج</td></tr>'+
         '<tr><td style="font-weight:700">الخصومات (غياب + دين متبقٍ)</td><td style="font-weight:900;text-align:left;color:#b91c1c">− '+fmtN(deductions)+' دج</td></tr>'+
         '<tr><td style="font-weight:700">الصافي بعد الخصم</td><td style="font-weight:900;text-align:left;color:#1d4ed8">'+fmtN(netBeforeAdv)+' دج</td></tr>'+
-        '<tr><td style="font-weight:700">التسبيقات المسجلة / مبالغ مصروفة</td><td style="font-weight:900;text-align:left;color:#166534">+ '+fmtN(fs.totalAdv)+' دج</td></tr>'+
+        '<tr><td style="font-weight:700">التسبيقات المحاسبية المحتسبة من الراتب</td><td style="font-weight:900;text-align:left;color:#166534">+ '+fmtN(fs.totalAdv)+' دج</td></tr>'+
+        '<tr><td style="font-weight:700">النقد المسلّم فعلياً للعامل</td><td style="font-weight:900;text-align:left;color:#0f766e">+ '+fmtN(fs.cashAdvances||0)+' دج</td></tr>'+
+        ((+fs.debtRecoveredFromSalary||0)>0?'<tr><td style="font-weight:700">قسط دين مسدّد من داخل التسبيق</td><td style="font-weight:900;text-align:left;color:#7c3aed">'+fmtN(fs.debtRecoveredFromSalary)+' دج <small>(ليس خروجاً نقدياً ثانياً)</small></td></tr>':'')+
         '<tr style="background:#fff"><td style="font-weight:900">المتبقي النهائي</td><td style="font-size:14px;font-weight:900;text-align:left;color:'+stateColor+'">'+state+'</td></tr>'+
       '</tbody></table>'+
       ((+fs.unpaidHrs||0)||(+fs.unpaidBon||0)?'<div style="font-size:10px;color:#5b3b95;margin-top:7px">يتضمن مستحقات غير مسددة: ساعات +'+fmtN(fs.unpaidHrs)+' دج | مكافآت +'+fmtN(fs.unpaidBon)+' دج</div>':'')+
@@ -7905,7 +7924,7 @@ function printWorkerDetail(wid,fM,tM){
           <td style="font-weight:800;color:#1a3a6b;text-align:left">${fmtN(ps)} دج<span style="color:#999;font-size:10px;margin-right:6px">(${wd} يوم)</span></td>
         </tr>
         ${advE.map((e,i)=>`<tr>
-          <td style="color:#e65100">💰 تسبيق ${i+1} — ${e.date}${advEntryStamp(e)?' <small style="color:#0e7c66">[إدخال: '+advEntryStamp(e)+']</small>':''}${e.note?' <small style="color:#999">('+e.note+')</small>':''}${advDedNote(e)?' <br><small style="color:#c0392b">'+advDedNote(e)+' | الصافي المدفوع: '+fmtN(advNetPaid(e))+'</small>':''}</td>
+          <td style="color:#e65100">💰 تسبيق ${i+1} — ${e.date}${advEntryStamp(e)?' <small style="color:#0e7c66">[إدخال: '+advEntryStamp(e)+']</small>':''}${e.note?' <small style="color:#999">('+e.note+')</small>':''}${advDedNote(e)?' <br><small style="color:#c0392b">'+advDedNote(e)+' | النقد المسلّم فعلياً: '+fmtN(advNetPaid(e))+'</small>':''}</td>
           <td style="color:#166534;font-weight:700;text-align:left">+ ${fmtN(advGross(e))} دج</td>
         </tr>`).join('')}
         ${absNow.filter(a=>!a._advanceId).map(a=>`<tr>
@@ -8017,7 +8036,7 @@ function printTodayAdvances(){
         const gross=advGross(a);
         totAdv+=gross;
         const ded=advDedNote(a);
-        const net=advDedTotal(a)>0?' | الصافي المدفوع: '+fmtN(advNetPaid(a)):'';
+        const net=advDedTotal(a)>0?' | النقد المسلّم فعلياً: '+fmtN(advNetPaid(a)):'';
         // التاريخ المعروض = التاريخ الفعلي للدفع إن وُجد (قيود موجَّهة لدورة سابقة)
         advRows.push({date:a.realDate||a.date||'—',type:'💰 تسبيق',month:MN[+m]||'',amt:gross,note:(a.note||'')+(ded?(' | '+ded+net):''),color:'#155e1a',sign:'+'});
       });
@@ -8168,7 +8187,7 @@ function printTodayOnly(){
       arr.filter(a=>!_isInstAdv(a)&&(a.date===td||a.realDate===td)).forEach(a=>{
         const gross=advGross(a);
         totAdv+=gross;
-        rows.push({type:'تسبيق'+(a.realDate?' (دورة '+(MN[+m]||'')+')':''),amt:gross,note:(a.note||'')+(advDedNote(a)?' | '+advDedNote(a)+' | الصافي المدفوع: '+fmtN(advNetPaid(a)):''),sign:'+',col:'#1a7a4a'});
+        rows.push({type:'تسبيق'+(a.realDate?' (دورة '+(MN[+m]||'')+')':''),amt:gross,note:(a.note||'')+(advDedNote(a)?' | '+advDedNote(a)+' | النقد المسلّم فعلياً: '+fmtN(advNetPaid(a)):''),sign:'+',col:'#1a7a4a'});
       });
     });
     (DB.hours[w.id]||[]).filter(h=>h.date===td).forEach(h=>{
@@ -8588,7 +8607,7 @@ function printTodayByType(type){
       let details='',val='',status='';
       const entryT=_advEntryTime(item)||'—';
       if(type==='advances'){
-        details=((item.note||'—')+(advDedNote(item)?' | '+advDedNote(item)+' | الصافي المدفوع: '+fmtN(advNetPaid(item)):'')+(item._month?' ('+item._month+')':''));
+        details=((item.note||'—')+(advDedNote(item)?' | '+advDedNote(item)+' | النقد المسلّم فعلياً: '+fmtN(advNetPaid(item)):'')+(item._month?' ('+item._month+')':''));
         val='+'+fmtN(advGross(item));status=item.by||'—';
       }else if(type==='hours'){
         details=`${item.hours}سا × ${fmtN(item.hourly||0)}/سا`;
@@ -10676,40 +10695,130 @@ try{
     });
     return Math.round(total);
   }
+  // v77 — تسوية الراتب الأساسي فقط: لا تدخل الساعات ولا المكافآت في القفل.
+  // التسوية = النقد المسلّم من التسبيقات + خصم الغياب + قسط الدين المخصوم من الراتب.
+  // قسط دين مجدول ولم يُدفع فعلياً لا يغلق الدورة.
   function cycleBasicBalance(worker,m,yr){
-    var w=worker && typeof worker==='object' ? worker : getWorker(worker), st=status(w,m,yr)||{};
-    var base=Math.max(0,Math.round(+st.baseSal || +(w&&w.salary) || 0)), paid=cycleGrossPaid(w,m,yr);
-    return {base:base,paid:paid,remaining:Math.max(0,base-paid)};
+    var d=ensure(), w=worker && typeof worker==='object' ? worker : getWorker(worker);
+    if(!d || !w) return {base:0,paid:0,remaining:0,cashPaid:0,absenceDeduction:0,debtDeduction:0,debtDueRemaining:0,settled:0};
+    var st=status(w,m,yr)||{}, base=Math.max(0,Math.round(+st.baseSal || +(w&&w.salary) || 0));
+    var win=cycleWin(w,m,yr);
+    if(!win || !win.from || !win.to || !(base>0)) return {base:base,paid:0,remaining:base,cashPaid:0,absenceDeduction:0,debtDeduction:0,debtDueRemaining:0,settled:0};
+    function inside(value){
+      try { return typeof _inCycle==='function' ? _inCycle(value,win) : (function(){var x=dateObj(value);return !!(x&&x>=win.from&&x<win.to);})(); }
+      catch(e){ return false; }
+    }
+    // لا نعد قسط الدين كجزء من تسوية الراتب إلا إذا كان له سجل return فعلي في خانة الديون.
+    var returnByTag={}, debtRows=asArray((d.debts||{})[w.id] || (d.debts||{})[String(w.id)]);
+    debtRows.forEach(function(r){
+      if(!r || r.type!=='return' || !r.debtId) return;
+      var tag=String(r._instTag || r.instTag || '');
+      if(!tag) return;
+      var k=String(r.debtId)+'|'+tag;
+      returnByTag[k]=(returnByTag[k]||0)+Math.max(0,Math.round(+r.amount||0));
+    });
+    var allAdv=(d.advances[w.id] || d.advances[String(w.id)] || {}), cashPaid=0, debtOnAdvance=0;
+    Object.keys(allAdv).forEach(function(bucket){ asArray(allAdv[bucket]).forEach(function(row){
+      if(!row || row._isInstDeduction || !inside(row.date)) return;
+      var gross=Math.max(0,Math.round(typeof advGross==='function' ? (+advGross(row)||0) : (+row.amount||0)));
+      var deductions=Array.isArray(row.deductions) ? row.deductions : [];
+      var totalDed=deductions.reduce(function(sum,x){return sum+Math.max(0,Math.round(+((x||{}).amount)||0));},0);
+      totalDed=Math.min(gross,totalDed);
+      cashPaid+=Math.max(0,gross-totalDed);
+      deductions.forEach(function(x){
+        if(!x || x.type!=='debt') return;
+        var amount=Math.max(0,Math.round(+x.amount||0)), tag=String(x._instTag||x.instTag||''), k=String(x.debtId||'')+'|'+tag;
+        if(!tag || !x.debtId || !(returnByTag[k]>0)) return;
+        var verified=Math.min(amount,returnByTag[k]);
+        debtOnAdvance+=verified;returnByTag[k]-=verified;
+      });
+    }); });
+    var absenceDeduction=asArray((d.absences||{})[w.id] || (d.absences||{})[String(w.id)]).filter(function(a){
+      return a && a.deductOpt==='now' && inside(a.from || a.date);
+    }).reduce(function(sum,a){return sum+Math.max(0,Math.round(+a.deduct||0));},0);
+    absenceDeduction=Math.min(base,absenceDeduction);
+    debtOnAdvance=Math.min(Math.max(0,base-absenceDeduction),debtOnAdvance);
+    var settled=Math.min(base,Math.max(0,Math.round(cashPaid+absenceDeduction+debtOnAdvance)));
+    // calcMonthStatus v63 يعرض القسط المقرر الذي لم يُسدد فعلياً في هذه الدورة.
+    var debtDueRemaining=Math.max(0,Math.round(+st.totInst||0));
+    return {base:base,paid:settled,remaining:Math.max(0,base-settled),cashPaid:Math.round(cashPaid),absenceDeduction:absenceDeduction,debtDeduction:debtOnAdvance,debtDueRemaining:debtDueRemaining,settled:settled};
   }
   function cycleLabel(worker,m,yr){ var win=cycleWin(worker,m,yr); return (typeof MN !== 'undefined' ? MN[m] : String(m+1))+' '+yr+' ('+toDMY(toISO(win && win.from))+' → '+toDMY(toISO(win && win.to))+')'; }
   function cycleEndAccountingDate(worker,m,yr){ var win=cycleWin(worker,m,yr); if(!win || !win.to) return ''; var d=new Date(win.to.getTime()-86400000); return toDMY(toISO(d)); }
+  // v77 — نفحص كل دورات العامل من تاريخ دخوله إلى اليوم/الخروج، لا دورات التسبيقات فقط.
   function relevantCycles(){
     var d=ensure(), result=[]; if(!d) return result;
     d.workers.forEach(function(w){
       var seen={};
-      function add(anchor){ if(!anchor) return; var k=String(w.id)+'|'+anchor.yr+'|'+anchor.m; if(!seen[k]){seen[k]=1;result.push({worker:w,m:anchor.m,yr:anchor.yr});} }
+      function add(anchor){
+        if(!anchor) return;
+        var win=cycleWin(w,anchor.m,anchor.yr), start=dateObj(w.startDate);
+        if(!win || !win.from || !win.to || (start && win.to<=start)) return;
+        var k=String(w.id)+'|'+anchor.yr+'|'+anchor.m;
+        if(!seen[k]){seen[k]=1;result.push({worker:w,m:anchor.m,yr:anchor.yr});}
+      }
+      var start=dateObj(w.startDate), end=dateObj(w.exitDate) || dateObj((typeof todayISO==='function'?todayISO():toISO(new Date()))) || new Date();
+      if(start){
+        var a=cycleAnchor(w,toISO(start)), guard=0;
+        while(a && guard++<240){
+          var win=cycleWin(w,a.m,a.yr); if(!win || !win.from || !win.to) break;
+          if(win.from>end) break;
+          add(a);
+          var next=new Date(a.yr,a.m+1,Math.min(+w.day||1,28));
+          a={m:next.getMonth(),yr:next.getFullYear()};
+        }
+      }
       try { if(typeof getActiveCycle === 'function') add(getActiveCycle(w.id)); } catch(e) {}
-      Object.keys(d.advances[w.id] || d.advances[String(w.id)] || {}).forEach(function(bucket){ asArray((d.advances[w.id] || d.advances[String(w.id)] || {})[bucket]).forEach(function(a){ if(a && a.date) add(cycleAnchor(w,a.date)); }); });
+      // توافق مع بيانات قديمة قد تحمل قيداً خارج التسلسل.
+      ['advances','hours','absences','bonuses','debts'].forEach(function(section){
+        var bucket=(d[section]||{})[w.id] || (d[section]||{})[String(w.id)];
+        if(Array.isArray(bucket)) bucket.forEach(function(r){if(r)add(cycleAnchor(w,r.realDate||r.from||r.date||r.nextDue));});
+        else Object.keys(bucket||{}).forEach(function(k){asArray(bucket[k]).forEach(function(r){if(r)add(cycleAnchor(w,r.realDate||r.from||r.date||r.nextDue));});});
+      });
     });
     return result;
   }
+  function isCurrentCycle(worker,m,yr){
+    var w=worker && typeof worker==='object' ? worker : getWorker(worker); if(!w) return false;
+    var active=cycleAnchor(w,(typeof todayISO==='function'?todayISO():toISO(new Date())));
+    return !!active && +active.m===+m && +active.yr===+yr;
+  }
+  function isPastCycle(worker,m,yr){ return !isCurrentCycle(worker,m,yr); }
   function reconcileLockForCycle(worker,m,yr,reason,silent){
     var d=ensure(); if(!d||!worker) return 0;
-    var bal=cycleBasicBalance(worker,m,yr), base=bal.base, paid=bal.paid;
+    var bal=cycleBasicBalance(worker,m,yr), base=bal.base, settled=bal.settled;
     if(!(base>0)) return 0;
-    var win=cycleWin(worker,m,yr), key=cycleKey(worker,m,yr), existing=d.cycleLocks[key], should=paid>=base;
-    if(should && (!existing || !existing.locked || !existing.auto)){
-      d.cycleLocks[key]={id:key,workerId:worker.id,workerName:worker.name,cycleMonth:m,cycleYear:yr,cycleStart:toISO(win&&win.from),cycleEnd:toISO(win&&win.to),locked:true,auto:true,reason:'إغلاق تلقائي: مجموع التسبيقات بلغ الراتب الأساسي',baseSalary:base,advancesTotal:paid,updatedAt:now(),by:d.settings.userName || 'Youcef Abdi'};
-      if(!silent) ledger('cycle_lock','🔒 إغلاق تلقائي للدورة — '+worker.name,{workerId:worker.id,cycle:cycleLabel(worker,m,yr),baseSalary:base,advancesTotal:paid,reason:reason || 'تسبيق'});
-      return 1;
-    }
-    if(should && existing){
-      var lockChanged=(!existing.locked || !existing.auto || +existing.baseSalary!==base || +existing.advancesTotal!==paid || existing.reason!=='إغلاق تلقائي: مجموع التسبيقات بلغ الراتب الأساسي');
-      if(lockChanged){existing.locked=true;existing.auto=true;existing.reason='إغلاق تلقائي: مجموع التسبيقات بلغ الراتب الأساسي';existing.baseSalary=base;existing.advancesTotal=paid;existing.updatedAt=now();return 1;}
+    var win=cycleWin(worker,m,yr), key=cycleKey(worker,m,yr), existing=d.cycleLocks[key], past=isPastCycle(worker,m,yr), debtDueRemaining=Math.max(0,+bal.debtDueRemaining||0), should=past && settled>=base && debtDueRemaining===0;
+    var lockReason='إغلاق تلقائي: اكتملت مستحقات الراتب الأساسي (نقد + غياب + قسط دين مسجل فعلياً في الديون)، دون الساعات والمكافآت';
+    // الدورة الحالية لا تُقفل تلقائياً أبداً. هذا تصحيح لمفاتيح قديمة فقط.
+    if(!past){
+      if(existing && existing.locked){
+        existing.locked=false; existing.auto=false; existing.manualEditOpen=false; existing.reason='الدورة الحالية تبقى مفتوحة حتى تنتقل إلى الدورة التالية'; existing.baseSalary=base; existing.advancesTotal=settled; existing.updatedAt=now();
+        return 1;
+      }
       return 0;
     }
-    if(existing && existing.locked && existing.auto){existing.locked=false;existing.reason='إعادة فتح تلقائية: مجموع التسبيقات أصبح أقل من الراتب الأساسي';existing.baseSalary=base;existing.advancesTotal=paid;existing.updatedAt=now();if(!silent)ledger('cycle_unlock','🔓 إعادة فتح تلقائية للدورة — '+worker.name,{workerId:worker.id,cycle:cycleLabel(worker,m,yr),baseSalary:base,advancesTotal:paid,reason:reason || 'تعديل'});return 1;}
+    if(should){
+      var rec=existing || {id:key,workerId:worker.id,workerName:worker.name,cycleMonth:m,cycleYear:yr,cycleStart:toISO(win&&win.from),cycleEnd:toISO(win&&win.to)};
+      var changed=!rec.locked || !rec.auto || +rec.baseSalary!==base || +rec.advancesTotal!==settled || rec.reason!==lockReason || rec.manualEditOpen===true;
+      rec.locked=true;rec.auto=true;rec.manualEditOpen=false;rec.reason=lockReason;rec.baseSalary=base;rec.advancesTotal=settled;rec.cashPaid=bal.cashPaid;rec.absenceDeduction=bal.absenceDeduction;rec.debtDeduction=bal.debtDeduction;rec.debtDueRemaining=debtDueRemaining;rec.updatedAt=now();rec.by=d.settings.userName || 'Youcef Abdi';d.cycleLocks[key]=rec;
+      if(changed && !silent) ledger('cycle_lock','🔒 إغلاق تلقائي للدورة السابقة — '+worker.name,{workerId:worker.id,cycle:cycleLabel(worker,m,yr),baseSalary:base,settled:settled,cashPaid:bal.cashPaid,absenceDeduction:bal.absenceDeduction,debtDeduction:bal.debtDeduction,reason:reason || 'اكتمال المستحقات'});
+      return changed?1:0;
+    }
+    // لا يوجد فتح تلقائي لدورة سابقة: إن احتاجت تصحيحاً يفتحها المستخدم عبر تعديل صريح فقط.
+    if(existing){
+      existing.baseSalary=base; existing.advancesTotal=settled; existing.cashPaid=bal.cashPaid; existing.absenceDeduction=bal.absenceDeduction; existing.debtDeduction=bal.debtDeduction; existing.debtDueRemaining=debtDueRemaining; existing.updatedAt=now();
+      if(existing.manualEditOpen){ existing.locked=false; existing.auto=false; existing.reason='مفتوحة للتعديل الصريح: '+(reason || 'تعديل'); }
+    }
     return 0;
+  }
+
+  function openCycleForEdit(worker,m,yr,reason){
+    var d=ensure(), w=worker && typeof worker==='object' ? worker : getWorker(worker); if(!d||!w) return false;
+    var key=cycleKey(w,m,yr), lock=d.cycleLocks[key]; if(!lock || !lock.locked) return false;
+    lock.locked=false;lock.auto=false;lock.manualEditOpen=true;lock.openedForEditAt=now();lock.openedForEditBy=d.settings.userName || 'Youcef Abdi';lock.reason='مفتوحة للتعديل الصريح: '+(reason || 'تعديل');lock.updatedAt=now();
+    ledger('cycle_unlock','✏️ فتح دورة للتعديل — '+w.name,{workerId:w.id,cycle:cycleLabel(w,m,yr),reason:reason || 'تعديل صريح'});
+    return true;
   }
 
   function reconcileLocks(reason,silent){
@@ -10910,9 +11019,12 @@ try{
     document.getElementById('v50EditSave').onclick=async function(){
       var ctx=window.__V50_EDIT__, amount=Math.round(+document.getElementById('v50EditAmount').value || 0), dateISO=document.getElementById('v50EditDate').value, note=document.getElementById('v50EditNote').value.trim(); if(!ctx || !(amount>0) || !dateISO){toastSafe('❌ أدخل مبلغاً وتاريخاً صحيحين',true);return;}
       var w=getWorker(ctx.workerId), touching={}; ctx.meta.children.forEach(function(c){ var a=cycleAnchor(w,c.row.date); touching[cycleKey(w,a.m,a.yr)]=isLocked(w,a.m,a.yr); });
-      var locks=Object.keys(touching).filter(function(k){return touching[k] && touching[k].locked;});
-      if(locks.length && !(await ask('🔒 تعديل دورة مقفلة','التعديل يمس '+locks.length+' دورة مقفلة تلقائياً. سيعاد حساب القفل بعد حفظ العملية.','متابعة التعديل'))) return;
-      var before=businessSnapshot(); currentOperation=ctx.meta.transactionId;
+      var locks=Object.keys(touching).filter(function(k){return touching[k] && touching[k].locked;}), before=businessSnapshot();
+      if(locks.length){
+        if(!(await ask('🔒 فتح دورة مقفلة للتعديل','التعديل يمس '+locks.length+' دورة مقفلة. ستُفتح هذه الدورة لهذا التعديل فقط، ثم تُغلق مجدداً تلقائياً إن بقيت مستحقات الراتب الأساسي مكتملة.','فتح للتعديل'))) return;
+        locks.forEach(function(k){var l=touching[k];openCycleForEdit(w,l.cycleMonth,l.cycleYear,'تعديل تسبيق');});
+      }
+      currentOperation=ctx.meta.transactionId;
       try {
         removeAdvanceChildren(w.id,ctx.meta.children);
         reconcileLocks('حذف مؤقت للتعديل',true);
@@ -10927,7 +11039,13 @@ try{
     var row=asArray((d.advances[worker.id] || {})[bucket]).find(function(x){return x && String(x.id)===String(entryId);}); if(!row){toastSafe('❌ لم يُعثر على التسبيق',true);return;}
     var children=findOperation(row.operationId || row.transactionId || row.id,worker.id); if(!children.length)children=[{bucket:String(bucket),row:row}];
     if(!(await ask('🗑️ حذف تسبيق','سيُحذف كامل العملية: <b>'+fmtMoney(+row.originalAmount || children.reduce(function(s,x){return s+(+x.row.amount||0);},0))+'</b><br>عدد القيود المرتبطة: '+children.length,'🗑️ حذف العملية'))) return;
-    var before=businessSnapshot(), tx=txId('DEL'); currentOperation=tx;
+    var touched={},before=businessSnapshot(); children.forEach(function(c){var a=cycleAnchor(worker,c.row.date);var k=cycleKey(worker,a.m,a.yr);touched[k]=isLocked(worker,a.m,a.yr);});
+    var lockedKeys=Object.keys(touched).filter(function(k){return touched[k]&&touched[k].locked;});
+    if(lockedKeys.length){
+      if(!(await ask('🔒 فتح دورة مقفلة للحذف','الحذف يمس '+lockedKeys.length+' دورة مقفلة. ستُفتح لهذا التعديل فقط، ثم يُعاد قفلها تلقائياً إن بقيت مستحقات الراتب الأساسي مكتملة.','فتح للحذف'))) return;
+      lockedKeys.forEach(function(k){var l=touched[k];openCycleForEdit(worker,l.cycleMonth,l.cycleYear,'حذف تسبيق');});
+    }
+    var tx=txId('DEL'); currentOperation=tx;
     try { removeAdvanceChildren(worker.id,children); reconcileLocks('حذف تسبيق',false); pushAudit('حذف عملية تسبيق — '+worker.name,{workerId:worker.id,operationId:row.operationId || row.id,records:children.map(function(c){return c.row.id;})},tx); saveDB(); try{ if(typeof renderSalContent==='function')renderSalContent(); if(typeof renderDash==='function')renderDash();}catch(e){} toastSafe('🗑️ تم حذف العملية كاملة'); } finally { currentOperation=null; }
   };
 
@@ -11022,7 +11140,12 @@ try{
     var ops={}; d.workers.forEach(function(w){Object.keys(d.advances[w.id]||{}).forEach(function(bucket){asArray(d.advances[w.id][bucket]).forEach(function(a){if(a&&a.operationId){(ops[a.operationId]=ops[a.operationId]||[]).push(a);}});});});
     Object.keys(ops).forEach(function(op){var arr=ops[op], expected=+arr[0].originalAmount || arr.reduce(function(s,x){return s+(+x.amount||0);},0), actual=arr.reduce(function(s,x){return s+(+x.amount||0);},0);if(Math.round(expected)!==Math.round(actual))add('error','توزيع التسبيق','عملية '+op+' لا يساوي توزيعها المبلغ الأصلي');});
     d.ledger.forEach(function(row){if(row && row.integrityHash && row.integrityHash!==recordHash(Object.assign({},row,{integrityHash:undefined}))) add('warn','Ledger','بصمة سجل تدقيق غير مطابقة: '+row.id);});
-    relevantCycles().forEach(function(item){var bal=cycleBasicBalance(item.worker,item.m,item.yr), lock=isLocked(item.worker,item.m,item.yr), should=(bal.base>0 && bal.paid>=bal.base);if(should && !(lock&&lock.locked))add('error','قفل الدورات','دورة ينبغي أن تكون مقفلة: '+item.worker.name+' — '+cycleLabel(item.worker,item.m,item.yr));if(!should && lock&&lock.locked&&lock.auto)add('warn','قفل الدورات','قفل تلقائي يحتاج إعادة حساب: '+item.worker.name+' — '+cycleLabel(item.worker,item.m,item.yr));});
+    relevantCycles().forEach(function(item){
+      var bal=cycleBasicBalance(item.worker,item.m,item.yr), lock=isLocked(item.worker,item.m,item.yr), should=(isPastCycle(item.worker,item.m,item.yr) && bal.base>0 && bal.settled>=bal.base);
+      if(should && !(lock&&lock.locked)) add('error','قفل الدورات','دورة سابقة مكتملة يجب أن تكون مقفلة: '+item.worker.name+' — '+cycleLabel(item.worker,item.m,item.yr));
+      if(isCurrentCycle(item.worker,item.m,item.yr) && lock&&lock.locked) add('warn','قفل الدورات','الدورة الحالية يجب أن تبقى مفتوحة: '+item.worker.name+' — '+cycleLabel(item.worker,item.m,item.yr));
+      if(!should && lock&&lock.locked&&lock.auto) add('warn','قفل الدورات','دورة مقفلة تحتاج تعديلاً صريحاً إن كانت البيانات تغيّرت: '+item.worker.name+' — '+cycleLabel(item.worker,item.m,item.yr));
+    });
     if(!(d.settings && d.settings.lastSyncHash) && d.settings && d.settings.cloudUrl && d.settings.cloudKey){var sx=(d.settings&&d.settings.v74LastSyncError)||null,detail=sx&&sx.message?(' آخر سبب مسجل: '+String(sx.message).slice(0,160)):'';add('warn','مزامنة','لم يصل إيصال مزامنة جزئية ناجح بعد.'+detail+' لن تُخفى الرسالة إلا بعد تحقق فعلي من Firebase.');}
     return issues;
   }
@@ -11444,13 +11567,16 @@ try{
         var m=(typeof S!=='undefined'&&S._smManual)?S.sm:active.m, yr=(typeof S!=='undefined'&&S._smManual)?(S.syr||new Date().getFullYear()):active.yr;
         var key=cycleKey(worker,m,yr), lock=d.cycleLocks[key], old=document.getElementById('v50CycleLockBanner'); if(old)old.remove();
         var banner=document.createElement('div'); banner.id='v50CycleLockBanner';
-        var bal=cycleBasicBalance(worker,m,yr), base=bal.base, paid=bal.paid;
+        var bal=cycleBasicBalance(worker,m,yr), base=bal.base, paid=bal.settled;
         if(lock&&lock.locked){
           banner.className='v50-cycle-lock';
-          banner.innerHTML='🔒 <b>الدورة مقفلة تلقائياً</b> — مجموع التسبيقات '+fmtMoney(paid)+' بلغ الراتب الأساسي '+fmtMoney(base)+'. أي تسبيق جديد يوزّع على الدورة التالية بعد التأكيد.';
+          banner.innerHTML='🔒 <b>دورة سابقة مقفلة تلقائياً</b> — تمت تسوية الراتب الأساسي: '+fmtMoney(paid)+' من '+fmtMoney(base)+' (التسبيقات + الغياب + قسط الدين الفعلي). الساعات والمكافآت خارج القفل. افتحها فقط عبر تعديل سجل تابع لها.';
+        }else if(isCurrentCycle(worker,m,yr)){
+          banner.className='v50-cycle-lock open';
+          banner.innerHTML='🔓 <b>الدورة الحالية مفتوحة</b> — لا تُقفل تلقائياً حتى تصبح دورة سابقة. تسوية الراتب الأساسي حالياً: '+fmtMoney(paid)+' من '+fmtMoney(base)+'.';
         }else{
           banner.className='v50-cycle-lock open';
-          banner.innerHTML='🔓 <b>الدورة مفتوحة</b> — التسبيقات '+fmtMoney(paid)+' من الراتب الأساسي '+fmtMoney(base)+'.';
+          banner.innerHTML='🔓 <b>دورة سابقة غير مكتملة</b> — تسوية الراتب الأساسي: '+fmtMoney(paid)+' من '+fmtMoney(base)+'. الساعات والمكافآت لا تدخل في شرط القفل.';
         }
         var target=host.querySelector('.twrap'); if(target)host.insertBefore(banner,target);else host.prepend(banner);
       }catch(e){console.warn('v50 lock render',e);}
@@ -11486,7 +11612,7 @@ try{
 
   function init(){
     var boot=ensure(); normalizeTombstones(boot); purgeDeleted(boot); installAuditWrapper(); installSaveWrapper(); installDeletionGuards(); installSafeCloudTools(); installSync(); installAdvanceSave(); installAdvanceModalActions(); installSalaryRenderLock(); enhancePrint(); installFunctionAliases(); installImport(); adminPanel(); reconcileLocks('تهيئة v54',true); queueTombstoneMigration(); lastSnapshot=businessSnapshot();
-    try { document.title=(document.title || 'EGTPH').replace(/v\d+(?:\.\d+)?/,'v52'); var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v54'; } catch(e) {}
+    try { document.title=(document.title || 'EGTPH').replace(/v\d+(?:\.\d+)?/,'v52'); var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v77'; } catch(e) {}
     setTimeout(function(){
       initializing=false;lastSnapshot=businessSnapshot();
       try{saveDB();}catch(e){}
@@ -11656,7 +11782,7 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
     wrap('renderDash',function(){var n=dedupeSafe();if(n){setTimeout(function(){try{if(typeof saveDB==='function')saveDB();}catch(e){}},0);}buildDashboard();refreshDashboard();});
     wrap('renderWorkers',function(){refreshDashboard();});
     wrap('showPage',function(){setTimeout(function(){buildDashboard();refreshDashboard();},0);});
-    try{document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v53');var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v54';}catch(e){}
+    try{document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v53');var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v77';}catch(e){}
     buildDashboard();refreshDashboard();
     window.EGTPH_V53={version:V53,restoreFromTrash:v53RestoreFromTrash,deleteAdvance:v53DeleteAdvance,dedupeSafe:dedupeSafe,refresh:refreshDashboard};
   }
@@ -12151,7 +12277,8 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
 /* ═══════════════════════════════════════════════════════════════
    EGTPH Pay v63 — طبقة الاعتماد المحاسبي
    المصدر الموحد للخصومات داخل الدورة:
-   ساعات غير مسددة → مكافآت غير مسددة → آخر تسبيق يغلق الراتب → التصفية.
+   آخر تسبيق من الراتب فقط → التصفية.
+   - الساعات الإضافية والمكافآت تبقى مستحقات مستقلة ولا تُخصم منها أقساط الدين أو الغياب.
    - لا يغير مبلغ التسبيق الأصلي.
    - لا ينشئ تسبيقاً لقسط الدين.
    - كل سبب خصم يملك allocationId واحداً ومُعرّف معاملة واحداً.
@@ -12293,14 +12420,10 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
       empty.installmentDue+=item.remaining;empty.totalDue+=item.remaining;if(item.remaining>0)empty.items.push(item);
     });
     empty.items.sort(function(a,b){return itemDate(a)-itemDate(b);});
-    var workH=empty.sources.hours.map(function(e){return {entry:e,remaining:capacity(e,'hours')};});
-    var workB=empty.sources.bonus.map(function(e){return {entry:e,remaining:capacity(e,'bonus')};});
-    empty.items.forEach(function(item){
-      var rem=item.remaining,take;
-      for(var i=0;i<workH.length&&rem>0;i++){take=Math.min(rem,workH[i].remaining);if(take){rem-=take;workH[i].remaining-=take;empty.projectedHours+=take;}}
-      for(var j=0;j<workB.length&&rem>0;j++){take=Math.min(rem,workB[j].remaining);if(take){rem-=take;workB[j].remaining-=take;empty.projectedBonus+=take;}}
-      item.projectedReserve=rem;
-    });
+    // v78: الساعات والمكافآت خارج الراتب الأساسي؛ لا تُستعمل أبداً لتسديد غياب أو قسط دين.
+    // كل مبلغ واجب يُحجز من آخر تسبيق راتب فقط، ليبقى صافي النقد واضحاً ولا يقع احتساب مزدوج.
+    empty.items.forEach(function(item){ item.projectedReserve=Math.max(0,money(item.remaining)); });
+    empty.projectedHours=0;empty.projectedBonus=0;
     empty.reserve=money(empty.items.reduce(function(sum,item){return sum+n(item.projectedReserve);},0));
     return empty;
   }
@@ -12312,7 +12435,7 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
     var deduction={
       id:generate('DED63'),transactionId:item.transactionId,allocationId:item.allocationId,
       allocationPartId:item.allocationId+'_'+key(entry.id)+'_'+kind,type:item.type,amount:amount,date:todayDMY(),
-      note:(item.type==='debt'?'قسط دين':'خصم غياب')+' من '+entryLabel(kind),
+      note:(item.type==='debt'?'قسط دين من تسبيق الراتب':'خصم غياب من تسبيق الراتب'),
       _v63:true,_v63Unique:unique,_v63Source:kind,_v63SourceEntryId:entry.id
     };
     if(item.type==='absence')deduction.absenceId=item.absenceId;
@@ -12354,8 +12477,9 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   function rebuildDebtReturns(wid){
     var d=db();if(!d)return false;var groups=sourceDebtGroups(wid),rows=arr(d.debts&&d.debts[wid]),changed=false,seen={};
     Object.keys(groups).forEach(function(aid){var g=groups[aid],rec=rows.find(function(r){return r&&r.type==='return'&&r._v63===true&&same(r.allocationId,aid);});
-      if(!rec){rec={id:generate('RET63'),type:'return',amount:g.amount,date:todayDMY(),debtId:g.debtId,note:'قسط دين — خُصم حسب ترتيب الدورة',by:'النظام',_v63:true,allocationId:aid,transactionId:g.transactionId,_instPayment:true,_instTag:g.instTag,_v63Sources:g.sources};rows.push(rec);changed=true;}
-      else{var before=JSON.stringify({amount:rec.amount,debtId:rec.debtId,tag:rec._instTag,src:rec._v63Sources});rec.amount=g.amount;rec.debtId=g.debtId;rec._instTag=g.instTag;rec.transactionId=g.transactionId;rec._v63Sources=g.sources;if(before!==JSON.stringify({amount:rec.amount,debtId:rec.debtId,tag:rec._instTag,src:rec._v63Sources}))changed=true;}
+      var advanceSource=(g.sources||[]).find(function(s){return s&&s.kind==='advance';});
+      if(!rec){rec={id:generate('RET63'),type:'return',amount:g.amount,date:todayDMY(),debtId:g.debtId,note:'قسط دين تلقائي — خُصم من تسبيق الراتب (لا حركة نقدية مستقلة)',by:'النظام',_v63:true,allocationId:aid,transactionId:g.transactionId,_instPayment:true,_instTag:g.instTag,_v63Sources:g.sources,_advanceId:advanceSource&&advanceSource.entryId||null,source:'salary-advance',cashEffect:0};rows.push(rec);changed=true;}
+      else{var before=JSON.stringify({amount:rec.amount,debtId:rec.debtId,tag:rec._instTag,src:rec._v63Sources,adv:rec._advanceId});rec.amount=g.amount;rec.debtId=g.debtId;rec._instTag=g.instTag;rec.transactionId=g.transactionId;rec._v63Sources=g.sources;rec._advanceId=advanceSource&&advanceSource.entryId||null;rec.source='salary-advance';rec.cashEffect=0;rec.note='قسط دين تلقائي — خُصم من تسبيق الراتب (لا حركة نقدية مستقلة)';if(before!==JSON.stringify({amount:rec.amount,debtId:rec.debtId,tag:rec._instTag,src:rec._v63Sources,adv:rec._advanceId}))changed=true;}
       seen[aid]=true;
     });
     var kept=rows.filter(function(r){if(!(r&&r.type==='return'&&r._v63===true))return true;if(seen[r.allocationId])return true;changed=true;return false;});
@@ -12378,10 +12502,13 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
     else if(plan.advanceGross>=plan.baseSalary&&sources.advance.length)closingAdvance=sources.advance[0];
     plan.items.forEach(function(item){
       var remain=item.remaining,parts=[],take,ded;
-      for(var i=0;i<sources.hours.length&&remain>0;i++){take=Math.min(remain,capacity(sources.hours[i],'hours'));if(take){ded=attachDeduction(sources.hours[i],'hours',item,take);if(ded){remain-=take;parts.push({source:'hours',entryId:sources.hours[i].id,amount:take});changed=true;}}}
-      for(var j=0;j<sources.bonus.length&&remain>0;j++){take=Math.min(remain,capacity(sources.bonus[j],'bonus'));if(take){ded=attachDeduction(sources.bonus[j],'bonus',item,take);if(ded){remain-=take;parts.push({source:'bonus',entryId:sources.bonus[j].id,amount:take});changed=true;}}}
-      if(remain>0&&options.allowAdvance&&closingAdvance&&plan.advanceGross>=plan.baseSalary){take=Math.min(remain,capacity(closingAdvance,'advance'));if(take){ded=attachDeduction(closingAdvance,'advance',item,take);if(ded){remain-=take;parts.push({source:'advance',entryId:closingAdvance.id,amount:take});changed=true;}}}
-      if(parts.length){ledgerOnce(wid,item,parts);auditSafe((item.type==='debt'?'قسط دين':'خصم غياب')+' تلقائي '+fmt(parts.reduce(function(s,p){return s+n(p.amount);},0))+' — '+(w.name||''));allParts=allParts.concat(parts);}
+      // v78: الخصم التلقائي لا يكون إلا من تسبيق الراتب الذي يغلق الدورة.
+      // الساعات والمكافآت لا تتغير ولا تُستعمل في تسديد الدين أو الغياب.
+      if(remain>0&&options.allowAdvance&&closingAdvance&&plan.advanceGross>=plan.baseSalary){
+        take=Math.min(remain,capacity(closingAdvance,'advance'));
+        if(take){ded=attachDeduction(closingAdvance,'advance',item,take);if(ded){remain-=take;parts.push({source:'advance',entryId:closingAdvance.id,amount:take});changed=true;}}
+      }
+      if(parts.length){ledgerOnce(wid,item,parts);auditSafe((item.type==='debt'?'قسط دين':'خصم غياب')+' تلقائي من تسبيق الراتب '+fmt(parts.reduce(function(s,p){return s+n(p.amount);},0))+' — '+(w.name||''));allParts=allParts.concat(parts);}
     });
     if(rebuildDebtReturns(wid))changed=true;
     if(refreshAbsenceState(wid))changed=true;
@@ -12443,19 +12570,24 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
     var retTags={};debts.filter(function(x){return x&&x.type==='return'&&x._instTag;}).forEach(function(x){retTags[x._instTag]=true;});
     var legacyInst=money(allAdvanceRows.filter(function(x){return x&&x._isInstDeduction&&!(x._instTag&&retTags[x._instTag]);}).reduce(function(s,x){return s+n(x.amount);},0));
     var debtBalance=Math.max(0,money(debtTotal-returns-legacyInst)),net=money(earned+unpaidH+unpaidB-totalAdv-absRemaining-debtBalance);
-    return {isFinal:!!w.exitDate,refDate:ref,actualDays:actualDays,earnedSal:earned,daily:salary/30,unpaidHrs:unpaidH,unpaidBon:unpaidB,totalAdv:totalAdv,totalAbs:absRemaining,debtBalance:debtBalance,netFinal:net,allocatedFromHours:money(hours.reduce(function(s,e){return s+deductionTotal(e);},0)),allocatedFromBonuses:money(bonuses.reduce(function(s,e){return s+deductionTotal(e);},0))};
+    // فصل عرضي فقط: totalAdv هو الجزء المحاسبي من الراتب، cashAdvances هو النقد الخارج فعلياً.
+    // قسط الدين ينقص رصيد الدين عبر return المرتبط، ولا يُضاف كحركة نقدية ثانية.
+    var cashAdvances=money(advances.reduce(function(s,e){return s+advanceNet(e);},0));
+    var debtRecoveredFromSalary=money(advances.reduce(function(s,e){return s+sourceDeds(e).filter(function(x){return x&&x.type==='debt';}).reduce(function(t,x){return t+n(x.amount);},0);},0));
+    var absenceRecoveredFromSalary=money(advances.reduce(function(s,e){return s+sourceDeds(e).filter(function(x){return x&&x.type==='absence';}).reduce(function(t,x){return t+n(x.amount);},0);},0));
+    return {isFinal:!!w.exitDate,refDate:ref,actualDays:actualDays,earnedSal:earned,daily:salary/30,unpaidHrs:unpaidH,unpaidBon:unpaidB,totalAdv:totalAdv,cashAdvances:cashAdvances,debtRecoveredFromSalary:debtRecoveredFromSalary,absenceRecoveredFromSalary:absenceRecoveredFromSalary,totalAbs:absRemaining,debtBalance:debtBalance,netFinal:net,allocatedFromHours:money(hours.reduce(function(s,e){return s+deductionTotal(e);},0)),allocatedFromBonuses:money(bonuses.reduce(function(s,e){return s+deductionTotal(e);},0))};
   }
   function cyclePrintBlock(wid,m,yr){
     var p=buildPlan(wid,m,yr),parts=[];
-    if(p.unpaidHours||p.allocatedHours)parts.push('<div>⏱️ ساعات إضافية: <b>+ '+fmt(p.unpaidHours)+' دج</b>'+(p.allocatedHours?'<span style="color:#b91c1c"> | − '+fmt(p.allocatedHours)+' دج خصم مطبق</span>':'')+'</div>');
-    if(p.unpaidBonus||p.allocatedBonus)parts.push('<div>🎁 مكافآت: <b>+ '+fmt(p.unpaidBonus)+' دج</b>'+(p.allocatedBonus?'<span style="color:#b91c1c"> | − '+fmt(p.allocatedBonus)+' دج خصم مطبق</span>':'')+'</div>');
+    if(p.unpaidHours)parts.push('<div>⏱️ ساعات إضافية مستقلة: <b>+ '+fmt(p.unpaidHours)+' دج</b></div>');
+    if(p.unpaidBonus)parts.push('<div>🎁 مكافآت مستقلة: <b>+ '+fmt(p.unpaidBonus)+' دج</b></div>');
     if(p.absenceDue)parts.push('<div>📅 غيابات متبقية: <b style="color:#b91c1c">− '+fmt(p.absenceDue)+' دج</b></div>');
     if(p.installmentDue)parts.push('<div>📋 أقساط دين متبقية: <b style="color:#b91c1c">− '+fmt(p.installmentDue)+' دج</b></div>');
     if(!parts.length)return '';
-    return '<div style="margin:7px 0;padding:8px 9px;border:1px dashed #80aee8;background:#f5f9ff;border-radius:5px;font-size:10px;color:#173b62"><b>🧾 مصدر حساب الدورة v63 — دون خصم مزدوج</b>'+parts.join('')+'<div style="margin-top:4px">ترتيب الخصم: ساعات → مكافآت → آخر تسبيق/تصفية.</div></div>';
+    return '<div style="margin:7px 0;padding:8px 9px;border:1px dashed #80aee8;background:#f5f9ff;border-radius:5px;font-size:10px;color:#173b62"><b>🧾 مصدر حساب الدورة — دون احتساب مزدوج</b>'+parts.join('')+'<div style="margin-top:4px">قسط الدين وخصم الغياب يُسجلان داخل آخر تسبيق راتب فقط؛ الساعات والمكافآت لا تُخصم منها.</div></div>';
   }
   function renderCycleBox(){
-    try{var d=db(),w=worker((typeof S!=='undefined'&&S)?S.sw:null),host=document.getElementById('salContent');if(!d||!w||!host)return;var active=typeof getActiveCycle==='function'?getActiveCycle(w.id):cycleFor(w,nowISO()),m=(S&&S._smManual)?S.sm:active.m,yr=(S&&S._smManual)?(S.syr||new Date().getFullYear()):active.yr,p=buildPlan(w.id,m,yr);var old=document.getElementById('v63CycleBox');if(old)old.remove();var box=document.createElement('div');box.id='v63CycleBox';box.className='abox warn';box.style.marginTop='12px';box.innerHTML='<b>🧾 خريطة خصومات الدورة v63</b><br>خصم فعلي من الساعات: <b>− '+fmt(p.allocatedHours)+' دج</b> | خصم فعلي من المكافآت: <b>− '+fmt(p.allocatedBonus)+' دج</b><br>متوقع من ساعات غير مسددة: <b>− '+fmt(p.projectedHours)+' دج</b> | متوقع من مكافآت غير مسددة: <b>− '+fmt(p.projectedBonus)+' دج</b> | المحفوظ لآخر تسبيق/التصفية: <b>− '+fmt(p.reserve)+' دج</b><br><span style="font-size:11px">أي غياب أو قسط يُسجل مرة واحدة فقط مع Allocation ID في Ledger.</span>';host.insertBefore(box,host.firstChild);}catch(e){console.warn('v63 render cycle',e);}
+    try{var d=db(),w=worker((typeof S!=='undefined'&&S)?S.sw:null),host=document.getElementById('salContent');if(!d||!w||!host)return;var active=typeof getActiveCycle==='function'?getActiveCycle(w.id):cycleFor(w,nowISO()),m=(S&&S._smManual)?S.sm:active.m,yr=(S&&S._smManual)?(S.syr||new Date().getFullYear()):active.yr,p=buildPlan(w.id,m,yr);var old=document.getElementById('v63CycleBox');if(old)old.remove();var box=document.createElement('div');box.id='v63CycleBox';box.className='abox warn';box.style.marginTop='12px';box.innerHTML='<b>🧾 خريطة تسوية الراتب</b><br>الساعات الإضافية والمكافآت: <b>مستحقات مستقلة</b> ولا تدخل في خصم الدين أو قفل الراتب.<br>المحفوظ من آخر تسبيق راتب لتسوية غياب/قسط دين: <b>− '+fmt(p.reserve)+' دج</b><br><span style="font-size:11px">عند الخصم: يُسجل قسط الدين في خانة الديون، ويظهر داخل التسبيق دون حركة نقدية مكررة.</span>';host.insertBefore(box,host.firstChild);}catch(e){console.warn('v63 render cycle',e);}
   }
   function preflightMessage(pf){return '⚠️ لا تسجل هذا التسبيق: يجب أن يبقى '+fmt(pf.plan.reserve)+' دج للحساب الأخير حتى تُطبق الخصومات مرة واحدة. الحد الأقصى الآن: '+fmt(pf.maxEarly)+' دج.';}
   function routeAdvance(wid,m,yr,dateISO,amount,note){
@@ -12628,7 +12760,7 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   function runSelfTests(){
     var results=[];function test(name,fn){try{var out=fn();if(out&&out.manual)results.push({name:name,status:'warn',detail:txt(out.manual)});else results.push({name:name,status:out===false?'fail':'pass',detail:out===true?'':txt(out||'')});}catch(e){results.push({name:name,status:'fail',detail:e.message||txt(e)});}}
     test('نافذة الدورة يوم 28 لا تكرر يوم البداية',function(){var w={day:28},win=cycleWin(w,0,2026);return win&&win.from.getDate()===28&&win.to.getDate()===28&&win.from.getMonth()===0&&win.to.getMonth()===1;});
-    test('توزيع الخصم: ساعات ثم مكافآت ثم تسبيق',function(){var due=8000,h=8000,b=5000,a=20000,x=Math.min(due,h);due-=x;var y=Math.min(due,b);due-=y;var z=Math.min(due,a);return x===8000&&y===0&&z===0&&due===0;});
+    test('توزيع الخصم: آخر تسبيق راتب فقط',function(){var due=8000,a=20000,take=Math.min(due,a);return take===8000&&(a-take)===12000;});
     test('تحذير قبل آخر تسبيق',function(){var baseSal=45000,already=40000,reserve=5000,maxEarly=baseSal-reserve-already;var block=(already+2000<baseSal&&already+2000>maxEarly),allow=(already+0<=maxEarly);return block&&allow;});
     test('آخر تسبيق: +5000 ثم −5000 = نقد 0',function(){var gross=5000,ded=5000;return gross-ded===0;});
     test('قاعدة 15 يوم محفوظة في التصفية',function(){var start=new Date(2026,3,7),out=new Date(2026,3,20),days=Math.round((out-start)/86400000)+1;return days===14;});
@@ -12668,7 +12800,7 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
     wrapMarkHours();wrapMarkBonus();
     (function(){var fn=window.toggleDebtInst;if(typeof fn!=='function'||fn.__v63Wrapped)return;var wrapped=function(wid,did){var r=fn.apply(this,arguments);reapplyCycles(wid,[cycleKey(wid,nowISO())]);return r;};wrapped.__v63Wrapped=true;window.toggleDebtInst=wrapped;try{toggleDebtInst=wrapped;}catch(e){}})();
     addTestButton();setTimeout(addTestButton,900);setTimeout(function(){try{renderCycleBox();}catch(e){}},1200);
-    window.EGTPH_V63={version:VERSION,buildPlan:buildPlan,applyCycle:applyCycle,preflight:preflight,runTests:runSelfTests,status:function(){return {version:VERSION,loaded:true,autoMutationOnBoot:false};}};
+    window.EGTPH_V63={version:VERSION,buildPlan:buildPlan,applyCycle:applyCycle,preflight:preflight,runTests:runSelfTests,status:function(){return {version:VERSION,loaded:true,autoMutationOnBoot:false,debtPolicy:'salary-advance-only-v78'};}};
   }
   // v63.1 — تركيب مع إعادة محاولة حتى تجهز قاعدة البيانات.
   // سابقاً: setTimeout(install,3400) مرة واحدة فقط. إن لم تكن db() جاهزة
@@ -13752,221 +13884,150 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
 <script id="egtph-v73-sync-receipt-fix">/* v74.0 — عنوان النسخة. التسجيل الفعلي لإيصال المزامنة داخل محرك v69 بعد رد Firebase ناجح. */
 (function(){try{var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v74.0';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v74.0');}catch(e){}})();
 </script>
-
-
-<style id="egtph-v75-quick-ops-dailyfollowup-style">
-/* v75 — متابعة عمليات اليوم: واجهة تنظيمية فقط، بلا أثر مالي */
-.v75-followup-panel{margin:0 0 14px;padding:14px 15px;border:1px solid rgba(24,129,76,.25);border-radius:16px;background:linear-gradient(135deg,#f5fff8,#ffffff);box-shadow:0 8px 20px rgba(18,92,54,.08)}
-.v75-followup-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
-.v75-followup-title{font-weight:900;font-size:15px;color:#14633d}.v75-followup-note{font-size:10px;color:var(--gray);margin-top:3px;line-height:1.5}
-.v75-followup-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}.v75-followup-stat{border:1px solid rgba(19,92,54,.14);border-radius:11px;background:#fff;padding:9px 8px;text-align:center}.v75-followup-stat b{display:block;font-size:15px;color:#174c34}.v75-followup-stat span{display:block;font-size:10px;color:var(--gray);margin-top:2px}
-.v75-followup-actions{display:flex;gap:6px;flex-wrap:wrap}.v75-filter{border:1px solid rgba(15,105,61,.25);background:#fff;color:#285843;font-family:'Tajawal',sans-serif;border-radius:18px;padding:6px 10px;font-weight:800;font-size:11px;cursor:pointer}.v75-filter.active{background:#117846;color:#fff;border-color:#117846}.v75-last-action{margin-top:10px;padding:8px 10px;border-radius:10px;background:#edf8f1;color:#266344;font-size:11px;line-height:1.55}.v75-last-action.empty{background:#fbf7ea;color:#876300}
-.qcard.v75-reviewed{border-color:rgba(18,145,75,.44)!important;box-shadow:0 0 0 2px rgba(18,145,75,.06),var(--shadow-card)}
-.qcard.v75-unreviewed{border-color:rgba(208,137,0,.34)!important}
-.v75-card-followup{border-radius:10px;padding:7px 9px;margin:3px 0 8px;border:1px solid rgba(15,100,59,.12);background:#f8fcf9;font-size:10px;line-height:1.6}.v75-card-followup.reviewed{background:#effbf3;border-color:rgba(18,145,75,.24)}.v75-card-followup.unreviewed{background:#fffaf0;border-color:rgba(208,137,0,.22)}
-.v75-state{font-weight:900}.v75-state.ok{color:#137344}.v75-state.wait{color:#a86e00}.v75-activity{margin-top:3px;color:#45685a}.v75-activity b{color:#285843}.v75-review-btn{width:100%;border:1px solid rgba(18,132,73,.28);background:#eef9f2;color:#126d40;border-radius:9px;padding:7px 10px;font-family:'Tajawal',sans-serif;font-size:11px;font-weight:900;cursor:pointer}.v75-review-btn.unreviewed{border-color:rgba(205,135,0,.35);background:#fff7e9;color:#946000}.v75-review-btn:active{transform:scale(.985)}
-@media(max-width:900px){.v75-followup-panel{padding:12px}.v75-followup-stats{gap:6px}.v75-followup-stat{padding:8px 5px}.v75-followup-stat b{font-size:13px}.v75-followup-title{font-size:14px}.v75-followup-actions{width:100%}.v75-filter{flex:1;padding:7px 6px}.v75-card-followup{font-size:10px}}
-@media print{.v75-followup-panel,.v75-card-followup,.v75-review-btn{display:none!important}}
+<style id="egtph-v76-daily-followup-style">
+/* v76: واجهة متابعة فقط، لا تغيّر أي منطق مالي. */
+.v76-panel{margin:0 0 14px;padding:13px;border:1px solid rgba(18,120,70,.25);border-radius:16px;background:linear-gradient(135deg,#f5fff8,#fff);box-shadow:0 8px 20px rgba(18,92,54,.08)}
+.v76-head{display:flex;align-items:flex-start;justify-content:space-between;gap:9px;flex-wrap:wrap}.v76-title{font-size:15px;font-weight:900;color:#14633d}.v76-note{font-size:10px;color:var(--gray);margin-top:3px}.v76-tools{display:flex;gap:6px}.v76-filter{border:1px solid rgba(15,105,61,.25);background:#fff;color:#285843;font-family:Tajawal,sans-serif;border-radius:18px;padding:6px 10px;font-weight:800;font-size:11px}.v76-filter.active{background:#117846;color:#fff;border-color:#117846}
+.v76-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:10px}.v76-stat{border:1px solid rgba(19,92,54,.14);border-radius:11px;background:#fff;padding:8px;text-align:center}.v76-stat b{display:block;font-size:14px;color:#174c34}.v76-stat span{font-size:10px;color:var(--gray)}
+.v76-block{margin-top:9px;padding:8px 9px;border:1px solid rgba(18,92,54,.12);border-radius:10px;background:#fff;font-size:11px;line-height:1.65}.v76-block b{color:#285843}.v76-chip{margin:2px;padding:4px 8px;border:1px solid #e2d0a3;border-radius:14px;background:#fff8e9;color:#8a6308;font-family:Tajawal,sans-serif;font-size:10px;font-weight:800}.v76-chip.move{border-color:#afcce6;background:#eef7ff;color:#1564a4}
+.v76-card{border-radius:10px;padding:8px 9px;margin:3px 0 8px;border:1px solid rgba(15,100,59,.12);font-size:10px;line-height:1.65}.v76-card.pending{background:#fffaf0;border-color:rgba(208,137,0,.22)}.v76-card.reviewed{background:#effbf3;border-color:rgba(18,145,75,.24)}.v76-card.moved{background:#f0f8ff;border-color:rgba(21,100,164,.22)}.v76-state{font-weight:900}.v76-state.pending{color:#a86e00}.v76-state.reviewed{color:#137344}.v76-state.moved{color:#1564a4}.v76-detail{margin-top:2px;color:#45685a}.v76-review{width:100%;border:1px solid rgba(18,132,73,.28);background:#eef9f2;color:#126d40;border-radius:9px;padding:7px 10px;font-family:Tajawal,sans-serif;font-size:11px;font-weight:900}.v76-review.pending{border-color:rgba(205,135,0,.35);background:#fff7e9;color:#946000}
+.qcard.v76-reviewed{border-color:rgba(18,145,75,.44)!important}.qcard.v76-moved{border-color:rgba(21,100,164,.38)!important}.qcard.v76-pending{border-color:rgba(208,137,0,.34)!important}
+@media(max-width:900px){.v76-panel{padding:11px}.v76-tools{width:100%}.v76-filter{flex:1}.v76-stat{padding:7px 4px}}
+@media print{.v76-panel,.v76-card,.v76-review{display:none!important}}
 </style>
-
-
-<script id="egtph-v75-quick-ops-dailyfollowup">
+<script id="egtph-v76-safe-daily-followup">
+/* v76: بدون تغليف renderDash/saveDB/showPage؛ يمنع حلقة الاستدعاء الموجودة في v75. */
+(function(){
+'use strict';
+if(window.__EGTPH_V76__)return;window.__EGTPH_V76__=true;
+var KEY='quickOpsDailyFollowupV76', mode='all', obs=null, queued=false, painting=false;
+function D(){try{return (typeof DB!=='undefined'&&DB)?DB:(window.DB||null);}catch(e){return window.DB||null;}}
+function A(v){return Array.isArray(v)?v:[];}
+function O(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}
+function p(n){return String(n).padStart(2,'0');}
+function today(){var d=new Date();return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+function dkey(v){if(!v)return '';var s=String(v).trim(),m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[1]+'-'+m[2]+'-'+m[3];m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);return m?m[3]+'-'+p(m[2])+'-'+p(m[1]):'';}
+function isToday(){for(var i=0;i<arguments.length;i++)if(dkey(arguments[i])===today())return true;return false;}
+function safe(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function val(v){var n=Number(v);return isFinite(n)?n:0;}
+function money(v){try{return typeof fmt==='function'?fmt(v):val(v).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' دج';}catch(e){return val(v).toFixed(2)+' دج';}}
+function ws(){var d=D();return d&&Array.isArray(d.workers)?d.workers.filter(function(w){return w&&w.id!=null;}):[];}
+function get(wid){wid=String(wid);return ws().find(function(w){return String(w.id)===wid;})||null;}
+function bucket(d,sec,wid){var root=O(d&&d[sec]);return root[wid]||root[String(wid)]||null;}
+function store(make){var d=D();if(!d)return null;d.settings=O(d.settings);var s=d.settings[KEY];if(!s&&make)s=d.settings[KEY]={version:'v76',days:{}};if(!s)return null;s.days=O(s.days);var k=today();if(!s.days[k]&&make)s.days[k]={reviews:{}};var out=s.days[k]||null;if(out)out.reviews=O(out.reviews);return out;}
+function reviewed(wid){var s=store(false);return !!(s&&s.reviews[String(wid)]);}
+function persist(){try{if(typeof window.saveDB==='function')window.saveDB();else if(typeof saveDB==='function')saveDB();}catch(e){console.warn('v76 save',e);}}
+function rows(wid){
+ var d=D(),r=[];if(!d)return r;function add(kind,amount){r.push({kind:kind,amount:val(amount)});}var adv=O(bucket(d,'advances',wid));Object.keys(adv).forEach(function(k){A(adv[k]).forEach(function(x){if(x&&!x._instAuto&&x.source!=='installment'&&isToday(x.enteredAt,x._createdAt,x.realDate,x.date))add('💰 تسبيق',x.amount);});});
+ A(bucket(d,'hours',wid)).forEach(function(x){if(x&&isToday(x.enteredAt,x._createdAt,x.date))add('⏱️ ساعات',x.total!=null?x.total:x.amount);});
+ A(bucket(d,'absences',wid)).forEach(function(x){if(x&&isToday(x.enteredAt,x._createdAt,x.date,x.from))add('📅 غياب',x.deduct!=null?x.deduct:x.amount);});
+ var bon=O(bucket(d,'bonuses',wid));Object.keys(bon).forEach(function(k){A(bon[k]).forEach(function(x){if(x&&isToday(x.enteredAt,x._createdAt,x.date))add('🎁 مكافأة',x.net!=null?x.net:x.amount);});});
+ A(bucket(d,'debts',wid)).forEach(function(x){if(x&&isToday(x.enteredAt,x._createdAt,x.realDate,x.date))add(x.type==='return'?'💵 تسديد دين':'📋 دين',x.amount);});return r;
+}
+function text(r){if(!r.length)return 'لا توجد حركة مالية مسجلة اليوم.';var g={};r.forEach(function(x){g[x.kind]=(g[x.kind]||0)+x.amount;});return Object.keys(g).map(function(k){return k+(g[k]?' — '+money(g[k]):'');}).join(' • ');}
+function cardId(card,i){var all=ws(),b=card.querySelector('.wn'),n=b?parseInt(b.textContent,10):0;return n>0&&all[n-1]?all[n-1].id:(all[i]?all[i].id:null);}
+function toggle(wid){var s=store(true);if(!s)return;var k=String(wid),w=get(wid);if(s.reviews[k])delete s.reviews[k];else s.reviews[k]={at:new Date().toISOString(),name:w?w.name:'عامل'};persist();queue();}
+function decorateCard(card,wid){var done=reviewed(wid),r=rows(wid),state=done?'reviewed':(r.length?'moved':'pending');card.setAttribute('data-v76-wid',String(wid));card.classList.toggle('v76-reviewed',done);card.classList.toggle('v76-moved',!done&&r.length>0);card.classList.toggle('v76-pending',!done&&!r.length);
+ var box=card.querySelector('.v76-card');if(!box){box=document.createElement('div');box.className='v76-card';var top=card.querySelector('.qcname');if(top&&top.nextSibling)card.insertBefore(box,top.nextSibling);else card.appendChild(box);}box.className='v76-card '+state;box.innerHTML='<div class="v76-state '+state+'">'+(done?'✓ تمت مراجعة العامل اليوم':r.length?'● توجد حركة اليوم — راجع العامل ثم علّمه كمراجع':'◷ لم تتم مراجعة العامل بعد')+'</div><div class="v76-detail"><b>حركات اليوم:</b> '+text(r)+'</div>';
+ var btn=card.querySelector('.v76-review');if(!btn){var row=document.createElement('div');row.className='qbtns';row.style.marginTop='4px';btn=document.createElement('button');btn.type='button';btn.className='v76-review';row.appendChild(btn);card.appendChild(row);btn.addEventListener('click',function(){toggle(wid);});}btn.className='v76-review '+(done?'':'pending');btn.textContent=done?'✓ تمت المراجعة اليوم — إلغاء العلامة':'✓ تمت مراجعة العامل اليوم';card.style.display=(mode==='pending'&&done)?'none':'';
+}
+function jump(wid){var c=A(document.querySelectorAll('#qgrid .qcard')).find(function(x){return x.getAttribute('data-v76-wid')===String(wid);});if(c){c.scrollIntoView({behavior:'smooth',block:'center'});c.style.outline='3px solid rgba(21,100,164,.35)';setTimeout(function(){c.style.outline='';},1100);}}
+function panel(){var grid=document.getElementById('qgrid');if(!grid)return;var el=document.getElementById('v76Panel');if(!el){el=document.createElement('section');el.id='v76Panel';el.className='v76-panel';grid.parentNode.insertBefore(el,grid);}var all=ws(),done=all.filter(function(w){return reviewed(w.id);}),pending=all.filter(function(w){return !reviewed(w.id);}),moving=all.filter(function(w){return rows(w.id).length;});function chips(list,cl){return list.length?list.map(function(w){return '<button type="button" class="v76-chip '+cl+'" data-v76-go="'+safe(w.id)+'">'+safe(w.name)+'</button>';}).join(''):'<span style="color:var(--gray)">لا يوجد</span>';}
+ el.innerHTML='<div class="v76-head"><div><div class="v76-title">📌 متابعة عمليات اليوم</div><div class="v76-note">تنظيم فقط: لا يغيّر راتباً أو دورة أو ديناً أو Ledger.</div></div><div class="v76-tools"><button class="v76-filter '+(mode==='all'?'active':'')+'" data-v76-filter="all">الكل ('+all.length+')</button><button class="v76-filter '+(mode==='pending'?'active':'')+'" data-v76-filter="pending">غير مراجع ('+pending.length+')</button></div></div><div class="v76-stats"><div class="v76-stat"><b>'+done.length+' / '+all.length+'</b><span>تمت مراجعتهم</span></div><div class="v76-stat"><b>'+pending.length+'</b><span>بانتظار المراجعة</span></div><div class="v76-stat"><b>'+moving.length+'</b><span>لديهم حركات اليوم</span></div></div><div class="v76-block"><b>◷ بانتظار المراجعة — اضغط الاسم للانتقال إليه</b><br>'+chips(pending,'')+'</div><div class="v76-block"><b>● عمال لديهم حركات مسجلة اليوم</b><br>'+chips(moving,'move')+'</div>';
+ A(el.querySelectorAll('[data-v76-filter]')).forEach(function(b){b.addEventListener('click',function(){mode=b.getAttribute('data-v76-filter')||'all';queue();});});A(el.querySelectorAll('[data-v76-go]')).forEach(function(b){b.addEventListener('click',function(){jump(b.getAttribute('data-v76-go'));});});}
+function paint(){var grid=document.getElementById('qgrid');if(!grid)return;painting=true;if(obs)obs.disconnect();try{panel();A(grid.querySelectorAll('.qcard')).forEach(function(c,i){var id=cardId(c,i);if(id!=null)decorateCard(c,id);});}catch(e){console.warn('v76 follow-up',e);}finally{painting=false;if(obs)obs.observe(grid,{childList:true,subtree:false});}}
+function queue(){if(queued)return;queued=true;setTimeout(function(){queued=false;paint();},0);}
+function install(){try{var l=document.querySelector('.tlogo span');if(l)l.textContent='| سجل الأجور v77.0';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v77.0');}catch(e){}var g=document.getElementById('qgrid');if(!g)return;if(!obs){obs=new MutationObserver(function(m){if(!painting&&m.some(function(x){return x.addedNodes.length||x.removedNodes.length;}))queue();});obs.observe(g,{childList:true,subtree:false});}queue();}
+[0,500,1500,3500,6500].forEach(function(ms){setTimeout(install,ms);});
+})();
+</script>
+<script id="egtph-v77-cycle-lock-policy">
+/* v77 — سياسة قفل الدورة: دورات سابقة مكتملة فقط؛ الساعات والمكافآت خارج شرط القفل. */
+window.__EGTPH_V77_CYCLE_LOCK_POLICY__={version:'77.0',policy:'past-cycle-core-salary-only',updatedAt:'2026-07-02'};
+setTimeout(function(){try{var l=document.querySelector('.tlogo span');if(l)l.textContent='| سجل الأجور v77.0';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v77.0');}catch(e){}},1800);
+</script>
+<script id="egtph-v78-debt-only-settlement-policy">
 /* ═══════════════════════════════════════════════════════════════
-   EGTPH Payroll v75.0 — متابعة عمليات اليوم في العمليات السريعة
-   طبقة تنظيمية فقط: لا تغيّر الرواتب أو الدورات أو Ledger أو الحذف.
+   EGTPH v78 — قسط الدين من تسبيق الراتب فقط
+   - لا خصم تلقائياً من الساعات أو المكافآت.
+   - كل قسط تلقائي مرتبط بتسبيق وبسجل return في الديون.
+   - مقدار التسبيق المحاسبي لا يتحول إلى خروج نقدي مرتين.
 ═══════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
-  if(window.__EGTPH_V75_QUICK_FOLLOWUP__) return;
-  window.__EGTPH_V75_QUICK_FOLLOWUP__=true;
-
-  var STORE_KEY='quickOpsDailyFollowupV75', MAX_DAYS=31, MAX_ACTIONS=160;
-  var currentFilter='all', pendingIntent=null, baseRenderDash=null;
-  var LABELS={advance:'💰 تسبيق',hours:'⏱️ ساعات إضافية',absence:'📅 غياب',bonus:'🎁 مكافأة',debt:'📋 دين',return:'💵 تسديد دين',settle:'✅ تسوية غياب'};
-
-  function db(){return (window.DB&&typeof window.DB==='object')?window.DB:null;}
-  function pad(n){return String(n).padStart(2,'0');}
-  function todayKey(){var x=new Date();return x.getFullYear()+'-'+pad(x.getMonth()+1)+'-'+pad(x.getDate());}
-  function clock(x){x=x?new Date(x):new Date();return pad(x.getHours())+':'+pad(x.getMinutes());}
-  function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function num(v){var n=Number(v);return isFinite(n)?n:0;}
-  function money(v){try{return typeof window.fmt==='function'?window.fmt(v):num(v).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' دج';}catch(e){return num(v).toFixed(2)+' دج';}}
-  function workers(){var d=db();return d&&Array.isArray(d.workers)?d.workers:[];}
-  function workerById(wid){wid=String(wid);return workers().find(function(w){return String(w&&w.id)===wid;})||null;}
-
-  function ensureStore(){
-    var d=db();if(!d)return null;
-    d.settings=(d.settings&&typeof d.settings==='object')?d.settings:{};
-    var s=d.settings[STORE_KEY];
-    if(!s||typeof s!=='object'||Array.isArray(s)) s=d.settings[STORE_KEY]={version:'v75.0',days:{}};
-    if(!s.days||typeof s.days!=='object'||Array.isArray(s.days))s.days={};
-    Object.keys(s.days).forEach(function(k){
-      var day=s.days[k];
-      if(!day||typeof day!=='object'){delete s.days[k];return;}
-      if(!day.reviews||typeof day.reviews!=='object'||Array.isArray(day.reviews))day.reviews={};
-      if(!Array.isArray(day.actions))day.actions=[];
-      day.actions=day.actions.filter(function(a){return a&&typeof a==='object'&&a.wid!=null&&a.type;}).slice(-MAX_ACTIONS);
-    });
-    var cutoff=new Date();cutoff.setDate(cutoff.getDate()-MAX_DAYS);
-    var cutoffKey=cutoff.getFullYear()+'-'+pad(cutoff.getMonth()+1)+'-'+pad(cutoff.getDate());
-    Object.keys(s.days).forEach(function(k){if(k<cutoffKey)delete s.days[k];});
-    return s;
+  var VERSION='78.0', applied=false;
+  function live(){try{return (typeof DB!=='undefined'&&DB)?DB:(window.DB||null);}catch(e){return null;}}
+  function arr(v){return Array.isArray(v)?v:[];}
+  function n(v){v=+v;return isFinite(v)?v:0;}
+  function money(v){return Math.round(n(v));}
+  function clone(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
+  function aid(d){return String((d&&d.allocationId)||'');}
+  function allAdvanceDeductions(d,wid){
+    var out=[];Object.keys((d.advances&&d.advances[wid])||{}).forEach(function(m){arr(d.advances[wid][m]).forEach(function(a){
+      arr(a&&a.deductions).forEach(function(x){if(x&&x.type==='debt'&&x._v63===true)out.push({advance:a,ded:x});});
+    });});return out;
   }
-  function dayStore(create){
-    var s=ensureStore();if(!s)return null;var k=todayKey();
-    if(!s.days[k]&&create!==false)s.days[k]={reviews:{},actions:[]};
-    return s.days[k]||null;
-  }
-  function saveFollowup(){
-    try{if(typeof window.saveDB==='function')window.saveDB();}catch(e){console.warn('v75 follow-up persistence',e);}
-  }
-  function refreshDash(){try{if(typeof window.renderDash==='function')window.renderDash();}catch(e){console.warn('v75 dashboard refresh',e);}}
-
-  function isoOf(v){
-    if(!v)return '';
-    if(v instanceof Date&&!isNaN(v))return v.getFullYear()+'-'+pad(v.getMonth()+1)+'-'+pad(v.getDate());
-    var s=String(v).trim();
-    var m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[1]+'-'+m[2]+'-'+m[3];
-    m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);if(m)return m[3]+'-'+pad(m[2])+'-'+pad(m[1]);
-    return '';
-  }
-  function isTodayValue(){
-    var target=todayKey();
-    for(var i=0;i<arguments.length;i++)if(isoOf(arguments[i])===target)return true;
-    return false;
-  }
-  function addSummary(out,key,label,amount,detail){
-    if(!out[key])out[key]={key:key,label:label,count:0,amount:0,detail:detail||''};
-    out[key].count++;out[key].amount+=num(amount);
-  }
-  function liveActivity(wid){
-    var d=db(),out={};if(!d)return [];
-    Object.keys(d.advances&&d.advances[wid]||{}).forEach(function(m){(d.advances[wid][m]||[]).forEach(function(a){
-      if(!a||a._instAuto||a.source==='installment')return;
-      if(isTodayValue(a.enteredAt,a.realDate,a.date))addSummary(out,'advance','💰 تسبيق',a.amount);
-    });});
-    (d.hours&&d.hours[wid]||[]).forEach(function(h){if(h&&isTodayValue(h.enteredAt,h.date))addSummary(out,'hours','⏱️ ساعات',h.total,Math.round(num(h.hours)*100)/100+'سا');});
-    (d.absences&&d.absences[wid]||[]).forEach(function(a){if(a&&isTodayValue(a.enteredAt,a.createdAt,a.date,a.from))addSummary(out,'absence','📅 غياب',a.deduct,(num(a.days)||1)+'ي');});
-    Object.keys(d.bonuses&&d.bonuses[wid]||{}).forEach(function(m){(d.bonuses[wid][m]||[]).forEach(function(b){if(b&&isTodayValue(b.enteredAt,b.date))addSummary(out,'bonus','🎁 مكافأة',b.net!=null?b.net:b.amount);});});
-    (d.debts&&d.debts[wid]||[]).forEach(function(x){if(x&&isTodayValue(x.enteredAt,x.date))addSummary(out,x.type==='return'?'return':'debt',x.type==='return'?'💵 تسديد دين':'📋 دين',x.amount);});
-    return Object.keys(out).map(function(k){return out[k];});
-  }
-  function liveText(wid){
-    var a=liveActivity(wid);if(!a.length)return 'لا توجد حركة مسجلة اليوم';
-    return a.map(function(x){
-      if(x.key==='hours')return x.label+' '+esc(x.detail||'')+(x.amount?' ('+money(x.amount)+')':'');
-      if(x.key==='absence')return x.label+' '+esc(x.detail||'')+(x.amount?' ('+money(x.amount)+')':'');
-      return x.label+' '+money(x.amount);
-    }).join(' • ');
-  }
-  function actionsToday(){var x=dayStore(false);return x&&Array.isArray(x.actions)?x.actions:[];}
-  function lastActionFor(wid){
-    var rows=actionsToday().filter(function(a){return String(a.wid)===String(wid);});
-    rows.sort(function(a,b){return String(b.at||'').localeCompare(String(a.at||''));});return rows[0]||null;
-  }
-  function lastActionAll(){var rows=actionsToday().slice().sort(function(a,b){return String(b.at||'').localeCompare(String(a.at||''));});return rows[0]||null;}
-  function isReviewed(wid){var x=dayStore(false);return !!(x&&x.reviews&&x.reviews[String(wid)]);}
-
-  function snapshot(wid,type){
-    var d=db();if(!d)return '';
-    var v={};
-    if(type==='advance'){v.a=d.advances&&d.advances[wid];}
-    else if(type==='hours'){v.h=d.hours&&d.hours[wid];}
-    else if(type==='absence'){v.a=d.absences&&d.absences[wid];}
-    else if(type==='bonus'){v.b=d.bonuses&&d.bonuses[wid];}
-    else if(type==='debt'||type==='return'){v.d=d.debts&&d.debts[wid];}
-    else if(type==='settle'){v.a=d.advances&&d.advances[wid];v.x=d.absences&&d.absences[wid];}
-    return JSON.stringify(v);
-  }
-  function beginIntent(wid,type){
-    if(!wid||!type)return;
-    pendingIntent={wid:wid,type:type,before:snapshot(wid,type),started:Date.now(),id:'QF_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)};
-    var pendingId=pendingIntent.id;
-    (function watch(){
-      var p=pendingIntent;if(!p||p.id!==pendingId)return;
-      if(snapshot(p.wid,p.type)!==p.before){recordAction(p.wid,p.type);pendingIntent=null;return;}
-      if(Date.now()-p.started>45000){pendingIntent=null;return;}
-      setTimeout(watch,350);
-    })();
-  }
-  function recordAction(wid,type){
-    var w=workerById(wid), ds=dayStore(true);if(!ds)return;
-    var at=new Date().toISOString();
-    ds.actions.push({id:'QACT_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),wid:wid,workerName:w?w.name:'عامل',type:type,label:LABELS[type]||'تعديل',at:at});
-    ds.actions=ds.actions.slice(-MAX_ACTIONS);ensureStore();saveFollowup();refreshDash();
-  }
-  function toggleReview(wid){
-    var ds=dayStore(true);if(!ds)return;var k=String(wid);
-    if(ds.reviews[k]){delete ds.reviews[k];try{window.toast&&window.toast('↩️ أُلغيت مراجعة العامل لليوم');}catch(e){}}
-    else{var w=workerById(wid);ds.reviews[k]={at:new Date().toISOString(),workerName:w?w.name:'عامل'};try{window.toast&&window.toast('✅ تم تعليم '+(w?w.name:'العامل')+' كمراجع اليوم');}catch(e){}}
-    ensureStore();saveFollowup();refreshDash();
-  }
-  window.toggleQuickOpsReviewV75=toggleReview;
-
-  function actionTypeFromText(t){
-    t=String(t||'');
-    if(t.indexOf('تسوية غيابات')>=0)return 'settle';
-    if(t.indexOf('تسديد دين')>=0)return 'return';
-    if(t.indexOf('تسبيق')>=0)return 'advance';
-    if(t.indexOf('ساعات')>=0)return 'hours';
-    if(t.indexOf('غياب')>=0)return 'absence';
-    if(t.indexOf('مكافأة')>=0)return 'bonus';
-    if(t.indexOf('دين')>=0)return 'debt';
-    return '';
-  }
-  function cardWorkerId(card,index){
-    var ws=workers(), n=card.querySelector('.wn');
-    if(n){var idx=parseInt(n.textContent,10);if(idx>0&&ws[idx-1])return ws[idx-1].id;}
-    return ws[index]?ws[index].id:null;
-  }
-  function decorateCards(){
-    var grid=document.getElementById('qgrid');if(!grid)return;
-    Array.prototype.slice.call(grid.querySelectorAll('.qcard')).forEach(function(card,index){
-      var wid=cardWorkerId(card,index);if(wid==null)return;
-      card.setAttribute('data-v75-wid',String(wid));
-      var reviewed=isReviewed(wid),review=dayStore(false)&&dayStore(false).reviews[String(wid)],last=lastActionFor(wid),info=card.querySelector('.v75-card-followup');
-      card.classList.toggle('v75-reviewed',reviewed);card.classList.toggle('v75-unreviewed',!reviewed);
-      if(!info){info=document.createElement('div');info.className='v75-card-followup';var target=card.querySelector('.qcname');if(target&&target.nextSibling)card.insertBefore(info,target.nextSibling);else card.appendChild(info);}
-      info.className='v75-card-followup '+(reviewed?'reviewed':'unreviewed');
-      info.innerHTML='<div class="v75-state '+(reviewed?'ok':'wait')+'">'+(reviewed?'✓ تمت المراجعة اليوم — '+clock(review&&review.at):'◷ لم تتم المراجعة بعد')+'</div>'+
-        '<div class="v75-activity"><b>اليوم:</b> '+liveText(wid)+'</div>'+
-        (last?'<div class="v75-activity"><b>آخر إجراء الآن:</b> '+esc(last.label)+' — '+clock(last.at)+'</div>':'');
-      var reviewBtn=card.querySelector('.v75-review-btn');
-      if(!reviewBtn){var row=document.createElement('div');row.className='qbtns';row.style.marginTop='4px';reviewBtn=document.createElement('button');reviewBtn.type='button';reviewBtn.className='v75-review-btn';row.appendChild(reviewBtn);card.appendChild(row);reviewBtn.addEventListener('click',function(){toggleReview(wid);});}
-      reviewBtn.className='v75-review-btn '+(reviewed?'':'unreviewed');reviewBtn.textContent=reviewed?'✓ تمت مراجعة العامل اليوم — إلغاء العلامة':'✓ تمت مراجعة العامل اليوم';
-      Array.prototype.slice.call(card.querySelectorAll('button')).forEach(function(btn){
-        if(btn.getAttribute('data-v75-bound')==='1')return;
-        var type=actionTypeFromText(btn.textContent);if(!type)return;
-        btn.setAttribute('data-v75-bound','1');
-        btn.addEventListener('click',function(){beginIntent(wid,type);},{capture:true});
+  function repairLegacyHoursBonusDeductions(){
+    var d=live();if(!d)return {changed:false,removed:0,returns:0};
+    d.settings=d.settings&&typeof d.settings==='object'?d.settings:{};
+    if(d.settings.v78DebtOnlyPolicyApplied)return {changed:false,removed:0,returns:0};
+    var removed=0, affected={};
+    function clearList(list,wid){arr(list).forEach(function(row){
+      if(!row||!Array.isArray(row.deductions))return;
+      var old=row.deductions;
+      var keep=old.filter(function(x){
+        var take=!!(x&&x._v63===true&&x.type==='debt');
+        if(take){removed++;affected[String(wid)]=1;}
+        return !take;
       });
-      card.style.display=(currentFilter==='pending'&&reviewed)?'none':'';
+      if(keep.length!==old.length)row.deductions=keep;
+    });}
+    Object.keys(d.hours||{}).forEach(function(wid){clearList(d.hours[wid],wid);});
+    Object.keys(d.bonuses||{}).forEach(function(wid){Object.keys(d.bonuses[wid]||{}).forEach(function(m){clearList(d.bonuses[wid][m],wid);});});
+    var returnChanges=0;
+    Object.keys(d.debts||{}).forEach(function(wid){
+      var groups={};
+      allAdvanceDeductions(d,wid).forEach(function(p){var x=p.ded,k=aid(x);if(!k)return;if(!groups[k])groups[k]={amount:0,debtId:x.debtId,tag:x._instTag||x.instTag||'',advanceId:p.advance&&p.advance.id,sources:[]};groups[k].amount+=Math.max(0,money(x.amount));groups[k].sources.push({kind:'advance',entryId:p.advance&&p.advance.id,amount:Math.max(0,money(x.amount))});});
+      var rows=arr(d.debts[wid]), kept=[];
+      rows.forEach(function(r){
+        if(!(r&&r.type==='return'&&r._v63===true&&r.allocationId)){kept.push(r);return;}
+        var g=groups[String(r.allocationId)];
+        if(!g){returnChanges++;return;}
+        var before=JSON.stringify({a:r.amount,d:r.debtId,t:r._instTag,adv:r._advanceId});
+        r.amount=money(g.amount);r.debtId=g.debtId;r._instTag=g.tag;r._advanceId=g.advanceId||null;r._v63Sources=g.sources;r.source='salary-advance';r.cashEffect=0;r.note='قسط دين تلقائي — خُصم من تسبيق الراتب (لا حركة نقدية مستقلة)';
+        if(before!==JSON.stringify({a:r.amount,d:r.debtId,t:r._instTag,adv:r._advanceId}))returnChanges++;
+        kept.push(r);delete groups[String(r.allocationId)];
+      });
+      Object.keys(groups).forEach(function(k){var g=groups[k];kept.push({id:'RET78_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),type:'return',amount:money(g.amount),date:(typeof todayStr==='function'?todayStr():new Date().toLocaleDateString('fr-FR')),debtId:g.debtId,note:'قسط دين تلقائي — خُصم من تسبيق الراتب (لا حركة نقدية مستقلة)',by:(d.settings.userName||'النظام'),_v63:true,allocationId:k,_instPayment:true,_instTag:g.tag,_advanceId:g.advanceId||null,_v63Sources:g.sources,source:'salary-advance',cashEffect:0});returnChanges++;});
+      d.debts[wid]=kept;
+      arr(kept).filter(function(x){return x&&x.type==='debt'&&x.inst;}).forEach(function(debt){try{if(typeof window.syncDebtInstallmentState==='function')window.syncDebtInstallmentState(wid,debt);}catch(e){}});
     });
-  }
-  function renderPanel(){
-    var grid=document.getElementById('qgrid');if(!grid)return;
-    var panel=document.getElementById('v75QuickFollowupPanel');
-    if(!panel){panel=document.createElement('section');panel.id='v75QuickFollowupPanel';panel.className='v75-followup-panel';grid.parentNode.insertBefore(panel,grid);}
-    var ws=workers(), reviewed=ws.filter(function(w){return isReviewed(w.id);}).length, remaining=Math.max(0,ws.length-reviewed), actions=actionsToday(), last=lastActionAll();
-    panel.innerHTML='<div class="v75-followup-head"><div><div class="v75-followup-title">📌 متابعة عمليات اليوم</div><div class="v75-followup-note">علامة المراجعة تنظيمية فقط؛ لا تغيّر أي مبلغ أو دورة أو دين.</div></div>'+
-      '<div class="v75-followup-actions"><button type="button" class="v75-filter '+(currentFilter==='all'?'active':'')+'" data-v75-filter="all">الكل ('+ws.length+')</button><button type="button" class="v75-filter '+(currentFilter==='pending'?'active':'')+'" data-v75-filter="pending">غير مراجع ('+remaining+')</button></div></div>'+
-      '<div class="v75-followup-stats"><div class="v75-followup-stat"><b>'+reviewed+' / '+ws.length+'</b><span>تمت مراجعتهم</span></div><div class="v75-followup-stat"><b>'+remaining+'</b><span>بانتظار المراجعة</span></div><div class="v75-followup-stat"><b>'+actions.length+'</b><span>إجراءات من السريع</span></div></div>'+
-      '<div class="v75-last-action '+(last?'':'empty')+'">'+(last?'آخر إجراء سريع: <b>'+esc(last.workerName||'عامل')+'</b> — '+esc(last.label||'تعديل')+' — '+clock(last.at):'لا يوجد إجراء سريع مسجل في جلسة اليوم بعد.')+'</div>';
-    Array.prototype.slice.call(panel.querySelectorAll('[data-v75-filter]')).forEach(function(b){b.addEventListener('click',function(){currentFilter=b.getAttribute('data-v75-filter')||'all';renderPanel();decorateCards();});});
-  }
-  function decorate(){try{renderPanel();decorateCards();}catch(e){console.warn('v75 follow-up render',e);}}
-  function install(){
-    var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v75.0';
-    document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v75.0');
-    if(typeof window.renderDash==='function'&&!window.renderDash.__v75Followup){
-      baseRenderDash=window.renderDash;
-      var wrapped=function(){var r=baseRenderDash.apply(this,arguments);decorate();return r;};
-      wrapped.__v75Followup=true;wrapped.__v75Base=baseRenderDash;window.renderDash=wrapped;
+    // أي قفل تلقائي قديم مع قسط مستحق غير مسجّل لا يمثل دورة مكتملة؛ هذا فتح تصحيحي لمرة واحدة فقط.
+    var unlocked=0;
+    Object.keys(d.cycleLocks||{}).forEach(function(k){
+      var lock=d.cycleLocks[k];if(!lock||!lock.locked||!lock.auto||lock.workerId==null)return;
+      try{var st=(typeof calcMonthStatus==='function')?calcMonthStatus(lock.workerId,lock.cycleMonth,lock.cycleYear):null;
+        if(st&&Math.max(0,money(st.totInst))>0){lock.locked=false;lock.auto=false;lock.manualEditOpen=false;lock.reason='فتح تصحيحي v78: قسط دين مستحق غير مسجّل فعلياً';lock.correctedAt=new Date().toISOString();unlocked++;}
+      }catch(e){}
+    });
+    d.settings.v78DebtOnlyPolicyApplied={at:new Date().toISOString(),removedLegacyDebtDeductionsFromHoursOrBonuses:removed,rebuiltDebtReturns:returnChanges,openedIncorrectAutoLocks:unlocked};
+    if(removed||returnChanges||unlocked){
+      try{if(typeof audit==='function')audit('تصحيح v78: منع خصم أقساط الدين من الساعات والمكافآت — '+removed+' تخصيص قديم'+(unlocked?' | فتح تصحيحي '+unlocked+' دورة':''));}catch(e){}
     }
-    decorate();
+    return {changed:!!(removed||returnChanges||unlocked),removed:removed,returns:returnChanges,unlocked:unlocked};
   }
-  [0,500,1400,3200,6000].forEach(function(ms){setTimeout(install,ms);});
+  function updateTitle(){try{var l=document.querySelector('.tlogo span');if(l)l.textContent='| سجل الأجور v78.0';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v78.0');}catch(e){}}
+  function run(){
+    var d=live();if(!d||applied)return;
+    // v63 installs after the base engine; do not mutate before its debt tools are ready.
+    if(!window.EGTPH_V63){setTimeout(run,800);return;}
+    applied=true;var r=repairLegacyHoursBonusDeductions();
+    // نحفظ أيضاً علامة اكتمال الترحيل مرة واحدة؛ الرفع سيكون إعدادات/مسارات متأثرة فقط.
+    try{if(typeof saveDB==='function')saveDB();}catch(e){console.warn('v78 save',e);}
+    updateTitle();
+    window.EGTPH_V78={version:VERSION,policy:'debt-and-absence-from-salary-advance-only',migration:r,runRepair:repairLegacyHoursBonusDeductions};
+  }
+  [5200,7000,9000].forEach(function(ms){setTimeout(run,ms);});
+  setTimeout(updateTitle,9500);
 })();
-</script>
-
-</body></html>
+</script></body></html>
