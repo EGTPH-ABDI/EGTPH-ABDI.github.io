@@ -2120,7 +2120,7 @@ body.theme-blue .sec,body.theme-purple .sec,body.theme-red .sec,body.theme-sand 
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
 <button class="btn1" onclick="autoBackup(false)" style="background:linear-gradient(135deg,var(--green3),var(--green2))">💾 نسخ احتياطي الآن</button>
 <button class="btn2" onclick="exportData()">📤 تصدير JSON</button>
-<button class="btn2" onclick="shareData()">📲 مشاركة (واتساب...)</button>
+<button class="btn2" onclick="showPage('print')" title="تصدير أو مشاركة PDF للتقارير فقط">🖨️ تقارير PDF</button>
 <label class="btn2" style="cursor:pointer">📥 استيراد JSON<input accept=".json" onchange="importData(event)" style="display:none" type="file"/></label>
 <button class="btn3" onclick="askReset()">🗑 مسح البيانات</button>
 </div>
@@ -13443,6 +13443,156 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   window.EGTPH_V70={version:VERSION,autoInitialize:begin,status:function(){var d=D(),id=localDevice(d);return {deviceId:id,marker:currentMark(d,id),automatic:true};}};
   window.addEventListener('online',function(){started=false;setTimeout(begin,650);});
   wait();
+})();
+</script>
+
+
+<script id="egtph-v71-pdf-reports-only">
+/* ═══════════════════════════════════════════════════════════════
+   EGTPH Payroll v71.0 — PDF reports only / no JSON sharing
+   - Removes the accidental JSON share route from backup settings.
+   - Adds PDF + PDF/WhatsApp actions beside every report in Print.
+   - A PDF action opens the exact report and creates its PDF, never DB JSON.
+   - WhatsApp action opens the exact report preview; the final share gesture
+     remains explicit so iOS shares the actual PDF file and the user chooses
+     the recipient.
+════════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  var VERSION='v71.0', pending=null, basePWin=null, patchedPWin=null;
+  function S(v){return String(v==null?'':v);}
+  function say(m,bad){try{if(typeof window.toast==='function')window.toast(m,!!bad);}catch(e){}}
+  function freshIntent(){return pending&&pending.until>Date.now()?pending:null;}
+  function clearIntent(){pending=null;}
+  function setIntent(mode,code){pending={mode:mode,code:S(code),until:Date.now()+120000};}
+  function executeReport(code,mode){
+    code=S(code).trim();
+    if(!/^print[A-Za-z0-9_]*\s*\(/.test(code)){say('❌ مسار التقرير غير صالح',true);return;}
+    setIntent(mode,code);
+    try{
+      /* The string comes only from existing trusted inline report buttons. */
+      (new Function(code)).call(window);
+    }catch(e){
+      clearIntent();
+      say('❌ تعذر فتح التقرير: '+(e&&e.message||e),true);
+    }
+  }
+  function addPreviewHint(win,intent){
+    if(!win||win.closed)return;
+    var tries=0;
+    (function waitForPreview(){
+      tries++;
+      try{
+        var doc=win.document;
+        var toolbar=doc&&doc.getElementById('egtphV69Toolbar');
+        var status=doc&&doc.getElementById('egtphExportStatus');
+        if(toolbar&&status&&typeof win.egtphExportPdf==='function'){
+          var old=doc.getElementById('egtphV71PdfHint');
+          if(old)old.remove();
+          var note=doc.createElement('div');
+          note.id='egtphV71PdfHint';
+          note.style.cssText='width:100%;text-align:center;font-size:12px;line-height:1.65;color:#e8f6ef;background:rgba(255,255,255,.12);padding:6px 10px;border-radius:8px';
+          if(intent.mode==='pdf'){
+            note.textContent='📄 يجري إنشاء PDF لهذا التقرير فقط؛ لا تتم مشاركة بيانات البرنامج أو نسخة JSON.';
+            status.textContent='⏳ جارٍ تصدير PDF للتقرير المحدد…';
+            toolbar.appendChild(note);
+            /* Download is attempted directly. The visible PDF button remains a manual fallback. */
+            setTimeout(function(){
+              try{ if(typeof win.egtphExportPdf==='function')win.egtphExportPdf(); }
+              catch(e){ try{status.textContent='⚠️ اضغط «تصدير PDF» لإعادة المحاولة';}catch(_e){} }
+            },180);
+          }else{
+            note.textContent='🟢 ستُشارك فقط نسخة PDF لهذا التقرير. اضغط الزر الأخضر «مشاركة PDF / WhatsApp» ثم اختر الشخص.';
+            status.textContent='PDF التقرير المحدد جاهز للمشاركة — اضغط الزر الأخضر';
+            toolbar.appendChild(note);
+            var share=toolbar.querySelector('button[onclick="egtphSharePdf()"]');
+            if(share){share.style.outline='3px solid rgba(255,255,255,.62)';share.style.outlineOffset='2px';try{share.focus();}catch(_e){}}
+          }
+          return;
+        }
+      }catch(e){}
+      if(tries<90)setTimeout(waitForPreview,160);
+      else say('⚠️ فتحت المعاينة، استخدم أزرار PDF في أعلاها.',true);
+    })();
+  }
+  function installPWin(){
+    var current=window.pWin;
+    if(typeof current!=='function'||current===patchedPWin)return;
+    basePWin=current;
+    patchedPWin=function(html){
+      var intent=freshIntent();
+      var w;
+      try{w=basePWin.call(window,html);}catch(e){clearIntent();throw e;}
+      if(intent){
+        clearIntent();
+        if(!w){say('⚠️ لم تُفتح المعاينة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة.',true);}
+        else addPreviewHint(w,intent);
+      }
+      return w;
+    };
+    window.pWin=patchedPWin;
+    try{pWin=patchedPWin;}catch(e){}
+  }
+  function ensureStyle(){
+    if(document.getElementById('egtphV71PdfStyle'))return;
+    var style=document.createElement('style');style.id='egtphV71PdfStyle';
+    style.textContent='\n'+
+      '.v71-pdf-report{flex:1 1 250px;min-width:220px;padding:8px;border:1px solid rgba(13,106,75,.18);border-radius:14px;background:linear-gradient(145deg,#fff,#f5fbf7);box-shadow:0 3px 12px rgba(15,70,42,.06)}'+
+      '.v71-pdf-report>.bsm{width:100%;min-width:0!important;display:block!important;padding:13px 14px!important;text-align:right!important;background:rgba(10,138,77,.06)!important;border-color:rgba(10,138,77,.26)!important;color:var(--white)!important}'+
+      '.v71-pdf-actions{display:grid;grid-template-columns:1fr 1.25fr;gap:6px;margin-top:7px}'+
+      '.v71-pdf-actions button{border:0;border-radius:10px;min-height:38px;padding:8px 7px;font-family:Tajawal,sans-serif;font-weight:800;font-size:11px;cursor:pointer}'+
+      '.v71-pdf-open{background:#edf4ff;color:#164a89;border:1px solid #bdd3ed!important}'+
+      '.v71-pdf-share{background:#dff8e8;color:#075f32;border:1px solid #9ed7b3!important}'+
+      '@media(max-width:900px){.v71-pdf-report{flex-basis:100%;min-width:0}.v71-pdf-actions button{font-size:12px;min-height:43px}}';
+    document.head.appendChild(style);
+  }
+  function decoratePrintPage(){
+    var page=document.getElementById('page-print');if(!page)return;
+    ensureStyle();
+    var list=page.querySelectorAll('button.bsm[onclick]');
+    for(var i=0;i<list.length;i++){
+      var btn=list[i];
+      if(btn.getAttribute('data-v71-pdf')==='1')continue;
+      var code=S(btn.getAttribute('onclick'));
+      if(!/^print[A-Za-z0-9_]*\s*\(/.test(code))continue;
+      btn.setAttribute('data-v71-pdf','1');
+      var parent=btn.parentNode;if(!parent)continue;
+      var box=document.createElement('div');box.className='v71-pdf-report';
+      parent.replaceChild(box,btn);box.appendChild(btn);
+      var actions=document.createElement('div');actions.className='v71-pdf-actions';
+      var pdf=document.createElement('button');pdf.type='button';pdf.className='v71-pdf-open';pdf.textContent='📄 تصدير PDF';pdf.title='يُنشئ PDF للتقرير المحدد فقط';
+      pdf.addEventListener('click',(function(c){return function(){executeReport(c,'pdf');};})(code));
+      var share=document.createElement('button');share.type='button';share.className='v71-pdf-share';share.textContent='🟢 مشاركة PDF';share.title='يفتح PDF التقرير للمشاركة عبر WhatsApp';
+      share.addEventListener('click',(function(c){return function(){executeReport(c,'share');};})(code));
+      actions.appendChild(pdf);actions.appendChild(share);box.appendChild(actions);
+    }
+    var note=document.getElementById('v69PrintHint');
+    if(note){note.id='v71PrintHint';note.innerHTML='<b>📄 التقارير فقط بصيغة PDF</b><br><span style="font-size:12px">اختر «تصدير PDF» لإنشاء ملف التقرير، أو «مشاركة PDF» لفتح مشاركة WhatsApp لملف التقرير نفسه. مشاركة النسخة الاحتياطية JSON أُلغيت من الإعدادات.</span>';}
+  }
+  function disableJsonShare(){
+    window.shareData=function(){
+      try{if(typeof window.showPage==='function')window.showPage('print');}catch(e){}
+      say('📄 مشاركة واتساب متاحة لتقارير PDF فقط من صفحة الطباعة.');
+    };
+    var btns=document.querySelectorAll('button[onclick="shareData()"]');
+    for(var i=0;i<btns.length;i++){
+      btns[i].setAttribute('onclick',"showPage('print')");
+      btns[i].textContent='🖨️ تقارير PDF';
+      btns[i].title='انتقل للطباعة لتصدير أو مشاركة PDF فقط';
+    }
+  }
+  function updateVersion(){
+    try{
+      var l=document.querySelector('.tlogo span');if(l)l.textContent='| سجل الأجور v71.0';
+      document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v71.0');
+    }catch(e){}
+  }
+  function boot(){installPWin();disableJsonShare();decoratePrintPage();updateVersion();}
+  window.EGTPH_V71={version:VERSION,openPdf:function(code){executeReport(code,'pdf');},sharePdf:function(code){executeReport(code,'share');},status:function(){return {jsonShare:false,reportPdfOnly:true,pending:!!freshIntent()};}};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);
+  else boot();
+  /* v70 rebinds pWin after hydration; reapply only this wrapper after each late bind. */
+  [400,1000,2200,4200,6500,7600,9800].forEach(function(ms){setTimeout(boot,ms);});
 })();
 </script>
 
