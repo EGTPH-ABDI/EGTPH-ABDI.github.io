@@ -525,6 +525,39 @@ table tbody tr:last-child td{border-bottom:none}
   }
 }
 
+
+/* === PDF controls in archive — fixed layout so iPhone never hides them === */
+.archive-pdf-build-marker{white-space:nowrap}
+.archive-week-actions{
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr);
+  gap:6px !important;
+  min-width:170px;
+}
+.archive-week-actions .btn{
+  width:100%;
+  min-height:36px;
+  justify-content:center;
+  white-space:normal;
+  line-height:1.35;
+  padding:7px 8px;
+}
+.archive-week-actions .archive-pdf-btn{
+  background:#b91c1c;
+  color:#fff;
+  border:1px solid #991b1b;
+  box-shadow:0 2px 7px rgba(185,28,28,.25);
+}
+.archive-week-actions .archive-share-btn{
+  background:#15803d;
+  color:#fff;
+  border:1px solid #166534;
+  box-shadow:0 2px 7px rgba(21,128,61,.25);
+}
+@media(min-width:901px){
+  .archive-week-actions{grid-template-columns:repeat(2,minmax(0,1fr));min-width:250px}
+  .archive-week-actions .archive-pdf-btn,.archive-week-actions .archive-share-btn{grid-column:span 2}
+}
 </style>
 </head>
 <body>
@@ -789,7 +822,8 @@ table tbody tr:last-child td{border-bottom:none}
   <div class="page" id="page-archive">
     <div class="toolbar">
       <input type="text" id="archiveSearch" placeholder="بحث في الأرشيف..." oninput="renderArchive()">
-      <span class="text-muted">الأسابيع المحفوظة تلقائياً · زر PDF يحفظ الملف · زر مشاركة PDF يحفظه ثم يفتح قائمة مشاركة الهاتف لاختيار WhatsApp والشخص</span>
+      <span class="text-muted">الأسابيع المحفوظة تلقائياً</span>
+      <span id="archivePdfBuildMarker" class="badge badge-primary archive-pdf-build-marker" title="للتأكد من أن النسخة الجديدة محمّلة">PDF v32 iPhone</span>
     </div>
     <div class="card" style="padding:0">
       <div class="table-container">
@@ -980,6 +1014,7 @@ table tbody tr:last-child td{border-bottom:none}
 <div class="toast" id="toast"></div>
 
 <script>
+window.EGTPH_BUILD='v32-ios-pdf-capture-fixed';
 /* ====================================================
    EGTPH - سجل الأجرة الأسبوعي  |  المحرك الرئيسي
    ==================================================== */
@@ -3071,13 +3106,13 @@ function renderArchive(){
       <td><b style="color:var(--primary)">${money(grand)} دج</b></td>
       <td><b style="color:#c2410c">${money(financialTotal)} دج</b><br><small class="text-muted">${money(grand)} + ${money(settledOld)}</small></td>
       <td>
-        <div style="display:flex;gap:5px;flex-wrap:wrap;min-width:196px">
+        <div class="archive-week-actions" data-archive-week-actions="${w.id}">
+          <button class="btn btn-danger btn-xs archive-pdf-btn" data-export-week="${w.id}" onclick="exportArchivedWeekPDF('${w.id}')" title="تصدير نفس كشف الطباعة PDF" aria-label="تصدير PDF"><i class="fas fa-file-pdf"></i> تصدير PDF</button>
+          <button class="btn btn-success btn-xs archive-share-btn" data-export-week="${w.id}" onclick="shareArchivedWeekPDF('${w.id}')" title="ينزّل PDF ثم يفتح قائمة مشاركة الهاتف لاختيار WhatsApp والشخص" aria-label="مشاركة ملف PDF"><i class="fas fa-share-nodes"></i> مشاركة PDF</button>
           <button class="btn btn-info btn-xs" onclick="printArchivedWeek('${w.id}')" title="طباعة كشف الأسبوع" aria-label="طباعة كشف الأسبوع"><i class="fas fa-print"></i> طباعة</button>
-          <button class="btn btn-danger btn-xs" data-export-week="${w.id}" onclick="exportArchivedWeekPDF('${w.id}')" title="تصدير نفس كشف الطباعة PDF" aria-label="تصدير PDF"><i class="fas fa-file-pdf"></i> PDF</button>
-          <button class="btn btn-success btn-xs" data-export-week="${w.id}" onclick="shareArchivedWeekPDF('${w.id}')" title="يحفظ PDF ثم يفتح قائمة المشاركة لاختيار WhatsApp والشخص" aria-label="مشاركة ملف PDF"><i class="fas fa-share-nodes"></i> مشاركة PDF</button>
-          <button class="btn btn-outline btn-xs" onclick="editWeek('${w.id}')" title="تعديل"><i class="fas fa-edit"></i></button>
-          <button class="btn btn-warning btn-xs" onclick="assignArchivedWeekProject('${w.id}')" title="تحويل لمشروع"><i class="fas fa-folder-tree"></i></button>
-          <button class="btn btn-danger btn-xs" onclick="deleteWeek('${w.id}')" title="حذف"><i class="fas fa-trash"></i></button>
+          <button class="btn btn-outline btn-xs" onclick="editWeek('${w.id}')" title="تعديل"><i class="fas fa-edit"></i> تعديل</button>
+          <button class="btn btn-warning btn-xs" onclick="assignArchivedWeekProject('${w.id}')" title="تحويل لمشروع"><i class="fas fa-folder-tree"></i> مشروع</button>
+          <button class="btn btn-danger btn-xs" onclick="deleteWeek('${w.id}')" title="حذف"><i class="fas fa-trash"></i> حذف</button>
         </div>
       </td>
     </tr>`;
@@ -3430,31 +3465,104 @@ function downloadPdfBlob(blob,fileName){
   link.click();
   setTimeout(()=>{ link.remove(); URL.revokeObjectURL(url); },1200);
 }
+/*
+  iPhone/Safari PDF capture
+  السبب: html2canvas في iOS قد يُنتج Canvas أبيض عندما يكون عنصر المصدر خارج الشاشة
+  (right:-10000px) أو مخفياً. لذلك يتم رسم المصدر داخل شاشة التخطيط، خلف واجهة التطبيق،
+  ثم تحويل الـCanvas مباشرةً إلى صفحات PDF. لا نعتمد على html2pdf().toPdf() في iPhone.
+*/
+function buildPdfCaptureStageMarkup(week){
+  return `<style>
+    #egtphPdfExportStage, #egtphPdfExportStage *{box-sizing:border-box}
+    #egtphPdfExportStage table{width:100%;border-collapse:collapse;font-size:11px}
+    #egtphPdfExportStage th,#egtphPdfExportStage td{border:1px solid #333;padding:5px 6px;word-wrap:break-word;vertical-align:middle}
+    #egtphPdfExportStage tr{break-inside:avoid;page-break-inside:avoid}
+    #egtphPdfExportStage .print-section-title{break-after:avoid;page-break-after:avoid}
+  </style><div style="width:794px;background:#fff;color:#000;direction:rtl;font-family:Cairo,Tajawal,Tahoma,Arial,sans-serif">${buildPrintHTML(week,true)}</div>`;
+}
+function pdfCanvasHasVisibleContent(canvas){
+  if(!canvas || canvas.width<80 || canvas.height<80) return false;
+  const probe=document.createElement('canvas');
+  probe.width=96; probe.height=128;
+  const ctx=probe.getContext('2d',{willReadFrequently:true});
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,probe.width,probe.height);
+  ctx.drawImage(canvas,0,0,probe.width,probe.height);
+  const pixels=ctx.getImageData(0,0,probe.width,probe.height).data;
+  let nonWhite=0;
+  for(let i=0;i<pixels.length;i+=4){
+    const r=pixels[i],g=pixels[i+1],b=pixels[i+2],a=pixels[i+3];
+    if(a>20 && (r<238 || g<238 || b<238)) nonWhite++;
+  }
+  return nonWhite>90;
+}
+async function rasterizePdfStage(stage,forceFront){
+  if(!window.html2canvas) throw new Error('html2canvas unavailable');
+  stage.style.zIndex=forceFront?'2147483647':'0';
+  stage.style.pointerEvents='none';
+  stage.style.visibility='visible';
+  stage.style.opacity='1';
+  stage.offsetHeight; // force layout before Safari captures the node
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  const canvas=await window.html2canvas(stage,{
+    scale:1.45,
+    useCORS:true,
+    allowTaint:false,
+    backgroundColor:'#ffffff',
+    logging:false,
+    scrollX:0,
+    scrollY:0,
+    windowWidth:Math.ceil(stage.scrollWidth||794),
+    windowHeight:Math.ceil(stage.scrollHeight||1123)
+  });
+  return canvas;
+}
+function pdfBlobFromCanvas(canvas){
+  const JsPDF=window.jspdf?.jsPDF;
+  if(!JsPDF) throw new Error('jsPDF unavailable');
+  const pdf=new JsPDF({unit:'mm',format:'a4',orientation:'portrait',compress:true});
+  const pageWidth=210, pageHeight=297, margin=7;
+  const drawWidth=pageWidth-(margin*2), drawHeight=pageHeight-(margin*2);
+  const pixelsPerMm=canvas.width/drawWidth;
+  const sliceHeight=Math.max(1,Math.floor(drawHeight*pixelsPerMm));
+  let sourceY=0, page=0;
+  while(sourceY<canvas.height){
+    const height=Math.min(sliceHeight,canvas.height-sourceY);
+    const slice=document.createElement('canvas');
+    slice.width=canvas.width; slice.height=height;
+    const sliceCtx=slice.getContext('2d');
+    sliceCtx.fillStyle='#fff';
+    sliceCtx.fillRect(0,0,slice.width,slice.height);
+    sliceCtx.drawImage(canvas,0,sourceY,canvas.width,height,0,0,canvas.width,height);
+    if(page>0) pdf.addPage('a4','portrait');
+    const renderedHeight=height/pixelsPerMm;
+    pdf.addImage(slice.toDataURL('image/jpeg',0.96),'JPEG',margin,margin,drawWidth,renderedHeight,undefined,'FAST');
+    sourceY+=height;
+    page++;
+  }
+  return pdf.output('blob');
+}
 async function createArchivedWeekPdf(week){
-  const html2pdf=await loadPdfExportLibrary();
-  const stage=document.createElement('div');
+  await loadPdfExportLibrary();
+  const stage=document.createElement('section');
   stage.id='egtphPdfExportStage';
   stage.setAttribute('dir','rtl');
   stage.setAttribute('aria-hidden','true');
-  stage.style.cssText='position:fixed;top:0;right:-10000px;width:794px;min-height:1123px;padding:0;background:#fff;color:#000;z-index:-1;overflow:visible;pointer-events:none';
-  /* buildPrintHTML هو نفس المصدر المستعمل في الطباعة، دون أي إعادة حساب مستقلة. */
-  stage.innerHTML=`<div style="width:794px;background:#fff;color:#000;direction:rtl;font-family:Cairo,Tajawal,Tahoma,Arial,sans-serif">${buildPrintHTML(week,true)}</div>`;
+  /* يبقى داخل نافذة التخطيط لأن Safari/iPhone لا يرسم العنصر البعيد خارج الشاشة في PDF. */
+  stage.style.cssText='position:fixed;top:0;left:0;right:auto;width:794px;min-height:1123px;padding:0;margin:0;background:#fff;color:#000;z-index:0;overflow:visible;pointer-events:none;visibility:visible;opacity:1;contain:layout style paint';
+  stage.innerHTML=buildPdfCaptureStageMarkup(week);
   document.body.appendChild(stage);
   try{
     if(document.fonts?.ready) await document.fonts.ready;
-    await new Promise(resolve=>setTimeout(resolve,160));
-    const options={
-      margin:[8,8,8,8],
-      filename:archivedWeekPdfFileName(week),
-      image:{type:'jpeg',quality:0.98},
-      html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false,scrollX:0,scrollY:0,windowWidth:794},
-      jsPDF:{unit:'mm',format:'a4',orientation:'portrait',compress:true},
-      pagebreak:{mode:['css','legacy'],avoid:['tr','.print-section-title']}
-    };
-    const worker=html2pdf().set(options).from(stage).toPdf();
-    const blob=await worker.outputPdf('blob');
-    if(!(blob instanceof Blob)||blob.size<800) throw new Error('invalid PDF output');
-    return {blob,fileName:options.filename,weekId:week.id,title:archivedWeekShareText(week)};
+    await new Promise(resolve=>setTimeout(resolve,220));
+    let canvas=await rasterizePdfStage(stage,false);
+    /* احتياط خاص لـ Safari: إن أعطى لقطة بيضاء، نرفع المصدر لحظة واحدة ونعيد الالتقاط. */
+    if(!pdfCanvasHasVisibleContent(canvas)){
+      canvas=await rasterizePdfStage(stage,true);
+    }
+    if(!pdfCanvasHasVisibleContent(canvas)) throw new Error('blank PDF canvas');
+    const blob=pdfBlobFromCanvas(canvas);
+    if(!(blob instanceof Blob)||blob.size<1200) throw new Error('invalid PDF output');
+    return {blob,fileName:archivedWeekPdfFileName(week),weekId:week.id,title:archivedWeekShareText(week)};
   }finally{
     stage.remove();
   }
