@@ -823,7 +823,7 @@ table tbody tr:last-child td{border-bottom:none}
     <div class="toolbar">
       <input type="text" id="archiveSearch" placeholder="بحث في الأرشيف..." oninput="renderArchive()">
       <span class="text-muted">الأسابيع المحفوظة تلقائياً</span>
-      <span id="archivePdfBuildMarker" class="badge badge-primary archive-pdf-build-marker" title="للتأكد من أن النسخة الجديدة محمّلة">PDF v32 iPhone</span>
+      <span id="archivePdfBuildMarker" class="badge badge-primary archive-pdf-build-marker" title="نسخة الحفظ الأصلي من صفحة مستقلة — بدون تحويل Canvas">PDF v33 صفحة الحفظ والمشاركة</span>
     </div>
     <div class="card" style="padding:0">
       <div class="table-container">
@@ -1825,7 +1825,7 @@ function renderProjectWeeks(){
       <td>${money(w.total)} دج</td>
       <td>${money(exp)} دج</td>
       <td><b>${money(w.total+exp)} دج</b></td>
-      <td><div style="display:flex;gap:5px;flex-wrap:wrap;min-width:172px"><button class="btn btn-outline btn-xs" onclick="editWeek('${w.id}')" title="تعديل"><i class="fas fa-edit"></i></button> <button class="btn btn-info btn-xs" onclick="printArchivedWeek('${w.id}')" title="طباعة"><i class="fas fa-print"></i></button> <button class="btn btn-danger btn-xs" data-export-week="${w.id}" onclick="exportArchivedWeekPDF('${w.id}')" title="PDF"><i class="fas fa-file-pdf"></i></button> <button class="btn btn-success btn-xs" data-export-week="${w.id}" onclick="shareArchivedWeekPDF('${w.id}')" title="مشاركة PDF"><i class="fas fa-share-nodes"></i></button> <button class="btn btn-danger btn-xs" onclick="deleteWeek('${w.id}')" title="حذف"><i class="fas fa-trash"></i></button></div></td>
+      <td><div style="display:flex;gap:5px;flex-wrap:wrap;min-width:172px"><button class="btn btn-outline btn-xs" onclick="editWeek('${w.id}')" title="تعديل"><i class="fas fa-edit"></i></button> <button class="btn btn-info btn-xs" onclick="printArchivedWeek('${w.id}')" title="طباعة"><i class="fas fa-print"></i></button> <button class="btn btn-danger btn-xs" data-export-week="${w.id}" onclick="exportArchivedWeekPDF('${w.id}')" title="فتح صفحة حفظ PDF"><i class="fas fa-file-pdf"></i></button> <button class="btn btn-success btn-xs" data-export-week="${w.id}" onclick="shareArchivedWeekPDF('${w.id}')" title="فتح صفحة الحفظ ثم WhatsApp"><i class="fas fa-share-nodes"></i></button> <button class="btn btn-danger btn-xs" onclick="deleteWeek('${w.id}')" title="حذف"><i class="fas fa-trash"></i></button></div></td>
     </tr>`;
   }).join('');
 }
@@ -3107,8 +3107,8 @@ function renderArchive(){
       <td><b style="color:#c2410c">${money(financialTotal)} دج</b><br><small class="text-muted">${money(grand)} + ${money(settledOld)}</small></td>
       <td>
         <div class="archive-week-actions" data-archive-week-actions="${w.id}">
-          <button class="btn btn-danger btn-xs archive-pdf-btn" data-export-week="${w.id}" onclick="exportArchivedWeekPDF('${w.id}')" title="تصدير نفس كشف الطباعة PDF" aria-label="تصدير PDF"><i class="fas fa-file-pdf"></i> تصدير PDF</button>
-          <button class="btn btn-success btn-xs archive-share-btn" data-export-week="${w.id}" onclick="shareArchivedWeekPDF('${w.id}')" title="ينزّل PDF ثم يفتح قائمة مشاركة الهاتف لاختيار WhatsApp والشخص" aria-label="مشاركة ملف PDF"><i class="fas fa-share-nodes"></i> مشاركة PDF</button>
+          <button class="btn btn-danger btn-xs archive-pdf-btn" data-export-week="${w.id}" onclick="exportArchivedWeekPDF('${w.id}')" title="يفتح كشفاً مستقلاً للحفظ كـ PDF من iPhone" aria-label="فتح صفحة حفظ PDF"><i class="fas fa-file-pdf"></i> فتح صفحة PDF</button>
+          <button class="btn btn-success btn-xs archive-share-btn" data-export-week="${w.id}" onclick="shareArchivedWeekPDF('${w.id}')" title="يفتح صفحة مستقلة: احفظ PDF ثم شاركه عبر WhatsApp" aria-label="حفظ ومشاركة PDF"><i class="fas fa-share-nodes"></i> حفظ ثم WhatsApp</button>
           <button class="btn btn-info btn-xs" onclick="printArchivedWeek('${w.id}')" title="طباعة كشف الأسبوع" aria-label="طباعة كشف الأسبوع"><i class="fas fa-print"></i> طباعة</button>
           <button class="btn btn-outline btn-xs" onclick="editWeek('${w.id}')" title="تعديل"><i class="fas fa-edit"></i> تعديل</button>
           <button class="btn btn-warning btn-xs" onclick="assignArchivedWeekProject('${w.id}')" title="تحويل لمشروع"><i class="fas fa-folder-tree"></i> مشروع</button>
@@ -3403,16 +3403,22 @@ function printArchivedWeek(weekId){
 
 
 /* ====================================================
-   تصدير PDF ومشاركة واتساب للأسابيع المؤرشفة
-   - المصدر هو buildPrintHTML نفسه: نفس كشف الطباعة والحسابات.
-   - عند طلب المشاركة: يُنزّل PDF أولاً، ثم تفتح مشاركة iPhone/Android الأصلية
-     ليختار المستخدم التطبيق (مثل WhatsApp) ثم الشخص أو المجموعة المستلمة.
+   حفظ ومشاركة كشف الأسبوع على iPhone
+   ----------------------------------------------------
+   الحل المعتمد لا يلتقط الصفحة بـ html2canvas ولا ينشئ PDF داخل
+   JavaScript؛ لأن هذا هو مصدر الورقة البيضاء في Safari/iPhone.
+   بدلاً من ذلك يفتح كشفاً مستقلاً ومرئياً بالكامل. iPhone/Safari
+   يحفظه كـ PDF عبر أدواته الأصلية، ثم يشارك الملف من تطبيق Files.
    ==================================================== */
-const PDF_EXPORT_LIBRARY_URL='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-let _pdfExportLibraryPromise=null;
-let _preparedPdfShare=null;
-const _pdfExportLocks=new Set();
-
+function archivedWeekPdfFileName(week){
+  const clean=value=>String(value||'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,48)||'week';
+  return `EGTPH_Semaine_${clean(week.startDate||'start')}_au_${clean(week.endDate||'end')}.pdf`;
+}
+function archivedWeekShareText(week){
+  const project=DB.projects.find(p=>p.id===week.projectId);
+  const projectText=project?.name?` — ${project.name}`:'';
+  return `كشف الأجرة الأسبوعي EGTPH: ${formatDateAR(week.startDate)} إلى ${formatDateAR(week.endDate)}${projectText}`;
+}
 function setArchivedWeekExportBusy(weekId,busy){
   Array.from(document.querySelectorAll('[data-export-week]')).forEach(btn=>{
     if(btn.dataset.exportWeek===String(weekId)){
@@ -3422,236 +3428,100 @@ function setArchivedWeekExportBusy(weekId,busy){
     }
   });
 }
-function loadPdfExportLibrary(){
-  if(window.html2pdf) return Promise.resolve(window.html2pdf);
-  if(_pdfExportLibraryPromise) return _pdfExportLibraryPromise;
-  _pdfExportLibraryPromise=new Promise((resolve,reject)=>{
-    const old=document.getElementById('egtphHtml2PdfLibrary');
-    if(old){
-      old.addEventListener('load',()=>window.html2pdf?resolve(window.html2pdf):reject(new Error('PDF library unavailable')),{once:true});
-      old.addEventListener('error',()=>reject(new Error('PDF library download failed')),{once:true});
-      return;
-    }
-    const script=document.createElement('script');
-    script.id='egtphHtml2PdfLibrary';
-    script.src=PDF_EXPORT_LIBRARY_URL;
-    script.async=true;
-    script.onload=()=>window.html2pdf?resolve(window.html2pdf):reject(new Error('PDF library unavailable'));
-    script.onerror=()=>reject(new Error('PDF library download failed'));
-    document.head.appendChild(script);
-  }).catch(err=>{ _pdfExportLibraryPromise=null; throw err; });
-  return _pdfExportLibraryPromise;
-}
-function cleanPdfFilePart(value){
-  return String(value||'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,48)||'week';
-}
-function archivedWeekPdfFileName(week){
-  const start=cleanPdfFilePart(week.startDate||'start');
-  const end=cleanPdfFilePart(week.endDate||'end');
-  return `EGTPH_Semaine_${start}_au_${end}.pdf`;
-}
-function archivedWeekShareText(week){
-  const project=DB.projects.find(p=>p.id===week.projectId);
-  const projectText=project?.name?` — ${project.name}`:'';
-  return `كشف الأجرة الأسبوعي EGTPH: ${formatDateAR(week.startDate)} إلى ${formatDateAR(week.endDate)}${projectText}`;
-}
-function downloadPdfBlob(blob,fileName){
-  const url=URL.createObjectURL(blob);
-  const link=document.createElement('a');
-  link.href=url;
-  link.download=fileName;
-  link.style.display='none';
-  document.body.appendChild(link);
-  link.click();
-  setTimeout(()=>{ link.remove(); URL.revokeObjectURL(url); },1200);
-}
-/*
-  iPhone/Safari PDF capture
-  السبب: html2canvas في iOS قد يُنتج Canvas أبيض عندما يكون عنصر المصدر خارج الشاشة
-  (right:-10000px) أو مخفياً. لذلك يتم رسم المصدر داخل شاشة التخطيط، خلف واجهة التطبيق،
-  ثم تحويل الـCanvas مباشرةً إلى صفحات PDF. لا نعتمد على html2pdf().toPdf() في iPhone.
-*/
-function buildPdfCaptureStageMarkup(week){
-  return `<style>
-    #egtphPdfExportStage, #egtphPdfExportStage *{box-sizing:border-box}
-    #egtphPdfExportStage table{width:100%;border-collapse:collapse;font-size:11px}
-    #egtphPdfExportStage th,#egtphPdfExportStage td{border:1px solid #333;padding:5px 6px;word-wrap:break-word;vertical-align:middle}
-    #egtphPdfExportStage tr{break-inside:avoid;page-break-inside:avoid}
-    #egtphPdfExportStage .print-section-title{break-after:avoid;page-break-after:avoid}
-  </style><div style="width:794px;background:#fff;color:#000;direction:rtl;font-family:Cairo,Tajawal,Tahoma,Arial,sans-serif">${buildPrintHTML(week,true)}</div>`;
-}
-function pdfCanvasHasVisibleContent(canvas){
-  if(!canvas || canvas.width<80 || canvas.height<80) return false;
-  const probe=document.createElement('canvas');
-  probe.width=96; probe.height=128;
-  const ctx=probe.getContext('2d',{willReadFrequently:true});
-  ctx.fillStyle='#fff'; ctx.fillRect(0,0,probe.width,probe.height);
-  ctx.drawImage(canvas,0,0,probe.width,probe.height);
-  const pixels=ctx.getImageData(0,0,probe.width,probe.height).data;
-  let nonWhite=0;
-  for(let i=0;i<pixels.length;i+=4){
-    const r=pixels[i],g=pixels[i+1],b=pixels[i+2],a=pixels[i+3];
-    if(a>20 && (r<238 || g<238 || b<238)) nonWhite++;
+function buildNativePdfPreviewDocument(week,flow){
+  const isShare=flow==='share';
+  const fileName=archivedWeekPdfFileName(week);
+  const title=archivedWeekShareText(week);
+  const actionTitle=isShare?'حفظ PDF ثم الإرسال عبر WhatsApp':'فتح وحفظ كشف الأسبوع كـ PDF';
+  const actionHint=isShare
+    ?'بعد حفظ الملف، افتح تطبيق الملفات واختر الملف ثم مشاركة › WhatsApp › الشخص أو المجموعة.'
+    :'يمكنك حفظ هذا الكشف كـ PDF من أدوات iPhone الأصلية، بدون أي تحويل صور أو Canvas.';
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${actionTitle}</title>
+<style>
+  :root{color-scheme:light}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#edf6f7;color:#10233d;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Tahoma,Arial,sans-serif}
+  .native-export-tools{position:sticky;top:0;z-index:10;padding:12px;background:#072036;color:#fff;border-bottom:3px solid #0e7a6e;box-shadow:0 2px 12px rgba(0,0,0,.22)}
+  .native-export-tools-inner{max-width:900px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .native-export-title{font-size:15px;font-weight:800;line-height:1.45}
+  .native-export-title small{display:block;color:#b9d7e7;font-size:11px;font-weight:500;margin-top:2px}
+  .native-export-actions{display:flex;gap:8px;flex-wrap:wrap}
+  .native-export-btn{border:0;border-radius:10px;padding:10px 13px;cursor:pointer;font:inherit;font-size:13px;font-weight:800}
+  .native-export-btn.primary{background:#f4a707;color:#10233d}
+  .native-export-btn.secondary{background:#fff;color:#0e7a6e}
+  .native-export-note{max-width:900px;margin:12px auto 0;background:#fff7df;color:#654400;border:1px solid #e0b43c;border-radius:11px;padding:10px 12px;font-size:12px;line-height:1.8}
+  .native-export-note b{font-weight:900}
+  #nativePrintDocument{width:min(794px,calc(100% - 20px));margin:16px auto 30px;background:#fff;box-shadow:0 3px 18px rgba(7,32,54,.18);padding:10px}
+  #nativePrintDocument table{width:100%;border-collapse:collapse;font-size:11px}
+  #nativePrintDocument th,#nativePrintDocument td{border:1px solid #333;padding:5px 6px;word-wrap:break-word;vertical-align:middle}
+  #nativePrintDocument tr{break-inside:avoid;page-break-inside:avoid}
+  #nativePrintDocument .print-section-title{break-after:avoid;page-break-after:avoid}
+  @media(max-width:600px){
+    #nativePrintDocument{width:100%;margin:0;padding:7px;box-shadow:none}
+    .native-export-tools{padding:10px}
+    .native-export-btn{padding:9px 10px;font-size:12px}
   }
-  return nonWhite>90;
-}
-async function rasterizePdfStage(stage,forceFront){
-  if(!window.html2canvas) throw new Error('html2canvas unavailable');
-  stage.style.zIndex=forceFront?'2147483647':'0';
-  stage.style.pointerEvents='none';
-  stage.style.visibility='visible';
-  stage.style.opacity='1';
-  stage.offsetHeight; // force layout before Safari captures the node
-  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-  const canvas=await window.html2canvas(stage,{
-    scale:1.45,
-    useCORS:true,
-    allowTaint:false,
-    backgroundColor:'#ffffff',
-    logging:false,
-    scrollX:0,
-    scrollY:0,
-    windowWidth:Math.ceil(stage.scrollWidth||794),
-    windowHeight:Math.ceil(stage.scrollHeight||1123)
-  });
-  return canvas;
-}
-function pdfBlobFromCanvas(canvas){
-  const JsPDF=window.jspdf?.jsPDF;
-  if(!JsPDF) throw new Error('jsPDF unavailable');
-  const pdf=new JsPDF({unit:'mm',format:'a4',orientation:'portrait',compress:true});
-  const pageWidth=210, pageHeight=297, margin=7;
-  const drawWidth=pageWidth-(margin*2), drawHeight=pageHeight-(margin*2);
-  const pixelsPerMm=canvas.width/drawWidth;
-  const sliceHeight=Math.max(1,Math.floor(drawHeight*pixelsPerMm));
-  let sourceY=0, page=0;
-  while(sourceY<canvas.height){
-    const height=Math.min(sliceHeight,canvas.height-sourceY);
-    const slice=document.createElement('canvas');
-    slice.width=canvas.width; slice.height=height;
-    const sliceCtx=slice.getContext('2d');
-    sliceCtx.fillStyle='#fff';
-    sliceCtx.fillRect(0,0,slice.width,slice.height);
-    sliceCtx.drawImage(canvas,0,sourceY,canvas.width,height,0,0,canvas.width,height);
-    if(page>0) pdf.addPage('a4','portrait');
-    const renderedHeight=height/pixelsPerMm;
-    pdf.addImage(slice.toDataURL('image/jpeg',0.96),'JPEG',margin,margin,drawWidth,renderedHeight,undefined,'FAST');
-    sourceY+=height;
-    page++;
+  @page{size:A4 portrait;margin:10mm}
+  @media print{
+    html,body{background:#fff!important}
+    .native-export-tools,.native-export-note{display:none!important}
+    #nativePrintDocument{width:100%!important;margin:0!important;padding:0!important;box-shadow:none!important}
+    #nativePrintDocument *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   }
-  return pdf.output('blob');
-}
-async function createArchivedWeekPdf(week){
-  await loadPdfExportLibrary();
-  const stage=document.createElement('section');
-  stage.id='egtphPdfExportStage';
-  stage.setAttribute('dir','rtl');
-  stage.setAttribute('aria-hidden','true');
-  /* يبقى داخل نافذة التخطيط لأن Safari/iPhone لا يرسم العنصر البعيد خارج الشاشة في PDF. */
-  stage.style.cssText='position:fixed;top:0;left:0;right:auto;width:794px;min-height:1123px;padding:0;margin:0;background:#fff;color:#000;z-index:0;overflow:visible;pointer-events:none;visibility:visible;opacity:1;contain:layout style paint';
-  stage.innerHTML=buildPdfCaptureStageMarkup(week);
-  document.body.appendChild(stage);
-  try{
-    if(document.fonts?.ready) await document.fonts.ready;
-    await new Promise(resolve=>setTimeout(resolve,220));
-    let canvas=await rasterizePdfStage(stage,false);
-    /* احتياط خاص لـ Safari: إن أعطى لقطة بيضاء، نرفع المصدر لحظة واحدة ونعيد الالتقاط. */
-    if(!pdfCanvasHasVisibleContent(canvas)){
-      canvas=await rasterizePdfStage(stage,true);
-    }
-    if(!pdfCanvasHasVisibleContent(canvas)) throw new Error('blank PDF canvas');
-    const blob=pdfBlobFromCanvas(canvas);
-    if(!(blob instanceof Blob)||blob.size<1200) throw new Error('invalid PDF output');
-    return {blob,fileName:archivedWeekPdfFileName(week),weekId:week.id,title:archivedWeekShareText(week)};
-  }finally{
-    stage.remove();
-  }
-}
-async function exportArchivedWeekPDF(weekId){
-  const week=DB.weeks.find(x=>x.id===weekId);
-  if(!week){ showToast('الأسبوع غير موجود','error'); return; }
-  if(_pdfExportLocks.has(weekId)){ showToast('يتم تجهيز ملف PDF بالفعل…','warning'); return; }
-  _pdfExportLocks.add(weekId); setArchivedWeekExportBusy(weekId,true);
-  try{
-    showToast('يتم تجهيز ملف PDF من كشف الطباعة…','warning');
-    const pdf=await createArchivedWeekPdf(week);
-    downloadPdfBlob(pdf.blob,pdf.fileName);
-    logActivity(`تصدير PDF للأسبوع: ${formatDateAR(week.startDate)}`);
-    showToast('تم إنشاء ملف PDF وحفظه على الجهاز.','success');
-  }catch(err){
-    console.error('PDF export failed:',err);
-    showToast('تعذر إنشاء PDF. تحقق من الإنترنت ثم أعد المحاولة، أو استخدم زر الطباعة واختر “حفظ كـ PDF”.','error');
-  }finally{
-    _pdfExportLocks.delete(weekId); setArchivedWeekExportBusy(weekId,false);
-  }
-}
-function closePreparedPdfShare(){
-  _preparedPdfShare=null;
-  closeModal();
-}
-function showPreparedPdfShareModal(pdf){
-  _preparedPdfShare=pdf;
-  const overlay=document.getElementById('modalOverlay');
-  const content=document.getElementById('modalContent');
-  overlay.classList.add('show');
-  content.innerHTML=`
-    <h3><i class="fas fa-share-nodes" style="color:var(--primary)"></i> مشاركة كشف الأسبوع PDF</h3>
-    <div style="line-height:1.9;color:var(--text2)">
-      <p style="margin-bottom:10px"><b style="color:var(--text)">تم تحميل الملف إلى جهازك:</b> ${pdf.fileName}</p>
-      <p><b style="color:var(--primary)">1.</b> اضغط <b>اختيار تطبيق للمشاركة</b>.</p>
-      <p><b style="color:var(--primary)">2.</b> من قائمة مشاركة الهاتف اختر <b>WhatsApp</b>.</p>
-      <p><b style="color:var(--primary)">3.</b> داخل واتساب اختر الشخص أو المجموعة ثم أرسل الملف.</p>
-      <p style="font-size:12px;color:var(--text3);margin-top:10px">لا يرسل البرنامج الملف تلقائياً إلى أي شخص؛ الاختيار يبقى لك بالكامل من شاشة مشاركة الهاتف.</p>
+</style>
+</head>
+<body>
+  <section class="native-export-tools">
+    <div class="native-export-tools-inner">
+      <div class="native-export-title">${actionTitle}<small>${fileName}</small></div>
+      <div class="native-export-actions">
+        <button type="button" class="native-export-btn primary" onclick="window.print()">طباعة / حفظ PDF</button>
+        <button type="button" class="native-export-btn secondary" onclick="window.close()">إغلاق</button>
+      </div>
     </div>
-    <div class="modal-actions">
-      <button class="btn btn-outline" type="button" onclick="downloadPreparedPdfShare()"><i class="fas fa-download"></i> تنزيل مرة أخرى</button>
-      <button class="btn btn-outline" type="button" onclick="closePreparedPdfShare()">إغلاق</button>
-      <button class="btn btn-success" id="preparedPdfShareBtn" type="button"><i class="fas fa-share-nodes"></i> اختيار تطبيق للمشاركة</button>
-    </div>`;
-  document.getElementById('preparedPdfShareBtn').onclick=sharePreparedPdfNow;
+  </section>
+  <div class="native-export-note">
+    <b>على iPhone:</b> هذه صفحة مستقلة وحقيقية وليست صورة مُلتقطة. استخدم زر المشاركة في Safari
+    ثم <b>Markup</b> ثم <b>Done</b> ثم <b>Save File To</b> لحفظها PDF.
+    ${isShare?`بعد الحفظ: <b>Files › الملف › مشاركة › WhatsApp › اختر الشخص أو المجموعة.</b>`:actionHint}
+  </div>
+  <main id="nativePrintDocument">${buildPrintHTML(week,true)}</main>
+</body>
+</html>`;
 }
-function downloadPreparedPdfShare(){
-  if(!_preparedPdfShare){ showToast('لا يوجد ملف PDF جاهز','error'); return; }
-  downloadPdfBlob(_preparedPdfShare.blob,_preparedPdfShare.fileName);
-  showToast('تم حفظ ملف PDF على الجهاز.','success');
-}
-async function sharePreparedPdfNow(){
-  const pdf=_preparedPdfShare;
-  if(!pdf){ showToast('لا يوجد ملف PDF جاهز','error'); return; }
-  const file=new File([pdf.blob],pdf.fileName,{type:'application/pdf'});
-  const shareData={title:pdf.title,text:pdf.title,files:[file]};
-  try{
-    const supportsFiles=!!(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]})));
-    if(!supportsFiles) throw new Error('native file sharing unavailable');
-    await navigator.share(shareData);
-    logActivity(`مشاركة PDF للأسبوع عبر قائمة الهاتف: ${pdf.fileName}`);
-    _preparedPdfShare=null;
-    closeModal();
-    showToast('تم فتح المشاركة. اختر واتساب وأرسل الملف.','success');
-  }catch(err){
-    if(err?.name==='AbortError'){ showToast('تم إلغاء المشاركة. ملف PDF ما زال جاهزاً للحفظ.','warning'); return; }
-    console.warn('Native file share unavailable:',err);
-    downloadPdfBlob(pdf.blob,pdf.fileName);
-    showToast('تم تنزيل PDF. افتح تطبيق الملفات، ثم اختر مشاركة > WhatsApp > الشخص أو المجموعة.','warning');
-  }
-}
-async function shareArchivedWeekPDF(weekId){
+function openArchivedWeekPdfPage(weekId,flow='export'){
   const week=DB.weeks.find(x=>x.id===weekId);
   if(!week){ showToast('الأسبوع غير موجود','error'); return; }
-  if(_pdfExportLocks.has(weekId)){ showToast('يتم تجهيز ملف PDF بالفعل…','warning'); return; }
-  _pdfExportLocks.add(weekId); setArchivedWeekExportBusy(weekId,true);
-  try{
-    showToast('يتم تجهيز PDF ثم تنزيله للمشاركة…','warning');
-    const pdf=await createArchivedWeekPdf(week);
-    downloadPdfBlob(pdf.blob,pdf.fileName);
-    logActivity(`تصدير PDF للمشاركة للأسبوع: ${formatDateAR(week.startDate)}`);
-    showPreparedPdfShareModal(pdf);
-  }catch(err){
-    console.error('PDF share preparation failed:',err);
-    showToast('تعذر تجهيز PDF للمشاركة. تحقق من الإنترنت ثم أعد المحاولة.','error');
-  }finally{
-    _pdfExportLocks.delete(weekId); setArchivedWeekExportBusy(weekId,false);
+
+  /* يجب فتح النافذة فور النقر نفسه، وإلا يمنعها Safari كمُنبثق. */
+  const previewWindow=window.open('','_blank');
+  if(!previewWindow){
+    showToast('تعذر فتح صفحة الحفظ. اسمح بالنوافذ المنبثقة لهذا الموقع ثم أعد المحاولة.','warning');
+    return;
   }
+  try{
+    previewWindow.document.open();
+    previewWindow.document.write(buildNativePdfPreviewDocument(week,flow));
+    previewWindow.document.close();
+    previewWindow.focus();
+    logActivity(`${flow==='share'?'فتح صفحة حفظ ومشاركة PDF':'فتح صفحة حفظ PDF'} للأسبوع: ${formatDateAR(week.startDate)}`);
+    showToast('فُتحت صفحة مستقلة. احفظ PDF من أدوات iPhone ثم شاركه عبر WhatsApp.','success');
+  }catch(err){
+    console.error('Native PDF preview failed:',err);
+    try{previewWindow.close();}catch(_){}
+    showToast('تعذر فتح صفحة الحفظ. أعد المحاولة.','error');
+  }
+}
+function exportArchivedWeekPDF(weekId){
+  openArchivedWeekPdfPage(weekId,'export');
+}
+function shareArchivedWeekPDF(weekId){
+  openArchivedWeekPdfPage(weekId,'share');
 }
 
 /* ====================================================
