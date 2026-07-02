@@ -1085,7 +1085,7 @@ function migrateDB(){
   if(!DB.trash)    DB.trash=[];
   // ── ضمان طابع زمني (_mod) لكل سجل: أساس "الأحدث يغلب" ──
   const _baseMod=(x)=>{ const t=Date.parse((x&&(x.createdAt||x.archivedAt))||'')||0; return t||1; };
-  ['workers','projects','users','weeks','debts'].forEach(k=>{
+  ['workers','projects','users','weeks','debts','pendingWages'].forEach(k=>{
     (DB[k]||[]).forEach(x=>{ if(x&&(x._mod===undefined||x._mod===null)) x._mod=_baseMod(x); });
   });
   if(DB.currentWeek){
@@ -1117,12 +1117,11 @@ function migrateDB(){
       if(!e.services) e.services=[];
     });
   });
-  /* ترحيل سجلات المعلّق: الحساب الحقيقي للمدفوع يُستخرج من الحركات، لا من رقم قابل للتكرار. */
-  (DB.pendingWages||[]).forEach(pw=>{
-    if(!Array.isArray(pw.dates)) pw.dates=[];
-    if(pw.total===undefined) pw.total=0;
-    pw.paid=Math.max(0,pw.dates.filter(d=>d.type==='pay').reduce((sum,d)=>sum+num(d.amount),0));
-  });
+  /* دفتر الأجور المعلّقة: الرصيد يُحسب حصراً من الحركات، ثم نسترجع
+     القيود التاريخية التي كانت موجودة في الأسابيع المؤرشفة ولم تصل إلى دفتر المعلّق
+     (مثلاً بسبب مزامنة قديمة لم تكن تنقل pendingWages). */
+  normalizePendingWageLedger(false);
+  repairPendingWageLedger(false);
   if(!DB.company) DB.company={name:'مؤسسة الأشغال العمومية الكبرى والري',short:'EGTPH',address:'وادي سلي، الشلف',nif:'19202010500199',phone:''};
 
   // توحيد النصوص القادمة من النسخ القديمة أو الاستيراد حتى لا تكسر قوالب HTML.
@@ -2385,11 +2384,12 @@ function getDebtDeductionLimit(entry){
   const otherPayments=(debt.dates||[]).filter(d=>d.type==='pay'&&!sourcePayments.includes(d)).reduce((sum,d)=>sum+num(d.amount),0);
   return Math.max(0,num(debt.total)-otherPayments);
 }
-function recalculatePendingWagePaid(pw){
+function recalculatePendingWagePaid(pw, stamp=true){
   if(!pw) return 0;
   pw.dates=Array.isArray(pw.dates)?pw.dates:[];
-  pw.paid=Math.max(0,pw.dates.filter(d=>d.type==='pay').reduce((sum,d)=>sum+num(d.amount),0));
-  pw._mod=nextMod();
+  const paid=Math.max(0,pw.dates.filter(d=>d&&d.type==='pay').reduce((sum,d)=>sum+num(d.amount),0));
+  if(num(pw.paid)!==paid) pw.paid=paid;
+  if(stamp) pw._mod=nextMod();
   return pw.paid;
 }
 function getPendingSettlementLimitForEntry(entry){
@@ -2418,7 +2418,7 @@ function updatePendingOriginRecord(record,weekId,entry,targetPending,weekStart,w
   if(!record && desired<=0) return null;
   if(!record){
     record={id:generateId(),workerId:entry.workerId,weekId,sourceEntryId:entry.id,weekStart,weekEnd,projectId:projectId||null,total:desired,paid:0,dates:[],_mod:nextMod()};
-    record.dates.push({date:new Date().toISOString(),amount:desired,note:`أجر أسبوع ${formatDateAR(weekStart)}`,type:'add',weekId,weekStart,sourceEntryId:entry.id});
+    record.dates.push({id:generateId(),date:new Date().toISOString(),amount:desired,note:`أجر أسبوع ${formatDateAR(weekStart)}`,type:'add',weekId,weekStart,sourceEntryId:entry.id});
     DB.pendingWages.push(record);
   }else{
     if(!record.sourceEntryId) record.sourceEntryId=entry.id;
@@ -2429,7 +2429,7 @@ function updatePendingOriginRecord(record,weekId,entry,targetPending,weekStart,w
     record.dates=Array.isArray(record.dates)?record.dates:[];
     let add=record.dates.find(d=>d.type==='add'&&(d.sourceEntryId===entry.id||(!d.sourceEntryId&&d.weekId===weekId)));
     if(!add){
-      add={date:new Date().toISOString(),amount:desired,note:`تصحيح أجر معلّق لأسبوع ${formatDateAR(weekStart)}`,type:'add',weekId,weekStart,sourceEntryId:entry.id};
+      add={id:generateId(),date:new Date().toISOString(),amount:desired,note:`تصحيح أجر معلّق لأسبوع ${formatDateAR(weekStart)}`,type:'add',weekId,weekStart,sourceEntryId:entry.id};
       record.dates.unshift(add);
     }else{
       add.amount=desired;
@@ -2621,7 +2621,7 @@ function saveWeek(){
     entriesWithTotals.forEach(e=>{
       if(e.pendingAmount>0){
         const pw={id:generateId(),workerId:e.workerId,weekId,sourceEntryId:e.id,weekStart:cw.startDate,weekEnd:cw.endDate,projectId:cw.projectId||null,total:e.pendingAmount,paid:0,dates:[],_mod:nextMod()};
-        pw.dates.push({date:new Date().toISOString(),amount:e.pendingAmount,note:`أجر أسبوع ${formatDateAR(cw.startDate)} (دُفع ${money(e.paidNow)} من ${money(e.parts.net)})`,type:'add',weekId,weekStart:cw.startDate,sourceEntryId:e.id});
+        pw.dates.push({id:generateId(),date:new Date().toISOString(),amount:e.pendingAmount,note:`أجر أسبوع ${formatDateAR(cw.startDate)} (دُفع ${money(e.paidNow)} من ${money(e.parts.net)})`,type:'add',weekId,weekStart:cw.startDate,sourceEntryId:e.id});
         DB.pendingWages.push(pw);
       }
     });
@@ -2846,7 +2846,121 @@ function renderDebts(){
 /* ====================================================
    الأجور المعلّقة (دفعات جزئية لم تُسدَّد كاملةً بعد)
    ==================================================== */
-function pendingWagesRemaining(pw){ return Math.max(0, num(pw.total)-num(pw.paid)); }
+function pendingWagesRemaining(pw){ return Math.max(0, num(pw?.total)-num(pw?.paid)); }
+function normalizePendingWageRecord(pw, stamp=false){
+  if(!pw) return false;
+  let changed=false;
+  if(!Array.isArray(pw.dates)){ pw.dates=[]; changed=true; }
+  if(pw.total===undefined || pw.total===null){ pw.total=0; changed=true; }
+  const paid=Math.max(0,pw.dates.filter(d=>d&&d.type==='pay').reduce((sum,d)=>sum+num(d.amount),0));
+  if(num(pw.paid)!==paid){ pw.paid=paid; changed=true; }
+  if(stamp && changed) pw._mod=nextMod();
+  return changed;
+}
+function normalizePendingWageLedger(stamp=false){
+  let changed=false;
+  (DB.pendingWages||[]).forEach(pw=>{ if(normalizePendingWageRecord(pw,stamp)) changed=true; });
+  return changed;
+}
+function pendingMovementKey(d){
+  if(d?.id) return 'id:'+d.id;
+  /* السجلات القديمة لم تكن تحمل معرّف حركة؛ هذه البصمة تمنع تكرار نفس الحركة عند دمج جهازين. */
+  return ['legacy',d?.type||'',d?.date||'',num(d?.amount),d?.sourceEntryId||'',d?.paidByEntryId||'',d?.paidByWeekId||'',d?.payerWorkerId||'',d?.note||''].join('|');
+}
+function archivedPendingAmount(week,entry){
+  const f=week?.financialPosting?.entries?.[entry?.id]||{};
+  if(f.pendingAmount!==undefined) return Math.max(0,num(f.pendingAmount));
+  if(entry?.pendingAmount!==undefined) return Math.max(0,num(entry.pendingAmount));
+  const net=postedEntryNet(entry);
+  const paidNow=f.paidNow!==undefined?num(f.paidNow):(entry?.paidNow!==undefined&&entry?.paidNow!==null?num(entry.paidNow):net);
+  return Math.max(0,net-paidNow);
+}
+function archivedSettledPendingAmount(week,entry){
+  const f=week?.financialPosting?.entries?.[entry?.id]||{};
+  return Math.max(0,num(f.settlePending!==undefined?f.settlePending:entry?.settlePending));
+}
+function hasLinkedPendingPaymentForEntry(pw,weekId,entry){
+  return (pw?.dates||[]).some(d=>{
+    if(!d||d.type!=='pay') return false;
+    if(d.paidByEntryId) return d.paidByEntryId===entry.id;
+    return d.paidByWeekId===weekId && (!d.payerWorkerId||d.payerWorkerId===entry.workerId) && isLegacySourceEntryUnambiguous(weekId,entry.workerId);
+  });
+}
+/* استرجاع تحفظي: لا يلمس السجلات السليمة. ينشئ فقط المصدر المفقود من الأرشيف،
+   ثم يربط به تسديدات الأسابيع المسجلة التي لم يكن لها سجل معلّق وقت المزامنة القديمة. */
+function repairPendingWageLedger(stamp=true){
+  if(!Array.isArray(DB.pendingWages)) DB.pendingWages=[];
+  const recoveredIds=new Set();
+  const allWeeks=[...(DB.weeks||[])].sort((a,b)=>String(a.startDate||'').localeCompare(String(b.startDate||'')));
+  allWeeks.forEach(week=>{
+    const entries=week.entries||[];
+    entries.forEach(entry=>{
+      if(!entry?.id || !entry.workerId) return;
+      const pending=archivedPendingAmount(week,entry);
+      if(pending<=0) return;
+      let record=(DB.pendingWages||[]).find(pw=>pw?.sourceEntryId===entry.id);
+      if(!record){
+        const sameWorkerWeek=(DB.pendingWages||[]).filter(pw=>pw?.weekId===week.id && pw?.workerId===entry.workerId && !pw?.sourceEntryId);
+        const sourceCount=entries.filter(x=>x?.workerId===entry.workerId && archivedPendingAmount(week,x)>0).length;
+        if(sameWorkerWeek.length===1 && sourceCount===1){
+          record=sameWorkerWeek[0];
+          record.sourceEntryId=entry.id;
+          if(stamp) record._mod=nextMod();
+        }
+      }
+      if(!record){
+        const createdAt=week.archivedAt||new Date(`${week.startDate||'1970-01-01'}T12:00:00`).toISOString();
+        record={
+          id:'pending_'+entry.id,
+          workerId:entry.workerId,weekId:week.id,sourceEntryId:entry.id,
+          weekStart:week.startDate||'',weekEnd:week.endDate||'',projectId:week.projectId||null,
+          total:pending,paid:0,
+          dates:[{id:'pending_add_'+entry.id,date:createdAt,amount:pending,note:`استرجاع أجر معلّق لأسبوع ${formatDateAR(week.startDate)}`,type:'add',weekId:week.id,weekStart:week.startDate,sourceEntryId:entry.id}],
+          _mod:stamp?nextMod():(Date.parse(createdAt)||0)
+        };
+        DB.pendingWages.push(record);
+        recoveredIds.add(record.id);
+      }else{
+        if(num(record.total)<=0){ record.total=pending; if(stamp) record._mod=nextMod(); }
+        if(!Array.isArray(record.dates)) record.dates=[];
+        if(!record.dates.some(d=>d?.type==='add'&&(d.sourceEntryId===entry.id||(!d.sourceEntryId&&d.weekId===week.id)))){
+          record.dates.unshift({id:'pending_add_'+entry.id,date:week.archivedAt||new Date(`${week.startDate||'1970-01-01'}T12:00:00`).toISOString(),amount:num(record.total)||pending,note:`أجر أسبوع ${formatDateAR(week.startDate)}`,type:'add',weekId:week.id,weekStart:week.startDate,sourceEntryId:entry.id});
+          if(stamp) record._mod=nextMod();
+        }
+      }
+      normalizePendingWageRecord(record,stamp);
+    });
+  });
+
+  /* نعيد فقط التسديدات الخاصة بالمصادر التي أنشأناها الآن؛ لا نقترب من دفعات يدوية قائمة. */
+  if(recoveredIds.size){
+    const settlements=[];
+    allWeeks.forEach(week=>(week.entries||[]).forEach(entry=>{
+      const amount=archivedSettledPendingAmount(week,entry);
+      if(entry?.id && entry.workerId && amount>0) settlements.push({week,entry,amount});
+    }));
+    settlements.sort((a,b)=>String(a.week.startDate||'').localeCompare(String(b.week.startDate||'')) || String(a.entry.id).localeCompare(String(b.entry.id)));
+    settlements.forEach(({week,entry,amount})=>{
+      const already=(DB.pendingWages||[]).reduce((sum,pw)=>sum+(hasLinkedPendingPaymentForEntry(pw,week.id,entry)?(pw.dates||[]).filter(d=>d?.type==='pay'&&((d.paidByEntryId&&d.paidByEntryId===entry.id)||(!d.paidByEntryId&&d.paidByWeekId===week.id))).reduce((s,d)=>s+num(d.amount),0):0),0);
+      let rest=Math.max(0,amount-already);
+      if(rest<=0) return;
+      const candidates=(DB.pendingWages||[]).filter(pw=>recoveredIds.has(pw.id) && pw.workerId===entry.workerId && pw.weekId!==week.id && String(pw.weekStart||'')<=String(week.startDate||''))
+        .sort((a,b)=>String(a.weekStart||'').localeCompare(String(b.weekStart||'')) || String(a.id).localeCompare(String(b.id)));
+      candidates.forEach(pw=>{
+        if(rest<=0) return;
+        const pay=Math.min(rest,pendingWagesRemaining(pw));
+        if(pay<=0) return;
+        const movementId='recovered_pending_pay_'+entry.id+'_'+pw.id;
+        if(!(pw.dates||[]).some(d=>d?.id===movementId)){
+          pw.dates.push({id:movementId,date:week.archivedAt||new Date(`${week.startDate||'1970-01-01'}T12:00:00`).toISOString(),amount:pay,note:`استرجاع تسديد معلّق مع أجر أسبوع ${formatDateAR(week.startDate)}`,type:'pay',sourceWeekId:pw.weekId||null,paidByWeekId:week.id,paidByWeekStart:week.startDate,paidByEntryId:entry.id,payerWorkerId:entry.workerId});
+          normalizePendingWageRecord(pw,stamp);
+        }
+        rest-=pay;
+      });
+    });
+  }
+  return recoveredIds.size;
+}
 function getOpenPendingWagesForWorker(workerId){
   return (DB.pendingWages||[]).filter(pw=>pw.workerId===workerId && pendingWagesRemaining(pw)>0);
 }
@@ -2864,7 +2978,7 @@ function distributePendingWagePayment(workerId, amount, note, paidByWeekId=null,
     const pay=Math.min(rest,pendingWagesRemaining(pw));
     if(pay>0){
       pw.dates=Array.isArray(pw.dates)?pw.dates:[];
-      pw.dates.push({date:new Date().toISOString(),amount:pay,note:note||'تسديد',type:'pay',sourceWeekId:pw.weekId||null,paidByWeekId,paidByWeekStart,paidByEntryId,payerWorkerId:workerId});
+      pw.dates.push({id:generateId(),date:new Date().toISOString(),amount:pay,note:note||'تسديد',type:'pay',sourceWeekId:pw.weekId||null,paidByWeekId,paidByWeekStart,paidByEntryId,payerWorkerId:workerId});
       recalculatePendingWagePaid(pw);
       rest-=pay;
     }
@@ -2919,9 +3033,9 @@ function settlePendingWage(pwId){
   if(amountStr===null) return;
   const amount=Math.min(Math.max(0,num(amountStr)), rem);
   if(amount<=0) return;
-  pw.paid=num(pw.paid)+amount;
-  pw.dates.push({date:new Date().toISOString(),amount,note:'تسديد',type:'pay'});
-  pw._mod=nextMod();
+  pw.dates=Array.isArray(pw.dates)?pw.dates:[];
+  pw.dates.push({id:generateId(),date:new Date().toISOString(),amount,note:'تسديد يدوي من صفحة الأجور المعلّقة',type:'pay'});
+  recalculatePendingWagePaid(pw);
   saveDB(); renderPendingWages(); loadDashboard();
   showToast(`✅ تم تسديد ${money(amount)} دج لـ${w?.name||''}`,'success');
 }
@@ -3129,14 +3243,15 @@ function buildPrintHTML(weekObj,fromArchive){
     debtDeductionTotal:entries.reduce((a,e)=>a+num(e.debtDeduction??e.parts?.deduction),0)
   };
   const financeCashOut=financeTotals.paidNowTotal+financeTotals.settledPendingTotal+expTotal;
+  const workersFinancialTotal=dailyTotal+pieceTotal+financeTotals.settledPendingTotal;
   const financialTotalAfterPendingSettlement=grand+financeTotals.settledPendingTotal;
   const financeTable=(movementRows.length||financeTotals.settledPendingTotal>0||financeTotals.pendingCreatedTotal>0||financeTotals.debtDeductionTotal>0)?`
 <div class="print-section-title" style="background:#1d4ed8;margin-top:12px">▪ الحركات المالية المسوّاة للأسبوع</div>
 <table style="width:100%;border-collapse:collapse">
-  <thead><tr style="background:#1d4ed8;color:#fff"><th style="text-align:right">العامل</th><th>أجرة الأسبوع</th><th>مدفوع من الأجر</th><th>أجر معلّق جديد</th><th>تسديد معلّق سابق</th><th style="background:#1e40af">النقد المدفوع للعامل</th></tr></thead>
+  <thead><tr style="background:#1d4ed8;color:#fff"><th style="text-align:right">العامل</th><th>أجرة الأسبوع</th><th>مدفوع من الأجر</th><th>أجر معلّق جديد</th><th>تسديد معلّق سابق</th><th style="background:#1e40af">النقد المدفوع للعامل</th><th>الحالة / الإجمالي</th></tr></thead>
   <tbody>
-    ${movementRows.map(r=>`<tr><td style="text-align:right;font-weight:700">${r.name}</td><td style="text-align:center">${money(r.net)}</td><td style="text-align:center">${money(r.paidNow)}</td><td style="text-align:center;color:#b91c1c;font-weight:700">${r.pending>0?money(r.pending):'—'}</td><td style="text-align:center;color:#a16207;font-weight:700">${r.settle>0?money(r.settle):'—'}</td><td style="text-align:center;background:#dbeafe;font-weight:800">${money(r.paidNow+r.settle)}</td></tr>`).join('')}
-    <tr style="background:#eff6ff;font-weight:800"><td style="text-align:right">الإجمالي</td><td style="text-align:center">${money(dailyTotal+pieceTotal)}</td><td style="text-align:center">${money(financeTotals.paidNowTotal)}</td><td style="text-align:center;color:#b91c1c">${money(financeTotals.pendingCreatedTotal)}</td><td style="text-align:center;color:#a16207">${money(financeTotals.settledPendingTotal)}</td><td style="text-align:center">${money(financeTotals.paidNowTotal+financeTotals.settledPendingTotal)}</td></tr>
+    ${movementRows.map(r=>`<tr><td style="text-align:right;font-weight:700">${r.name}</td><td style="text-align:center">${money(r.net)}</td><td style="text-align:center">${money(r.paidNow)}</td><td style="text-align:center;color:#b91c1c;font-weight:700">${r.pending>0?money(r.pending):'—'}</td><td style="text-align:center;color:#a16207;font-weight:700">${r.settle>0?money(r.settle):'—'}</td><td style="text-align:center;background:#dbeafe;font-weight:800">${money(r.paidNow+r.settle)}</td><td style="text-align:right;font-size:10px;line-height:1.6"><b>أجر الأسبوع: ${money(r.net)} دج</b>${r.settle>0?`<br><span style="color:#a16207">+ معلّق مسدّد الآن: ${money(r.settle)} دج</span><br><b style="color:#1e40af">إجمالي الاستحقاق الآن: ${money(r.net+r.settle)} دج</b>`:'<br><span style="color:#475569">لا يوجد معلّق سابق مسدّد</span>'}</td></tr>`).join('')}
+    <tr style="background:#eff6ff;font-weight:800"><td style="text-align:right">الإجمالي</td><td style="text-align:center">${money(dailyTotal+pieceTotal)}</td><td style="text-align:center">${money(financeTotals.paidNowTotal)}</td><td style="text-align:center;color:#b91c1c">${money(financeTotals.pendingCreatedTotal)}</td><td style="text-align:center;color:#a16207">${money(financeTotals.settledPendingTotal)}</td><td style="text-align:center">${money(financeTotals.paidNowTotal+financeTotals.settledPendingTotal)}</td><td style="text-align:right">أجور الأسبوع ${money(dailyTotal+pieceTotal)} + معلّق مسدّد ${money(financeTotals.settledPendingTotal)} = <b>${money(workersFinancialTotal)} دج</b></td></tr>
   </tbody>
 </table>
 <div style="margin-top:8px;padding:8px 10px;border:1px solid #1d4ed8;border-radius:6px;background:#eff6ff;font-size:11px;display:flex;justify-content:space-between;gap:12px">
@@ -3182,13 +3297,14 @@ ${num(weekObj.postArchiveAdjustmentTotal)!==0?`<div style="margin-top:7px;paddin
       ${piece.length?`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #ccc;font-size:11px"><span>أجور عمال القطعة (${piece.length} عامل)</span><span style="font-weight:700">${money(pieceTotal)} دج</span></div>`:''}
       ${exps.length?`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #ccc;font-size:11px"><span>مجموع المصاريف (${exps.length} بند)</span><span style="font-weight:700">${money(expTotal)} دج</span></div>`:''}
       <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #ccc;font-size:11px;color:#a16207"><span>تسديد أجور معلّقة من أسابيع سابقة (يُضاف إلى المبلغ المالي)</span><span style="font-weight:800">${money(financeTotals.settledPendingTotal)} دج</span></div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #ccc;font-size:12px;font-weight:900;color:#1e40af"><span>إجمالي أجور العمال بعد تسديد المعلّق السابق = أجور الأسبوع + معلّق مسدّد الآن</span><span>${money(dailyTotal+pieceTotal)} + ${money(financeTotals.settledPendingTotal)} = ${money(workersFinancialTotal)} دج</span></div>
       <div style="display:flex;justify-content:space-between;padding:7px 0;margin-top:4px;border-top:2px solid #0f766e;font-size:13px;font-weight:900;color:#0f766e">
         <span>المجموع المحاسبي للأسبوع (أجور الأسبوع + المصاريف)</span><span>${money(grand)} دج</span>
       </div>
       <div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid #ea580c;font-size:15px;font-weight:900;color:#c2410c">
         <span>المجموع المالي بعد تسديد الأجور المعلّقة السابقة</span><span>${money(financialTotalAfterPendingSettlement)} دج</span>
       </div>
-      <div style="font-size:10px;color:#666;margin-top:4px">${money(grand)} (المجموع المحاسبي) + ${money(financeTotals.settledPendingTotal)} (معلّق سابق مسدَّد). المعلّق الجديد لا يُضاف مرتين لأنه جزء من أجور الأسبوع.</div>
+      <div style="font-size:10px;color:#666;margin-top:4px">${money(grand)} (المجموع المحاسبي) + ${money(financeTotals.settledPendingTotal)} (معلّق سابق مسدَّد الآن). لذلك يظهر المبلغ في حالة العامل وفي إجمالي الأجور وفي المجموع المالي الكلي. المعلّق الجديد لا يُضاف مرتين لأنه جزء من أجور الأسبوع.</div>
     </div>
   </div>
 
@@ -3581,7 +3697,7 @@ function _applyDeletions(delIds){
   if(!delIds||!delIds.length)return;
   const dset=new Set(delIds.map(String));
   // مصفوفات المستوى الأعلى
-  ['workers','projects','users','weeks','debts'].forEach(k=>{
+  ['workers','projects','users','weeks','debts','pendingWages'].forEach(k=>{
     if(Array.isArray(DB[k]))DB[k]=DB[k].filter(x=>!dset.has(String(x.id)));
   });
   // عناصر داخل الأسبوع الحالي
@@ -3609,6 +3725,42 @@ function _mergeNewest(key,remoteArr,delSet){
   });
   return added;
 }
+/* دمج دفتر الأجور المعلّقة: لا يُعامل كتاريخ بسيط؛ حركات التسديد تُدمج بالمعرّف/البصمة ثم يُعاد حساب الرصيد. */
+function _mergePendingWages(remoteArr,delSet){
+  let changed=0;
+  if(!Array.isArray(DB.pendingWages)) DB.pendingWages=[];
+  const byId={};
+  DB.pendingWages.forEach(pw=>{ if(pw&&pw.id) byId[pw.id]=pw; });
+  (remoteArr||[]).forEach(remote=>{
+    if(!remote||!remote.id||delSet.has(String(remote.id))) return;
+    const local=byId[remote.id];
+    if(!local){
+      DB.pendingWages.push(remote);
+      byId[remote.id]=remote;
+      normalizePendingWageRecord(remote,false);
+      changed++;
+      return;
+    }
+    const localMod=+local._mod||0, remoteMod=+remote._mod||0;
+    const preferred=remoteMod>localMod?remote:local;
+    const before=JSON.stringify({total:local.total,paid:local.paid,dates:local.dates,sourceEntryId:local.sourceEntryId,_mod:local._mod});
+    const localDates=Array.isArray(local.dates)?local.dates:[];
+    const remoteDates=Array.isArray(remote.dates)?remote.dates:[];
+    const all=[]; const seen=new Set();
+    localDates.concat(remoteDates).forEach(d=>{
+      const key=pendingMovementKey(d);
+      if(seen.has(key)) return;
+      seen.add(key); all.push(d);
+    });
+    Object.assign(local,preferred);
+    local.dates=all.sort((a,b)=>String(a?.date||'').localeCompare(String(b?.date||'')));
+    local._mod=Math.max(localMod,remoteMod);
+    normalizePendingWageRecord(local,false);
+    const after=JSON.stringify({total:local.total,paid:local.paid,dates:local.dates,sourceEntryId:local.sourceEntryId,_mod:local._mod});
+    if(before!==after) changed++;
+  });
+  return changed;
+}
 function mergeRemote(d){
   let added=0;
   if(!DB.deletedIds)DB.deletedIds=[];
@@ -3631,7 +3783,9 @@ function mergeRemote(d){
     else if((+x._mod||0)>(+loc._mod||0)){Object.assign(loc,x);added++;}
     else if((x.dates||[]).length>(loc.dates||[]).length){loc.dates=x.dates;loc.total=x.total;loc.paid=x.paid;loc.installment=x.installment;added++;}
   });
-  // 5) الأسبوع الحالي: سجل واحد — "الأحدث يغلب بالكامل" (يمنع خلط الهاتف/الحاسوب)
+  // 5) دفتر الأجر المعلّق: السجل + حركات التسديد، لا يجوز إسقاطه عند المزامنة.
+  added+=_mergePendingWages(d.pendingWages,del);
+  // 6) الأسبوع الحالي: سجل واحد — "الأحدث يغلب بالكامل" (يمنع خلط الهاتف/الحاسوب)
   // ⚠️ لا تستبدله أبداً أثناء تعديل فعلي محلي (يكتب المستخدم الآن) — وإلا يُمحى تعديله بصمت
   try{
     if(!isEditingNow()){
@@ -3648,7 +3802,7 @@ function mergeRemote(d){
   if(!DB.company&&d.company)DB.company=d.company;
   // إعدادات: الأحدث يغلب (مع الإبقاء على مفاتيح النقل المحلية)
   added+=_mergeSettings(d.settings);
-  // 6) حارس مزدوج بعد الدمج
+  // 7) حارس مزدوج بعد الدمج
   _applyDeletions(DB.deletedIds);
   return added;
 }
@@ -3672,7 +3826,7 @@ function _mergeSettings(r){
 function _cloudPayload(stamp){
   return JSON.stringify({
     workers:DB.workers,projects:DB.projects,weeks:DB.weeks,
-    currentWeek:DB.currentWeek,debts:DB.debts,users:DB.users,
+    currentWeek:DB.currentWeek,debts:DB.debts,pendingWages:DB.pendingWages,users:DB.users,
     company:DB.company,deletedIds:DB.deletedIds||[],
     settings:_sanitizedSettings(),
     syncedAt:stamp,writerId:WRITER_ID
@@ -4054,7 +4208,7 @@ function seedFromEmbedded(){
   if(DB.settings._seedTag===EMBEDDED_SEED_TAG)return;          // يُدمج مرة واحدة فقط
   const del=new Set((DB.deletedIds||[]).map(String));
   // أضف السجلات الناقصة فقط (لا نُرجِع المحذوف، ولا نلمس الموجود الأحدث)
-  ['workers','projects','users','weeks','debts'].forEach(k=>{
+  ['workers','projects','users','weeks','debts','pendingWages'].forEach(k=>{
     if(!Array.isArray(DB[k]))DB[k]=[];
     const byId={};DB[k].forEach(x=>{if(x&&x.id)byId[x.id]=x;});
     (EMBEDDED_DB[k]||[]).forEach(x=>{
