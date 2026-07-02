@@ -13596,4 +13596,160 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
 })();
 </script>
 
+<script id="egtph-v72-null-records-guard">
+/* ═══════════════════════════════════════════════════════════════
+   EGTPH Payroll v72.0 — حارس السجلات الفارغة
+   - يمنع انهيار الفحص أو الحساب عندما تصل قيمة null/نص داخل قوائم مالية.
+   - لا يحذف أي سجل مالي صالح؛ يزيل فقط الخانات الفارغة أو غير الكائنية.
+   - يعمل قبل فحص المنطق وبعد اكتمال تهيئة الجهاز، ثم يحفظ الإصلاح الجزئي مرة واحدة.
+═══════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  var VERSION='v72.0', baseLogic=null, baseVerify=null, persistTimer=null, scheduled=false, lastReport=null;
+  var MAP_BUCKETS=['advances','bonuses'], MAP_LISTS=['hours','absences','debts'];
+  function D(){try{return (typeof DB!=='undefined'&&DB)?DB:(window.DB||null);}catch(e){return null;}}
+  function isObj(v){return v!==null&&typeof v==='object'&&!Array.isArray(v);}
+  function isArray(v){return Array.isArray(v);}
+  function str(v){return String(v==null?'':v);}
+  function clone(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
+  function emptyStats(){return {removed:0,workers:0,advances:0,bonuses:0,hours:0,absences:0,debts:0,trash:0,changed:false};}
+  function cleanList(value,stats,kind){
+    if(!isArray(value)){
+      if(value===null||value===undefined)return [];
+      stats.removed++;stats[kind]=(stats[kind]||0)+1;stats.changed=true;return [];
+    }
+    var out=[],bad=0;
+    for(var i=0;i<value.length;i++){
+      if(isObj(value[i]))out.push(value[i]);else bad++;
+    }
+    if(bad){stats.removed+=bad;stats[kind]=(stats[kind]||0)+bad;stats.changed=true;}
+    return bad?out:value;
+  }
+  function cleanBucketMap(map,stats,kind){
+    if(!isObj(map))return {};
+    Object.keys(map).forEach(function(wid){
+      var buckets=map[wid];
+      if(!isObj(buckets)){if(buckets!==null&&buckets!==undefined){stats.removed++;stats[kind]++;stats.changed=true;}map[wid]={};return;}
+      Object.keys(buckets).forEach(function(month){buckets[month]=cleanList(buckets[month],stats,kind);});
+    });
+    return map;
+  }
+  function cleanListMap(map,stats,kind){
+    if(!isObj(map))return {};
+    Object.keys(map).forEach(function(wid){map[wid]=cleanList(map[wid],stats,kind);});
+    return map;
+  }
+  function sanitize(source){
+    var d=D(),stats=emptyStats();if(!d)return stats;
+    if(isArray(d.workers))d.workers=cleanList(d.workers,stats,'workers');
+    else if(d.workers==null)d.workers=[];
+    else{d.workers=[];stats.removed++;stats.workers++;stats.changed=true;}
+    MAP_BUCKETS.forEach(function(k){d[k]=cleanBucketMap(d[k],stats,k);});
+    MAP_LISTS.forEach(function(k){d[k]=cleanListMap(d[k],stats,k);});
+    if(isObj(d.trash)){
+      Object.keys(d.trash).forEach(function(k){if(isArray(d.trash[k]))d.trash[k]=cleanList(d.trash[k],stats,'trash');});
+    }
+    if(stats.changed){
+      lastReport={at:new Date().toISOString(),source:str(source||'runtime'),removed:stats.removed,by:{workers:stats.workers,advances:stats.advances,bonuses:stats.bonuses,hours:stats.hours,absences:stats.absences,debts:stats.debts,trash:stats.trash}};
+      try{d.settings=d.settings&&typeof d.settings==='object'?d.settings:{};d.settings.v72LastDataGuard=clone(lastReport);}catch(e){}
+    }
+    return stats;
+  }
+  function queuePersist(stats){
+    if(!stats||!stats.changed||scheduled)return;
+    scheduled=true;
+    clearTimeout(persistTimer);
+    persistTimer=setTimeout(function(){
+      scheduled=false;
+      try{if(typeof window.saveDB==='function')window.saveDB();}
+      catch(e){console.warn('v72 data guard save',e);}
+    },1200);
+  }
+  function normalize(source,persist){var stats=sanitize(source);if(persist!==false)queuePersist(stats);return stats;}
+  function safeBonusEntries(wid,m,yr){
+    normalize('bonusEntries',false);
+    var d=D(),w=typeof window.getW==='function'?window.getW(wid):null;
+    if(!d||!w)return [];
+    var win=typeof window.cycleWindow==='function'?window.cycleWindow(w,m,yr):null,out=[];
+    Object.keys(d.bonuses[wid]||{}).forEach(function(k){
+      cleanList((d.bonuses[wid]||{})[k],emptyStats(),'bonuses').forEach(function(b){
+        if(!b)return;
+        if(!win||(typeof window._inCycle==='function'&&window._inCycle(b.date,win)))out.push(b);
+      });
+    });
+    return out;
+  }
+  function safeHourEntries(wid,m,yr){
+    normalize('hourEntries',false);
+    var d=D(),w=typeof window.getW==='function'?window.getW(wid):null;
+    if(!d||!w)return [];
+    var win=typeof window.cycleWindow==='function'?window.cycleWindow(w,m,yr):null;
+    return cleanList(d.hours[wid],emptyStats(),'hours').filter(function(h){return !!h&&(!win||(typeof window._inCycle==='function'&&window._inCycle(h.date,win)));});
+  }
+  function safeAbsenceEntries(wid,m,yr){
+    normalize('absenceEntries',false);
+    var d=D(),w=typeof window.getW==='function'?window.getW(wid):null;
+    if(!d||!w)return [];
+    var win=typeof window.cycleWindow==='function'?window.cycleWindow(w,m,yr):null;
+    return cleanList(d.absences[wid],emptyStats(),'absences').filter(function(a){
+      var dt=a&&(a.from||a.date);return !!a&&(!win||(typeof window._inCycle==='function'&&window._inCycle(dt,win)));
+    });
+  }
+  function safeAdvanceEntries(wid,m,yr){
+    normalize('advanceEntries',false);
+    var d=D(),w=typeof window.getW==='function'?window.getW(wid):null;
+    if(!d||!w)return [];
+    var win=typeof window.cycleWindow==='function'?window.cycleWindow(w,m,yr):null,out=[];
+    Object.keys(d.advances[wid]||{}).forEach(function(k){
+      cleanList((d.advances[wid]||{})[k],emptyStats(),'advances').forEach(function(a){
+        if(!a)return;
+        var isInst=typeof window._isInstAdv==='function'?window._isInstAdv(a):!!a._isInstDeduction;
+        if(!isInst&&(!win||(typeof window._inCycle==='function'&&window._inCycle(a.date,win))))out.push(a);
+      });
+    });
+    return out;
+  }
+  function wrapHelpers(){
+    window.bonusEntriesInCycle=safeBonusEntries;try{bonusEntriesInCycle=safeBonusEntries;}catch(e){}
+    window.hourEntriesInCycle=safeHourEntries;try{hourEntriesInCycle=safeHourEntries;}catch(e){}
+    window.absenceEntriesInCycle=safeAbsenceEntries;try{absenceEntriesInCycle=safeAbsenceEntries;}catch(e){}
+    window.advanceEntriesInCycle=safeAdvanceEntries;try{advanceEntriesInCycle=safeAdvanceEntries;}catch(e){}
+  }
+  function wrapLogic(){
+    var current=window.runLogicEngine;
+    if(typeof current!=='function'||current.__v72SafeRecords)return;
+    baseLogic=current;
+    var guarded=function(){
+      var fixed=normalize('logicCheck',true);
+      try{return baseLogic.apply(this,arguments);}
+      catch(e){
+        console.error('v72 logic guard',e);
+        var msg=(e&&e.message)||String(e);
+        var tail=fixed&&fixed.removed?' — تم تجاهل '+fixed.removed+' خانة بيانات فارغة':' ';
+        return [{sev:'error',cat:'سلامة البيانات',msg:'تعذر إكمال الفحص التفصيلي: '+msg+tail}];
+      }
+    };
+    guarded.__v72SafeRecords=true;
+    window.runLogicEngine=guarded;try{runLogicEngine=guarded;}catch(e){}
+  }
+  function wrapVerification(){
+    var current=window.runDoubleVerification;
+    if(typeof current!=='function'||current.__v72SafeRecords)return;
+    baseVerify=current;
+    var guarded=function(){normalize('doubleVerification',true);return baseVerify.apply(this,arguments);};
+    guarded.__v72SafeRecords=true;window.runDoubleVerification=guarded;try{runDoubleVerification=guarded;}catch(e){}
+  }
+  function updateVersion(){
+    try{var l=document.querySelector('.tlogo span');if(l)l.textContent='| سجل الأجور v72.0';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v72.0');}catch(e){}
+  }
+  function boot(){
+    var stats=normalize('boot',true);wrapHelpers();wrapLogic();wrapVerification();updateVersion();
+    /* v70 can replace DB asynchronously after automatic cloud initialization. */
+    [900,2400,5200].forEach(function(ms){setTimeout(function(){var x=normalize('postInit',true);if(x.changed&&typeof window.renderDash==='function'){try{window.renderDash();}catch(e){}}},ms);});
+  }
+  window.EGTPH_V72={version:VERSION,normalize:function(){return normalize('manual',true);},status:function(){return {lastRepair:lastReport||null};}};
+  boot();
+})();
+</script>
+
 </body></html>
