@@ -5240,11 +5240,22 @@ function renderSalContent(){
   const yr=S._smManual?(S.syr||new Date().getFullYear()):_active.yr;
   if(!DB.advances[w.id])DB.advances[w.id]={};
   if(!DB.advances[w.id][m])DB.advances[w.id][m]=[];
-  // ── عرض كل التسبيقات الواقعة داخل نافذة الدورة (وليس خانة الشهر فقط) ──
+  // ── عرض تسبيقات الدورة حسب ملكية الدورة الصريحة أولاً ──
+  // realDate تاريخ دفع فعلي فقط؛ لا ينقل التسبيق إلى دورة الدفع عندما يكون
+  // cycleStart أو cycleKey موجودين (مثال: تسوية دورة ماي المدفوعة في 01/07).
   const _winSal=cycleWindow(w,m,yr);
+  const _monthKeySal=String(yr)+'-'+String(m+1).padStart(2,'0');
+  const _belongsToSalaryCycle=(e)=>{
+    if(!e||_isInstAdv(e))return false;
+    const explicitStart=_toDate(e.cycleStart);
+    if(explicitStart)return explicitStart.getTime()===_winSal.from.getTime();
+    const explicitKey=String(e.cycleKey||'');
+    if(explicitKey)return explicitKey===_monthKeySal;
+    return _inCycle(e.date||e.realDate,_winSal);
+  };
   const entries=[];
   Object.entries(DB.advances[w.id]).forEach(([mk,arr])=>{
-    (arr||[]).forEach(e=>{if(!_isInstAdv(e)&&_inCycle(e.date,_winSal))entries.push({...e,_bucket:+mk});});
+    (arr||[]).forEach(e=>{if(_belongsToSalaryCycle(e))entries.push({...e,_bucket:+mk});});
   });
   // ترتيب حسب التاريخ
   entries.sort((a,b)=>{const da=_toDate(a.date),db=_toDate(b.date);return (da?da.getTime():0)-(db?db.getTime():0);});
@@ -14048,10 +14059,14 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
   }
   function rowInCycle(row,w,r,m,y){
     if(!row)return false;
+    /* cycleStart / cycleKey are authoritative. realDate may be later than the owned cycle. */
     var st=date(row.cycleStart);if(st)return sameDay(st,r.from);
     var ck=S(row.cycleKey||'');
-    if(ck===String(y)+'-'+String(m+1).padStart(2,'0'))return true;
-    if(ck&&ck.indexOf(iso(r.from))>=0&&ck.indexOf(iso(r.to))>=0)return true;
+    if(ck){
+      if(ck===String(y)+'-'+String(m+1).padStart(2,'0'))return true;
+      if(ck.indexOf(iso(r.from))>=0&&ck.indexOf(iso(r.to))>=0)return true;
+      return false;
+    }
     return inRange(row.date||row.realDate,r);
   }
   function salaryBase(w,m,y){
@@ -14299,14 +14314,23 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
     var out=[],seen={},from=date(w&&w.startDate),until=date(w&&w.exitDate)||startToday(); if(!w||!from||until<from)return out;
     var a=anchorFor(w,from),guard=0;
     while(a&&guard++<240){var r=rangeFor(w,a.m,a.yr);if(r.from>until)break; if(r.to>from){var k=keyFor(w,a.m,a.yr);if(!seen[k]){seen[k]=1;out.push({m:a.m,yr:a.yr});}} a={m:(a.m+1)%12,yr:a.m===11?a.yr+1:a.yr};}
-    ['advances','hours','absences','bonuses','debts'].forEach(function(section){rows((D()||{})[section],w.id).forEach(function(x){var v=x&&(x.cycleStart||x.realDate||x.from||x.date||x.nextDue);if(!v)return;var p=anchorFor(w,v),k=keyFor(w,p.m,p.yr);if(!seen[k]){seen[k]=1;out.push(p);}});});
+    ['advances','hours','absences','bonuses','debts'].forEach(function(section){rows((D()||{})[section],w.id).forEach(function(x){var v=x&&(x.cycleStart||x.date||x.from||x.realDate||x.nextDue);if(!v)return;var p=anchorFor(w,v),k=keyFor(w,p.m,p.yr);if(!seen[k]){seen[k]=1;out.push(p);}});});
     out.sort(function(x,y){return x.yr-y.yr||x.m-y.m;});return out;
   }
+  /*
+   * ملكية القيد للدورة تُقرأ من بياناته المحاسبية أولاً:
+   * cycleStart / cycleKey.  realDate هو تاريخ دفع فعلي فقط، وقد يقع في
+   * دورة لاحقة عندما يُسدَّد راتب دورة سابقة متأخراً. لذلك لا يجوز أبداً
+   * استعمال realDate لنقل قيد يملك دورة صريحة إلى الدورة الحالية.
+   */
   function rowMatchesCycle(row,w,r,m,y){
     if(!row)return false;
-    if(row.cycleStart&&date(row.cycleStart)&&date(row.cycleStart).getTime()===r.from.getTime())return true;
-    if(row.cycleKey&&S(row.cycleKey)===(r.from.getFullYear()+'-'+String(r.from.getMonth()+1).padStart(2,'0')))return true;
-    return inRange(row.realDate||row.date||row.from||row.nextDue,r);
+    var explicitStart=date(row.cycleStart);
+    if(explicitStart)return explicitStart.getTime()===r.from.getTime();
+    var explicitKey=S(row.cycleKey||'');
+    if(explicitKey)return explicitKey===(r.from.getFullYear()+'-'+String(r.from.getMonth()+1).padStart(2,'0'));
+    /* سجل قديم بلا ملكية دورة: تاريخ القيد المحاسبي أولاً، ثم تاريخ الدفع عند غيابه فقط. */
+    return inRange(row.date||row.realDate||row.from||row.nextDue,r);
   }
   function debtReturnRows(debts,advance,ded){
     var debtId=S(ded&&ded.debtId),tag=S(ded&&(ded._instTag||ded.instTag||ded.allocationId)),adv=S(advance&&advance.id);
@@ -14569,7 +14593,7 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
 ═══════════════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
-  var VERSION='v89.0-non-destructive-sync';
+  var VERSION='v90.0-non-destructive-sync';
   var MAPS=['advances','hours','absences','bonuses','debts'];
   var LOCAL_KEY='egtph_v22';
   var timer=null,poll=null,busy=false,baseline=null,pending={},booted=false;
@@ -14798,7 +14822,7 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
     recover(false).then(function(){var x=init();baseline=sig(x);bind();installUi();});
     poll=setInterval(function(){window.__EGTPH_V84_RECOVERY_GUARD__=true;var x=init();if(x&&x.settings.v85CloudAuto!==false&&navigator.onLine)v85Sync(false);},90000);
     [6500,12000,22000].forEach(function(ms){setTimeout(function(){bind();installUi();},ms);});
-    try{var lab=document.querySelector('.tlogo span');if(lab)lab.textContent='| سجل الأجور v89';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v89');}catch(e){}
+    try{var lab=document.querySelector('.tlogo span');if(lab)lab.textContent='| سجل الأجور v90';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v90');}catch(e){}
   }
   if(window.__EGTPH_DB_READY__)boot();else{window.addEventListener('egtph-db-ready',boot,{once:true});setTimeout(boot,7000);}
 })();
@@ -14922,11 +14946,339 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
   function clean(){
     var stale=document.getElementById('v85JaafarBtn'); if(stale&&stale.parentNode)stale.parentNode.removeChild(stale);
     var note=document.getElementById('v69SyncNote'); if(note&&note.parentNode)note.parentNode.removeChild(note);
-    try{var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v89';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v89');}catch(e){}
+    try{var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v90';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v90');}catch(e){}
   }
   [0,400,1200,3500,8000,16000].forEach(function(ms){setTimeout(clean,ms);});
 })();
 </script>
 
+
+<script id="egtph-v91-immutable-event-sync">
+/* ═══════════════════════════════════════════════════════════════════════
+   EGTPH v91 — مزامنة قيود فردية غير قابلة للاستبدال
+   - تهيئة آمنة واحدة فقط: قراءة أقسام الأعمال من السحابة ودمجها بلا حذف.
+   - بعد التهيئة: إرسال/استقبال أحداث فردية فقط تحت syncV91/events.
+   - لا PUT للجذر ولا لقائمة عامل كاملة ولا لحاوية شهر كاملة.
+   - كل عملية مالية مستقلة؛ تعديل نفس القيد من جهازين ينتج تعارضاً مرئياً.
+   - الحذف المتزامن = أرشفة فقط؛ لا يحذف العامل أو القيد من جهاز آخر تلقائياً.
+═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  var VERSION='v91.0-immutable-event-sync';
+  var MAPS=['advances','hours','absences','bonuses','debts'];
+  var FINANCIAL=['advances','hours','absences','bonuses','debts'];
+  var LOCAL_KEY='egtph_v22';
+  var BASE=null, BUSY=false, BOOTED=false, AUTO_TIMER=null, REBIND_TIMER=null;
+  var MAX_SEEN=1200, MAX_OUTBOX=800, MAX_CONFLICTS=100, MAX_ARCHIVES=120;
+
+  function D(){ try{return (typeof DB!=='undefined'&&DB)?DB:(window.DB||null);}catch(e){return window.DB||null;} }
+  function A(v){return Array.isArray(v)?v:[];}
+  function O(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}
+  function S(v){return String(v==null?'':v);}
+  function C(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
+  function now(){return new Date().toISOString();}
+  function toast(m,bad){try{if(typeof window.toast==='function')window.toast(m,!!bad);}catch(e){}}
+  function status(m,col){try{if(typeof _cloudStatus==='function')_cloudStatus(m,col||'var(--teal)');}catch(e){}}
+  function esc(v){return S(v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function id(prefix){return (prefix||'EV91')+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,11);}
+  function textHash(s){var h=2166136261>>>0;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}return (h>>>0).toString(36)+'_'+s.length;}
+  function cleanForHash(v){
+    if(v===null||typeof v!=='object')return v;
+    if(Array.isArray(v))return v.map(cleanForHash);
+    var out={};Object.keys(v).sort().forEach(function(k){
+      if(k==='_syncHash'||k==='_updatedAt'||k==='updatedAt'||k==='_lastRender'||k==='_tmp'||k==='_v68Pending'||k==='_v69Pending'||k==='_v85Pending'||k==='_v91EventId'||k==='cycleLocked'||k==='_v63Allocated')return;
+      out[k]=cleanForHash(v[k]);
+    });return out;
+  }
+  function stable(v){return JSON.stringify(cleanForHash(v));}
+  function hash(v){return textHash(stable(v));}
+  function same(a,b){return hash(a)===hash(b);}
+  function isRecord(x,section){
+    if(!x||typeof x!=='object'||Array.isArray(x)||x.id===undefined)return false;
+    if(section==='workers')return x.name!==undefined;
+    if(section==='hours')return x.hours!==undefined||x.total!==undefined;
+    if(section==='absences')return x.days!==undefined||x.deduct!==undefined||x.deductOpt!==undefined;
+    if(section==='debts')return x.type!==undefined||x.amount!==undefined;
+    return x.amount!==undefined||x.date!==undefined;
+  }
+  function ensure(d){
+    d=d||D();if(!d)return null;
+    d.settings=O(d.settings);d.workers=A(d.workers);MAPS.forEach(function(s){d[s]=O(d[s]);});
+    d.trash=O(d.trash);if(!Array.isArray(d.trash.workers))d.trash.workers=[];
+    d.auditLog=A(d.auditLog);d.ledger=A(d.ledger);d.cycleLocks=O(d.cycleLocks);
+    d.settings.v91Sync=O(d.settings.v91Sync);
+    d.settings.v91Sync.outbox=A(d.settings.v91Sync.outbox);
+    d.settings.v91Sync.seen=A(d.settings.v91Sync.seen);
+    d.settings.v91Sync.conflicts=A(d.settings.v91Sync.conflicts);
+    d.settings.v91Sync.archives=A(d.settings.v91Sync.archives);
+    return d;
+  }
+  function deviceId(d){
+    d=ensure(d);var key='egtph_pay_device_id_v91',v='';
+    try{v=S(localStorage.getItem(key)||'');}catch(e){}
+    if(!/^dev91_[a-z0-9]+_[a-z0-9]+$/i.test(v)){v='dev91_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10);try{localStorage.setItem(key,v);}catch(e){}}
+    if(d){d.settings.deviceId=v;d.settings.v91Sync.deviceId=v;}return v;
+  }
+  function disableLegacy(d){
+    d=ensure(d);if(!d)return;
+    window.__EGTPH_V50_CLEAN__=true;
+    window.__EGTPH_V84_RECOVERY_GUARD__=true;
+    d.settings.cloudAuto=false;
+    d.settings.v68CloudAuto=false;
+    d.settings.v69CloudAuto=false;
+    d.settings.v85CloudAuto=false;
+    d.settings.v91CloudAuto=d.settings.v91CloudAuto!==false;
+    d.settings.syncProtocol='v91-immutable-events';
+  }
+  function persist(d){
+    d=ensure(d);if(!d)return;
+    try{localStorage.setItem(LOCAL_KEY,JSON.stringify(d));}catch(e){}
+    try{if(typeof idbSet==='function')Promise.resolve(idbSet(C(d))).catch(function(){});}catch(e){}
+    try{if(typeof markSaved==='function')markSaved();}catch(e){}
+  }
+  function cfg(){try{return typeof _cloudCfg==='function'?_cloudCfg():null;}catch(e){return null;}}
+  function child(endpoint,path){var m=S(endpoint).match(/^(.*)\.json(\?.*)?$/),bits=A(path).map(function(p){return encodeURIComponent(S(p));});return m?m[1]+'/'+bits.join('/')+'.json'+(m[2]||''):endpoint;}
+  async function request(url,opts){var r=await (typeof fbFetch==='function'?fbFetch(url,opts||{},1):fetch(url,opts||{}));if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}
+  function read(c,path){return request(child(c.endpoint,A(path)),{headers:{'Cache-Control':'no-cache','Accept':'application/json'}});}
+  function writeEvent(c,event){return request(child(c.endpoint,['syncV91','events',event.id]),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(event)});}
+
+  function baseSettings(s){
+    var src=O(s),out={};['mult','hoursMultiplier','holidays','backupInterval','paydayAlert','bonTax','userName','company','saturdayWorking','weeklyHolidayDay','weeklyPaidHoliday','cycleBoundary','cycleCountingMode','cycleRule','finalSettlement15DayRuleScope','finalSettlementLastCycleRule','finalSettlementPartialRule'].forEach(function(k){if(src[k]!==undefined)out[k]=C(src[k]);});return out;
+  }
+  function addEntity(out,entity){
+    if(!entity||!entity.key)return;
+    if(out[entity.key]){out.__duplicates=out.__duplicates||[];out.__duplicates.push(entity);return;}
+    out[entity.key]=entity;
+  }
+  function bucketFor(section,row,path){
+    if(section==='advances'||section==='bonuses')return S(path&&path.length?path[0]:(row&&row.month!==undefined?row.month:''));
+    return '';
+  }
+  function walkRecords(section,wid,node,path,out){
+    if(isRecord(node,section)){
+      var rid=S(node.id);if(!rid)return;
+      addEntity(out,{key:section+'|'+S(wid)+'|'+rid,section:section,workerId:S(wid),bucket:bucketFor(section,node,path),id:rid,payload:C(node)});return;
+    }
+    if(Array.isArray(node)){node.forEach(function(v,i){walkRecords(section,wid,v,(path||[]).concat(S(i)),out);});return;}
+    if(node&&typeof node==='object')Object.keys(node).forEach(function(k){walkRecords(section,wid,node[k],(path||[]).concat(S(k)),out);});
+  }
+  function entities(d){
+    d=ensure(d);var out={};if(!d)return out;
+    A(d.workers).forEach(function(w){if(isRecord(w,'workers'))addEntity(out,{key:'workers|'+S(w.id),section:'workers',workerId:S(w.id),id:S(w.id),bucket:'',payload:C(w)});});
+    FINANCIAL.forEach(function(section){Object.keys(O(d[section])).forEach(function(wid){walkRecords(section,wid,d[section][wid],[],out);});});
+    addEntity(out,{key:'settings|business',section:'settings',workerId:'',id:'business',bucket:'',payload:baseSettings(d.settings)});
+    return out;
+  }
+  function publicEntities(map){var out={};Object.keys(map||{}).forEach(function(k){if(k!=='__duplicates')out[k]=map[k];});return out;}
+  function findEntity(d,entity){var all=entities(d);return all[entity.key]||null;}
+  function emptyNodeFor(section,d,wid,bucket){
+    if(section==='advances'||section==='bonuses'){
+      if(!d[section][wid]||typeof d[section][wid]!=='object')d[section][wid]={};
+      var own=d[section][wid];
+      if(Array.isArray(own)){var i=Number(bucket);if(!isFinite(i))i=0;if(!Array.isArray(own[i]))own[i]=[];return own[i];}
+      if(!Array.isArray(own[bucket]))own[bucket]=[];return own[bucket];
+    }
+    if(!Array.isArray(d[section][wid]))d[section][wid]=[];return d[section][wid];
+  }
+  function removeEntity(d,entity){
+    var removed=0;
+    if(entity.section==='workers'){for(var wi=d.workers.length-1;wi>=0;wi--){if(d.workers[wi]&&S(d.workers[wi].id)===S(entity.id)){d.workers.splice(wi,1);removed++;}}return removed;}
+    if(entity.section==='settings')return 0;
+    function walk(node){
+      if(Array.isArray(node)){for(var i=node.length-1;i>=0;i--){var v=node[i];if(isRecord(v,entity.section)&&S(v.id)===S(entity.id)){node.splice(i,1);removed++;}else walk(v);}}
+      else if(node&&typeof node==='object')Object.keys(node).forEach(function(k){walk(node[k]);});
+    }
+    walk(d[entity.section]&&d[entity.section][entity.workerId]);return removed;
+  }
+  function placeEntity(d,entity,payload){
+    payload=C(payload);
+    if(entity.section==='workers'){
+      var ix=d.workers.findIndex(function(w){return w&&S(w.id)===S(entity.id);});if(ix<0)d.workers.push(payload);else d.workers[ix]=payload;return;
+    }
+    if(entity.section==='settings'){d.settings=Object.assign({},d.settings,payload);return;}
+    removeEntity(d,entity);emptyNodeFor(entity.section,d,entity.workerId,entity.bucket).push(payload);
+  }
+  function recordConflict(d,reason,event,local){
+    var state=d.settings.v91Sync, eid=S(event&&event.id), exists=state.conflicts.some(function(x){return x&&S(x.eventId)===eid;});
+    if(exists)return;
+    state.conflicts.unshift({id:'CF91_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),eventId:eid,reason:reason,at:now(),entity:C(event&&event.entity||{}),incoming:C(event||{}),local:local?C(local.payload||local):null,status:'open'});
+    state.conflicts=state.conflicts.slice(0,MAX_CONFLICTS);
+  }
+  function archiveRemote(d,event){
+    var state=d.settings.v91Sync;if(state.archives.some(function(x){return x&&S(x.eventId)===S(event.id);}))return;
+    state.archives.unshift({eventId:event.id,at:now(),entity:C(event.entity),snapshot:C(event.before||event.payload||null),reason:S(event.reason||'أرشفة صريحة من جهاز آخر')});state.archives=state.archives.slice(0,MAX_ARCHIVES);
+  }
+  function validEvent(e){return !!(e&&typeof e==='object'&&/^EV91_/.test(S(e.id))&&e.entity&&S(e.entity.key)&&['create','correction','archive','resolution'].indexOf(S(e.kind))>=0&&S(e.deviceId));}
+  function eventOrder(a,b){return S(a.occurredAt).localeCompare(S(b.occurredAt))||S(a.id).localeCompare(S(b.id));}
+  function seenSet(d){var o={};A(d.settings.v91Sync.seen).forEach(function(x){if(S(x))o[S(x)]=1;});return o;}
+  function markSeen(d,ids){var set={},out=[];A(d.settings.v91Sync.seen).concat(ids||[]).forEach(function(x){x=S(x);if(x&&!set[x]){set[x]=1;out.push(x);}});d.settings.v91Sync.seen=out.slice(-MAX_SEEN);}
+  function applyEvent(d,event){
+    if(!validEvent(event))return {applied:false,ignored:true};
+    var e=C(event), entity=e.entity, local=findEntity(d,entity), localHash=local?hash(local.payload):'';
+    if(e.kind==='archive'){archiveRemote(d,e);return {applied:true,archived:true};}
+    if(e.kind==='create'){
+      if(!local){placeEntity(d,entity,e.payload);return {applied:true};}
+      if(localHash===S(e.afterHash||hash(e.payload)))return {applied:false,already:true};
+      recordConflict(d,'إنشاء قيد بالمعرّف نفسه لكن بمعلومات مختلفة',e,local);return {applied:false,conflict:true};
+    }
+    if(e.kind==='correction'){
+      if(!local){recordConflict(d,'تصحيح وصل لكن القيد الأصلي غير موجود محلياً',e,null);return {applied:false,conflict:true};}
+      if(localHash===S(e.afterHash||hash(e.payload)))return {applied:false,already:true};
+      if(localHash!==S(e.baseHash)){recordConflict(d,'القيد عُدّل محلياً أو من جهاز آخر قبل تطبيق هذا التصحيح',e,local);return {applied:false,conflict:true};}
+      placeEntity(d,entity,e.payload);return {applied:true};
+    }
+    if(e.kind==='resolution'){
+      /* قرار يدوي صريح: لا يُنشأ إلا من شاشة التعارض، ويحفظ كلا النسختين داخل الحدث. */
+      placeEntity(d,entity,e.payload);return {applied:true,resolved:true};
+    }
+    return {applied:false,ignored:true};
+  }
+  function addOutbox(d,event){
+    var q=d.settings.v91Sync.outbox;if(q.some(function(x){return x&&S(x.id)===S(event.id);} ))return;
+    q.push(C(event));if(q.length>MAX_OUTBOX)q=q.slice(-MAX_OUTBOX);d.settings.v91Sync.outbox=q;
+  }
+  function capture(d){
+    var current=publicEntities(entities(d));
+    if(!BASE){BASE=current;return 0;}
+    var keys={},count=0;Object.keys(BASE).forEach(function(k){keys[k]=1;});Object.keys(current).forEach(function(k){keys[k]=1;});
+    Object.keys(keys).sort().forEach(function(k){
+      var before=BASE[k],after=current[k];
+      if(!before&&after){var created={id:id('EV91'),kind:'create',entity:C(after),payload:C(after.payload),before:null,baseHash:'',afterHash:hash(after.payload),occurredAt:now(),deviceId:deviceId(d),version:VERSION};addOutbox(d,created);count++;return;}
+      if(before&&!after){var archived={id:id('EV91'),kind:'archive',entity:C(before),before:C(before.payload),payload:null,baseHash:hash(before.payload),afterHash:'',reason:'أرشفة/حذف صريح محلي؛ لا يطبق كحذف تلقائي على الأجهزة الأخرى',occurredAt:now(),deviceId:deviceId(d),version:VERSION};addOutbox(d,archived);count++;return;}
+      if(before&&after&&hash(before.payload)!==hash(after.payload)){
+        var corrected={id:id('EV91'),kind:'correction',entity:C(after),payload:C(after.payload),before:C(before.payload),baseHash:hash(before.payload),afterHash:hash(after.payload),occurredAt:now(),deviceId:deviceId(d),version:VERSION};addOutbox(d,corrected);count++;
+      }
+    });
+    BASE=current;return count;
+  }
+  function addAudit(d,text,details){d.auditLog.unshift({id:'AUD91_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),action:text,time:now(),at:now(),user:(d.settings.userName||'Youcef Abdi'),version:VERSION,details:details||undefined});d.auditLog=d.auditLog.slice(0,300);}
+
+  function rowsById(section,node){
+    var out={};function walk(v,path){if(isRecord(v,section)){out[S(v.id)]={row:v,path:path||[]};return;}if(Array.isArray(v))v.forEach(function(x,i){walk(x,(path||[]).concat(S(i)));});else if(v&&typeof v==='object')Object.keys(v).forEach(function(k){walk(v[k],(path||[]).concat(S(k)));});}walk(node,[]);return out;
+  }
+  function legacyUnion(d,remote){
+    var changes=0;
+    A(remote.workers).forEach(function(r){if(!isRecord(r,'workers'))return;var local=d.workers.find(function(w){return w&&S(w.id)===S(r.id);});if(!local){d.workers.push(C(r));changes++;}else if(!same(local,r)){recordConflict(d,'اختلاف قديم بين هذا الجهاز وبيانات Firebase قبل v91',{id:'LEGACY_WORKER_'+S(r.id),kind:'create',entity:{key:'workers|'+S(r.id),section:'workers',workerId:S(r.id),id:S(r.id),bucket:''},payload:C(r),afterHash:hash(r),deviceId:'legacy'}, {payload:C(local)});}});
+    FINANCIAL.forEach(function(section){
+      var root=O(remote[section]);Object.keys(root).forEach(function(wid){var rem=rowsById(section,root[wid]),loc=rowsById(section,d[section][wid]);Object.keys(rem).forEach(function(rid){var rr=rem[rid], key=section+'|'+S(wid)+'|'+rid, fake={key:key,section:section,workerId:S(wid),bucket:bucketFor(section,rr.row,rr.path),id:rid,payload:C(rr.row)}, l=loc[rid];if(!l){placeEntity(d,fake,rr.row);changes++;}else if(!same(l.row,rr.row)){recordConflict(d,'اختلاف قديم في قيد مالي بين Firebase والجهاز قبل v91',{id:'LEGACY_'+section+'_'+rid,kind:'create',entity:fake,payload:C(rr.row),afterHash:hash(rr.row),deviceId:'legacy'},{payload:C(l.row)});}});});
+    });
+    var remoteSettings=baseSettings(remote.settings);Object.keys(remoteSettings).forEach(function(k){if(d.settings[k]===undefined||d.settings[k]==='')d.settings[k]=C(remoteSettings[k]);});
+    return changes;
+  }
+  async function fetchLegacy(c){
+    var paths=['workers'].concat(FINANCIAL).concat(['settings']);var vals=await Promise.all(paths.map(function(p){return read(c,[p]);}));var out={};paths.forEach(function(p,i){out[p]=vals[i];});return out;
+  }
+  async function fetchEvents(c){
+    var raw=await read(c,['syncV91','events']);var list=[];Object.keys(O(raw)).forEach(function(k){var e=raw[k];if(validEvent(e))list.push(e);});return list.sort(eventOrder);
+  }
+  async function pullEvents(d,c){
+    var list=await fetchEvents(c), seen=seenSet(d), mine=deviceId(d), applied=0,conf=0,newSeen=[];
+    list.forEach(function(e){if(seen[S(e.id)])return;var r=applyEvent(d,e);if(r.applied)applied++;if(r.conflict)conf++;newSeen.push(e.id);});
+    if(newSeen.length)markSeen(d,newSeen);
+    d.settings.v91Sync.lastPullAt=now();d.settings.v91Sync.lastPullCount=applied;d.settings.v91Sync.lastPullConflicts=conf;
+    return {events:list.length,applied:applied,conflicts:conf};
+  }
+  async function bootstrap(d,c,manual){
+    status('⏳ تهيئة آمنة واحدة: قراءة العمال والحركات من السحابة دون استبدال…','var(--teal)');
+    var remote=await fetchLegacy(c), added=legacyUnion(d,remote), pulled=await pullEvents(d,c);
+    d.settings.v91Sync.initializedAt=now();d.settings.v91Sync.initialization='cloud-sections-union-once';d.settings.v91Sync.legacyRecoveryAdded=added;
+    BASE=publicEntities(entities(d));persist(d);refresh();
+    status('🟢 تهيئة v91 اكتملت: دمج فقط، لا حذف ولا استبدال','var(--green1)');
+    if(manual)toast('✅ تهيئة آمنة: أضيف '+added+' سجل مفقود؛ استُقبل '+pulled.applied+' حدث.');
+    return {added:added,pulled:pulled};
+  }
+  function refresh(){['renderDash','renderWorkers','renderTrash','renderAdmin','renderSummary','renderQuick','renderAdvances','renderHours','updateBadges'].forEach(function(n){try{if(typeof window[n]==='function')window[n]();}catch(e){}});}
+  function schedule(){if(AUTO_TIMER)clearTimeout(AUTO_TIMER);AUTO_TIMER=setTimeout(function(){sync(false);},1200);}
+  function safeSave(){
+    var d=ensure();if(!d)return;disableLegacy(d);var n=capture(d);if(n)d.settings.v91Sync.lastCapturedAt=now();persist(d);if(n&&d.settings.v91CloudAuto!==false&&navigator.onLine)schedule();
+  }
+  async function uploadOutbox(d,c){
+    var queue=A(d.settings.v91Sync.outbox), sent=[], failed=[];
+    for(var i=0;i<queue.length;i++){
+      var e=queue[i];if(!validEvent(e))continue;
+      try{await writeEvent(c,e);sent.push(e.id);markSeen(d,[e.id]);}catch(err){failed.push({id:e.id,message:S(err&&err.message||err)});break;}
+    }
+    if(sent.length){var set={};sent.forEach(function(x){set[S(x)]=1;});d.settings.v91Sync.outbox=queue.filter(function(e){return !set[S(e&&e.id)];});}
+    return {sent:sent,failed:failed};
+  }
+  async function sync(manual){
+    if(BUSY)return false;var d=ensure(),c=cfg();if(!d||!c){if(manual)toast('❌ هيّئ رابط Firebase والمفتاح أولاً.',true);return false;}if(!navigator.onLine){if(manual)toast('📡 لا يوجد اتصال بالإنترنت.',true);return false;}
+    BUSY=true;try{
+      disableLegacy(d);
+      if(!d.settings.v91Sync.initializedAt)await bootstrap(d,c,false);else {var pre=await pullEvents(d,c);if(pre.applied||pre.conflicts)refresh();}
+      d=ensure();capture(d);
+      var up=await uploadOutbox(d,c);if(up.failed.length)throw new Error(up.failed[0].message);
+      var post=await pullEvents(d,c);
+      d.settings.v91Sync.lastSyncAt=now();d.settings.v91Sync.lastSyncState='ok';d.settings.v91Sync.lastSent=up.sent.length;d.settings.v91Sync.lastReceived=post.applied;d.settings.cloudLastSync=new Date().toLocaleString('fr-DZ');
+      BASE=publicEntities(entities(d));persist(d);refresh();
+      status('🟢 مزامنة v91: أُرسل '+up.sent.length+' قيد واستُقبل '+post.applied+' قيد','var(--green1)');
+      if(manual)toast('☁️ مزامنة v91 ناجحة — إرسال '+up.sent.length+'، استقبال '+post.applied+'.');
+      return true;
+    }catch(e){d=ensure();if(d){d.settings.v91Sync.lastSyncState='failed';d.settings.v91Sync.lastError={at:now(),message:S(e&&e.message||e).slice(0,240)};persist(d);}status('🔴 فشلت مزامنة v91: '+S(e&&e.message||e),'var(--red)');if(manual)toast('❌ فشلت المزامنة: '+S(e&&e.message||e),true);return false;}finally{BUSY=false;}
+  }
+  function resolveConflict(cid,choice){
+    var d=ensure(),conf=d.settings.v91Sync.conflicts.find(function(x){return x&&S(x.id)===S(cid)&&x.status==='open';});if(!conf){toast('❌ التعارض غير موجود.',true);return false;}
+    var payload=choice==='remote'?C(conf.incoming&&conf.incoming.payload):C(conf.local), entity=C(conf.entity);if(!payload||!entity||!entity.key){toast('❌ بيانات التعارض غير مكتملة.',true);return false;}
+    var event={id:id('EV91'),kind:'resolution',entity:entity,payload:payload,before:C(conf.local),baseHash:'manual-resolution',afterHash:hash(payload),reason:choice==='remote'?'اعتماد النسخة الواردة بعد مراجعة يدوية':'الاحتفاظ بالنسخة المحلية بعد مراجعة يدوية',occurredAt:now(),deviceId:deviceId(d),version:VERSION,manual:true};
+    placeEntity(d,entity,payload);conf.status='resolved';conf.resolvedAt=now();conf.choice=choice;conf.resolutionEventId=event.id;addOutbox(d,event);addAudit(d,'⚖️ حل تعارض مزامنة يدوياً',{conflictId:cid,choice:choice,eventId:event.id});BASE=publicEntities(entities(d));persist(d);refresh();schedule();showConflicts();return true;
+  }
+  function modal(){
+    var m=document.getElementById('v91ConflictModal');if(m)return m;
+    m=document.createElement('div');m.id='v91ConflictModal';m.style.cssText='display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.62);padding:18px;overflow:auto;direction:rtl';
+    m.innerHTML='<div style="max-width:720px;margin:6vh auto;background:#fff;color:#132238;border-radius:16px;padding:16px;font-family:Tahoma,Arial,sans-serif"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><b style="font-size:17px">⚖️ تعارضات مزامنة v91</b><button type="button" id="v91CloseConflict" style="border:0;border-radius:8px;padding:7px 10px;cursor:pointer">إغلاق</button></div><div id="v91ConflictBody" style="margin-top:13px;display:grid;gap:10px"></div></div>';
+    document.body.appendChild(m);m.querySelector('#v91CloseConflict').onclick=function(){m.style.display='none';};return m;
+  }
+  function showConflicts(){
+    var d=ensure(), list=A(d&&d.settings&&d.settings.v91Sync&&d.settings.v91Sync.conflicts).filter(function(x){return x&&x.status==='open';}),m=modal(),body=m.querySelector('#v91ConflictBody');
+    body.innerHTML=list.length?list.map(function(c){var title=esc((c.entity&&c.entity.section||'قيد')+' — '+(c.entity&&c.entity.id||''));return '<div style="border:1px solid #e0a100;border-radius:11px;padding:11px;background:#fff8e8"><b>⚠️ '+title+'</b><br><span style="font-size:12px">'+esc(c.reason||'اختلاف بيانات')+'</span><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px"><button type="button" data-v91="local" data-id="'+esc(c.id)+'" style="border:0;border-radius:8px;padding:8px 10px;background:#0b6b3a;color:#fff;cursor:pointer">الاحتفاظ بالمحلي</button><button type="button" data-v91="remote" data-id="'+esc(c.id)+'" style="border:0;border-radius:8px;padding:8px 10px;background:#165dcc;color:#fff;cursor:pointer">اعتماد الوارد</button></div></div>';}).join(''):'<div style="padding:20px;text-align:center;color:#0b6b3a;font-weight:700">لا توجد تعارضات مفتوحة.</div>';
+    Array.prototype.slice.call(body.querySelectorAll('button[data-v91]')).forEach(function(b){b.onclick=function(){resolveConflict(b.getAttribute('data-id'),b.getAttribute('data-v91'));};});m.style.display='block';
+  }
+  function updatePanel(){
+    var d=ensure();if(!d)return;var host=document.getElementById('cloud_status');if(!host||!host.parentNode)return;
+    ['v85SyncNote','v85RecoverBtn','v88JulyRecoveryCard','v86JulyRecoverBtn','v86JulyNote','v87JulyRecoveryCard'].forEach(function(x){var n=document.getElementById(x);if(n&&n.parentNode)n.parentNode.removeChild(n);});
+    var p=document.getElementById('v91SyncPanel');if(!p){p=document.createElement('div');p.id='v91SyncPanel';p.style.cssText='font-size:11px;line-height:1.7;margin-top:8px;padding:10px;border:1px solid rgba(13,148,136,.35);border-radius:10px;color:var(--gray);background:rgba(13,148,136,.05)';host.parentNode.insertBefore(p,host.nextSibling);}
+    var state=O(d.settings.v91Sync),open=A(state.conflicts).filter(function(x){return x&&x.status==='open';}).length,out=A(state.outbox).length;
+    p.innerHTML='<b style="color:var(--teal)">مزامنة v91 — قيود فردية محمية</b><br>أول جهاز: قراءة ودمج واحد من السحابة بلا استبدال. بعد ذلك: إرسال واستقبال القيود المتغيرة فقط. لا حذف تلقائي ولا كتابة على جذر Firebase.<br><span style="font-size:10px">معلّق للإرسال: '+out+' — تعارضات مفتوحة: '+open+' — آخر مزامنة: '+esc(state.lastSyncAt||'—')+'</span><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px"><button type="button" id="v91SyncNow" class="btn2">🔄 مزامنة v91 الآن</button><button type="button" id="v91SafeInit" class="btn2">🛟 تهيئة آمنة (دمج فقط)</button><button type="button" id="v91Conflicts" class="btn2" '+(open?'':'disabled')+'>⚖️ التعارضات ('+open+')</button></div>';
+    p.querySelector('#v91SyncNow').onclick=function(){sync(true).then(updatePanel);};
+    p.querySelector('#v91SafeInit').onclick=function(){var x=ensure();delete x.settings.v91Sync.initializedAt;persist(x);sync(true).then(updatePanel);};
+    p.querySelector('#v91Conflicts').onclick=function(){showConflicts();};
+  }
+  function patchCloudUi(){
+    Array.prototype.slice.call(document.querySelectorAll('button[onclick*="cloudForcePush"]')).forEach(function(b){b.disabled=true;b.textContent='⛔ الرفع القسري معطّل في v91';b.title='غير مسموح لأن المزامنة المحاسبية لا تستبدل السحابة بالكامل.';});
+    Array.prototype.slice.call(document.querySelectorAll('button[onclick*="cloudPullReplace"]')).forEach(function(b){b.textContent='🛟 تهيئة آمنة (دمج فقط)';b.title='لا تستبدل هذا الجهاز؛ تقرأ وتدمج السجلات فقط.';});
+  }
+  function configSave(){
+    var d=ensure(),u=document.getElementById('cloud_url'),k=document.getElementById('cloud_key'),a=document.getElementById('cloud_auto');
+    if(u)d.settings.cloudUrl=S(u.value).trim();if(k)d.settings.cloudKey=S(k.value).trim();if(a)d.settings.v91CloudAuto=!!a.checked;disableLegacy(d);persist(d);updatePanel();toast('✅ حُفظت إعدادات مزامنة v91.');
+  }
+  function fillInputs(){var d=ensure(),u=document.getElementById('cloud_url'),k=document.getElementById('cloud_key'),a=document.getElementById('cloud_auto');if(u)u.value=d.settings.cloudUrl||'';if(k)k.value=d.settings.cloudKey||'';if(a)a.checked=d.settings.v91CloudAuto!==false;}
+  function bind(){
+    var d=ensure();if(!d)return;disableLegacy(d);
+    window.saveDB=safeSave;try{saveDB=safeSave;}catch(e){}
+    window.cloudSync=function(manual){return sync(!!manual);};try{cloudSync=window.cloudSync;}catch(e){}
+    window.cloudForcePush=function(){toast('⛔ الرفع القسري الكامل معطّل في v91 لحماية البيانات المالية.',true);return false;};try{cloudForcePush=window.cloudForcePush;}catch(e){}
+    window.cloudPullReplace=function(){var x=ensure();delete x.settings.v91Sync.initializedAt;persist(x);return sync(true);};try{cloudPullReplace=window.cloudPullReplace;}catch(e){}
+    window.cloudAutoSetup=function(){};try{cloudAutoSetup=window.cloudAutoSetup;}catch(e){}
+    window.cloudStartStream=function(){};try{cloudStartStream=window.cloudStartStream;}catch(e){}
+    window.cloudConfigSave=configSave;try{cloudConfigSave=configSave;}catch(e){}
+    window.cloudFillInputs=fillInputs;try{cloudFillInputs=fillInputs;}catch(e){}
+    window.EGTPH_V91={version:VERSION,sync:function(){return sync(true);},initialize:function(){var x=ensure();delete x.settings.v91Sync.initializedAt;persist(x);return sync(true);},status:function(){var x=ensure(),s=O(x&&x.settings&&x.settings.v91Sync);return {version:VERSION,initialized:!!s.initializedAt,outbox:A(s.outbox).length,conflicts:A(s.conflicts).filter(function(c){return c&&c.status==='open';}).length,archives:A(s.archives).length,mode:'immutable-record-events'};},conflicts:showConflicts};
+    patchCloudUi();fillInputs();updatePanel();
+    try{var lab=document.querySelector('.tlogo span');if(lab)lab.textContent='| سجل الأجور v91';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v91');}catch(e){}
+  }
+  function boot(){
+    var d=ensure();if(!d){setTimeout(boot,350);return;}
+    if(BOOTED)return;BOOTED=true;disableLegacy(d);deviceId(d);BASE=publicEntities(entities(d));persist(d);bind();
+    setTimeout(function(){bind();sync(false);},1200);
+    [5000,12000,24000,40000].forEach(function(ms){setTimeout(bind,ms);});
+    REBIND_TIMER=setInterval(bind,60000);
+    setInterval(function(){var x=ensure();if(x&&x.settings.v91CloudAuto!==false&&navigator.onLine)sync(false);},60000);
+    window.addEventListener('online',function(){setTimeout(function(){sync(false);},900);});
+    try{var lab=document.querySelector('.tlogo span');if(lab)lab.textContent='| سجل الأجور v91';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v91');}catch(e){}
+  }
+  if(window.__EGTPH_DB_READY__)boot();else{window.addEventListener('egtph-db-ready',boot,{once:true});setTimeout(boot,9000);}
+})();
+
+</script>
 </body>
 </html>
