@@ -1106,23 +1106,18 @@ body.theme-blue .sec,body.theme-purple .sec,body.theme-red .sec,body.theme-sand 
 </div>
 <!-- ═══ AI ═══ -->
 <div class="page" id="page-ai">
-<div class="pgtitle">🤖 التحليل الذكي</div>
-<div class="pgsub">تحليل محلي — يعمل بدون إنترنت</div>
+<div class="pgtitle">🧠 التحليل المنطقي والمالي</div>
+<div class="pgsub">قراءة مباشرة من السجل المالي الموحّد — لا تغيّر أي بيانات</div>
 <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
 <select id="aiPeriod" style="padding:9px 14px;background:rgba(0,255,136,.04);border:1px solid var(--border);border-radius:25px;color:var(--white);font-family:'Tajawal',sans-serif;font-size:13px;outline:none">
-<option value="week">هذا الأسبوع</option>
+<option value="week">آخر 7 أيام</option>
 <option selected="" value="month">هذا الشهر</option>
 <option value="year">هذه السنة</option>
 </select>
-<button class="btn1" onclick="runAI()">🔄 تشغيل التحليل</button>
+<button class="btn1" onclick="runAI()">🔄 تحديث التحليل</button>
+<button class="btn2" onclick="showUnifiedLogicReport()">🧪 اختبارات العقد (20)</button>
 </div>
-<div id="aiContent">
-<div style="text-align:center;padding:60px;color:var(--gray)">
-<div style="font-size:48px;margin-bottom:10px;filter:drop-shadow(0 0 20px rgba(0,255,136,.3))">🤖</div>
-<div style="font-size:15px;font-weight:700;margin-bottom:5px;color:var(--green1)">اضغط "تشغيل التحليل"</div>
-<div style="font-size:11px">يعمل مع كل الفترات: أسبوع / شهر / سنة</div>
-</div>
-</div>
+<div id="aiContent"></div>
 </div>
 <!-- ═══ ALERTS ═══ -->
 <div class="page" id="page-alerts">
@@ -2011,7 +2006,62 @@ function renderAnnual(){
 function renderAlerts(){
   var alerts=[];DB.workers.forEach(function(w){var s=settlement(w.workerId,today()),d=debtRows(w.workerId).reduce(function(a,x){return a+x.remaining;},0);if(s.net>0)alerts.push('<div class="abox warn"><b>'+esc(w.name)+'</b>: '+esc(s.message)+'</div>');if(w.exitDate&&d>0)alerts.push('<div class="abox danger"><b>'+esc(w.name)+'</b> خرج وعليه دين متبقٍ: '+money(d)+'</div>');transactions(w.workerId,{advance:1}).filter(function(t){return N(t.unallocatedAmount)>0;}).forEach(function(t){alerts.push('<div class="abox danger"><b>'+esc(w.name)+'</b>: تسبيق '+money(t.amount)+' يحتوي '+money(t.unallocatedAmount)+' غير موزّعة. صحّح نفس العملية، ولا تنشئ تسبيقاً جديداً.</div>');});});setHtml('alertsContent',alerts.join('')||'<div class="abox ok">✅ لا توجد تنبيهات مالية.</div>');
 }
-function renderAI(){var workers=DB.workers.length,tx=A(DB.financialTransactions).filter(isActive).length,conf=A(DB.syncConflicts).filter(function(x){return x.status==='open';}).length;setHtml('aiContent','<div class="sec"><div class="sechdr"><h3>🤖 تحليل القواعد</h3></div><div class="secbody"><div class="abox ok">المحرك يعمل بسجل مالي واحد: '+tx+' عملية حية مرتبطة بـ '+workers+' عامل.</div><div class="abox '+(conf?'warn':'ok')+'">تعارضات مزامنة مفتوحة: '+conf+'. لا يوجد "آخر كتابة تربح" داخل السجل المالي.</div><div class="abox ok">اختبر العقد عبر زر 🧠 فحص شامل: 20 حالة قبول إلزامية.</div></div></div>');}
+function analysisRange(period){
+  var end=today(),start=new Date(end.getFullYear(),end.getMonth(),1);
+  if(period==='week')start=addDays(end,-6);
+  else if(period==='year')start=new Date(end.getFullYear(),0,1);
+  return {start:start,end:end};
+}
+function analysisLiveStats(){
+  var workers=A(DB.workers),raw=A(DB.financialTransactions),active=raw.filter(isActive),deleted=raw.filter(function(t){return t&&t.status==='deleted';}),seen={},duplicateTx=[],missingTx=[],missingWorkers=[],unallocated=[],settles=[];
+  raw.forEach(function(t){
+    if(!t)return;
+    var tid=S(t.transactionId);
+    if(!tid||!S(t.workerId)||!S(t.type)||!S(t.effectiveDate))missingTx.push(t);
+    if(tid){if(seen[tid])duplicateTx.push(tid);seen[tid]=true;}
+    if(S(t.workerId)&&!worker(t.workerId))missingWorkers.push(t);
+    if(isActive(t)&&t.type==='advance'&&N(t.unallocatedAmount)>0)unallocated.push(t);
+  });
+  var ids={},duplicateWorkers=[];
+  workers.forEach(function(w){var wid=S(w&&w.workerId);if(!wid)duplicateWorkers.push('عامل بلا workerId');else if(ids[wid])duplicateWorkers.push(wid);else ids[wid]=true;});
+  workers.forEach(function(w){var st=settlement(w.workerId,today());if(st)settles.push(st);});
+  var companyPays=settles.reduce(function(a,x){return a+Math.max(0,N(x.net));},0),companyCredit=settles.reduce(function(a,x){return a+Math.max(0,-N(x.net));},0),debt=workers.reduce(function(a,w){return a+debtRows(w.workerId,today()).reduce(function(z,d){return z+N(d.remaining);},0);},0),conf=A(DB.syncConflicts).filter(function(c){return c&&c.status==='open';}).length;
+  return {workers:workers,raw:raw,active:active,deleted:deleted,settles:settles,companyPays:N(companyPays),companyCredit:N(companyCredit),debt:N(debt),openConflicts:conf,missingTx:missingTx,missingWorkers:missingWorkers,duplicateTx:duplicateTx,duplicateWorkers:duplicateWorkers,unallocated:unallocated};
+}
+function renderAI(){
+  var root=el('aiContent');if(!root)return;
+  var period=S(val('aiPeriod')||'month'),range=analysisRange(period),stats=analysisLiveStats(),periodTx=stats.active.filter(function(t){var d=date(t.effectiveDate);return d&&d>=range.start&&d<=range.end;}),periodOut=periodTx.reduce(function(a,t){return a+((t.type==='advance'||t.type==='pending_wage_payment'||t.type==='debt_payment')?N(t.cashPaid==null?t.amount:t.cashPaid):0);},0),issues=stats.missingTx.length+stats.missingWorkers.length+stats.duplicateTx.length+stats.duplicateWorkers.length+stats.unallocated.length,issueRows=[];
+  if(stats.missingTx.length)issueRows.push('حركات ناقصة الحقول الأساسية: '+stats.missingTx.length);
+  if(stats.missingWorkers.length)issueRows.push('حركات مرتبطة بعامل غير موجود: '+stats.missingWorkers.length);
+  if(stats.duplicateTx.length)issueRows.push('transactionId مكرر: '+stats.duplicateTx.length);
+  if(stats.duplicateWorkers.length)issueRows.push('workerId مكرر أو ناقص: '+stats.duplicateWorkers.length);
+  if(stats.unallocated.length)issueRows.push('تسبيقات غير موزعة بالكامل: '+stats.unallocated.length);
+  var cards='<div class="sumrow">'
+    +'<div class="scell sg"><div class="sclbl">عمال مسجلون</div><div class="scval">'+stats.workers.length+'</div></div>'
+    +'<div class="scell sb"><div class="sclbl">حركات حية</div><div class="scval">'+stats.active.length+'</div></div>'
+    +'<div class="scell sa"><div class="sclbl">مستحقات العمال</div><div class="scval">'+money(stats.companyPays)+'</div></div>'
+    +'<div class="scell sr"><div class="sclbl">رصيد لصالح المؤسسة</div><div class="scval">'+money(stats.companyCredit)+'</div></div>'
+    +'<div class="scell sp"><div class="sclbl">ديون متبقية</div><div class="scval">'+money(stats.debt)+'</div></div>'
+    +'</div>';
+  var integrity='<div class="sec"><div class="sechdr"><h3>🔎 سلامة السجل المالي</h3><span class="badge '+(issues||stats.openConflicts?'ba':'bg')+'">'+(issues||stats.openConflicts?'يحتاج مراجعة':'سليم')+'</span></div><div class="secbody">'
+    +'<div class="abox '+(issues?'danger':'ok')+'"><b>'+(!issues?'✅ لا توجد أخطاء هوية أو تكرار أو حركة ناقصة.':'⚠️ توجد عناصر تحتاج مراجعة.')+'</b>'+(issueRows.length?'<br>'+issueRows.map(esc).join('<br>'):'')+'</div>'
+    +'<div class="abox '+(stats.openConflicts?'warn':'ok')+'"><b>تعارضات مزامنة مفتوحة:</b> '+stats.openConflicts+'. '+(stats.openConflicts?'افتح حالة المزامنة للحسم؛ لا يطبّق البرنامج آخر كتابة تلقائياً.':'لا توجد تعارضات مفتوحة.')+'</div>'
+    +'<div class="abox ok"><b>المصدر الوحيد للحساب:</b> financialTransactions. الحركات المحذوفة ('+stats.deleted.length+') لا تدخل في الرصيد.</div>'
+    +'</div></div>';
+  var periodBox='<div class="sec"><div class="sechdr"><h3>📅 حركة الفترة المختارة</h3><span style="font-size:11px;color:var(--gray)">'+dtext(range.start)+' → '+dtext(range.end)+'</span></div><div class="secbody"><div class="sumrow">'
+    +'<div class="scell"><div class="sclbl">عمليات الفترة</div><div class="scval">'+periodTx.length+'</div></div>'
+    +'<div class="scell sb"><div class="sclbl">نقد مدفوع</div><div class="scval">'+money(periodOut)+'</div></div>'
+    +'<div class="scell sr"><div class="sclbl">غيابات</div><div class="scval">'+money(periodTx.filter(function(t){return t.type==='absence';}).reduce(function(a,t){return a+N(t.amount||t.deductionAmount);},0))+'</div></div>'
+    +'<div class="scell sg"><div class="sclbl">ساعات ومكافآت</div><div class="scval">'+money(periodTx.filter(function(t){return t.type==='hours'||t.type==='bonus';}).reduce(function(a,t){return a+N(t.amount);},0))+'</div></div>'
+    +'</div></div></div>';
+  var rows=stats.settles.map(function(st){
+    var cur=st.cycles.length?st.cycles[st.cycles.length-1]:null,kind=st.net>0?'ba':st.net<0?'br':'bg',debt=debtRows(st.worker.workerId,today()).reduce(function(a,d){return a+N(d.remaining);},0);
+    return '<tr><td><b>'+esc(st.worker.name)+'</b><br><span style="font-size:10px;color:var(--gray)">'+esc(st.worker.workerId)+'</span></td><td>'+money(st.grossDue)+'</td><td>'+money(st.totalPaid)+'</td><td>'+money(debt)+'</td><td><span class="badge '+kind+'">'+esc(st.message)+'</span></td><td>'+(cur?(cur.temporary15Rule?'قاعدة 15 مؤقتة':'أيام فعلية'):'—')+'</td><td><button class="eb" onclick="showPage(\'settlement\');setVal(\'settlSearch\',\''+esc(st.worker.name).replace(/'/g,'&#39;')+'\');renderSettlement()">💳</button></td></tr>';
+  }).join('');
+  var detail='<div class="twrap"><div class="thdr"><h3>📋 الخانات التفصيلية — تصفية كل عامل حتى اليوم</h3><span style="font-size:11px;color:var(--gray)">اليوم يعامل كخروج افتراضي للعامل النشط</span></div><div style="overflow:auto"><table><thead><tr><th>العامل</th><th>المستحق الإجمالي</th><th>المدفوع</th><th>الدين المتبقي</th><th>التصفية</th><th>قاعدة الدورة</th><th>فتح</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  var tests='<div class="sec"><div class="sechdr"><h3>🧪 اختبارات العقد</h3><button class="btn2" onclick="showUnifiedLogicReport()">عرض الاختبارات العشرين</button></div><div class="secbody"><div class="abox ok">الاختبارات العشرون ليست خانات إدخال ولا تغيّر بياناتك. هي فحص تقني لعقود الحساب: تسبيق، دين، غياب، تغيير الاستحقاق، الحذف، التكرار، المزامنة والطباعة.</div></div></div>';
+  setHtml('aiContent',cards+integrity+periodBox+detail+tests);
+}
 function renderTrash(){var rows=A(DB.financialTransactions).filter(function(t){return t&&t.status==='deleted';}).sort(function(a,b){return S(b.deletedAt).localeCompare(S(a.deletedAt));});setHtml('trashContent','<div class="twrap"><div class="thdr"><h3>🗑️ سلة المهملات — استرجاع صريح فقط</h3></div><div class="secbody">'+(rows.map(function(t){return '<div class="ledgerui-ledger-row"><b>'+esc(txTitle(t))+'</b> — '+esc(workerName(t.workerId))+'<br><span>'+esc(t.transactionId)+' · حُذف '+esc(dtext(t.deletedAt))+'</span><br><button class="btn2" style="margin-top:7px" onclick="restorePrompt(\''+esc(t.transactionId)+'\')">↩️ استرجاع بعد كتابة ID</button></div>';}).join('')||'<div class="abox ok">لا توجد عمليات محذوفة.</div>')+'</div></div>');var b=el('trashBadge');if(b){b.textContent=rows.length;b.style.display=rows.length?'inline-block':'none';}}
 function renderSearch(){
   var q=S(val('globalSearch')).toLowerCase(),kind=S(val('searchType')||'all'),monthRaw=S(val('searchMonth')),month=monthRaw===''?-1:I(monthRaw),
@@ -2325,9 +2375,9 @@ function selfTest(){
   }catch(e){results.push({name:'فشل استثناء',ok:false,detail:S(e&&e.stack||e)});}finally{DB=original;window.DB=original;saveLocal=originalSave;}
   return {version:VERSION,passed:results.filter(function(x){return x.ok;}).length,total:results.length,ok:results.every(function(x){return x.ok;}),results:results};
 }
-function showUnifiedLogicReport(){var r=selfTest(),old=el('mLogicReport');if(old)old.remove();var rows=r.results.map(function(x){return '<div class="abox '+(x.ok?'ok':'danger')+'"><b>'+(x.ok?'✅':'❌')+' '+esc(x.name)+'</b>'+(x.detail?'<br>'+esc(x.detail):'')+'</div>';}).join('');document.body.insertAdjacentHTML('beforeend','<div class="mo open" id="mLogicReport"><div class="modal"><h3>🧠 فحص السجل المالي</h3><div class="minfo"><b>'+r.passed+'/'+r.total+'</b> اختبار قبول ناجح. المصدر الوحيد: <code>financialTransactions</code>.</div>'+rows+'<div class="mbtns"><button class="btn2" onclick="document.getElementById(\'mLogicReport\').remove()">إغلاق</button></div></div></div>');return r;}
+function showUnifiedLogicReport(){var r=selfTest(),old=el('mLogicReport'),live=analysisLiveStats();if(old)old.remove();var rows=r.results.map(function(x){return '<div class="abox '+(x.ok?'ok':'danger')+'"><b>'+(x.ok?'✅':'❌')+' '+esc(x.name)+'</b>'+(x.detail?'<br>'+esc(x.detail):'')+'</div>';}).join('');var foot='<div class="minfo" style="margin-top:12px"><b>هذه اختبارات تقنية وليست خانات إدخال.</b><br>البيانات الحية: '+live.workers.length+' عامل · '+live.active.length+' حركة حية · '+live.deleted.length+' عملية محذوفة · '+live.openConflicts+' تعارض مزامنة مفتوح. التفاصيل التشغيلية موجودة في صفحة <b>التحليل المنطقي والمالي</b>.</div>';document.body.insertAdjacentHTML('beforeend','<div class="mo open" id="mLogicReport"><div class="modal"><h3>🧪 اختبارات اعتماد العقد</h3><div class="minfo"><b>'+r.passed+'/'+r.total+'</b> اختبار قبول ناجح. المصدر الوحيد: <code>financialTransactions</code>.</div>'+rows+foot+'<div class="mbtns"><button class="btn2" onclick="document.getElementById(\'mLogicReport\').remove()">إغلاق</button></div></div></div>');return r;}
 function showLogicReport(){return showUnifiedLogicReport();}
-function runAI(){showPage('ai');}
+function runAI(){showPage('ai');renderAI();}
 function runPeriodicMonitor(){renderAlerts();showPage('alerts');}
 /* ────────────────────────────── Boot and global API exposure ────────────────────────────── */
 function bindUi(){
@@ -2336,6 +2386,7 @@ function bindUi(){
   var sf=el('settlFilter');if(sf)sf.onchange=renderSettlement;
   var gs=el('globalSearch');if(gs)gs.oninput=renderSearch;
   var st=el('searchType');if(st)st.onchange=renderSearch;
+  var aiPeriod=el('aiPeriod');if(aiPeriod)aiPeriod.onchange=renderAI;
   var logic=el('logicBtn');if(logic){logic.onclick=function(e){if(e)e.preventDefault();showUnifiedLogicReport();};logic.title='فحص السجل المالي — 20 اختبار قبول';}
 
   /* مركز العمليات السريع: كل زر يستعمل الدالة نفسها التي تستعملها الصفحة المختصة. */
@@ -2371,7 +2422,7 @@ function bindUi(){
 }
 function scheduleTokenRefresh(){clearTimeout(scheduleTokenRefresh._t);var a=authSession();if(!a)return;var ms=Math.max(30000,N(a.expiresAt)-Date.now()-60000);scheduleTokenRefresh._t=setTimeout(function(){freshAuthToken().then(function(){scheduleTokenRefresh();}).catch(function(){});},ms);}
 function expose(){
-  var api={DB:DB,saveDB:saveDB,toast:toast,openModal:openModal,closeModal:closeModal,showPage:showPage,goBackPage:goBackPage,openAddWorker:openAddWorker,editW:editW,saveWorker:saveWorker,syncStartDate:syncStartDate,askDelW:askDelW,showWorkerDetail:showWorkerDetail,changePaydayPrompt:changePaydayPrompt,openAdvModal:openAdvModal,saveAdv:saveAdv,openHrsModal:openHrsModal,saveHrs:saveHrs,openBonModal:openBonModal,saveBon:saveBon,openAbsModal:openAbsModal,saveAbs:saveAbs,openDbtModal:openDbtModal,saveDbt:saveDbt,toggleAbsType:toggleAbsType,calcSingleAbs:calcSingleAbs,calcAbsRange:calcAbsRange,calcOpenAbs:calcOpenAbs,calcInst:calcInst,activateDebtInstallment:activateDebtInstallment,payDebtExternally:payDebtExternally,openPendingPayment:openPendingPayment,openCorrection:openCorrection,applyCorrection:applyCorrection,askDeleteTx:askDeleteTx,restorePrompt:restorePrompt,delAdv:delAdv,delHrs:delHrs,delAbs:delAbs,delBon:delBon,delDbt:delDbt,deleteAdv:deleteAdv,editAdv:editAdv,editHrs:editHrs,editAbs:editAbs,editBon:editBon,toggleHrsPaid:toggleHrsPaid,toggleBonPaid:toggleBonPaid,toggleDebtInst:toggleDebtInst,payInst:payInst,quickPayDebt:quickPayDebt,quickSettle:quickSettle,closeOpenAbs:closeOpenAbs,markAllHrsPaidToday:markAllHrsPaidToday,markAllBonPaidMonth:markAllBonPaidMonth,applyTheme:applyTheme,cycleTheme:cycleTheme,applyMult:applyMult,quickMult:quickMult,openMultModal:openMultModal,saveMult:saveMult,saveUserName:saveUserName,saveBonTax:saveBonTax,addHoliday:addHoliday,removeHoliday:removeHoliday,autoBackup:autoBackup,exportData:exportData,importData:importData,askReset:askReset,emptyTrashType:emptyTrashType,emptyAllTrash:emptyAllTrash,shareData:shareData,cloudConfigSave:cloudConfigSave,openFirebaseLogin:openFirebaseLogin,firebaseLogin:firebaseLogin,cloudSync:cloudSync,showConflicts:showConflicts,resolveConflict:resolveConflict,applyImportReview:applyImportReview,esc:esc,printWorkerDetail:printWorkerDetail,printAllWorkers:printAllWorkers,printAllWorkersMulti:printAllWorkersMulti,printMonthReport:printMonthReport,printSettlementReport:printSettlementReport,printPrintWorkerSelect:printPrintWorkerSelect,printAbsReport:printAbsReport,printHrsReport:printHrsReport,printDebtsReport:printDebtsReport,printSummary:printSummary,printAnnual:printAnnual,printAuditReport:printAuditReport,printTodayAdvances:printTodayAdvances,printTodayByType:printTodayByType,printTodayOnly:printTodayOnly,openPrtModal:openPrtModal,togglePrtType:togglePrtType,doPrint:doPrint,egtphExportPdf:egtphExportPdf,egtphSharePdf:egtphSharePdf,openAuditModal:openAuditModal,showAudit:showAudit,showLedger:showLedger,showFinanceLedger:showFinanceLedger,showSyncStatus:showSyncStatus,explainProtectedUndo:explainProtectedUndo,showUnifiedLogicReport:showUnifiedLogicReport,showLogicReport:showLogicReport,runAI:runAI,runPeriodicMonitor:runPeriodicMonitor,runSearch:runSearch,renderAbsSummary:renderAbsSummary,toggleHrsRateType:toggleHrsRateType,quickOpen:quickOpen,applyHourlyRateAll:function(){toast('ℹ️ تغيير معامل الساعات لا يعيد تقييم الحركات المسجلة؛ استعمل التصحيح للحركة المطلوبة.');},setWorkerRate:function(){toast('ℹ️ سعر الساعة محفوظ داخل كل حركة ساعات. استعمل التصحيح للحركة المطلوبة.');},renderDash:renderDashboard,renderWorkers:renderWorkers,renderSettlement:renderSettlement,renderSideFinStatus:renderSideStatus,renderAdmin:renderAdmin,renderAll:renderAll};
+  var api={DB:DB,saveDB:saveDB,toast:toast,openModal:openModal,closeModal:closeModal,showPage:showPage,goBackPage:goBackPage,openAddWorker:openAddWorker,editW:editW,saveWorker:saveWorker,syncStartDate:syncStartDate,askDelW:askDelW,showWorkerDetail:showWorkerDetail,changePaydayPrompt:changePaydayPrompt,openAdvModal:openAdvModal,saveAdv:saveAdv,openHrsModal:openHrsModal,saveHrs:saveHrs,openBonModal:openBonModal,saveBon:saveBon,openAbsModal:openAbsModal,saveAbs:saveAbs,openDbtModal:openDbtModal,saveDbt:saveDbt,toggleAbsType:toggleAbsType,calcSingleAbs:calcSingleAbs,calcAbsRange:calcAbsRange,calcOpenAbs:calcOpenAbs,calcInst:calcInst,activateDebtInstallment:activateDebtInstallment,payDebtExternally:payDebtExternally,openPendingPayment:openPendingPayment,openCorrection:openCorrection,applyCorrection:applyCorrection,askDeleteTx:askDeleteTx,restorePrompt:restorePrompt,delAdv:delAdv,delHrs:delHrs,delAbs:delAbs,delBon:delBon,delDbt:delDbt,deleteAdv:deleteAdv,editAdv:editAdv,editHrs:editHrs,editAbs:editAbs,editBon:editBon,toggleHrsPaid:toggleHrsPaid,toggleBonPaid:toggleBonPaid,toggleDebtInst:toggleDebtInst,payInst:payInst,quickPayDebt:quickPayDebt,quickSettle:quickSettle,closeOpenAbs:closeOpenAbs,markAllHrsPaidToday:markAllHrsPaidToday,markAllBonPaidMonth:markAllBonPaidMonth,applyTheme:applyTheme,cycleTheme:cycleTheme,applyMult:applyMult,quickMult:quickMult,openMultModal:openMultModal,saveMult:saveMult,saveUserName:saveUserName,saveBonTax:saveBonTax,addHoliday:addHoliday,removeHoliday:removeHoliday,autoBackup:autoBackup,exportData:exportData,importData:importData,askReset:askReset,emptyTrashType:emptyTrashType,emptyAllTrash:emptyAllTrash,shareData:shareData,cloudConfigSave:cloudConfigSave,openFirebaseLogin:openFirebaseLogin,firebaseLogin:firebaseLogin,cloudSync:cloudSync,showConflicts:showConflicts,resolveConflict:resolveConflict,applyImportReview:applyImportReview,esc:esc,printWorkerDetail:printWorkerDetail,printAllWorkers:printAllWorkers,printAllWorkersMulti:printAllWorkersMulti,printMonthReport:printMonthReport,printSettlementReport:printSettlementReport,printPrintWorkerSelect:printPrintWorkerSelect,printAbsReport:printAbsReport,printHrsReport:printHrsReport,printDebtsReport:printDebtsReport,printSummary:printSummary,printAnnual:printAnnual,printAuditReport:printAuditReport,printTodayAdvances:printTodayAdvances,printTodayByType:printTodayByType,printTodayOnly:printTodayOnly,openPrtModal:openPrtModal,togglePrtType:togglePrtType,doPrint:doPrint,egtphExportPdf:egtphExportPdf,egtphSharePdf:egtphSharePdf,openAuditModal:openAuditModal,showAudit:showAudit,showLedger:showLedger,showFinanceLedger:showFinanceLedger,showSyncStatus:showSyncStatus,explainProtectedUndo:explainProtectedUndo,showUnifiedLogicReport:showUnifiedLogicReport,showLogicReport:showLogicReport,runAI:runAI,runPeriodicMonitor:runPeriodicMonitor,runSearch:runSearch,renderAbsSummary:renderAbsSummary,toggleHrsRateType:toggleHrsRateType,quickOpen:quickOpen,applyHourlyRateAll:function(){toast('ℹ️ تغيير معامل الساعات لا يعيد تقييم الحركات المسجلة؛ استعمل التصحيح للحركة المطلوبة.');},setWorkerRate:function(){toast('ℹ️ سعر الساعة محفوظ داخل كل حركة ساعات. استعمل التصحيح للحركة المطلوبة.');},renderDash:renderDashboard,renderWorkers:renderWorkers,renderSettlement:renderSettlement,renderSideFinStatus:renderSideStatus,renderAdmin:renderAdmin,renderAI:renderAI,renderAll:renderAll};
   Object.keys(api).forEach(function(k){window[k]=api[k];});window.DB=DB;
   window.EGTPH_PAYROLL={version:VERSION,status:function(){return {workers:DB.workers.length,transactions:DB.financialTransactions.length,deleted:A(DB.financialTransactions).filter(function(t){return t.status==='deleted';}).length,pendingEvents:A(DB.syncEvents).filter(function(e){return e.status==='pending';}).length,authenticated:!!authSession(),sourceOfTruth:'financialTransactions'};},transactions:transactions,cycle:cycleSummary,settlement:settlement,saveTransaction:saveTx,correctTransaction:correctTx,deleteTransaction:deleteTx,restoreTransaction:restoreTx,changePayday:changePayday,sync:function(){return cloudSync(true);},selfTest:selfTest,mergeRemoteEvents:mergeRemoteEvents};
 }
