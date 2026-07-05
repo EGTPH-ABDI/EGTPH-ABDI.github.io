@@ -200,9 +200,9 @@ window.__EGTPH_V84_RECOVERY_GUARD__=true;
   function init(opts) {
     if (!opts || !opts.appId || !opts.apiKey || !opts.email) {
       console.error("EGTPHAuth.init: appId, apiKey و email مطلوبون");
-      return;
+      return Promise.reject(new Error("EGTPHAuth.init: appId, apiKey و email مطلوبون"));
     }
-    ensureLogin(opts.appId, opts);
+    return ensureLogin(opts.appId, opts);
   }
 
   function getToken(appId) {
@@ -8104,20 +8104,50 @@ async function fbFetch(url,opts,tries){
   throw lastErr;
 }
 // ── حماية حقيقية: تسجيل دخول بكلمة سر (مرة واحدة لكل جهاز)، الرمز يتجدد وحده ──
-// كلمة السر لا تُكتب هنا أبداً — تُكتب من المستخدم في النافذة التي تظهر.
-EGTPHAuth.init({
-  appId:   'lapayeparmois',
-  apiKey:  'AIzaSyD6Up-mmyDwqhr0UMBmV3aI5Xv-TjvoMDA', // Web API Key — مشروع egtph-pay
-  email:   'abdiyoucefislam@gmail.com',   // إيميل المستخدم المسجَّل في Firebase Authentication لهذا المشروع
-  onReady: function(){ try{ setTimeout(function(){ if(DB.settings&&DB.settings.cloudAuto&&typeof cloudSync==='function') (!window.__EGTPH_V50_CLEAN__ ? cloudSync(false) : undefined); },0); }catch(e){} }
+// لا يبدأ أي طلب Firebase قبل وجود Firebase ID token صالح.
+const EGTPH_AUTH_APP_ID='lapayeparmois';
+let __EGTPH_AUTH_READY__=null;
+window.egtphEnsureAuthenticated=function(){
+  const helper=window.EGTPHAuth;
+  if(!helper||typeof helper.init!=='function'||typeof helper.getToken!=='function'){
+    return Promise.reject(new Error('مساعد المصادقة EGTPHAuth غير محمّل. افتح ملف HTML الكامل، وليس نسخة تعتمد على ملف JS خارجي مفقود.'));
+  }
+  if(!__EGTPH_AUTH_READY__){
+    __EGTPH_AUTH_READY__=Promise.resolve(helper.init({
+      appId:EGTPH_AUTH_APP_ID,
+      apiKey:'AIzaSyD6Up-mmyDwqhr0UMBmV3aI5Xv-TjvoMDA',
+      email:'abdiyoucefislam@gmail.com',
+      onReady:function(){
+        try{
+          const status=document.getElementById('cloud_status');
+          if(status){status.textContent='🟢 تم تسجيل الدخول — جاهز للمزامنة';status.style.color='var(--green1)';}
+        }catch(e){}
+      },
+      onTokenChange:function(){
+        try{
+          const status=document.getElementById('cloud_status');
+          if(status){status.textContent='🟢 تم تجديد تسجيل الدخول — جاهز للمزامنة';status.style.color='var(--green1)';}
+        }catch(e){}
+      }
+    }));
+  }
+  return __EGTPH_AUTH_READY__;
+};
+window.egtphEnsureAuthenticated().catch(function(err){
+  console.warn('EGTPH authentication bootstrap:',err);
 });
-function _cloudCfg(){
+function _cloudSettings(){
   const url=(DB.settings.cloudUrl||'').trim().replace(/\/+$/,'');
   const key=(DB.settings.cloudKey||'').trim();
   if(!url||!key||key.length<8)return null;
-  // المفتاح يصبح جزءاً من المسار — ننظفه من الرموز الممنوعة في Firebase
-  const safe=key.replace(/[.#$\[\]\/\s]/g,'_');
-  return{endpoint:url+'/egtph/'+encodeURIComponent(safe)+'.json'+EGTPHAuth.authParam('lapayeparmois')};
+  return{url:url,key:key,safe:key.replace(/[.#$\[\]\/\s]/g,'_')};
+}
+function _cloudCfg(){
+  const base=_cloudSettings();
+  const helper=window.EGTPHAuth;
+  const token=helper&&typeof helper.getToken==='function'?helper.getToken(EGTPH_AUTH_APP_ID):null;
+  if(!base||!token)return null;
+  return{endpoint:base.url+'/egtph/'+encodeURIComponent(base.safe)+'.json?auth='+encodeURIComponent(token)};
 }
 function _cloudStatus(txt,col){
   const el=document.getElementById('cloud_status');
@@ -8127,7 +8157,7 @@ function cloudConfigSave(){
   DB.settings.cloudUrl=(document.getElementById('cloud_url')?.value||'').trim();
   DB.settings.cloudKey=(document.getElementById('cloud_key')?.value||'').trim();
   saveDB();
-  if(_cloudCfg()){toast('✅ حُفظت إعدادات المزامنة');_cloudStatus('🟡 مهيأة — اضغط مزامنة الآن','var(--amber)');if(!window.__EGTPH_V50_CLEAN__)cloudStartStream();}
+  if(_cloudSettings()){toast('✅ حُفظت إعدادات المزامنة — سجّل الدخول ثم اضغط مزامنة الآن');_cloudStatus('🟡 الإعدادات محفوظة — بانتظار تسجيل الدخول','var(--amber)');if(!window.__EGTPH_V50_CLEAN__)cloudStartStream();}
   else{toast('❌ الرابط أو المفتاح ناقص (المفتاح 8 أحرف على الأقل)',true);_cloudStatus('⚪ غير مهيأة');}
 }
 function cloudFillInputs(){
@@ -8158,8 +8188,13 @@ function flushDeferredDash(){ if(_deferDash&&!isUserBusy()){_deferDash=false;try
 document.addEventListener('focusout',()=>{setTimeout(flushDeferredDash,200);});
 
 async function cloudSync(manual){
+  try{await window.egtphEnsureAuthenticated();}catch(authErr){
+    _cloudStatus('🔴 يلزم تسجيل الدخول إلى Firebase','var(--red)');
+    if(manual)toast('❌ تعذر تسجيل الدخول إلى Firebase: '+(authErr&&authErr.message||authErr),true);
+    return;
+  }
   const cfg=_cloudCfg();
-  if(!cfg){if(manual)toast('❌ هيّئ الإعدادات أولاً (رابط + مفتاح)',true);return;}
+  if(!cfg){if(manual)toast('❌ هيّئ الإعدادات أولاً (رابط + مفتاح) ثم سجّل الدخول',true);return;}
   if(_cloudBusy)return;
   if(!navigator.onLine){if(manual)toast('📡 لا يوجد اتصال — حاول لاحقاً',true);_cloudStatus('📡 بدون اتصال','var(--red)');return;}
   _cloudBusy=true;
@@ -14417,7 +14452,16 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
     return {sent:sent,failed:failed};
   }
   async function sync(manual){
-    if(BUSY)return false;var d=ensure(),c=cfg();if(!d||!c){if(manual)toast('❌ هيّئ رابط Firebase والمفتاح أولاً.',true);return false;}if(!navigator.onLine){if(manual)toast('📡 لا يوجد اتصال بالإنترنت.',true);return false;}
+    if(BUSY)return false;
+    try{
+      if(typeof window.egtphEnsureAuthenticated==='function')await window.egtphEnsureAuthenticated();
+      else throw new Error('مساعد المصادقة غير محمّل');
+    }catch(authErr){
+      status('🔴 يلزم تسجيل الدخول إلى Firebase: '+S(authErr&&authErr.message||authErr),'var(--red)');
+      if(manual)toast('❌ سجّل الدخول إلى Firebase أولاً: '+S(authErr&&authErr.message||authErr),true);
+      return false;
+    }
+    var d=ensure(),c=cfg();if(!d||!c){if(manual)toast('❌ هيّئ رابط Firebase والمفتاح أولاً.',true);return false;}if(!navigator.onLine){if(manual)toast('📡 لا يوجد اتصال بالإنترنت.',true);return false;}
     BUSY=true;try{
       disableLegacy(d);
       if(!d.settings.v91Sync.initializedAt)await bootstrap(d,c,false);else {var pre=await pullEvents(d,c);if(pre.applied||pre.conflicts)refresh();}
