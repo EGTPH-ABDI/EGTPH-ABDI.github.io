@@ -15091,33 +15091,36 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
 
 </script>
 
-<script id="egtph-v108-final-exit-guard">
+<script id="egtph-v113-pending-payday-guarded-activation">
 /* ═══════════════════════════════════════════════════════════════
-   EGTPH v108 — حارس تصفية الخروج ودورة الخروج الأخيرة
-   - تاريخ خروج: تصفية تدقيقية فقط، لا دفعة نقدية تلقائية؛ المبلغ = أيام العمل الفعلية فقط.
-   - تاريخ الاستحقاق: نسخ مجدولة، لا إعادة كتابة للدورات السابقة.
-   - الانتقال: تغلق الدورة القديمة في موعدها، ثم دورة انتقال نسبية، ثم الجدول الموحد.
+   EGTPH v113 — تاريخ استحقاق فردي: تغيير معلّق + حراس وشواهد
+
+   القاعدة:
+   - حفظ اليوم الجديد لا يغيّر أي دورة ولا أي حساب فوراً.
+   - التغيير يُحفظ Pending داخل العامل فقط.
+   - الدورة القديمة تبقى حتى نهايتها الطبيعية.
+   - تبدأ دورة انتقال واحدة فقط عند نهاية الدورة القديمة.
+   - لا يصبح اليوم الجديد فعالاً إلا عند بلوغ effectiveFrom.
+   - كل تفعيل يكتب activationWitness مرة واحدة.
+   - لا يوجد توحيد عام ولا إعادة حساب رجعي للدورات السابقة.
 ═══════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
-  var VERSION='108.0';
-  var base={final:null,salary:null,status:null,window:null,anchor:null,active:null,saveWorker:null};
-  var own={};
+  var VERSION='113.0';
+  var base={final:null,salary:null,status:null,window:null,anchor:null,active:null,saveWorker:null,editW:null,openAddWorker:null,renderSalContent:null};
+  var own={}, selectedCycleKey='';
 
-  function D(){ try{return (typeof DB!=='undefined'&&DB)?DB:(window.DB||null);}catch(e){return window.DB||null;} }
+  function D(){try{return (typeof DB!=='undefined'&&DB)?DB:(window.DB||null);}catch(e){return window.DB||null;}}
   function A(v){return Array.isArray(v)?v:[];}
   function O(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}
   function S(v){return String(v==null?'':v);}
   function N(v){var n=Number(v);return isFinite(n)?Math.round(n):0;}
   function clone(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
-  function esc(v){return S(v).replace(/[&<>'"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c];});}
   function date(v){
     try{if(typeof _toDate==='function'){var q=_toDate(v);if(q)return new Date(q.getFullYear(),q.getMonth(),q.getDate());}}catch(e){}
     if(v instanceof Date&&!isNaN(v.getTime()))return new Date(v.getFullYear(),v.getMonth(),v.getDate());
     var s=S(v).trim(),m=s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
     if(m){var d=new Date(+m[1],+m[2]-1,+m[3]);return isNaN(d.getTime())?null:d;}
-    m=s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-    if(m){var x=new Date(+m[3],+m[2]-1,+m[1]);return isNaN(x.getTime())?null:x;}
     return null;
   }
   function iso(d){return d&&d instanceof Date&&!isNaN(d.getTime())?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'):'';}
@@ -15125,353 +15128,393 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
   function diffDays(a,b){return Math.round((new Date(b.getFullYear(),b.getMonth(),b.getDate())-new Date(a.getFullYear(),a.getMonth(),a.getDate()))/86400000);}
   function halfUp(v){return v>=0?Math.floor(v+0.5):Math.ceil(v-0.5);}
   function dailyRate(salary){return halfUp(Math.max(0,N(salary))/30);}
-  function money(v){try{return typeof fmt==='function'?fmt(N(v)):typeof fmtN==='function'?fmtN(N(v)):N(v).toLocaleString('fr-FR')+' دج';}catch(e){return String(N(v));}}
+  function money(v){try{return typeof fmt==='function'?fmt(N(v)):N(v).toLocaleString('fr-FR')+' دج';}catch(e){return String(N(v));}}
   function worker(wid){return A(D()&&D().workers).find(function(w){return w&&S(w.id)===S(wid);})||null;}
   function rows(map,wid){var src=(map||{})[wid];if(src===undefined)src=(map||{})[S(wid)];if(Array.isArray(src))return src.filter(Boolean);var out=[];Object.keys(O(src)).forEach(function(k){A(src[k]).forEach(function(x){if(x)out.push(x);});});return out;}
   function sameDay(a,b){return !!(a&&b&&a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate());}
   function inRange(v,r){var d=date(v);return !!(d&&d>=r.from&&d<r.to);}
-  function dueDay(w){return Math.min(28,Math.max(1,N((w&&w._v103LegacyPaydayDay)||((w||{}).day)||1)));}
-  function nextAnchorAfter(d,day){var c=new Date(d.getFullYear(),d.getMonth(),day);if(c>d)return c;return new Date(d.getFullYear(),d.getMonth()+1,day);}
-  function prevAnchor(end,day){return new Date(end.getFullYear(),end.getMonth()-1,day);}
+  function legacyDay(w){return Math.min(28,Math.max(1,N((w&&w.day)||1)));}
   function paid(v){return v===true||v===1||v==='1'||v==='true';}
   function gross(a){return a&&a._isInstDeduction?0:Math.max(0,N(a&&a.amount));}
   function deds(a){return A(a&&a.deductions).filter(function(x){return x&&typeof x==='object';});}
+  function safeSave(){try{if(typeof saveDB==='function'){saveDB();return true;}}catch(e){}return false;}
+  function note(msg){try{if(typeof audit==='function')audit(msg);}catch(e){}}
+  function toastSafe(msg,bad){try{if(typeof toast==='function')toast(msg,!!bad);}catch(e){}}
 
-  function transitionFor(w){
-    var d=D(),all=O(d&&d.paydayTransitions),x=all[w&&w.id];
-    if(!x)x=all[S(w&&w.id)];
-    return x&&x.status!=='voided'?x:null;
+  /* ──────────────────────────────────────────────────────────────
+     بيانات التغيير الفردي
+     لا نقرأ أي سياسة عامة أو DB.paydayTransitions.
+  ────────────────────────────────────────────────────────────── */
+  function allVersions(w){
+    return A(w&&w.paydayScheduleVersions).filter(function(v){
+      return v&&v.kind==='worker_individual_payday'&&v.status!=='voided'&&date(v.transitionStart)&&date(v.transitionEnd);
+    }).slice().sort(function(a,b){
+      var aa=date(a.transitionStart),bb=date(b.transitionStart);
+      return (aa?aa.getTime():0)-(bb?bb.getTime():0);
+    });
   }
-  function hasSchedule(w){return !!(w&&w._v103ScheduleActive&&transitionFor(w));}
-  function transitionDates(t){return t?{from:date(t.transitionStart),to:date(t.transitionEnd)}:null;}
+  function pendingVersion(w){
+    var out=allVersions(w).filter(function(v){return v.status==='pending';});
+    return out.length?out[out.length-1]:null;
+  }
+  function activeVersionAt(w,ref){
+    var d=date(ref)||today(),hit=null;
+    allVersions(w).forEach(function(v){
+      var eff=date(v.effectiveFrom||v.transitionEnd);
+      if(v.status==='active'&&v.activationWitness&&eff&&d>=eff)hit=v;
+    });
+    return hit;
+  }
+  function transitionVersionAt(w,ref){
+    var d=date(ref)||today(),now=today(),hit=null;
+    allVersions(w).forEach(function(v){
+      var a=date(v.transitionStart),b=date(v.transitionEnd);
+      /* لا نُظهر انتقالاً مستقبلياً قبل أن يصل يوم بدايته فعلاً. */
+      if(a&&b&&now>=a&&d>=a&&d<b)hit=v;
+    });
+    return hit;
+  }
+  function hasIndividualSchedule(w){return allVersions(w).length>0;}
+  function currentPaydayDay(w,at){
+    var d=date(at)||today(),tr=transitionVersionAt(w,d);
+    if(tr)return Math.min(28,Math.max(1,N(tr.previousDay)||legacyDay(w)));
+    var v=activeVersionAt(w,d);
+    return v?Math.min(28,Math.max(1,N(v.targetDay)||legacyDay(w))):legacyDay(w);
+  }
+  function normalRangeForDate(day,d,versionId){
+    var anchor=new Date(d.getFullYear(),d.getMonth(),day);
+    if(d<anchor)anchor=new Date(d.getFullYear(),d.getMonth()-1,day);
+    return {from:anchor,to:new Date(anchor.getFullYear(),anchor.getMonth()+1,day),kind:'normal',scheduleVersionId:versionId||('legacy-'+day),cycleId:(versionId||('legacy-'+day))+'_'+iso(anchor).replace(/-/g,'')};
+  }
+  function transitionRange(w,v){
+    var from=date(v.transitionStart),to=date(v.transitionEnd);
+    return {from:from,to:to,kind:'transition',scheduleVersionId:v.id,cycleId:v.transitionCycleId||('payday_transition_'+S(w&&w.id)+'_'+iso(from).replace(/-/g,'')+'_'+iso(to).replace(/-/g,'')),transition:v};
+  }
+  function rangeForDate(w,v){
+    var d=date(v)||today(),tr=transitionVersionAt(w,d);
+    if(tr)return transitionRange(w,tr);
+    var active=activeVersionAt(w,d);
+    if(active)return normalRangeForDate(Math.min(28,Math.max(1,N(active.targetDay)||legacyDay(w))),d,active.id);
+    return normalRangeForDate(legacyDay(w),d,'legacy-'+legacyDay(w));
+  }
+
+  /* يمكن أن يبدأ انتقال ويوم الاستحقاق الجديد في الشهر نفسه. نحتاج cycleId
+     داخلياً كي لا تختلط الدورتان، بينما تبقى واجهة الشهر القديمة متوافقة. */
+  function stateObj(){try{return (typeof S!=='undefined'&&S)?S:(window.S||{});}catch(e){return window.S||{};}}
+  function selectedHint(w,m,y){
+    var st=stateObj(),h=st&&st._v113CycleHint;
+    return h&&S(h.wid)===S(w&&w.id)&&N(h.m)===N(m)&&N(h.yr)===N(y)?S(h.cycleId):'';
+  }
+  function rangesForMonth(w,m,y){
+    var first=new Date(y,m,1),last=new Date(y,m+1,0),seen={},out=[];
+    for(var i=-35;i<=last.getDate()+35;i++){
+      var d=new Date(y,m,1+i),r=rangeForDate(w,d),key=S(r&&r.cycleId);
+      if(!r||!key||seen[key])continue;
+      if(r.from.getFullYear()===y&&r.from.getMonth()===m){seen[key]=true;out.push(r);}
+    }
+    out.sort(function(a,b){return a.from-b.from;});
+    return out;
+  }
   function rangeFor(w,m,y){
-    var t=transitionFor(w),legacy=dueDay(w);
-    if(!t)return {from:new Date(y,m,legacy),to:new Date(y,m+1,legacy),kind:'normal',scheduleVersionId:'legacy-'+legacy};
-    var tr=transitionDates(t),target=Math.min(28,Math.max(1,N(t.targetDay)||1));
-    if(tr&&tr.from&&tr.to&&tr.from.getFullYear()===y&&tr.from.getMonth()===m){
-      return {from:tr.from,to:tr.to,kind:'transition',scheduleVersionId:t.scheduleVersionId||'transition'};
-    }
-    var firstNewMonth=new Date(tr.to.getFullYear(),tr.to.getMonth(),1),cm=new Date(y,m,1);
-    var useNew=cm>=firstNewMonth;
-    var day=useNew?target:legacy;
-    return {from:new Date(y,m,day),to:new Date(y,m+1,day),kind:'normal',scheduleVersionId:useNew?(t.scheduleVersionId||'unified'):'legacy-'+legacy};
+    var list=rangesForMonth(w,m,y),hint=selectedHint(w,m,y),i;
+    for(i=0;i<list.length;i++)if(S(list[i].cycleId)===hint)return list[i];
+    /* الدورة النشطة تحصل دائماً على الأولوية في صفحات التشغيل. */
+    var cur=rangeForDate(w,today());
+    if(cur&&cur.from.getFullYear()===y&&cur.from.getMonth()===m)return cur;
+    if(list.length)return list[list.length-1];
+    return normalRangeForDate(currentPaydayDay(w,new Date(y,m,15)),new Date(y,m,15),'legacy-'+legacyDay(w));
   }
-  function anchorFor(w,v){
-    var d=date(v)||today(),t=transitionFor(w),legacy=dueDay(w);
-    if(t){
-      var tr=transitionDates(t),target=Math.min(28,Math.max(1,N(t.targetDay)||1));
-      if(tr&&tr.from&&tr.to){
-        if(d>=tr.from&&d<tr.to)return {m:tr.from.getMonth(),yr:tr.from.getFullYear(),cycleId:t.transitionId||''};
-        if(d>=tr.to){return d.getDate()>=target?{m:d.getMonth(),yr:d.getFullYear()}:{m:(d.getMonth()+11)%12,yr:d.getMonth()===0?d.getFullYear()-1:d.getFullYear()};}
-      }
-    }
-    return d.getDate()>=legacy?{m:d.getMonth(),yr:d.getFullYear()}:{m:(d.getMonth()+11)%12,yr:d.getMonth()===0?d.getFullYear()-1:d.getFullYear()};
-  }
-  function rangeForDate(w,v){var a=anchorFor(w,v);return rangeFor(w,a.m,a.yr);}
+  function anchorFor(w,v){var r=rangeForDate(w,v);return {m:r.from.getMonth(),yr:r.from.getFullYear(),cycleId:r.cycleId||''};}
   function belongs(row,r){
     if(!row)return false;
+    if(row.paydayCycleId&&r.cycleId&&S(row.paydayCycleId)===S(r.cycleId))return true;
     var st=date(row.cycleStart);if(st)return sameDay(st,r.from);
-    var ck=S(row.cycleKey||row.cycleId||'');
-    if(ck&&r.cycleId&&ck===S(r.cycleId))return true;
+    var ck=S(row.cycleKey||row.cycleId||'');if(ck&&r.cycleId&&ck===S(r.cycleId))return true;
     return inRange(row.from||row.date||row.realDate||row.nextDue,r);
   }
+
+  /* ──────────────────────────────────────────────────────────────
+     حارس التغيير: الحفظ = Pending فقط. بلوغ التاريخ = تفعيل مرة واحدة.
+  ────────────────────────────────────────────────────────────── */
+  function normalizeExistingVersions(w,now){
+    var changed=false,versions=A(w&&w.paydayScheduleVersions);
+    versions.forEach(function(v){
+      if(!v||v.kind!=='worker_individual_payday')return;
+      var end=date(v.effectiveFrom||v.transitionEnd),start=date(v.transitionStart);
+      if(!v.transitionCycleId&&start&&end){v.transitionCycleId='payday_transition_'+S(w.id)+'_'+iso(start).replace(/-/g,'')+'_'+iso(end).replace(/-/g,'');changed=true;}
+      /* بيانات v112 كانت تسمي النسخة active قبل وصول تاريخها؛ نحوّلها بحذر. */
+      if(v.status==='active'&&!v.activationWitness){
+        if(end&&now>=end){
+          v.activationWitness={active:true,trigger:'v113_legacy_upgrade',activatedAt:new Date().toISOString(),effectiveFrom:iso(end),scheduleVersionId:v.id};v.activatedAt=v.activationWitness.activatedAt;
+        }else v.status='pending';
+        changed=true;
+      }
+      if(!v.status)v.status='pending';
+    });
+    return changed;
+  }
+  function syncPendingPointer(w){
+    var p=pendingVersion(w),before=S(w&&w.pendingPaydayChange&&w.pendingPaydayChange.versionId),nowId=S(p&&p.id);
+    if(p){
+      w.pendingPaydayChange={versionId:p.id,previousDay:N(p.previousDay),targetDay:N(p.targetDay),transitionStart:p.transitionStart,effectiveFrom:p.effectiveFrom||p.transitionEnd,status:'pending',savedAt:p.createdAt||''};
+    }else if(w&&w.pendingPaydayChange)delete w.pendingPaydayChange;
+    return before!==nowId;
+  }
+  function activateDuePaydayChanges(opts){
+    opts=opts||{};var d=D(),now=date(opts.at)||today(),changed=false,details=[];
+    A(d&&d.workers).forEach(function(w){
+      if(!w)return;
+      if(normalizeExistingVersions(w,now))changed=true;
+      allVersions(w).forEach(function(v){
+        if(v.status!=='pending')return;
+        var start=date(v.transitionStart),eff=date(v.effectiveFrom||v.transitionEnd),exit=date(w.exitDate);
+        if(exit&&eff&&exit<eff){
+          v.status='voided';v.voidedAt=new Date().toISOString();v.voidReason='exit_before_new_payday_effective';v.voidWitness={trigger:'exitDate',exitDate:iso(exit),effectiveFrom:iso(eff)};changed=true;details.push({workerId:w.id,versionId:v.id,action:'voided_by_exit'});return;
+        }
+        if(start&&now>=start&&!v.transitionWitness){
+          v.transitionWitness={active:true,trigger:'old_cycle_closed',observedAt:new Date().toISOString(),transitionStart:iso(start),transitionEnd:iso(eff),scheduleVersionId:v.id};changed=true;details.push({workerId:w.id,versionId:v.id,action:'transition_started'});
+        }
+        if(eff&&now>=eff){
+          v.status='active';v.activatedAt=new Date().toISOString();v.activationWitness={active:true,trigger:'effective_payday_reached',activatedAt:v.activatedAt,effectiveFrom:iso(eff),scheduleVersionId:v.id,previousScheduleVersionId:v.previousScheduleVersionId||null};
+          w.activePaydayScheduleVersionId=v.id;w.payday=Math.min(28,Math.max(1,N(v.targetDay)||legacyDay(w)));changed=true;details.push({workerId:w.id,versionId:v.id,action:'activated'});
+        }
+      });
+      if(syncPendingPointer(w))changed=true;
+      var cur=activeVersionAt(w,now);if(cur&&N(w.payday)!==N(cur.targetDay)){w.payday=N(cur.targetDay);changed=true;}
+    });
+    if(changed&&opts.persist!==false){safeSave();}
+    return {changed:changed,details:details,at:iso(now)};
+  }
+  function cancelPendingPaydayChange(wid){
+    var w=worker(wid),p=pendingVersion(w);if(!w||!p)return false;
+    p.status='voided';p.voidedAt=new Date().toISOString();p.voidReason='cancelled_by_user_before_effective_date';p.voidWitness={trigger:'explicit_user_cancel',cancelledAt:p.voidedAt,scheduleVersionId:p.id};
+    syncPendingPointer(w);w.payday=currentPaydayDay(w,today());note('📅 إلغاء تغيير تاريخ الاستحقاق المعلّق: '+w.name+' — بقي اليوم '+currentPaydayDay(w,today())+' فعالاً.');safeSave();
+    try{if(typeof renderWorkers==='function')renderWorkers();}catch(e){}
+    try{if(typeof renderSalContent==='function')renderSalContent();}catch(e){}
+    return true;
+  }
+  function planForWorker(w,targetDay,at){
+    if(!w)return {ok:false,reason:'لم يُعثر على العامل.'};
+    if(date(w.exitDate))return {ok:false,reason:'لا يمكن جدولة تاريخ استحقاق لعامل لديه تاريخ خروج؛ التصفية النهائية لها الأولوية.'};
+    var p0=pendingVersion(w);if(p0)return {ok:false,pending:true,reason:'يوجد تغيير معلّق لهذا العامل حتى '+S(p0.effectiveFrom||p0.transitionEnd)+'. ألغِه صراحة قبل إنشاء تغيير آخر.',pendingVersion:p0};
+    var target=Math.min(28,Math.max(1,N(targetDay))),d=date(at)||today(),cur=rangeForDate(w,d),oldDay=currentPaydayDay(w,d);
+    if(cur.kind==='transition')return {ok:false,reason:'يوجد انتقال جارٍ لهذا العامل؛ لا يمكن إنشاء انتقال ثانٍ قبل انتهائه.'};
+    if(target===oldDay)return {ok:true,unchanged:true,oldDay:oldDay,targetDay:target};
+    var oldEnd=cur.to,newStart=new Date(oldEnd.getFullYear(),oldEnd.getMonth(),target);
+    if(newStart<=oldEnd)newStart=new Date(oldEnd.getFullYear(),oldEnd.getMonth()+1,target);
+    var daily=dailyRate(w.salary),days=Math.max(0,diffDays(oldEnd,newStart)),id='worker_payday_'+S(w.id)+'_'+iso(oldEnd).replace(/-/g,'')+'_'+iso(newStart).replace(/-/g,'');
+    return {ok:true,workerId:w.id,workerName:w.name,oldDay:oldDay,targetDay:target,oldCycleStart:iso(cur.from),oldCycleEnd:iso(oldEnd),transitionStart:iso(oldEnd),transitionEnd:iso(newStart),effectiveFrom:iso(newStart),eligibleDays:days,dailyRate:daily,baseAmount:halfUp(days*daily),scheduleVersionId:id,transitionCycleId:'payday_transition_'+S(w.id)+'_'+iso(oldEnd).replace(/-/g,'')+'_'+iso(newStart).replace(/-/g,''),previousScheduleVersionId:(activeVersionAt(w,d)||{}).id||null,status:'pending'};
+  }
+  function addPendingVersion(w,plan){
+    if(!w||!plan||!plan.ok||plan.unchanged)return null;
+    w.paydayScheduleVersions=A(w.paydayScheduleVersions);
+    var rec={id:plan.scheduleVersionId,kind:'worker_individual_payday',status:'pending',previousDay:plan.oldDay,targetDay:plan.targetDay,day:plan.targetDay,previousScheduleVersionId:plan.previousScheduleVersionId||null,transitionStart:plan.transitionStart,transitionEnd:plan.transitionEnd,effectiveFrom:plan.effectiveFrom,transitionCycleId:plan.transitionCycleId,oldCycleStart:plan.oldCycleStart,oldCycleEnd:plan.oldCycleEnd,eligibleDays:plan.eligibleDays,dailyRate:plan.dailyRate,baseAmount:plan.baseAmount,createdAt:new Date().toISOString(),immutablePlan:true,planWitness:{active:true,trigger:'worker_editor_save',createdAt:new Date().toISOString(),previousDay:plan.oldDay,targetDay:plan.targetDay,oldCycleStart:plan.oldCycleStart,oldCycleEnd:plan.oldCycleEnd,transitionStart:plan.transitionStart,effectiveFrom:plan.effectiveFrom,appliesOnlyAfter:'effective_payday_reached'}};
+    w.paydayScheduleVersions.push(rec);syncPendingPointer(w);w.payday=currentPaydayDay(w,today());w._mod=typeof nextMod==='function'?nextMod():new Date().toISOString();return rec;
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+     محرك الاستحقاقات والقيود: نفس حساب v112 مع cycleId صريح.
+  ────────────────────────────────────────────────────────────── */
   function debtSchedule(debt){
     if(!debt||debt.type!=='debt'||!debt.inst||debt.instDisabled)return [];
     var total=Math.max(0,N(debt.amount)),step=Math.max(1,N(debt.instAmt||debt.installmentAmount)||total||1),count=Math.max(1,N(debt.instCount||debt.installments)||Math.ceil(total/step)||1),first=date(debt.instFirstDue||debt.firstDue||debt.date);
     if(!first)return [];
     var interval=debt.instType==='weekly'?7:debt.instType==='monthly'?30:Math.max(1,N(debt.instDays)||30),out=[];
-    for(var i=0;i<count;i++){var amount=Math.max(0,Math.min(step,total-i*step));if(amount>0){var d=new Date(first.getFullYear(),first.getMonth(),first.getDate());d.setDate(d.getDate()+i*interval);out.push({index:i+1,amount:amount,due:d,paid:0});}}
+    for(var i=0;i<count;i++){var amount=Math.max(0,Math.min(step,total-i*step));if(amount>0){var due=new Date(first.getFullYear(),first.getMonth(),first.getDate()+i*interval);out.push({index:i+1,amount:amount,due:due,paid:0});}}
     return out;
   }
   function debtDueForRange(debts,r){
     var due=0,detail=[];
     A(debts).filter(function(x){return x&&x.type==='debt';}).forEach(function(debt){
       var returns=A(debts).filter(function(x){return x&&x.type==='return'&&S(x.debtId)===S(debt.id);}).slice().sort(function(a,b){return (date(a.realDate||a.date)||new Date(0))-(date(b.realDate||b.date)||new Date(0));}),left=returns.reduce(function(s,x){return s+Math.max(0,N(x.amount));},0);
-      debtSchedule(debt).forEach(function(inst){var paidAmount=Math.min(inst.amount,left);left-=paidAmount;if(inst.due>=r.from&&inst.due<r.to){var rem=Math.max(0,inst.amount-paidAmount);due+=rem;detail.push({debtId:debt.id,index:inst.index,due:iso(inst.due),amount:inst.amount,paid:paidAmount,remaining:rem});}});
+      debtSchedule(debt).forEach(function(inst){var p=Math.min(inst.amount,left);left-=p;if(inst.due>=r.from&&inst.due<r.to){var rem=Math.max(0,inst.amount-p);due+=rem;detail.push({debtId:debt.id,index:inst.index,due:iso(inst.due),amount:inst.amount,paid:p,remaining:rem});}});
     });
     return {amount:N(due),detail:detail};
   }
   function totalDebtBalance(debts){var original=A(debts).filter(function(x){return x&&x.type==='debt';}).reduce(function(s,x){return s+Math.max(0,N(x.amount));},0),returned=A(debts).filter(function(x){return x&&x.type==='return';}).reduce(function(s,x){return s+Math.max(0,N(x.amount));},0);return Math.max(0,original-returned);}
 
-  function transitionSalary(w,r){
-    var start=date(w&&w.startDate),from=r.from,to=r.to;if(start&&to<=start)return {salary:0,days:0,pro:true,full:false,daily:dailyRate(w.salary),noPay:true};
-    var effective=start&&start>from?start:from,days=Math.max(0,diffDays(effective,to)),daily=dailyRate(w.salary);
-    return {salary:halfUp(days*daily),days:days,pro:true,full:false,daily:daily,transition:true};
-  }
+  /* حارس التصفية النهائية — لا يستدعى إلا مع exitDate داخل دورة الخروج. */
   function exitRuleWitness(w,r){
-    /*
-      شاهد تشغيل القاعدة:
-      لا يُرجع شيئاً إلا بوجود تاريخ خروج صالح داخل دورة الخروج الأخيرة نفسها.
-      لذلك لا يمكن لمسار الراتب العادي أو التصفية المؤقتة استدعاء هذه القاعدة.
-    */
     var start=date(w&&w.startDate),exit=date(w&&w.exitDate);
     if(!start||!exit||exit<start||!r||!r.from||!r.to||exit<r.from||exit>=r.to)return null;
     var scopeStart=start>r.from?start:r.from;
-    return {
-      active:true,
-      trigger:'exitDate',
-      exitDate:iso(exit),
-      finalCycleStart:iso(r.from),
-      finalCycleEnd:iso(r.to),
-      scopeStart:iso(scopeStart),
-      appliesOnlyTo:'final_exit_cycle'
-    };
+    return {active:true,trigger:'exitDate',exitDate:iso(exit),finalCycleStart:iso(r.from),finalCycleEnd:iso(r.to),scopeStart:iso(scopeStart),appliesOnlyTo:'final_exit_cycle'};
   }
   function finalBase(w,r){
     var witness=exitRuleWitness(w,r);if(!witness)return null;
     var scopeStart=date(witness.scopeStart),exit=date(witness.exitDate),span=Math.max(0,diffDays(scopeStart,exit));
-    /*
-      القاعدة الجديدة، داخل التصفية النهائية فقط:
-      01→15: فرق 14 + يوم البداية = 15.
-      01→16: فرق 15 فقط = 15.
-      01→21: فرق 20 فقط = 20.
-      لا يوجد سقف للأيام؛ هذه فقط طريقة احتساب طرفي التاريخ في دورة الخروج.
-    */
-    var includeBothEndpoints=span<15;
-    var eligibleDays=Math.max(0,Math.min(30,span+(includeBothEndpoints?1:0)));
-    var daily=dailyRate(w.salary),serviceDays=diffDays(date(w.startDate),exit)+1;
-    return {
-      scopeStart:scopeStart,
-      eligibleDays:eligibleDays,
-      exclusiveWorkedDays:span,
-      daily:daily,
-      amount:halfUp((Math.max(0,N(w.salary))*eligibleDays)/30),
-      serviceDays:serviceDays,
-      endpointMode:includeBothEndpoints?'both_endpoints':'single_endpoint',
-      ruleBranch:'exit_final_cycle_endpoint_count',
-      activationGuard:witness
-    };
+    var includeBothEndpoints=span<15,eligibleDays=Math.max(0,Math.min(30,span+(includeBothEndpoints?1:0))),daily=dailyRate(w.salary);
+    return {scopeStart:scopeStart,eligibleDays:eligibleDays,daily:daily,amount:halfUp((Math.max(0,N(w.salary))*eligibleDays)/30),endpointMode:includeBothEndpoints?'both_endpoints':'single_endpoint',ruleBranch:'exit_final_cycle_endpoint_count',activationGuard:witness};
   }
-  function v103CalcSal(w,m,y){
+  function transitionSalary(w,r){var start=date(w&&w.startDate),effective=start&&start>r.from?start:r.from,days=Math.max(0,diffDays(effective,r.to)),daily=dailyRate(w.salary);return {salary:halfUp(days*daily),days:days,pro:true,full:false,daily:daily,transition:true};}
+  function individualCalcSal(w,m,y){
     var r=rangeFor(w,m,y),start=date(w&&w.startDate),exit=date(w&&w.exitDate),daily=dailyRate(w&&w.salary);
-    /* الشرط الأول والحاسم: القاعدة الخاصة لا تُستدعى من دون exitDate داخل هذه الدورة. */
-    if(exit&&exit>=r.from&&exit<r.to){
-      var fb=finalBase(w,r);
-      if(fb)return {salary:fb.amount,days:fb.eligibleDays,pro:true,full:false,daily:fb.daily,exitFinal:true,scopeStart:iso(fb.scopeStart),exitRuleGuard:fb.activationGuard};
-    }
-    if(!hasSchedule(w))return base.salary?base.salary.apply(this,arguments):{salary:N(w&&w.salary),days:30,full:true,daily:daily};
+    if(exit&&exit>=r.from&&exit<r.to){var fb=finalBase(w,r);if(fb)return {salary:fb.amount,days:fb.eligibleDays,pro:true,full:false,daily:fb.daily,exitFinal:true,scopeStart:iso(fb.scopeStart),exitRuleGuard:fb.activationGuard};}
+    if(!hasIndividualSchedule(w))return base.salary?base.salary.apply(this,arguments):{salary:N(w&&w.salary),days:30,full:true,daily:daily};
     if(start&&r.to<=start)return {salary:0,days:0,pro:true,full:false,daily:daily,noPay:true,beforeStart:true};
     if(exit&&exit<r.from)return {salary:0,days:0,pro:true,full:false,daily:daily,noPay:true,afterExit:true};
     if(r.kind==='transition')return transitionSalary(w,r);
     if(start&&start>r.from&&start<r.to){var sd=Math.min(30,Math.max(0,diffDays(start,r.to)));return {salary:halfUp(sd*daily),days:sd,pro:true,full:false,daily:daily};}
     return {salary:N(w.salary),days:30,pro:false,full:true,daily:daily};
   }
-
-  function v103Status(wid,m,y){
-    var w=worker(wid);if(!w||!hasSchedule(w))return base.status?base.status.apply(this,arguments):null;
-    var d=D(),r=rangeFor(w,m,y),salary=v103CalcSal(w,m,y),adv=rows(d.advances,w.id).filter(function(x){return x&&!x._isInstDeduction&&belongs(x,r);}),abs=rows(d.absences,w.id).filter(function(x){return x&&x.deductOpt==='now'&&belongs(x,r);}),hrs=rows(d.hours,w.id).filter(function(x){return x&&belongs(x,r);}),bon=rows(d.bonuses,w.id).filter(function(x){return x&&belongs(x,r);}),debts=rows(d.debts,w.id),grossAdv=0,attachedAbs=0,cash=0;
+  function individualStatus(wid,m,y){
+    var w=worker(wid);if(!w||!hasIndividualSchedule(w))return base.status?base.status.apply(this,arguments):null;
+    var d=D(),r=rangeFor(w,m,y),salary=individualCalcSal(w,m,y),adv=rows(d.advances,w.id).filter(function(x){return x&&!x._isInstDeduction&&belongs(x,r);}),abs=rows(d.absences,w.id).filter(function(x){return x&&x.deductOpt==='now'&&belongs(x,r);}),hrs=rows(d.hours,w.id).filter(function(x){return x&&belongs(x,r);}),bon=rows(d.bonuses,w.id).filter(function(x){return x&&belongs(x,r);}),debts=rows(d.debts,w.id),grossAdv=0,attachedAbs=0,cash=0;
     adv.forEach(function(a){var g=gross(a),used=0;grossAdv+=g;deds(a).forEach(function(z){var amt=Math.max(0,N(z.amount));used+=amt;if(z.type==='absence')attachedAbs+=amt;});cash+=Math.max(0,g-Math.min(g,used));});
     var absTotal=abs.reduce(function(s,x){return s+Math.max(0,N(x.deduct));},0),baseSalary=Math.max(0,N(salary.salary)),absenceExternal=Math.max(0,Math.min(baseSalary,absTotal)-Math.min(absTotal,attachedAbs)),resolved=Math.min(baseSalary,grossAdv+absenceExternal),remaining=Math.max(0,baseSalary-resolved),debt=debtDueForRange(debts,r);
     function hAmt(x){return Math.max(0,N(x&&((x.total!=null)?x.total:((x.net!=null)?x.net:x.amount))));}
     function bAmt(x){return Math.max(0,N(x&&((x.net!=null)?x.net:x.amount)));}
     var hTotal=hrs.reduce(function(s,x){return s+hAmt(x);},0),hPaid=hrs.filter(function(x){return paid(x.paid);}).reduce(function(s,x){return s+hAmt(x);},0),bTotal=bon.reduce(function(s,x){return s+bAmt(x);},0),bPaid=bon.filter(function(x){return paid(x.paid);}).reduce(function(s,x){return s+bAmt(x);},0),unpaidH=Math.max(0,hTotal-hPaid),unpaidB=Math.max(0,bTotal-bPaid),cashDue=Math.max(0,remaining-Math.min(remaining,debt.amount))+unpaidH+unpaidB;
-    return {baseSal:baseSalary,totAdv:N(grossAdv),totAbsNow:N(absTotal),totInst:N(debt.amount),totalDeductions:N(absenceExternal+debt.amount),netDue:baseSalary,netSal:N(remaining),finalPayout:N(cashDue),cycleCashDue:N(cashDue),salaryPaid:remaining===0,salaryPaidWithInst:remaining===0&&debt.amount===0,hrsTotal:N(hTotal),hrsPaid:N(hPaid),hrsUnpaid:N(unpaidH),bonTotal:N(bTotal),bonPaid:N(bPaid),bonUnpaid:N(unpaidB),calRes:salary,v103:{range:{from:iso(r.from),to:iso(r.to),kind:r.kind},cashPaid:N(cash),absenceExternal:N(absenceExternal),debtDetail:debt.detail}};
+    return {baseSal:baseSalary,totAdv:N(grossAdv),totAbsNow:N(absTotal),totInst:N(debt.amount),totalDeductions:N(absenceExternal+debt.amount),netDue:baseSalary,netSal:N(remaining),finalPayout:N(cashDue),cycleCashDue:N(cashDue),salaryPaid:remaining===0,salaryPaidWithInst:remaining===0&&debt.amount===0,hrsTotal:N(hTotal),hrsPaid:N(hPaid),hrsUnpaid:N(unpaidH),bonTotal:N(bTotal),bonPaid:N(bPaid),bonUnpaid:N(unpaidB),calRes:salary,v113:{range:{from:iso(r.from),to:iso(r.to),kind:r.kind,cycleId:r.cycleId},cashPaid:N(cash),absenceExternal:N(absenceExternal),debtDetail:debt.detail}};
   }
-
-  function cycleSalaryForSettlement(w,r){
-    var calc=null;
-    try{
-      if(hasSchedule(w)) calc=v103CalcSal(w,r.from.getMonth(),r.from.getFullYear());
-      else if(base.salary&&base.salary!==own.salary) calc=base.salary(w,r.from.getMonth(),r.from.getFullYear());
-    }catch(e){calc=null;}
-    if(calc){
-      return {
-        days:Math.max(0,N(calc.days)),
-        amount:Math.max(0,N(calc.salary)),
-        daily:N(calc.daily)||dailyRate(w.salary),
-        source:hasSchedule(w)?'versioned-cycle':'calcSal'
-      };
-    }
-    /* احتياط فقط إذا تعذر محرك الراتب القديم؛ لا يستعمل عند عمل calcSal. */
-    var start=date(w&&w.startDate),effective=start&&start>r.from?start:r.from;
-    var full=effective<=r.from;
-    var days=full?30:Math.max(0,diffDays(effective,r.to));
-    return {
-      days:days,
-      amount:full?Math.max(0,N(w.salary)):halfUp((Math.max(0,N(w.salary))*days)/30),
-      daily:dailyRate(w.salary),
-      source:'fallback'
-    };
-  }
-  function previousRange(w,r){
-    var before=new Date(r.from.getFullYear(),r.from.getMonth(),r.from.getDate()-1);
-    return rangeForDate(w,before);
-  }
+  function cycleSalaryForSettlement(w,r){var calc=individualCalcSal(w,r.from.getMonth(),r.from.getFullYear());return {days:Math.max(0,N(calc&&calc.days)),amount:Math.max(0,N(calc&&calc.salary)),daily:N(calc&&calc.daily)||dailyRate(w.salary)};}
   function settlementCycleRollup(w){
-    var start=date(w&&w.startDate),exit=date(w&&w.exitDate);
-    if(!start||!exit||exit<start)return {entries:[],earnedSal:0,totalDays:0,finalBase:null,finalRange:null};
-    var current=rangeForDate(w,exit),entries=[],guard=0;
+    var start=date(w&&w.startDate),exit=date(w&&w.exitDate);if(!start||!exit||exit<start)return {entries:[],earnedSal:0,totalDays:0,finalBase:null};
+    var finalR=rangeForDate(w,exit),current=finalR,entries=[],guard=0;
     while(current&&current.to>start&&current.from<=exit&&guard++<240){
-      var isExitCycle=sameDay(current.from,rangeForDate(w,exit).from);
-      var item;
-      if(isExitCycle){
-        var fb=finalBase(w,current);
-        item={
-          from:iso(current.from),to:iso(current.to),kind:current.kind||'normal',
-          isExitCycle:true,days:N(fb&&fb.eligibleDays),amount:N(fb&&fb.amount),
-          daily:N(fb&&fb.daily),ruleBranch:fb&&fb.ruleBranch||'',scopeStart:iso(fb&&fb.scopeStart),activationGuard:fb&&fb.activationGuard||null
-        };
-      }else{
-        var normal=cycleSalaryForSettlement(w,current);
-        item={
-          from:iso(current.from),to:iso(current.to),kind:current.kind||'normal',
-          isExitCycle:false,days:N(normal.days),amount:N(normal.amount),
-          daily:N(normal.daily),ruleBranch:'previous_cycle_normal',scopeStart:''
-        };
-      }
+      var isExit=S(current.cycleId)===S(finalR.cycleId),item;
+      if(isExit){var fb=finalBase(w,current);item={from:iso(current.from),to:iso(current.to),kind:current.kind||'normal',cycleId:current.cycleId,isExitCycle:true,days:N(fb&&fb.eligibleDays),amount:N(fb&&fb.amount),daily:N(fb&&fb.daily),scopeStart:iso(fb&&fb.scopeStart),activationGuard:fb&&fb.activationGuard||null};}
+      else{var normal=cycleSalaryForSettlement(w,current);item={from:iso(current.from),to:iso(current.to),kind:current.kind||'normal',cycleId:current.cycleId,isExitCycle:false,days:normal.days,amount:normal.amount,daily:normal.daily,scopeStart:''};}
       entries.unshift(item);
-      var prev=previousRange(w,current);
-      if(!prev||sameDay(prev.from,current.from))break;
-      current=prev;
+      var prev=rangeForDate(w,new Date(current.from.getFullYear(),current.from.getMonth(),current.from.getDate()-1));
+      if(!prev||S(prev.cycleId)===S(current.cycleId))break;current=prev;
     }
     var last=entries.length?entries[entries.length-1]:null;
-    return {
-      entries:entries,
-      earnedSal:entries.reduce(function(s,x){return s+Math.max(0,N(x.amount));},0),
-      totalDays:entries.reduce(function(s,x){return s+Math.max(0,N(x.days));},0),
-      finalBase:last&&last.isExitCycle?last:null,
-      finalRange:rangeForDate(w,exit)
-    };
+    return {entries:entries,earnedSal:entries.reduce(function(s,x){return s+Math.max(0,N(x.amount));},0),totalDays:entries.reduce(function(s,x){return s+Math.max(0,N(x.days));},0),finalBase:last&&last.isExitCycle?last:null};
   }
-  function v103Final(w){
-    if(!w||!w.startDate)return null;
-    /* التصفية المؤقتة تبقى على المحرك الأصلي دون تغيير. */
-    if(!w.exitDate)return base.final?base.final.apply(this,arguments):null;
+  function finalSettlement(w){
+    if(!w||!w.startDate)return null;if(!w.exitDate)return base.final?base.final.apply(this,arguments):null;
     var start=date(w.startDate),exit=date(w.exitDate);if(!start||!exit||exit<start)return null;
-
-    /*
-      نأخذ القيود المالية من محرك التصفية الموحد السابق:
-      كل التسبيقات، الغيابات، الديون/الأقساط، الساعات والمكافآت من الدخول إلى الخروج،
-      مع نفس حماية منع الاحتساب المزدوج.
-      ثم نستبدل الراتب فقط بمجموع الدورات: الدورات السابقة عادية، دورة الخروج وحدها خاصة.
-    */
-    /* لا نستدعي أي محرك تصفية قديم عند وجود تاريخ خروج؛ نحسب القيود مباشرة. */
-    var financial=null;
-    var rollup=settlementCycleRollup(w),last=rollup.finalBase||{},earned=Math.max(0,N(rollup.earnedSal));
-    if(!financial){
-      /* احتياط إذا لم تكن الطبقة السابقة متاحة. */
-      var d0=D(),allAdv=rows(d0&&d0.advances,w.id).filter(function(a){
-        var dt=date(a&&((a.realDate)||a.date));return a&&!a._isInstDeduction&&dt&&dt>=start&&dt<=exit;
-      }),allAbs=rows(d0&&d0.absences,w.id).filter(function(a){
-        var dt=date(a&&((a.from)||a.date));return a&&a.deductOpt!=='cancel'&&dt&&dt>=start&&dt<=exit;
-      }),allH=rows(d0&&d0.hours,w.id).filter(function(a){var dt=date(a&&((a.realDate)||a.date));return a&&dt&&dt>=start&&dt<=exit&&!paid(a.paid);}),
-      allB=rows(d0&&d0.bonuses,w.id).filter(function(a){var dt=date(a&&((a.realDate)||a.date));return a&&dt&&dt>=start&&dt<=exit&&!paid(a.paid);}),
-      debts0=rows(d0&&d0.debts,w.id),advAmt=allAdv.reduce(function(s,a){return s+gross(a);},0),
-      attachedAbs=allAdv.reduce(function(s,a){return s+deds(a).filter(function(z){return z.type==='absence';}).reduce(function(q,z){return q+Math.max(0,N(z.amount));},0);},0),
-      absAmt=Math.max(0,allAbs.reduce(function(s,a){return s+Math.max(0,N(a.deduct));},0)-attachedAbs),
-      hAmt=allH.reduce(function(s,a){return s+Math.max(0,N(a.total!=null?a.total:(a.net!=null?a.net:a.amount)));},0),
-      bAmt=allB.reduce(function(s,a){return s+Math.max(0,N(a.net!=null?a.net:a.amount));},0),
-      debtAmt=totalDebtBalance(debts0);
-      financial={totalAdv:advAmt,cashAdvances:allAdv.reduce(function(s,a){return s+Math.max(0,N(a&&a.netPaid!=null?a.netPaid:gross(a)));},0),absenceRecoveredFromSalary:attachedAbs,totalAbs:absAmt,unpaidHrs:hAmt,unpaidBon:bAmt,debtBalance:debtAmt,debtDeductibleNow:debtAmt,ledgerSource:'direct-final-exit-ledger'};
-    }
-
-    var totalAdv=N(financial.totalAdv),unpaidH=N(financial.unpaidHrs),unpaidB=N(financial.unpaidBon),
-        totalAbs=N(financial.totalAbs),debtToDeduct=isFinite(Number(financial.debtDeductibleNow))?N(financial.debtDeductibleNow):N(financial.debtBalance),
-        net=N(earned+unpaidH+unpaidB-totalAdv-totalAbs-debtToDeduct);
-
-    return Object.assign({},financial,{
-      isFinal:true,
-      refDate:iso(exit),
-      /* actualDays هنا تخص دورة الخروج فقط؛ totalCalculatedDays يشمل كل الدورات. */
-      actualDays:N(last.days),
-      eligibleDays:N(last.days),
-      totalCalculatedDays:N(rollup.totalDays),
-      serviceDays:diffDays(start,exit)+1,
-      scopeStart:last.scopeStart||'',
-      finalCycleStart:last.from||'',
-      finalCycleEnd:last.to||'',
-      finalCycleType:last.kind||'normal',
-      exitRuleGuard:last.activationGuard||null,
-      earnedSal:earned,
-      priorCyclesEarnedSal:Math.max(0,earned-N(last.amount)),
-      finalCycleEarnedSal:N(last.amount),
-      daily:N(last.daily)||dailyRate(w.salary),
-      unpaidHrs:unpaidH,
-      unpaidBon:unpaidB,
-      totalAdv:totalAdv,
-      totalAbs:totalAbs,
-      debtDueFinalCycle:N(financial.debtDueFinalCycle),
-      debtBalance:N(financial.debtBalance),
-      netFinal:net,
-      cycleBreakdown:rollup.entries,
-      auditOnly:true,
-      status:'calculated_audit_only',
-      rule:'exitDate-guarded; all-previous-cycles-normal; final-exit-cycle-endpoint-count; direct-financial-ledger-from-start-to-exit-once; no-automatic-payment'
-    });
+    var d=D(),rollup=settlementCycleRollup(w),last=rollup.finalBase||{},earned=Math.max(0,N(rollup.earnedSal));
+    var allAdv=rows(d&&d.advances,w.id).filter(function(a){var dt=date(a&&((a.realDate)||a.date));return a&&!a._isInstDeduction&&dt&&dt>=start&&dt<=exit;}),allAbs=rows(d&&d.absences,w.id).filter(function(a){var dt=date(a&&((a.from)||a.date));return a&&a.deductOpt!=='cancel'&&dt&&dt>=start&&dt<=exit;}),allH=rows(d&&d.hours,w.id).filter(function(a){var dt=date(a&&((a.realDate)||a.date));return a&&dt&&dt>=start&&dt<=exit&&!paid(a.paid);}),allB=rows(d&&d.bonuses,w.id).filter(function(a){var dt=date(a&&((a.realDate)||a.date));return a&&dt&&dt>=start&&dt<=exit&&!paid(a.paid);}),debts=rows(d&&d.debts,w.id);
+    var totalAdv=allAdv.reduce(function(s,a){return s+gross(a);},0),attachedAbs=allAdv.reduce(function(s,a){return s+deds(a).filter(function(z){return z.type==='absence';}).reduce(function(q,z){return q+Math.max(0,N(z.amount));},0);},0),totalAbs=Math.max(0,allAbs.reduce(function(s,a){return s+Math.max(0,N(a.deduct));},0)-attachedAbs),unpaidH=allH.reduce(function(s,a){return s+Math.max(0,N(a.total!=null?a.total:(a.net!=null?a.net:a.amount)));},0),unpaidB=allB.reduce(function(s,a){return s+Math.max(0,N(a.net!=null?a.net:a.amount));},0),debt=totalDebtBalance(debts),net=N(earned+unpaidH+unpaidB-totalAdv-totalAbs-debt);
+    return {isFinal:true,refDate:iso(exit),actualDays:N(last.days),eligibleDays:N(last.days),totalCalculatedDays:N(rollup.totalDays),serviceDays:diffDays(start,exit)+1,scopeStart:last.scopeStart||'',finalCycleStart:last.from||'',finalCycleEnd:last.to||'',finalCycleType:last.kind||'normal',exitRuleGuard:last.activationGuard||null,earnedSal:earned,priorCyclesEarnedSal:Math.max(0,earned-N(last.amount)),finalCycleEarnedSal:N(last.amount),daily:N(last.daily)||dailyRate(w.salary),unpaidHrs:unpaidH,unpaidBon:unpaidB,totalAdv:totalAdv,totalAbs:totalAbs,debtBalance:debt,netFinal:net,cycleBreakdown:rollup.entries,auditOnly:true,status:'calculated_audit_only',rule:'exitDate-guarded; prior-cycles-normal; final-cycle-only-endpoint-rule; no-auto-payment'};
   }
   function recordExitSettlement(w){
-    var d=D();if(!d||!w)return null;d.workerExitSettlements=O(d.workerExitSettlements);
-    var old=d.workerExitSettlements[w.id]||d.workerExitSettlements[S(w.id)],now=new Date().toISOString();
+    var d=D();if(!d||!w)return null;d.workerExitSettlements=O(d.workerExitSettlements);var old=d.workerExitSettlements[w.id]||d.workerExitSettlements[S(w.id)],now=new Date().toISOString();
     if(!w.exitDate){if(old&&old.status!=='paid'){old.status='voided';old.voidedAt=now;old.voidReason='تم حذف تاريخ الخروج قبل أي دفع فعلي.';}w.status='active';return old||null;}
-    var fs=v103Final(w),id=old&&old.id?old.id:'worker_exit_settlement_'+S(w.id)+'_'+now.replace(/[^0-9]/g,'').slice(0,14);
-    var rec={id:id,workerId:w.id,workerName:w.name,exitDate:w.exitDate,status:'calculated_audit_only',actualPaymentId:null,createdAt:old&&old.createdAt?old.createdAt:now,updatedAt:now,activationGuard:{trigger:'exitDate',active:true,exitDate:w.exitDate,appliesOnlyTo:'final_exit_cycle'},calculation:clone(fs),policy:fs&&fs.rule};
+    var fs=finalSettlement(w),id=old&&old.id?old.id:'worker_exit_settlement_'+S(w.id)+'_'+now.replace(/[^0-9]/g,'').slice(0,14),rec={id:id,workerId:w.id,workerName:w.name,exitDate:w.exitDate,status:'calculated_audit_only',actualPaymentId:null,createdAt:old&&old.createdAt?old.createdAt:now,updatedAt:now,activationGuard:{trigger:'exitDate',active:true,exitDate:w.exitDate,appliesOnlyTo:'final_exit_cycle'},calculation:clone(fs),policy:fs&&fs.rule};
     d.workerExitSettlements[w.id]=rec;w.status='exited';w.exitSettlementId=id;return rec;
   }
-  function isExited(w){return !!(w&&w.exitDate&&date(w.exitDate)&&date(w.exitDate)<new Date(today().getFullYear(),today().getMonth(),today().getDate()+1));}
-  function blockExited(wid){var w=worker(wid);if(!isExited(w))return false;try{toast('⛔ العامل خرج بتاريخ '+iso(w.exitDate)+'؛ لا تُقبل عمليات جديدة بعد الخروج. أزل تاريخ الخروج فقط لتصحيح سجل سابق.',true);}catch(e){}return true;}
+  function isExited(w){var e=date(w&&w.exitDate),t=today();return !!(e&&e<=t);}
+  function blockExited(wid){var w=worker(wid);if(!isExited(w))return false;toastSafe('⛔ العامل خرج بتاريخ '+iso(w.exitDate)+'؛ لا تُقبل عمليات جديدة بعد الخروج.',true);return true;}
 
-  function planForWorker(w,targetDay,at){
-    var legacy=dueDay(w),oldEnd=nextAnchorAfter(at||today(),legacy),oldStart=prevAnchor(oldEnd,legacy),newStart=nextAnchorAfter(oldEnd,targetDay),days=Math.max(0,diffDays(oldEnd,newStart)),daily=dailyRate(w.salary),sid='payday_schedule_'+S(w.id)+'_'+iso(newStart).replace(/-/g,'');
-    return {workerId:w.id,workerName:w.name,legacyDay:legacy,targetDay:targetDay,oldCycleStart:iso(oldStart),oldCycleEnd:iso(oldEnd),transitionStart:iso(oldEnd),transitionEnd:iso(newStart),eligibleDays:days,dailyRate:daily,baseAmount:halfUp(days*daily),scheduleVersionId:sid,transitionId:'payday_transition_'+S(w.id)+'_'+iso(oldEnd).replace(/-/g,'')+'_'+iso(newStart).replace(/-/g,''),status:'planned'};
-  }
-  function eligibleWorkers(){return A(D()&&D().workers).filter(function(w){return w&&!w.exitDate&&!hasSchedule(w);});}
-  function preview(target){
-    target=Math.min(28,Math.max(1,N(target)||1));var ws=eligibleWorkers(),min=ws.length?Math.min.apply(null,ws.map(dueDay)):1;
-    return {targetDay:target,minimumLegacyDay:min,valid:target<=min,workers:ws.map(function(w){return planForWorker(w,target,today());})};
-  }
-  function renderPlan(out){
-    var el=document.getElementById('v103PaydayPreview');if(!el)return;
-    if(!out){el.innerHTML='';return;}
-    var warning=!out.valid?'<div class="abox warn">لا يمكن تطبيق اليوم '+out.targetDay+' على هذه النسخة: يوجد عامل تاريخ استحقاقه '+out.minimumLegacyDay+'، وسيؤدي اختيار يوم أعلى إلى دورتين في الشهر نفسه. اختر يوماً لا يتجاوز '+out.minimumLegacyDay+' — يوم 1 هو الخيار الآمن لتوحيد الجميع.</div>':'';
-    var rows=out.workers.map(function(p){return '<tr><td>'+esc(p.workerName)+'</td><td>'+p.legacyDay+'</td><td>'+p.targetDay+'</td><td>'+esc(p.oldCycleEnd)+'</td><td>'+esc(p.transitionStart)+' → '+esc(p.transitionEnd)+'</td><td>'+p.eligibleDays+' يوم</td><td>'+money(p.baseAmount)+'</td></tr>';}).join('');
-    el.innerHTML=warning+(rows?'<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th>العامل</th><th>القديم</th><th>الموحّد</th><th>إغلاق الدورة القديمة</th><th>دورة الانتقال</th><th>الأيام</th><th>أجر الانتقال</th></tr></thead><tbody>'+rows+'</tbody></table></div><div class="v103-note">أجر الانتقال = الأيام × أجر اليوم الثابت (الراتب ÷ 30 مع تقريب نصف لأعلى). لا يُنشأ أي تسبيق أو دفع تلقائي.</div>':'<div class="v103-note">لا يوجد عمال نشطون يحتاجون إلى توحيد.</div>');
-  }
-  function previewUI(){var inp=document.getElementById('v103TargetDay'),out=preview(inp&&inp.value);renderPlan(out);return out;}
-  function applyPlan(){
-    var out=previewUI();if(!out.valid){try{toast('❌ اختر يوماً موحداً لا يتجاوز '+out.minimumLegacyDay+'؛ يوم 1 آمن للجميع.',true);}catch(e){}return false;}
-    if(!out.workers.length){try{toast('ℹ️ لا يوجد تغيير مطلوب');}catch(e){}return false;}
-    if(!confirm('سيُحفظ جدول استحقاق مُؤرشف لكل عامل. الدورة الحالية القديمة لن تتغير وتغلق في موعدها، ثم تسجل دورة انتقال نسبية، ثم يبدأ التاريخ الموحد. لا توجد دفعة تلقائية. متابعة؟'))return false;
-    var d=D(),now=new Date().toISOString();d.paydayTransitions=O(d.paydayTransitions);d.settings=O(d.settings);
-    out.workers.forEach(function(p){var w=worker(p.workerId);if(!w)return;w._v103LegacyPaydayDay=dueDay(w);w._v103ScheduleActive=true;w.payday=p.targetDay;w.paydayScheduleVersions=A(w.paydayScheduleVersions);w.paydayScheduleVersions.push({id:p.scheduleVersionId,kind:'unified_payday',day:p.targetDay,effectiveFrom:p.transitionEnd,previousScheduleDay:p.legacyDay,transitionId:p.transitionId,createdAt:now,immutable:true});d.paydayTransitions[w.id]=Object.assign({},p,{status:'scheduled',createdAt:now,updatedAt:now,auditOnly:true,paymentId:null});w._mod=typeof nextMod==='function'?nextMod():now;});
-    d.settings.paydaySchedulePolicy={version:VERSION,policy:'versioned; old-cycle-closes-normally; pro-rata-transition; no-retroactive-rewrite; no-auto-payment',targetDay:out.targetDay,createdAt:now};
-    try{if(typeof audit==='function')audit('توحيد تاريخ الاستحقاق: يوم '+out.targetDay+' — حفظ جداول انتقال مؤرشفة لـ '+out.workers.length+' عامل.');}catch(e){}
-    if(typeof saveDB==='function')saveDB();renderPanel();try{renderWorkers();renderSettlement();}catch(e){}try{toast('✅ تم حفظ جدول التوحيد. الدورة القديمة محفوظة، والانتقال تدقيقي بلا دفع تلقائي.');}catch(e){}return true;
-  }
-
-  function renderPanel(){
-    var page=document.getElementById('page-admin');if(!page)return;
-    var panel=document.getElementById('v103PaydayPanel');if(!panel){panel=document.createElement('section');panel.id='v103PaydayPanel';panel.className='sec v103-panel';var first=page.querySelector('.sec');if(first&&first.nextSibling)page.insertBefore(panel,first.nextSibling);else page.appendChild(panel);}
-    var tlist=O(D()&&D().paydayTransitions),active=Object.keys(tlist).map(function(k){return tlist[k];}).filter(function(x){return x&&x.status!=='voided';});
-    panel.innerHTML='<div class="sechdr"><h3>📅 توحيد تاريخ الاستحقاق — جدول مُؤرشف</h3></div><div class="secbody"><div class="abox ok">القاعدة: لا يتغير أي تاريخ قديم. تُغلق الدورة القديمة في موعدها الطبيعي، ثم تُنشأ دورة انتقال نسبية، وبعدها يبدأ الاستحقاق الموحد. لا يُسجل أي تسبيق أو دفع تلقائي.</div><div class="fgrid"><div class="fg"><label>يوم الاستحقاق الموحد</label><input id="v103TargetDay" type="number" min="1" max="28" value="1"></div><div class="fg" style="display:flex;align-items:end;gap:8px;flex-wrap:wrap"><button class="btn2" onclick="window.EGTPH_V103.previewPaydayUnification()">🔎 معاينة الانتقال</button><button class="btn1" onclick="window.EGTPH_V103.applyPaydayUnification()">💾 اعتماد الجدول</button><button class="btn2" onclick="window.EGTPH_V103.runSelfTests(true)">🧪 محاكاة القواعد</button></div></div><div id="v103PaydayPreview"></div>'+(active.length?'<div class="v103-existing"><b>جداول محفوظة:</b> '+active.map(function(x){return esc(x.workerName)+' — '+esc(x.transitionStart)+' → '+esc(x.transitionEnd)+' (يوم '+x.targetDay+')';}).join('<br>')+'</div>':'')+'</div>';
-  }
-  function injectWorkerNote(){var modal=document.querySelector('#mWorker .modal');if(!modal||document.getElementById('v108ExitNote'))return;var b=document.createElement('div');b.id='v108ExitNote';b.className='v103-exit-note';b.innerHTML='<b>حارس التصفية النهائية:</b> لا يعمل هذا الحساب إلا بعد إدخال <b>تاريخ خروج صالح</b>. تُحفظ نتائج الدورات السابقة كما هي، وتُحسب <b>دورة الخروج الأخيرة فقط</b> بأيام العمل: 01→15 = 15، 01→16 = 15، 01→21 = 20. بعدها تُجمع القيود المالية المسجلة مرة واحدة فقط، ولا تُنشأ دفعة أو تسبيق تلقائياً.';var buttons=modal.querySelector('.mbtns');if(buttons)modal.insertBefore(b,buttons);}
-  function injectStyle(){if(document.getElementById('v103Style'))return;var s=document.createElement('style');s.id='v103Style';s.textContent='.v103-panel table th,.v103-panel table td{padding:8px;border-bottom:1px solid var(--border);text-align:right}.v103-panel table th{font-size:10px;color:var(--gray)}.v103-note{margin-top:9px;font-size:11px;color:var(--gray);line-height:1.7}.v103-existing{margin-top:12px;padding:10px;border:1px dashed var(--border2);border-radius:10px;font-size:11px;line-height:1.8;color:var(--gray)}.v103-exit-note{margin:3px 0 14px;padding:10px 12px;border-radius:10px;border:1px solid rgba(192,118,0,.35);background:rgba(192,118,0,.08);font-size:11px;line-height:1.75;color:var(--white)}';document.head.appendChild(s);}
-
-  function wrapExitGuards(){
-    ['openAdvModal','openHrsModal','openAbsModal','openBonModal','openDbtModal'].forEach(function(name){var fn=window[name];if(typeof fn!=='function'||fn.__v108)return;var wrapped=function(wid){if(blockExited(wid))return;return fn.apply(this,arguments);};wrapped.__v108=true;window[name]=wrapped;try{eval(name+'=window["'+name+'"];');}catch(e){}});
-    ['saveAdv','saveHrs','saveAbs','saveBon','saveDbt'].forEach(function(name){var fn=window[name];if(typeof fn!=='function'||fn.__v108)return;var wrapped=function(){var wid=window._wid;try{if(typeof _wid!=='undefined')wid=_wid;}catch(e){}if(blockExited(wid))return;return fn.apply(this,arguments);};wrapped.__v108=true;window[name]=wrapped;try{eval(name+'=window["'+name+'"];');}catch(e){}});
-  }
-  function wrapSaveWorker(){
-    var fn=window.saveWorker;if(typeof fn!=='function'||fn.__v108)return;
-    var wrapped=function(){
-      var startEl=document.getElementById('wm_startDate'),exitEl=document.getElementById('wm_exit'),start=date(startEl&&startEl.value),exit=date(exitEl&&exitEl.value);
-      if(exit&&(!start||exit<start)){try{toast('❌ تاريخ الخروج يجب أن يكون في تاريخ الدخول أو بعده.',true);}catch(e){}return;}
-      var beforeId=window._editWid,beforeWorker=beforeId?clone(worker(beforeId)):null;try{if(typeof _editWid!=='undefined')beforeId=_editWid;}catch(e){}
-      var result=fn.apply(this,arguments),wid=beforeId;
-      if(!wid){var d=D();wid=A(d&&d.workers).slice(-1)[0]&&A(d&&d.workers).slice(-1)[0].id;}
-      var w=worker(wid),d2=D();
-      if(w&&w.exitDate){
-        /* الاستدعاء الوحيد للحساب الخاص: بعد وجود exitDate. */
-        var rec=recordExitSettlement(w);
-        if(rec){try{if(typeof audit==='function')audit('تصفية خروج تدقيقية محروسة بتاريخ الخروج — '+w.name+' — '+w.exitDate+' — بدون دفع تلقائي.');}catch(e){}if(typeof saveDB==='function')saveDB();}
-      }else if(w&&beforeWorker&&beforeWorker.exitDate&&d2){
-        d2.workerExitSettlements=O(d2.workerExitSettlements);var old=d2.workerExitSettlements[w.id]||d2.workerExitSettlements[S(w.id)],now=new Date().toISOString();
-        if(old&&old.status!=='paid'){old.status='voided';old.voidedAt=now;old.voidReason='تم حذف تاريخ الخروج؛ لم تُعد أي عملية خروج محسوبة.';}
-        w.status='active';delete w.exitSettlementId;
-        if(typeof saveDB==='function')saveDB();
+  /* ──────────────────────────────────────────────────────────────
+     تطهير بقايا التوحيد العام، من دون لمس القيود المالية.
+  ────────────────────────────────────────────────────────────── */
+  function cleanupLegacyGlobalUnification(){
+    var d=D();if(!d)return false;var changed=false;
+    A(d.workers).forEach(function(w){
+      if(!w)return;
+      var oldLegacyDay=Object.prototype.hasOwnProperty.call(w,'_v103LegacyPaydayDay')?N(w._v103LegacyPaydayDay):0;
+      if(Object.prototype.hasOwnProperty.call(w,'_v103ScheduleActive')){delete w._v103ScheduleActive;changed=true;}
+      if(Object.prototype.hasOwnProperty.call(w,'_v103LegacyPaydayDay')){delete w._v103LegacyPaydayDay;if(oldLegacyDay){w.payday=oldLegacyDay;}changed=true;}
+      if(Array.isArray(w.paydayScheduleVersions)){
+        var keep=w.paydayScheduleVersions.filter(function(v){return !(v&&v.kind==='unified_payday');});
+        if(keep.length!==w.paydayScheduleVersions.length){w.paydayScheduleVersions=keep;changed=true;}
       }
-      return result;
-    };wrapped.__v108=true;window.saveWorker=wrapped;try{saveWorker=wrapped;}catch(e){}
+    });
+    if(d.paydayTransitions){delete d.paydayTransitions;changed=true;}
+    if(d.settings&&d.settings.paydaySchedulePolicy){delete d.settings.paydaySchedulePolicy;changed=true;}
+    if(changed){note('🧹 حذف بقايا توحيد تاريخ الاستحقاق العام؛ لا توجد إلا جداول العمال الفردية.');safeSave();}
+    return changed;
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+     واجهة تعديل العامل + اختيار دورة عند تكرار شهر واحد.
+  ────────────────────────────────────────────────────────────── */
+  function injectStyle(){
+    if(document.getElementById('v113PaydayStyle'))return;
+    var s=document.createElement('style');s.id='v113PaydayStyle';s.textContent=''
+      +'.v113-payday-note{margin:2px 0 14px;padding:10px 12px;border:1px solid rgba(13,148,136,.34);background:rgba(13,148,136,.06);border-radius:10px;font-size:11px;line-height:1.85;color:var(--text)}'
+      +'.v113-payday-preview{margin-top:7px;font-size:10px;line-height:1.8;color:var(--gray)}'
+      +'.v113-pending{margin-top:7px;padding:8px 10px;border-radius:9px;background:rgba(192,118,0,.08);border:1px solid rgba(192,118,0,.3);color:var(--amber);font-size:10px;line-height:1.7}'
+      +'.v113-cycle-picker{margin:0 0 12px;padding:9px 11px;border:1px solid var(--border2);background:rgba(13,148,136,.05);border-radius:10px;font-size:11px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}'
+      +'.v112-table-lines tbody tr+tr td{border-top:1.25px solid var(--border2)!important}.v112-table-lines tbody tr td{border-left:1px solid rgba(15,80,46,.10)!important}.v112-table-lines tbody tr td:last-child{border-left:0!important}.v112-table-lines thead th{border-left:1px solid var(--border)!important}.v112-table-lines thead th:last-child{border-left:0!important}'
+      +'@media(max-width:900px){.v113-payday-note{font-size:12px}.v113-cycle-picker{font-size:10px}.v112-table-lines tbody tr+tr td{border-top:1.5px solid var(--border3)!important}}';
+    document.head.appendChild(s);
+  }
+  function currentEditingWorker(){var id=window._editWid;try{if(typeof _editWid!=='undefined')id=_editWid;}catch(e){}return id?worker(id):null;}
+  function injectWorkerPaydayField(){
+    var modal=document.querySelector('#mWorker .modal');if(!modal)return;
+    if(document.getElementById('v113PaydayGrid'))return;
+    var ref=document.getElementById('wm_startDate');if(!ref)return;
+    var grid=document.createElement('div');grid.id='v113PaydayGrid';grid.className='fgrid';grid.innerHTML='<div class="fg"><label>يوم الاستحقاق الشهري الجديد للعامل</label><input id="wm_paydayDay" type="number" min="1" max="28" inputmode="numeric" placeholder="مثال: 1"></div><div class="fg"><label>الحالة قبل الحفظ</label><div id="v113PaydayPreview" class="v113-payday-preview">الحفظ ينشئ تغييراً معلّقاً فقط؛ لا يتغير الحساب الآن.</div></div>';
+    ref.closest('.fgrid').parentNode.insertBefore(grid,ref.closest('.fgrid'));
+    var noteBox=document.createElement('div');noteBox.id='v113PaydayNote';noteBox.className='v113-payday-note';noteBox.innerHTML='<b>تاريخ الاستحقاق الفردي المحروس:</b> عند الحفظ يبقى الجدول الحالي كما هو. عند نهاية الدورة القديمة تبدأ دورة انتقال واحدة، ولا يصبح اليوم الجديد فعالاً إلا عند بلوغ تاريخه الفعلي. لا تعديل رجعي ولا دفع تلقائي.';
+    var buttons=modal.querySelector('.mbtns');if(buttons)modal.insertBefore(noteBox,buttons);
+    document.getElementById('wm_paydayDay').addEventListener('input',previewWorkerPlan);
+  }
+  function pendingHtml(p){return '<div class="v113-pending"><b>⏳ تغيير معلّق — لم يُطبق بعد</b><br>يوم '+N(p.previousDay)+' → يوم '+N(p.targetDay)+'<br>الدورة القديمة تنتهي: '+S(p.transitionStart)+' — يصبح اليوم الجديد فعالاً: <b>'+S(p.effectiveFrom||p.transitionEnd)+'</b><br><button type="button" class="btn3" style="margin-top:7px;padding:5px 10px;font-size:10px" id="v113CancelPending">إلغاء التغيير المعلّق</button></div>';}
+  function wireCancelPending(w){
+    var b=document.getElementById('v113CancelPending');if(!b||b.__v113)return;b.__v113=true;b.addEventListener('click',function(){if(cancelPendingPaydayChange(w.id)){toastSafe('✅ أُلغي التغيير المعلّق؛ لم تتغير أي حركة مالية.');try{if(typeof editW==='function')editW(w.id);}catch(e){}}});
+  }
+  function previewWorkerPlan(){
+    activateDuePaydayChanges({persist:true});
+    var out=document.getElementById('v113PaydayPreview'),input=document.getElementById('wm_paydayDay'),w=currentEditingWorker();if(!out||!input)return;
+    var target=N(input.value);if(!target||target<1||target>28){out.textContent='اكتب يوماً بين 1 و28.';return;}
+    if(!w){out.textContent='عامل جديد: يصبح اليوم المختار جدولاً فعالاً من تاريخ دخوله، ولا توجد دورات سابقة لتعديلها.';return;}
+    var pp=pendingVersion(w);if(pp){out.innerHTML=pendingHtml(pp);wireCancelPending(w);return;}
+    var p=planForWorker(w,target,today());if(!p.ok){out.innerHTML='<span style="color:var(--red)">⚠️ '+p.reason+'</span>';return;}
+    if(p.unchanged){out.innerHTML='<span style="color:var(--green1)">✅ لا يوجد تغيير؛ اليوم الفعال حالياً هو '+p.oldDay+'.</span>';return;}
+    out.innerHTML='الدورة الحالية لا تتغير: '+p.oldCycleStart+' → '+p.oldCycleEnd+'<br>دورة انتقال معلّقة: '+p.transitionStart+' → '+p.transitionEnd+' — '+p.eligibleDays+' يوم — '+money(p.baseAmount)+'<br><b style="color:var(--amber)">يُحفظ التغيير الآن فقط. يُفعّل يوم '+p.effectiveFrom+' عند بلوغه.</b>';
+  }
+  function cycleLabel(r){return (r.kind==='transition'?'دورة انتقال':'دورة عادية')+' — '+iso(r.from)+' → '+iso(r.to);}
+  function injectCyclePicker(){
+    var st=stateObj(),wid=st&&st.sw,w=worker(wid);if(!w)return;
+    var active=window.getActiveCycle?window.getActiveCycle(w.id):anchorFor(w,today()),m=st&&st._smManual?N(st.sm):N(active.m),y=st&&st._smManual?N(st.syr||new Date().getFullYear()):N(active.yr),list=rangesForMonth(w,m,y);
+    var old=document.getElementById('v113CyclePicker');if(old)old.remove();if(list.length<2)return;
+    var selected=selectedHint(w,m,y)||S(rangeFor(w,m,y).cycleId),wrap=document.createElement('div');wrap.id='v113CyclePicker';wrap.className='v113-cycle-picker';
+    var options=list.map(function(r){return '<option value="'+S(r.cycleId).replace(/"/g,'&quot;')+'"'+(S(r.cycleId)===selected?' selected':'')+'>'+cycleLabel(r)+'</option>';}).join('');
+    wrap.innerHTML='<b>📌 هذا الشهر يحتوي دورتين مختلفتين:</b><select id="v113CycleSelect" class="sinp" style="width:auto;min-width:230px">'+options+'</select>';
+    var root=document.getElementById('salContent');if(root)root.insertBefore(wrap,root.firstChild);
+    var sel=document.getElementById('v113CycleSelect');if(sel)sel.addEventListener('change',function(){var ss=stateObj();ss._v113CycleHint={wid:w.id,m:m,yr:y,cycleId:sel.value};try{renderSalContent();}catch(e){}});
+  }
+
+  function wrapWorkerEditor(){
+    base.editW=window.editW;base.openAddWorker=window.openAddWorker;base.saveWorker=window.saveWorker;
+    if(typeof base.editW==='function'){
+      window.editW=function(id){activateDuePaydayChanges({persist:true});var r=base.editW.apply(this,arguments);injectWorkerPaydayField();var w=worker(id),i=document.getElementById('wm_paydayDay');if(i&&w)i.value=(pendingVersion(w)||{}).targetDay||currentPaydayDay(w);previewWorkerPlan();return r;};try{editW=window.editW;}catch(e){}
+    }
+    if(typeof base.openAddWorker==='function'){
+      window.openAddWorker=function(){var r=base.openAddWorker.apply(this,arguments);injectWorkerPaydayField();var i=document.getElementById('wm_paydayDay');if(i)i.value='';previewWorkerPlan();return r;};try{openAddWorker=window.openAddWorker;}catch(e){}
+    }
+    if(typeof base.saveWorker==='function'){
+      window.saveWorker=function(){
+        activateDuePaydayChanges({persist:true});
+        var targetEl=document.getElementById('wm_paydayDay'),target=N(targetEl&&targetEl.value),beforeId=window._editWid;try{if(typeof _editWid!=='undefined')beforeId=_editWid;}catch(e){}
+        var before=beforeId?clone(worker(beforeId)):null;
+        if(targetEl&&S(targetEl.value).trim()&&(!target||target<1||target>28)){toastSafe('❌ يوم الاستحقاق يجب أن يكون بين 1 و28.',true);return;}
+        var plan=null,existingPending=before&&pendingVersion(before);
+        if(before&&target){
+          if(existingPending&&target!==N(existingPending.targetDay)){toastSafe('❌ يوجد تغيير معلّق؛ ألغِه أولاً ثم أدخل اليوم الجديد.',true);return;}
+          if(!existingPending&&target!==currentPaydayDay(before)){plan=planForWorker(before,target,today());if(!plan.ok){toastSafe('❌ '+plan.reason,true);return;}}
+        }
+        var res=base.saveWorker.apply(this,arguments),wid=beforeId;
+        if(!wid){var d=D(),list=A(d&&d.workers);wid=list.length?list[list.length-1].id:null;}
+        var w=worker(wid);if(!w)return res;
+        if(!before&&target&&target!==legacyDay(w)){
+          var start=iso(date(w.startDate)||today()),id='worker_initial_payday_'+S(w.id)+'_'+Date.now();
+          w.paydayScheduleVersions=A(w.paydayScheduleVersions);w.paydayScheduleVersions.push({id:id,kind:'worker_individual_payday',status:'active',previousDay:legacyDay(w),targetDay:target,day:target,transitionStart:start,transitionEnd:start,effectiveFrom:start,createdAt:new Date().toISOString(),activatedAt:new Date().toISOString(),initial:true,immutablePlan:true,activationWitness:{active:true,trigger:'initial_worker_schedule',activatedAt:new Date().toISOString(),effectiveFrom:start,scheduleVersionId:id}});w.activePaydayScheduleVersionId=id;w.payday=target;
+        }else if(plan&&!plan.unchanged){
+          var rec=addPendingVersion(w,plan);if(rec)note('📅 حفظ تغيير استحقاق معلّق: '+w.name+' — يوم '+plan.oldDay+' إلى يوم '+plan.targetDay+'؛ لا يطبق قبل '+plan.effectiveFrom+'.');
+        }else if(!pendingVersion(w)){w.payday=currentPaydayDay(w,today());}
+        if(w.exitDate){activateDuePaydayChanges({persist:false});var ex=recordExitSettlement(w);if(ex)note('تصفية خروج تدقيقية محروسة بتاريخ الخروج — '+w.name+' — بدون دفع تلقائي.');}
+        safeSave();try{if(typeof renderWorkers==='function')renderWorkers();if(typeof updateBadges==='function')updateBadges();}catch(e){}
+        return res;
+      };try{saveWorker=window.saveWorker;}catch(e){}
+    }
+  }
+
+  function stampCurrentCycleRows(wid){
+    var w=worker(wid);if(!w)return 0;var r=rangeForDate(w,today()),d=D(),changed=0;
+    function mark(row,dt){if(!row||row.cycleStart||row.paydayCycleId||!inRange(dt||row.date||row.realDate,r))return;row.cycleStart=iso(r.from);row.cycleEnd=iso(r.to);row.paydayCycleId=r.cycleId;changed++;}
+    rows(d.advances,w.id).forEach(function(x){mark(x,x.date||x.realDate);});rows(d.absences,w.id).forEach(function(x){mark(x,x.from||x.date);});rows(d.hours,w.id).forEach(function(x){mark(x,x.date||x.realDate);});rows(d.bonuses,w.id).forEach(function(x){mark(x,x.date||x.realDate);});
+    return changed;
+  }
+  function wrapExitGuardsAndStamping(){
+    ['openAdvModal','openHrsModal','openAbsModal','openBonModal','openDbtModal'].forEach(function(name){var fn=window[name];if(typeof fn!=='function'||fn.__v113)return;var wrapped=function(wid){activateDuePaydayChanges({persist:true});if(blockExited(wid))return;return fn.apply(this,arguments);};wrapped.__v113=true;window[name]=wrapped;try{eval(name+'=window["'+name+'"];');}catch(e){}});
+    ['saveAdv','saveHrs','saveAbs','saveBon','saveDbt'].forEach(function(name){var fn=window[name];if(typeof fn!=='function'||fn.__v113)return;var wrapped=function(){activateDuePaydayChanges({persist:true});var wid=window._wid;try{if(typeof _wid!=='undefined')wid=_wid;}catch(e){}if(blockExited(wid))return;var r=fn.apply(this,arguments);if(stampCurrentCycleRows(wid))safeSave();return r;};wrapped.__v113=true;window[name]=wrapped;try{eval(name+'=window["'+name+'"];');}catch(e){}});
   }
   function patchCore(){
     if(window.calcFinalSettlement!==own.final)base.final=window.calcFinalSettlement;
@@ -15480,47 +15523,47 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
     if(window.cycleWindow!==own.window)base.window=window.cycleWindow;
     if(window.cycleAnchorForDate!==own.anchor)base.anchor=window.cycleAnchorForDate;
     if(window.getActiveCycle!==own.active)base.active=window.getActiveCycle;
-    own.window=function(w,m,y){return hasSchedule(w)?rangeFor(w,m,y):(base.window?base.window.apply(this,arguments):rangeFor(w,m,y));};
-    own.anchor=function(w,v){return hasSchedule(w)?anchorFor(w,v):(base.anchor?base.anchor.apply(this,arguments):anchorFor(w,v));};
-    own.salary=function(w,m,y){return hasSchedule(w)?v103CalcSal(w,m,y):(base.salary?base.salary.apply(this,arguments):v103CalcSal(w,m,y));};
-    own.status=function(wid,m,y){var w=worker(wid);return hasSchedule(w)?v103Status(wid,m,y):(base.status?base.status.apply(this,arguments):v103Status(wid,m,y));};
-    own.final=function(w){return v103Final(w);};
-    own.active=function(wid){var w=worker(wid);if(!hasSchedule(w))return base.active?base.active.apply(this,arguments):anchorFor(w,today());var a=anchorFor(w,today());return {m:a.m,yr:a.yr,cycleId:a.cycleId||''};};
+    own.window=function(w,m,y){activateDuePaydayChanges({persist:true});return hasIndividualSchedule(w)?rangeFor(w,m,y):(base.window?base.window.apply(this,arguments):rangeFor(w,m,y));};
+    own.anchor=function(w,v){activateDuePaydayChanges({persist:true});return hasIndividualSchedule(w)?anchorFor(w,v):(base.anchor?base.anchor.apply(this,arguments):anchorFor(w,v));};
+    own.salary=function(w,m,y){activateDuePaydayChanges({persist:true});var r=hasIndividualSchedule(w)?rangeFor(w,m,y):(base.window?base.window.call(this,w,m,y):rangeFor(w,m,y));if(w&&w.exitDate){var fb=finalBase(w,r);if(fb)return {salary:fb.amount,days:fb.eligibleDays,pro:true,full:false,daily:fb.daily,exitFinal:true,scopeStart:iso(fb.scopeStart),exitRuleGuard:fb.activationGuard};}return hasIndividualSchedule(w)?individualCalcSal(w,m,y):(base.salary?base.salary.apply(this,arguments):individualCalcSal(w,m,y));};
+    own.status=function(wid,m,y){activateDuePaydayChanges({persist:true});var w=worker(wid);return hasIndividualSchedule(w)?individualStatus(wid,m,y):(base.status?base.status.apply(this,arguments):null);};
+    own.final=function(w){activateDuePaydayChanges({persist:true});return w&&w.exitDate?finalSettlement(w):(base.final?base.final.apply(this,arguments):null);};
+    own.active=function(wid){activateDuePaydayChanges({persist:true});var w=worker(wid);if(!hasIndividualSchedule(w))return base.active?base.active.apply(this,arguments):anchorFor(w,today());var a=anchorFor(w,today());return {m:a.m,yr:a.yr,cycleId:a.cycleId||''};};
     window.cycleWindow=own.window;window.cycleAnchorForDate=own.anchor;window.calcSal=own.salary;window.calcMonthStatus=own.status;window.calcFinalSettlement=own.final;window.getActiveCycle=own.active;
     try{cycleWindow=own.window;cycleAnchorForDate=own.anchor;calcSal=own.salary;calcMonthStatus=own.status;calcFinalSettlement=own.final;getActiveCycle=own.active;}catch(e){}
   }
-  function runSelfTests(show){
-    var tests=[];function ok(name,actual,expected){tests.push({name:name,actual:actual,expected:expected,pass:actual===expected});}
-    var r0=finalBase({salary:45000,startDate:'2026-05-01',exitDate:''},{from:date('2026-05-01'),to:date('2026-06-01')});
-    ok('الحارس: لا تاريخ خروج = لا استدعاء خاص',r0===null,true);
-    var r10=finalBase({salary:45000,startDate:'2026-05-01',exitDate:'2026-05-10'},{from:date('2026-05-01'),to:date('2026-06-01')});
-    ok('01/05→10/05: الدخول والخروج محسوبان',r10.eligibleDays,10);
-    ok('01/05→10/05: 10 × 1500',r10.amount,15000);
-    ok('الحارس يحمل exitDate',r10.activationGuard&&r10.activationGuard.trigger,'exitDate');
-    var r15=finalBase({salary:45000,startDate:'2026-05-01',exitDate:'2026-05-15'},{from:date('2026-05-01'),to:date('2026-06-01')});
-    ok('01/05→15/05 = 15',r15.eligibleDays,15);
-    var r16=finalBase({salary:45000,startDate:'2026-05-01',exitDate:'2026-05-16'},{from:date('2026-05-01'),to:date('2026-06-01')});
-    ok('01/05→16/05 = 15',r16.eligibleDays,15);
-    var r21=finalBase({salary:45000,startDate:'2026-05-01',exitDate:'2026-05-21'},{from:date('2026-05-01'),to:date('2026-06-01')});
-    ok('01/05→21/05 = 20',r21.eligibleDays,20);
-    var laterStart=finalBase({salary:45000,startDate:'2026-05-20',exitDate:'2026-06-03'},{from:date('2026-05-14'),to:date('2026-06-14')});
-    ok('20/05→03/06 = 15 داخل دورة الخروج',laterStart.eligibleDays,15);
-    var oldFinal=finalBase({salary:45000,day:14,startDate:'2026-04-14',exitDate:'2026-06-30'},{from:date('2026-06-14'),to:date('2026-07-14')});
-    ok('عامل قديم 14/06→30/06 = 16',oldFinal.eligibleDays,16);
-    var p=planForWorker({id:'T',name:'محاكاة',day:14,salary:45000},1,date('2026-07-06'));
-    ok('إغلاق دورة تاريخ 14 في موعده',p.oldCycleEnd,'2026-07-14');
-    ok('انتقال التوحيد إلى يوم 1',p.transitionEnd,'2026-08-01');
-    ok('أيام الانتقال 14/07→01/08',p.eligibleDays,18);
-    ok('أجر انتقال 18×1500',p.baseAmount,27000);
-    var passed=tests.filter(function(t){return t.pass;}).length,result={version:VERSION,passed:passed,total:tests.length,tests:tests};
-    if(show){var tx=tests.map(function(t){return (t.pass?'✅ ':'❌ ')+t.name+' — '+t.actual+(t.pass?'':' (المتوقع '+t.expected+')');}).join('\n');try{alert('محاكاة v108: '+passed+'/'+tests.length+' ناجحة\n\n'+tx);}catch(e){}}
-    return result;
+  function decorateTables(){document.querySelectorAll('.page table').forEach(function(t){t.classList.add('v112-table-lines');});}
+  function wrapRenders(){
+    ['renderWorkers','renderSettlement','renderSal','renderAbs','renderAbsSummary','renderHrs','renderBon','renderDbt','renderSum','renderAnn','renderDash'].forEach(function(name){var fn=window[name];if(typeof fn!=='function'||fn.__v113Table)return;var wrapped=function(){activateDuePaydayChanges({persist:true});var r=fn.apply(this,arguments);try{decorateTables();}catch(e){}return r;};wrapped.__v113Table=true;window[name]=wrapped;try{eval(name+'=window["'+name+'"];');}catch(e){}});
+    base.renderSalContent=window.renderSalContent;
+    if(typeof base.renderSalContent==='function'&&!base.renderSalContent.__v113Picker){
+      var salaryRender=function(){activateDuePaydayChanges({persist:true});var r=base.renderSalContent.apply(this,arguments);try{decorateTables();injectCyclePicker();}catch(e){}return r;};salaryRender.__v113Picker=true;window.renderSalContent=salaryRender;try{renderSalContent=salaryRender;}catch(e){}
+    }
   }
-  function boot(){injectStyle();patchCore();wrapExitGuards();wrapSaveWorker();renderPanel();injectWorkerNote();try{var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v108';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v108');}catch(e){}}
-  var api={version:VERSION,previewPaydayUnification:previewUI,applyPaydayUnification:applyPlan,runSelfTests:runSelfTests,calcExitSettlement:v103Final,recordExitSettlement:recordExitSettlement,rangeFor:function(w,m,y){return rangeFor(w,m,y);},status:v103Status};window.EGTPH_V103=api;window.EGTPH_V104=api;window.EGTPH_V105=api;window.EGTPH_V106=api;window.EGTPH_V107=api;window.EGTPH_V108=api;
-  [0,200,700,1600,3500,7000,11000,16000,21000].forEach(function(ms){setTimeout(boot,ms);});
-  setInterval(function(){patchCore();renderPanel();},90000);
+  function patchPrintWindows(){
+    if(window.__v113PrintGrid)return;window.__v113PrintGrid=true;var nativeOpen=window.open;if(typeof nativeOpen!=='function')return;
+    window.open=function(){var p=nativeOpen.apply(this,arguments);try{if(p&&p.document&&!p.__v113DocWrite){p.__v113DocWrite=true;var write=p.document.write.bind(p.document);p.document.write=function(html){if(typeof html==='string'&&html.indexOf('</style>')!==-1){var css='table{border-collapse:collapse!important}table th,table td{border:1px solid #a8b9af!important;padding:7px 8px!important}tbody tr+tr td{border-top:1.4px solid #778b80!important}';html=html.replace('</style>',css+'</style>');}return write(html);};}}catch(e){}return p;};
+  }
+  function runSelfTests(show){
+    var t=[];function ok(n,a,e){t.push({name:n,actual:a,expected:e,pass:a===e});}
+    var d0=date('2026-07-06'),w={id:'T',day:14,salary:45000,startDate:'2026-04-14',paydayScheduleVersions:[]};
+    var early=planForWorker(w,1,d0);ok('خطة 14→1 معلّقة',early.ok,true);ok('انتقال 14→1 يبدأ بعد القديمة',early.transitionStart,'2026-07-14');ok('تفعيل 14→1 في الموعد الجديد',early.effectiveFrom,'2026-08-01');ok('أيام انتقال 14→1',early.eligibleDays,18);
+    var late=planForWorker(w,20,d0);ok('خطة 14→20 مسموحة',late.ok,true);ok('انتقال 14→20',late.transitionStart+'→'+late.effectiveFrom,'2026-07-14→2026-07-20');ok('أيام انتقال 14→20',late.eligibleDays,6);
+    var r10=finalBase({salary:45000,startDate:'2026-05-01',exitDate:'2026-05-10'},{from:date('2026-05-01'),to:date('2026-06-01')});ok('خروج 01→10',r10.eligibleDays,10);
+    var r15=finalBase({salary:45000,startDate:'2026-05-01',exitDate:'2026-05-15'},{from:date('2026-05-01'),to:date('2026-06-01')});ok('خروج 01→15',r15.eligibleDays,15);
+    var r21=finalBase({salary:45000,startDate:'2026-05-01',exitDate:'2026-05-21'},{from:date('2026-05-01'),to:date('2026-06-01')});ok('خروج 01→21',r21.eligibleDays,20);
+    var testW={id:'P',day:14,salary:45000,startDate:'2026-04-14',paydayScheduleVersions:[]},p=planForWorker(testW,20,d0);addPendingVersion(testW,p);ok('الحفظ لا يغير اليوم فوراً',currentPaydayDay(testW,d0),14);ok('سجل Pending موجود',pendingVersion(testW).status,'pending');
+    var result={version:VERSION,passed:t.filter(function(x){return x.pass;}).length,total:t.length,tests:t};if(show)try{alert('محاكاة v113: '+result.passed+'/'+result.total+' ناجحة\n\n'+t.map(function(x){return (x.pass?'✅ ':'❌ ')+x.name+' — '+x.actual;}).join('\n'));}catch(e){}return result;
+  }
+  function boot(){
+    cleanupLegacyGlobalUnification();activateDuePaydayChanges({persist:true});injectStyle();injectWorkerPaydayField();patchCore();wrapExitGuardsAndStamping();wrapWorkerEditor();wrapRenders();patchPrintWindows();decorateTables();
+    window.addEventListener('focus',function(){activateDuePaydayChanges({persist:true});},{passive:true});document.addEventListener('visibilitychange',function(){if(!document.hidden)activateDuePaydayChanges({persist:true});},{passive:true});
+    try{var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v113';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v113');}catch(e){}
+  }
+  var api={version:VERSION,planIndividualPayday:planForWorker,activateDuePaydayChanges:activateDuePaydayChanges,cancelPendingPaydayChange:cancelPendingPaydayChange,rangeForDate:rangeForDate,rangesForMonth:rangesForMonth,runSelfTests:runSelfTests,calcExitSettlement:finalSettlement,recordExitSettlement:recordExitSettlement,currentPaydayDay:currentPaydayDay};
+  window.EGTPH_V113=api;setTimeout(boot,0);
 })();
+
 </script>
 
 <script id="egtph-v111-automatic-interaction-monitor">
