@@ -249,7 +249,7 @@ var renderAdmin = window.renderAdmin;
 </script>
 <meta charset="utf-8">
 <meta content="width=device-width,initial-scale=1.0" name="viewport">
-<title>EGTPH — سجل الأجور v100</title>
+<title>EGTPH — سجل الأجور v120</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet">
 <style>
 :root{
@@ -15918,5 +15918,190 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
   function install(){if(INSTALLED)return;INSTALLED=true;enhanceNote();wrapSave();var changed=repairAhmed();var report=verify(8);if(changed){try{if(typeof saveDB==='function')saveDB();}catch(e){}refresh();}if(!report.ok)console.warn('v119 initial integrity',report.issues);window.EGTPHDebtAdvanceIntegrity={version:VERSION,verify:verify,repairAhmedMayInstallment:repairAhmed,repairMissingV63Returns:repairMissingV63Returns};}
   [4500,7000,10000].forEach(function(ms){setTimeout(install,ms);});
 })();
+</script>
+
+<script id="egtph-v120-cycle-owned-debt-installments">
+/* v120 — فصل الدورة المحاسبية عن تاريخ الإدخال/الدفع لأقساط الدين.
+   قاعدة: القسط الآلي يملك دورة راتب صريحة؛ enteredAt و actualPaymentDate معلومات زمنية فقط.
+   لا يُنشأ دفع تلقائي عند التحميل، بل يُحجز القسط عند تسبيق/تسوية دورة مستحقة. */
+(function(){
+  'use strict';
+  var VERSION='120.0', INSTALLED=false, REPAIR='v120_cycle_owned_debt_installments';
+
+  function D(){ try{return window.DB||DB||null;}catch(e){return window.DB||null;} }
+  function A(v){return Array.isArray(v)?v:[];}
+  function O(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}
+  function S(v){return v==null?'':String(v);}
+  function N(v){var x=Number(v);return isFinite(x)?Math.round(x):0;}
+  function same(a,b){return S(a)===S(b);}
+  function iso(d){if(!(d instanceof Date)||isNaN(d))return '';return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  function dmy(d){if(!(d instanceof Date)||isNaN(d))return '';return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();}
+  function date(v){
+    if(v instanceof Date)return isNaN(v)?null:new Date(v.getFullYear(),v.getMonth(),v.getDate());
+    var s=S(v).trim(),m;if(!s)return null;
+    if((m=s.match(/^(\d{4})-(\d{2})-(\d{2})/))){var a=new Date(+m[1],+m[2]-1,+m[3]);return a.getFullYear()===+m[1]&&a.getMonth()===+m[2]-1&&a.getDate()===+m[3]?a:null;}
+    if((m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/))){var b=new Date(+m[3],+m[2]-1,+m[1]);return b.getFullYear()===+m[3]&&b.getMonth()===+m[2]-1&&b.getDate()===+m[1]?b:null;}
+    var t=Date.parse(s);if(isNaN(t))return null;var c=new Date(t);return new Date(c.getFullYear(),c.getMonth(),c.getDate());
+  }
+  function plusMonths(d,n){var y=d.getFullYear(),m=d.getMonth()+n,day=d.getDate(),last=new Date(y,m+1,0).getDate();return new Date(y,m,Math.min(day,last));}
+  function nowIso(){return new Date().toISOString();}
+  function worker(wid){return A(D()&&D().workers).find(function(w){return w&&same(w.id,wid);})||null;}
+  function dayOf(w){var x=N(w&&(w.payday||w.day));return Math.max(1,Math.min(31,x||1));}
+  function fallbackRange(w,when){
+    var v=date(when)||new Date(),day=dayOf(w),start;
+    if(v.getDate()>=Math.min(day,new Date(v.getFullYear(),v.getMonth()+1,0).getDate())) start=new Date(v.getFullYear(),v.getMonth(),Math.min(day,new Date(v.getFullYear(),v.getMonth()+1,0).getDate()));
+    else start=new Date(v.getFullYear(),v.getMonth()-1,Math.min(day,new Date(v.getFullYear(),v.getMonth(),0).getDate()));
+    var end=plusMonths(start,1);return {from:start,to:end};
+  }
+  function ownId(w,r){return S(w&&w.id)+'|'+iso(r.from)+'_'+iso(r.to);}
+  function rangeForDate(w,when){
+    var v=date(when)||new Date(),r=null,anchor=null;
+    /* v113 يملك cycleAnchorForDate الحقيقي (يدعم الدورة الانتقالية ويوم الاستحقاق الفردي).
+       لا نمرر شهر تاريخ الإدخال مباشرة إلى cycleWindow، لأن يوم 07/07 لعامل يومه 20
+       تابع لدورة 20/06 وليس دورة 20/07. */
+    try{if(typeof window.cycleAnchorForDate==='function')anchor=window.cycleAnchorForDate(w,iso(v));}catch(e){}
+    try{if(typeof window.cycleWindow==='function'&&anchor&&anchor.m!=null&&anchor.yr!=null)r=window.cycleWindow(w,anchor.m,anchor.yr);}catch(e){}
+    if(!r||!date(r.from)||!date(r.to))r=fallbackRange(w,v);
+    var out={from:date(r.from),to:date(r.to)};out.id=ownId(w,out);return out;
+  }
+  function rangeFromStart(w,start){
+    var s=date(start);if(!s)return null;
+    var r={from:s,to:plusMonths(s,1)};r.id=ownId(w,r);return r;
+  }
+  function rangeFromId(w,id){
+    var m=S(id).match(/\|(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})$/);if(!m)return null;
+    var r={from:date(m[1]),to:date(m[2])};if(!r.from||!r.to)return null;r.id=ownId(w,r);return r;
+  }
+  function nextRange(w,r){return rangeForDate(w,iso(r.to));}
+  function compareRange(a,b){return a&&b?date(a.from)-date(b.from):0;}
+  function advanceRows(wid){var d=D(),out=[];Object.keys(O(d&&d.advances&&d.advances[wid])).forEach(function(k){out=out.concat(A(d.advances[wid][k]));});return out;}
+  function advanceById(wid,id){return advanceRows(wid).find(function(a){return a&&same(a.id,id);})||null;}
+  function deds(a){return A(a&&a.deductions);}
+  function getCycleForAdvance(w,a){
+    if(!a)return null;
+    var id=S(a.accountingCycleId||a.paydayCycleId||'');var from=date(a.accountingCycleStart||a.cycleStart),to=date(a.accountingCycleEnd||a.cycleEnd);
+    if(id&&from&&to)return {from:from,to:to,id:id};
+    if(from&&to)return {from:from,to:to,id:ownId(w,{from:from,to:to})};
+    if(id){var parsed=rangeFromId(w,id);if(parsed)return parsed;}
+    return rangeForDate(w,a.realDate||a.date||a.enteredAt);
+  }
+  function intIndex(row,debtId){
+    var tag=S(row&&(_tag(row)||'')),m=tag.match(new RegExp('^'+escapeReg(S(debtId))+'_(\\d+)$'));return m?N(m[1]):0;
+  }
+  function _tag(x){return x&&((x._instTag!=null)?x._instTag:(x.instTag!=null?x.instTag:x.allocationId));}
+  function escapeReg(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+  function count(debt){var total=Math.max(0,N(debt&&debt.amount)),step=Math.max(1,N(debt&&(debt.instAmt||debt.installmentAmount))||total||1),c=Math.max(1,N(debt&&(debt.instCount||debt.installments))||Math.ceil(total/step)||1);return c;}
+  function installmentAmount(debt,index){var total=Math.max(0,N(debt&&debt.amount)),step=Math.max(1,N(debt&&(debt.instAmt||debt.installmentAmount))||total||1);return Math.max(0,Math.min(step,total-(index-1)*step));}
+  function returnsFor(wid,debtId){return A(D()&&D().debts&&D().debts[wid]).filter(function(r){return r&&r.type==='return'&&same(r.debtId,debtId);});}
+  function cycleForReturn(w,r){
+    var id=S(r&&r.accountingCycleId);if(id){var parsed=rangeFromId(w,id);if(parsed)return parsed;}
+    var from=date(r&&r.accountingCycleStart),to=date(r&&r.accountingCycleEnd);if(from&&to)return {from:from,to:to,id:id||ownId(w,{from:from,to:to})};
+    if(r&&r._advanceId){var a=advanceById(w.id,r._advanceId),ar=getCycleForAdvance(w,a);if(ar)return ar;}
+    return rangeForDate(w,r&&(r.accountingDate||r.date||r.actualPaymentDate||r.enteredAt));
+  }
+  function anchorForDebt(w,debt){
+    var start=date(debt&&debt.installmentCycleAnchorStart);if(start)return rangeFromStart(w,start);
+    var id=S(debt&&debt.installmentCycleAnchorId),via=rangeFromId(w,id);if(via)return via;
+    var r1=returnsFor(w.id,debt.id).filter(function(r){return intIndex(r,debt.id)===1;})[0];if(r1){var rc=cycleForReturn(w,r1);if(rc)return rc;}
+    return rangeForDate(w,debt&&(debt.instFirstDue||debt.firstDue||debt.date));
+  }
+  function rangeAt(w,anchor,index){var r=anchor,limit=0;while(r&&++limit<240&&index-->1)r=nextRange(w,r);return r;}
+  function ordinal(w,anchor,target){if(!anchor||!target)return 0;var r=anchor,i=1,limit=0;while(r&&++limit<240){if(S(r.id)===S(target.id)||(+r.from===+target.from&&+r.to===+target.to))return i;if(compareRange(r,target)>0)return 0;r=nextRange(w,r);i++;}return 0;}
+  function paidForIndex(wid,debt,index){return returnsFor(wid,debt.id).filter(function(r){return intIndex(r,debt.id)===index;}).reduce(function(s,r){return s+Math.max(0,N(r.amount));},0);}
+  function firstUnpaid(w,debt){var c=count(debt);for(var i=1;i<=c;i++){var need=installmentAmount(debt,i),paid=paidForIndex(w.id,debt,i);if(paid<need)return {index:i,amount:need,paid:paid,remaining:Math.max(0,need-paid)};}return null;}
+  function dueForRange(w,debt,target){
+    if(!debt||debt.type!=='debt'||!debt.inst||debt.instDisabled||!target)return null;
+    var anchor=anchorForDebt(w,debt),wanted=firstUnpaid(w,debt);if(!anchor||!wanted)return null;
+    var targetOrdinal=ordinal(w,anchor,target);if(!targetOrdinal)return null;
+    // لا تُراكم الأقساط الفائتة في دورة واحدة: أول قسط غير مسدد فقط.
+    if(wanted.index>targetOrdinal)return null;
+    return {debtId:debt.id,index:wanted.index,count:count(debt),amount:wanted.amount,paid:wanted.paid,remaining:wanted.remaining,tag:S(debt.id)+'_'+wanted.index,anchor:anchor,dueRange:rangeAt(w,anchor,wanted.index),targetRange:target};
+  }
+  function formatCycle(r){return r?dmy(r.from)+' → '+dmy(r.to):'—';}
+  function moneyText(v){try{return N(v).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' دج';}catch(e){return N(v)+' دج';}}
+  function appendTrace(base,trace){base=S(base).trim();var mark='[v120-cycle]';var i=base.indexOf(mark);if(i>=0)base=base.slice(0,i).trim();return (base?(base+' — '):'')+mark+' '+trace;}
+  function stampReturnCycle(w,r,a){
+    if(!r||!w)return false;var changed=false,cy=getCycleForAdvance(w,a)||cycleForReturn(w,r);if(!cy)return false;
+    function set(k,v){if(v!=null&&S(r[k])!==S(v)){r[k]=v;changed=true;}}
+    set('accountingCycleId',cy.id);set('accountingCycleStart',iso(cy.from));set('accountingCycleEnd',iso(cy.to));
+    if(!r.accountingDate){r.accountingDate=dmy(cy.from);changed=true;}
+    if(!r.actualPaymentDate){var ap=date((a&&a.realDate)||r.date);if(ap){r.actualPaymentDate=dmy(ap);changed=true;}}
+    if(!r.enteredAt){var et=(a&&a.enteredAt)||r._createdAt||'';if(et){r.enteredAt=et;changed=true;}}
+    if(a&&S(r._advanceId)!==S(a.id)){r._advanceId=a.id;changed=true;}
+    if(S(r._cycleOwnership)!=='payroll-cycle-v120'){r._cycleOwnership='payroll-cycle-v120';changed=true;}
+    var idx=intIndex(r,r.debtId)||0,trace='قسط دين'+(idx?(' '+idx+'/'+count((A(D()&&D().debts&&D().debts[w.id]).find(function(x){return x&&x.type==='debt'&&same(x.id,r.debtId);})||{}))):'')+' — الدورة المحاسبية: '+formatCycle(cy)+(r.actualPaymentDate?('؛ الدفع/الإدخال الفعلي: '+r.actualPaymentDate):'');
+    var note=appendTrace(r.note,trace);if(S(r.note)!==note){r.note=note;changed=true;}
+    return changed;
+  }
+  function stampAdvanceTrace(w,a,cy){
+    if(!a||!cy)return false;var debtDeds=deds(a).filter(function(z){return z&&z.type==='debt';});if(!debtDeds.length)return false;
+    var changed=false,parts=debtDeds.map(function(z){var debt=A(D()&&D().debts&&D().debts[w.id]).find(function(x){return x&&x.type==='debt'&&same(x.id,z.debtId);})||{},idx=intIndex(z,z.debtId)||0;return 'قسط دين'+(idx?(' '+idx+'/'+count(debt)):'')+': −'+moneyText(z.amount);}).filter(Boolean);
+    var trace='💳 '+parts.join(' | ')+'؛ النقد المسلّم فعلياً: '+moneyText(a.netPaid)+'؛ مسجل في خانة الدين دون حركة نقدية ثانية.';
+    var note=appendTrace(a.note,trace);if(S(a.note)!==note){a.note=note;changed=true;}
+    return changed;
+  }
+  function reconcileDebt(w,debt){
+    var changed=false,rs=returnsFor(w.id,debt.id),byAdvance={};
+    advanceRows(w.id).forEach(function(a){deds(a).filter(function(z){return z&&z.type==='debt'&&same(z.debtId,debt.id);}).forEach(function(z){
+      var tag=S(_tag(z)),r=rs.find(function(x){return x&&(S(_tag(x))===tag||(S(x.allocationId)&&S(z.allocationId)&&S(x.allocationId)===S(z.allocationId))||same(x._advanceId,a.id));});
+      if(r){if(stampReturnCycle(w,r,a))changed=true;var cy=getCycleForAdvance(w,a);if(cy){if(S(z.accountingCycleId)!==S(cy.id)){z.accountingCycleId=cy.id;changed=true;}if(S(z.accountingCycleStart)!==iso(cy.from)){z.accountingCycleStart=iso(cy.from);changed=true;}if(S(z.accountingCycleEnd)!==iso(cy.to)){z.accountingCycleEnd=iso(cy.to);changed=true;}if(S(z._cycleOwnership)!=='payroll-cycle-v120'){z._cycleOwnership='payroll-cycle-v120';changed=true;}}}
+    });if(stampAdvanceTrace(w,a,getCycleForAdvance(w,a)))changed=true;});
+    rs.forEach(function(r){if(!r.accountingCycleId){if(stampReturnCycle(w,r,null))changed=true;}});
+    var anchor=anchorForDebt(w,debt);if(anchor){if(S(debt.installmentCycleAnchorId)!==S(anchor.id)){debt.installmentCycleAnchorId=anchor.id;changed=true;}if(S(debt.installmentCycleAnchorStart)!==iso(anchor.from)){debt.installmentCycleAnchorStart=iso(anchor.from);changed=true;}}
+    if(S(debt.installmentCyclePolicy)!=='payroll-cycle-v120'){debt.installmentCyclePolicy='payroll-cycle-v120';changed=true;}
+    var next=firstUnpaid(w,debt),nextRange=next&&anchor?rangeAt(w,anchor,next.index):null;
+    var nextDue=nextRange?iso(nextRange.from):null;
+    if(S(debt.nextDue)!==S(nextDue)){debt.nextDue=nextDue;changed=true;}
+    if(S(debt.nextAccountingCycleId)!==S(nextRange&&nextRange.id||'')){debt.nextAccountingCycleId=nextRange?nextRange.id:null;changed=true;}
+    if(S(debt.nextAccountingCycleStart)!==S(nextRange&&iso(nextRange.from)||'')){debt.nextAccountingCycleStart=nextRange?iso(nextRange.from):null;changed=true;}
+    var paid=0;for(var i=1;i<=count(debt);i++){if(paidForIndex(w.id,debt,i)>=installmentAmount(debt,i))paid++;else break;}
+    if(N(debt.instPaid)!==paid){debt.instPaid=paid;changed=true;}
+    if(N(debt.instCount)!==count(debt)){debt.instCount=count(debt);changed=true;}
+    return changed;
+  }
+  function reconcileWorker(wid){var w=worker(wid),d=D(),changed=false;if(!w||!d)return false;A(d.debts&&d.debts[wid]).filter(function(x){return x&&x.type==='debt'&&x.inst;}).forEach(function(debt){if(reconcileDebt(w,debt))changed=true;});return changed;}
+  function reconcileAll(){var changed=false;A(D()&&D().workers).forEach(function(w){if(w&&reconcileWorker(w.id))changed=true;});return changed;}
+  function statusOverride(base,wid,m,yr){
+    var w=worker(wid);if(!w||!base)return base;var target;
+    try{target=rangeForDate(w,new Date(yr,m,Math.min(dayOf(w),new Date(yr,m+1,0).getDate())));}catch(e){target=rangeForDate(w,new Date());}
+    var due=0,detail=[];A(D()&&D().debts&&D().debts[wid]).filter(function(x){return x&&x.type==='debt'&&x.inst;}).forEach(function(debt){var x=dueForRange(w,debt,target);if(x&&x.remaining){due+=x.remaining;detail.push(x);}});
+    var prior=Math.max(0,N(base.totInst));base.totInst=N(due);base.totalDeductions=Math.max(0,N(base.totalDeductions)-prior+N(due));
+    var cash=Math.max(0,N(base.netSal)-Math.min(Math.max(0,N(base.netSal)),N(due)))+Math.max(0,N(base.hrsUnpaid))+Math.max(0,N(base.bonUnpaid));
+    base.finalPayout=N(cash);base.cycleCashDue=N(cash);base.salaryPaidWithInst=!!base.salaryPaid&&N(due)===0;base.v120DebtCycleDetail=detail;
+    return base;
+  }
+  function verify(wid){
+    var w=worker(wid),issues=[];if(!w)return {ok:false,issues:['العامل غير موجود']};
+    A(D()&&D().debts&&D().debts[wid]).filter(function(x){return x&&x.type==='debt'&&x.inst;}).forEach(function(debt){
+      returnsFor(wid,debt.id).forEach(function(r){if(r._advanceId&&!r.accountingCycleId)issues.push('تسديد دين مرتبط بتسبيق بلا دورة محاسبية: '+S(r.id));});
+      var anchor=anchorForDebt(w,debt),next=firstUnpaid(w,debt),expected=next&&anchor?rangeAt(w,anchor,next.index):null;
+      if(expected&&S(debt.nextDue)!==iso(expected.from))issues.push('موعد القسط التالي لا يطابق دورة الراتب: '+S(debt.id));
+    });
+    return {ok:issues.length===0,issues:issues};
+  }
+  function repairAhmed(){
+    var d=D(),w=worker(8);if(!d||!w)return false;d.settings=d.settings||{};d.settings.dataRepairWitnesses=d.settings.dataRepairWitnesses||{};
+    var rows=A(d.debts&&d.debts[8]),debt=rows.find(function(x){return x&&x.type==='debt'&&same(x.id,'1779281559360_i1mm7');});if(!debt)return false;
+    var changed=false;
+    // القسط 1 = دورة أفريل، القسط 2 = دورة ماي؛ تاريخ الإدخال/الدفع لا يغير ملكية الدورة.
+    var april=rangeFromStart(w,'2026-04-20'),may=rangeFromStart(w,'2026-05-20');
+    function put(r,cy,actual){if(!r)return;var before=JSON.stringify({id:r.accountingCycleId,s:r.accountingCycleStart,e:r.accountingCycleEnd,a:r.actualPaymentDate,entered:r.enteredAt});r.accountingCycleId=cy.id;r.accountingCycleStart=iso(cy.from);r.accountingCycleEnd=iso(cy.to);r.accountingDate=dmy(cy.from);if(actual)r.actualPaymentDate=actual;if(!r.enteredAt&&r._createdAt)r.enteredAt=r._createdAt;r._cycleOwnership='payroll-cycle-v120';if(before!==JSON.stringify({id:r.accountingCycleId,s:r.accountingCycleStart,e:r.accountingCycleEnd,a:r.actualPaymentDate,entered:r.enteredAt}))changed=true;}
+    put(rows.find(function(r){return r&&r.type==='return'&&S(_tag(r))===S(debt.id)+'_1';}),april,null);
+    put(rows.find(function(r){return r&&r.type==='return'&&S(_tag(r))===S(debt.id)+'_2';}),may,'18/06/2026');
+    debt.installmentCycleAnchorId=april.id;debt.installmentCycleAnchorStart=iso(april.from);debt.installmentCyclePolicy='payroll-cycle-v120';
+    if(!d.settings.dataRepairWitnesses[REPAIR]){d.settings.dataRepairWitnesses[REPAIR]={appliedAt:nowIso(),workerId:8,debtId:debt.id,rule:'الدورة المحاسبية مستقلة عن actualPaymentDate و enteredAt؛ القسط 3 يتبع دورة جوان.'};changed=true;}
+    return reconcileDebt(w,debt)||changed;
+  }
+  function saveIfChanged(changed){if(!changed)return;try{if(typeof window.saveDB==='function')window.saveDB();else if(typeof saveDB==='function')saveDB();}catch(e){console.warn('v120 save',e);}}
+  function refresh(){try{if(typeof window.renderSalContent==='function')window.renderSalContent();if(typeof window.renderDbtContent==='function'&&typeof S!=='undefined'&&S.dw!=null)window.renderDbtContent();if(typeof window.renderDash==='function')window.renderDash();}catch(e){}}
+  function wrap(name){var base=window[name];if(typeof base!=='function'||base.__v120CycleDebt)return;var wrapped=function(){var wid=(typeof _wid!=='undefined'?_wid:null);if(wid!=null)reconcileWorker(wid);var out=base.apply(this,arguments);setTimeout(function(){try{var changed=wid!=null?reconcileWorker(wid):reconcileAll();saveIfChanged(changed);refresh();}catch(e){console.warn('v120 '+name,e);}},0);return out;};wrapped.__v120CycleDebt=true;window[name]=wrapped;try{eval(name+'=window["'+name+'"];');}catch(e){}}
+  function wrapStatus(){var base=window.calcMonthStatus;if(typeof base!=='function'||base.__v120CycleDebt)return;var wrapped=function(wid,m,yr){return statusOverride(base.apply(this,arguments),wid,m,yr);};wrapped.__v120CycleDebt=true;window.calcMonthStatus=wrapped;try{calcMonthStatus=wrapped;}catch(e){}}
+  function wrapDue(){var base=window.installmentDueInCycle;window.installmentDueInCycle=function(debt,w,m,yr){if(w&&debt&&debt.inst){var target;try{target=rangeForDate(w,new Date(yr,m,Math.min(dayOf(w),new Date(yr,m+1,0).getDate())));}catch(e){}var x=target&&dueForRange(w,debt,target);return !!(x&&x.remaining);}return typeof base==='function'?base.apply(this,arguments):false;};window.installmentDueInCycle.__v120CycleDebt=true;}
+  function wrapNote(){var base=window.advDedNote;if(typeof base!=='function'||base.__v120CycleDebt)return;var wrapped=function(a){var txt=base.apply(this,arguments),extra=deds(a).filter(function(z){return z&&z.type==='debt'&&z.accountingCycleStart;}).map(function(z){return '💳 '+(z.note||'قسط دين')+' — دورة '+dmy(date(z.accountingCycleStart))+' → '+dmy(date(z.accountingCycleEnd));});return txt+(extra.length?' ↳ '+extra.join(' | '):'');};wrapped.__v120CycleDebt=true;window.advDedNote=wrapped;try{advDedNote=wrapped;}catch(e){}}
+  function wrapV63(){var api=window.EGTPH_V63;if(!api||typeof api.applyCycle!=='function'||api.applyCycle.__v120CycleDebt)return;var base=api.applyCycle;api.applyCycle=function(wid,m,yr,opt){reconcileWorker(wid);var out=base.apply(this,arguments);setTimeout(function(){saveIfChanged(reconcileWorker(wid));},0);return out;};api.applyCycle.__v120CycleDebt=true;}
+  function install(){var d=D();if(INSTALLED||!d||!A(d.workers).length)return;INSTALLED=true;var changed=repairAhmed()||reconcileAll();wrapDue();wrapStatus();wrapNote();wrap('saveAdv');wrap('saveDbt');wrap('autoSettleOnAdvance');wrapV63();saveIfChanged(changed);refresh();window.EGTPH_V120={version:VERSION,reconcile:function(wid){var c=wid!=null?reconcileWorker(wid):reconcileAll();saveIfChanged(c);return c;},dueForCycle:function(wid,debtId,when){var w=worker(wid),debt=A(D()&&D().debts&&D().debts[wid]).find(function(x){return x&&x.type==='debt'&&same(x.id,debtId);});return w&&debt?dueForRange(w,debt,rangeForDate(w,when||new Date())):null;},verify:verify,rangeForDate:rangeForDate,status:'cycle-owned-debt-installments'};}
+  [0,800,2500,5500,9000,13000].forEach(function(ms){setTimeout(install,ms);});
+})();
+
 </script>
 </body></html>
