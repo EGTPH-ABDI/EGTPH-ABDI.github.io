@@ -6368,10 +6368,20 @@ function initSearchPage(){
 //  نوع العملية (عادي/ترحيل/إغلاق دورة/فائض)، التاريخ
 //  المحاسبي مقابل الفعلي، وكم خُصم فعلياً في كل دورة.
 // ═══════════════════════════════════════════════════
+function _entryTimestamp(e){
+  /* وقت الإدخال الفعلي: لا نستعمل التاريخ المحاسبي ولا _updatedAt. */
+  if(!e || typeof e!=='object')return 0;
+  var raw=e.enteredAt || e.createdAt || e._createdAt || e.addedAt || e.created_at || null;
+  var ts=0;
+  if(typeof raw==='number') ts=raw;
+  else if(raw){ ts=Date.parse(raw); if(isNaN(ts))ts=0; }
+  // توافق مع السجلات القديمة: Timestamp قد يكون في بداية id أو بعد ADV_/HRS_/BON_...
+  if(!ts){ var m=String(e.id||'').match(/(?:^|_)(1\d{12,13})(?:_|$)/); if(m)ts=parseInt(m[1],10)||0; }
+  return ts>=1e12 ? ts : 0;
+}
 function _advEntryTime(e){
-  // معرّف التسبيق يبدأ بـ Date.now() → نستخرج منه وقت الإدخال الحقيقي
-  var ts=parseInt(String(e&&e.id||'').split('_')[0],10);
-  if(isNaN(ts)||ts<1e12)return null;
+  var ts=_entryTimestamp(e);
+  if(!ts)return null;
   var d=new Date(ts); if(isNaN(d.getTime()))return null;
   var p=function(x){return String(x).padStart(2,'0');};
   var h=d.getHours(), ap=h<12?'ص':'م'; h=h%12||12;
@@ -6386,7 +6396,7 @@ function _advKind(e){
   if(n.indexOf('فائض')>=0)    return{lbl:'➕ فائض للدورة الحالية',col:'var(--blue)'};
   return{lbl:'تسبيق عادي',col:'var(--gray)'};
 }
-function _advTs(e){var t=parseInt(String(e&&e.id||'').split('_')[0],10);return isNaN(t)?0:t;}
+function _advTs(e){return _entryTimestamp(e);}
 // سبب الترحيل: يُلحق بقيود «ترحيل من ...» لتوضيح لماذا رُحّل المبلغ
 function _carryWhy(note){
   if(!note||note.indexOf('ترحيل')<0)return '';
