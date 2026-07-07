@@ -2227,19 +2227,26 @@ function todayISO(){return new Date().toISOString().slice(0,10);}
 function todayStr(){const d=new Date();return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear();}
 function pad(n){return String(n).padStart(2,'0');}
 function isoToD(iso){if(!iso)return'';const p=iso.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:iso;}
-// التاريخ الفعلي للإدخال — يُستخرج من بصمة الوقت داخل المعرّف (Date.now عند التسجيل)
+// وقت الإدخال الفعلي: enteredAt أولاً، ثم تاريخ إنشاء غير قابل للتغيير، ثم طابع id القديم.
+// لا نعرض التاريخ المحاسبي أو تاريخ الدفع كأنه وقت إدخال.
 function advEntryStamp(e){
-  if(!e) return '';
-  let t=null;
-  if(e.id && typeof e.id==='string'){
-    const n=parseInt(e.id.split('_')[0],10);
-    if(!isNaN(n) && n>1000000000000) t=n; // طابع زمني بالملّي ثانية
+  if(!e || typeof e!=='object') return '';
+  var raw=e.enteredAt||e.createdAt||e._createdAt||e.addedAt||e.created_at||null;
+  var t=0;
+  if(typeof raw==='number' && isFinite(raw)) t=raw;
+  else if(raw){
+    var parsed=Date.parse(raw);
+    if(!isNaN(parsed)) t=parsed;
   }
-  if(t){
-    const d=new Date(t), z=x=>String(x).padStart(2,'0');
-    return z(d.getDate())+'/'+z(d.getMonth()+1)+'/'+d.getFullYear()+' '+z(d.getHours())+':'+z(d.getMinutes());
+  if(!t && e.id){
+    var hit=String(e.id).match(/(?:^|_)(1\d{12,13})(?:_|$)/);
+    if(hit) t=parseInt(hit[1],10)||0;
   }
-  return e.realDate||'';
+  if(!(t>=1000000000000)) return '';
+  var d=new Date(t);
+  if(isNaN(d.getTime())) return '';
+  var z=function(x){return String(x).padStart(2,'0');};
+  return z(d.getHours())+':'+z(d.getMinutes())+' '+z(d.getDate())+'/'+z(d.getMonth()+1)+'/'+d.getFullYear();
 }
 function dToISO(d){if(!d)return'';const p=d.split('/');return p.length===3?p[2]+'-'+p[1]+'-'+p[0]:d;}
 function nowStr(){const d=new Date();return d.toLocaleDateString('fr-DZ')+' '+d.toLocaleTimeString('fr-DZ',{hour:'2-digit',minute:'2-digit'});}
@@ -2537,8 +2544,12 @@ function advDedNote(e){
     else other.push('−'+fmtN(amount)+' دج خصم');
   });
   var parts=[];
-  if(debt)parts.push('قسط دين مُسدَّد من الراتب: −'+fmtN(debt)+' دج');
-  if(abs)parts.push('خصم غياب من الراتب: −'+fmtN(abs)+' دج');
+  if(debt){
+    parts.push('💳 قسط دين خُصم من هذا التسبيق: −'+fmtN(debt)+' دج — مُسجَّل في خانة الدين دون حركة نقدية ثانية');
+  }
+  if(abs){
+    parts.push('📅 غياب مرتبط فعلياً بهذا التسبيق: −'+fmtN(abs)+' دج');
+  }
   return parts.concat(other).join(' | ');
 }
 // المبلغ النقدي الحقيقي الذي سُلِّم للعامل. مبلغ amount يبقى مبلغاً محاسبياً من الراتب.
@@ -4706,7 +4717,7 @@ function renderSalContent(){
           <td style="font-size:11px">${e.date}</td>
           <td style="font-size:10px;color:var(--teal);white-space:nowrap">${advEntryStamp(e)||'—'}</td>
           <td style="color:var(--green1);font-weight:700">${fmt(e.amount)}${advDedTotal(e)>0?`<br><span style="color:var(--red);font-size:10px">صافي ${fmt(advNetPaid(e))}</span>`:''}</td>
-          <td style="color:var(--gray);font-size:11px">${e.note||'—'}${advDedNote(e)?`<br><span style="color:var(--red)">${advDedNote(e)}</span>`:''}</td>
+          <td style="color:var(--gray);font-size:11px">${e.note||(!advDedNote(e)?'—':'')}${advDedNote(e)?`<br><span style="color:var(--red)">${advDedNote(e)}</span>`:''}</td>
           <td style="white-space:nowrap">
             <button class="eb" onclick="editAdv('${w.id}','${e._bucket}','${e.id}')" title="تعديل">✏️</button>
             <button class="db" onclick="delAdv('${w.id}','${e._bucket}','${e.id}')">🗑</button>
@@ -11780,7 +11791,7 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
     var d=db();if(!d)return false;var groups=sourceDebtGroups(wid),rows=arr(d.debts&&d.debts[wid]),changed=false,seen={};
     Object.keys(groups).forEach(function(aid){var g=groups[aid],rec=rows.find(function(r){return r&&r.type==='return'&&r._v63===true&&same(r.allocationId,aid);});
       var advanceSource=(g.sources||[]).find(function(s){return s&&s.kind==='advance';});
-      if(!rec){rec={id:generate('RET63'),type:'return',amount:g.amount,date:todayDMY(),debtId:g.debtId,note:'قسط دين تلقائي — خُصم من تسبيق الراتب (لا حركة نقدية مستقلة)',by:'النظام',_v63:true,allocationId:aid,transactionId:g.transactionId,_instPayment:true,_instTag:g.instTag,_v63Sources:g.sources,_advanceId:advanceSource&&advanceSource.entryId||null,source:'salary-advance',cashEffect:0};rows.push(rec);changed=true;}
+      if(!rec){rec={id:generate('RET63'),type:'return',amount:g.amount,date:todayDMY(),enteredAt:now(),debtId:g.debtId,note:'قسط دين تلقائي — خُصم من تسبيق الراتب (لا حركة نقدية مستقلة)',by:'النظام',_v63:true,allocationId:aid,transactionId:g.transactionId,_instPayment:true,_instTag:g.instTag,_v63Sources:g.sources,_advanceId:advanceSource&&advanceSource.entryId||null,source:'salary-advance',cashEffect:0};rows.push(rec);changed=true;}
       else{var before=JSON.stringify({amount:rec.amount,debtId:rec.debtId,tag:rec._instTag,src:rec._v63Sources,adv:rec._advanceId});rec.amount=g.amount;rec.debtId=g.debtId;rec._instTag=g.instTag;rec.transactionId=g.transactionId;rec._v63Sources=g.sources;rec._advanceId=advanceSource&&advanceSource.entryId||null;rec.source='salary-advance';rec.cashEffect=0;rec.note='قسط دين تلقائي — خُصم من تسبيق الراتب (لا حركة نقدية مستقلة)';if(before!==JSON.stringify({amount:rec.amount,debtId:rec.debtId,tag:rec._instTag,src:rec._v63Sources,adv:rec._advanceId}))changed=true;}
       seen[aid]=true;
     });
@@ -11806,7 +11817,11 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
       var remain=item.remaining,parts=[],take,ded;
       // v78: الخصم التلقائي لا يكون إلا من تسبيق الراتب الذي يغلق الدورة.
       // الساعات والمكافآت لا تتغير ولا تُستعمل في تسديد الدين أو الغياب.
-      if(remain>0&&options.allowAdvance&&closingAdvance&&plan.advanceGross>=plan.baseSalary){
+      // قسط الدين المستحق يُحجز من نفس التسبيق عند إدخاله، حتى لو لم يكتمل راتب الدورة.
+      // الغياب الفوري لا يدخل هنا: هو خفض مستقل لاستحقاق الراتب ولا يجوز خصمه من النقد مرة ثانية.
+      var paymentDate=dateOf(closingAdvance&&(closingAdvance.realDate||closingAdvance.date));
+      var dueDate=dateOf(item.date);
+      if(remain>0&&options.allowAdvance&&closingAdvance&&item.type==='debt'&&(!dueDate||!paymentDate||paymentDate>=dueDate)){
         take=Math.min(remain,capacity(closingAdvance,'advance'));
         if(take){ded=attachDeduction(closingAdvance,'advance',item,take);if(ded){remain-=take;parts.push({source:'advance',entryId:closingAdvance.id,amount:take});changed=true;}}
       }
@@ -15056,7 +15071,7 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
     var amountCell=h.indexOf('#')>=0?row.cells[3]:row.cells[2];
     if(!amountCell||amountCell.querySelector('.v102-external-absence'))return;
     var div=document.createElement('div');div.className='v102-external-absence';
-    div.innerHTML='📅 غياب محسوب: −'+esc(money(x.absenceExternal))+'<br><span>عرض فقط — مبلغ التسبيق والنقد لا يتغيران.</span>';
+    div.innerHTML='📅 غياب خُصم تلقائياً من راتب الدورة: −'+esc(money(x.absenceExternal))+'<br><span>عرض فقط — لا يُسجَّل كخصم داخل التسبيق ولا ينقص النقد مرة ثانية.</span>';
     amountCell.appendChild(div);
   }
   function decorateSalary(){
