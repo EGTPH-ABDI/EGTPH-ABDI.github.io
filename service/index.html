@@ -165,7 +165,10 @@ main{max-width:680px;margin:0 auto;padding:14px 12px 0;}
 .st-soon{color:var(--soon);border-color:var(--soon);background:rgba(200,133,26,.07);}
 .st-ok{color:var(--ok);border-color:var(--ok);background:rgba(63,125,79,.06);}
 .st-none{color:var(--muted);border-color:var(--line);background:#fafafa;}
+.st-manual{color:var(--gold-dk);border-color:var(--gold);background:rgba(184,134,47,.08);}
 .item-bottom{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.condition-control{width:100%;display:flex;align-items:center;justify-content:space-between;gap:7px;flex-wrap:wrap;background:rgba(184,134,47,.07);border:1px dashed rgba(184,134,47,.55);border-radius:9px;padding:7px 8px;font-size:10.5px;color:var(--ink2);}
+.condition-control b{font-family:'Saira';color:var(--gold-dk);}.condition-control .set-btn{padding:5px 8px;font-size:10px;}
 .last-info{font-size:11px;color:var(--muted);flex:1;min-width:120px;}.last-info b{color:var(--ink);font-family:'Saira';}
 .done-btn{border:none;border-radius:10px;padding:8px 13px;font-size:11.5px;font-weight:800;background:var(--ok);color:#fff;cursor:pointer;font-family:'Cairo';}
 .set-btn{border:1px solid var(--line);border-radius:10px;padding:8px 11px;font-size:11px;font-weight:700;background:#fff;color:var(--ink2);cursor:pointer;font-family:'Cairo';}
@@ -416,7 +419,7 @@ footer{text-align:center;font-size:10px;color:var(--muted);padding:16px 12px 4px
           <div style="padding:12px">
             <div class="logrow"><label>عدد الساعات/الكيلومترات وقت الصيانة</label><input id="logReading" type="number" inputmode="numeric" min="0"></div>
             <div class="logrow"><label>التاريخ</label><input id="logDate" type="date"></div>
-            <div class="logrow"><label>واش بدّلت؟ <span id="logHint" style="color:var(--muted);font-size:12px"></span></label>
+            <div class="logrow"><label>واش بدّلت أو صنت؟ <span id="logHint" style="color:var(--muted);font-size:12px"></span></label>
               <div style="margin:4px 0"><button class="hbtn" style="width:auto;padding:4px 10px;border-radius:8px" onclick="logSelectAll(true)">✓ اختر الكل</button>
               <button class="hbtn" style="width:auto;padding:4px 10px;border-radius:8px;margin-right:6px" onclick="logSelectAll(false)">✗ مسح</button></div>
               <div id="logItems" class="logitems"></div></div>
@@ -498,14 +501,51 @@ const ENGINES={truck:'WP10.290E32 · 290 ch · Euro II',jmc:'JMC JX493ZQ4A · 68
 const TRUCK_INFO=[['Marque','SHACMAN'],['Type','Dump Truck 6×4'],['Modèle','F2000 · SX3255JM384'],['Moteur','WP10.290E32 · 290 ch · Euro II'],['Boîte','Fast 9JS135 + QH50'],['Pont AV','MAN 7.5 T'],['Pont AR','STR16 · 2×16 T'],['Pneus','12R22.5 (10+1)'],['Pression','≈ 8.0–8.3 bar (max 830 kPa)'],['Réservoir','380 L'],['Benne','5200×2300×1350 mm'],['Année','2026'],['Origine','Chine']];
 function jmcInfo(i){return [['Marque','JMC / Jiangling Motors Corporation LTD'],['Type','JMC Dump Truck 4×2 · double cabine'],['Modèle certificat','CLW5042ZXJX2'],['Modèle commercial','JMC Carrying/Light dump 4×2'],['Moteur','JX493ZQ4A · 4 cylindres diesel · 2771 cc · 68 kW / 92 HP · Euro II'],['Transmission','Boîte manuelle 5F/1R'],['VIN',i.vin||'LEFYFCC23SHN09912'],['N° moteur',i.engno||'S2005638'],['Certificat No.','CK00007123 · issue 2025-02-13'],['PI fournisseur','24MQ1118MN037 · 2024-11-18 · Qingdao Transauto'],['Couleur','White'],['Pneus certificat','6.50R15 · 10PR · 6 roues'],['Pneus PI fournisseur','6.50R16 · à vérifier sur la roue avant achat'],['Empattement','2800 mm'],['Dimensions certificat','5460×2030×2315 mm'],['Dimensions PI','6000×2100×2300 mm'],['Benne PI','2800×1800×300 mm'],['GVW','4500 kg'],['Poids à vide','2900 kg'],['Places','5'],['Source','Certificat de conformité + Proforma Invoice + sources JMC/JX493ZQ4A publiques. Les références OEM filtres restent à confirmer par VIN/ancien filtre/agent JMC.']];}
 function excInfo(i){return [['Modèle','HX220HD'],['Type','Pelle sur chenilles'],['Moteur','Cummins 6BTAA-5.9 · 110 kW'],['PIN',i.pin],['N° moteur',i.engno],['Année',i.year],['Masse',i.mass],['Équipement','Godet 60 cm + brise-roche'],['Fournisseur','Jinan Kamac']];}
-function loadInfo(i){return [['Modèle','FL936H'],['Type','Chargeur sur pneus'],['Moteur','Weichai WP6G125E22 · 92 kW'],['PIN',i.pin],['N° moteur',i.engno],['Année',i.year],['Masse',i.mass],['Charge nom.',i.charge],['Dimensions',i.dim],['Fournisseur','Jinan Kamac']];}
+function loadInfo(i,mc){const model=lovolLoaderVariant(mc)==='FL936F'?'FL936F':'FL936H';return [['Modèle',model],['Type','Chargeur sur pneus'],['Moteur',(mc&&mc.eng)||'Weichai WP6G125E22 · 92 kW'],['PIN',i.pin],['N° moteur',i.engno],['Année',i.year],['Masse',i.mass],['Charge nom.',i.charge],['Dimensions',i.dim],['Fournisseur','Jinan Kamac']];}
 function jcbInfo(i){return [['Marque','JCB'],['Type','Backhoe Loader'],['Modèle','3CX Sitemaster'],['N° série',i.serial],['Moteur','JCB Dieselmax 68 kW · Tier 3'],['Homologation','96R-010456'],['Année',i.year],['Masse',i.mass],['Réservoir','160 L'],['Hydraulique','130 L'],['Transmission','Syncro Shuttle (manuelle)'],['Frigorigène','R134a · 1.35 kg'],['Origine','Royaume-Uni']];}
 
 /* maintenance */
 const EXC_ITEMS=[{id:'eng',engineOil:true,ar:'زيت المحرك + الفلتر',fr:'Huile moteur + filtre',spec:'15W-40 CI-4'},{id:'fuelf',interval:500,ar:'فلتر الوقود',fr:'Filtre gasoil'},{id:'pref',interval:500,ar:'الفلتر الأوّلي للوقود (préfiltre)',fr:'Préfiltre'},{id:'airf',interval:500,ar:'فلتر الهواء (تنظيف · تبديل 2000سا)',fr:'Filtre à air'},{id:'swing',interval:1000,ar:'زيت réducteur الدوران',fr:'Huile réd. rotation',spec:'85W-140 GL-5',cap:'6.2 L'},{id:'travel',interval:1000,ar:'زيت réducteurs الزحف ×2',fr:'Huile réd. translation',spec:'85W-140 GL-5',cap:'4.5 L ×2'},{id:'hydf',interval:1000,ar:'فلاتر الهيدروليك (رجوع·تفريغ·pilote)',fr:'Filtres hydr.'},{id:'breath',interval:1000,ar:'عنصر تنفّس الخزّان (breather)',fr:'Reniflard'},{id:'swgrease',interval:1000,ar:'شحم تروس الدوران',fr:'Graisse couronne',spec:'NLGI 2',cap:'7.9 kg'},{id:'hydoil',interval:2000,ar:'الزيت الهيدروليكي (الأصلي طويل العمر: 5000سا)',fr:'Huile hydraulique',spec:'VG 46/68',cap:'165 L'},{id:'coolant',interval:2000,ar:'السائل المبرّد',fr:'Refroidissement',cap:'31 L'},{id:'strainer',interval:2000,ar:'crépine الشفط',fr:'Crépine aspiration'}];
 const TRK_ITEMS=[{id:'eng',engineOil:true,ar:'زيت المحرك + الفلتر',fr:'Huile moteur + filtre',spec:'CI-4 5W-40'},{id:'fuelf',interval:10000,ar:'فلتر الوقود (×2)',fr:'Filtre gasoil',cap:'×2'},{id:'gearbox',interval:50000,ar:'زيت boîte (9JS135)',fr:'Huile boîte',spec:'85W-90 GL-4/5',cap:'12–15 L'},{id:'axles',interval:50000,ar:'زيت الجسور AV+AR',fr:'Huile ponts',spec:'85W-90 GL-5',cap:'8–16 L'},{id:'airsec',interval:30000,ar:'filtre à air sécurité',fr:'Filtre à air séc.',cap:'voyant'},{id:'coolant',interval:100000,ar:'السائل المبرّد',fr:'Refroidissement',spec:'≈24 mois',cap:'~40 L'}];
 const JMC_ITEMS=[{id:'eng',engineOil:true,ar:'زيت المحرك + فلتر الزيت',fr:'Huile moteur + filtre',spec:'15W-40 Diesel · API CF-4/CH-4/CI-4',cap:'≈ 6–7 L: تحقق بالعصا والدفتر'},{id:'oilf',interval:5000,ar:'فلتر زيت المحرك',fr:'Filtre à huile moteur',cap:'بدّل مع الزيت كل 5,000 كم في الخدمة الشاقة'},{id:'fuelf',interval:10000,ar:'فلتر الوقود الرئيسي',fr:'Filtre gasoil principal',cap:'10,000 كم، والوقود السيئ: أبكر'},{id:'pref',interval:5000,ar:'تفريغ ماء فاصل الوقود / préfiltre',fr:'Purge séparateur eau-gasoil',cap:'كل خدمة وافحص يومياً عند الشك في الوقود'},{id:'airf',interval:10000,ar:'فلتر الهواء',fr:'Filtre à air',cap:'الغبار/الورشات: تنظيف دوري وتبديل أبكر'},{id:'gearbox',interval:40000,ar:'زيت علبة السرعة اليدوية 5F/1R',fr:'Huile boîte manuelle 5F/1R',spec:'75W-90 أو 80W-90 · GL-4 أساساً'},{id:'rearaxle',interval:40000,ar:'زيت الجسر الخلفي',fr:'Huile pont arrière',spec:'80W-90 / 85W-90 · API GL-5'},{id:'steering',interval:40000,ar:'زيت الدركسيون/المقود',fr:'Direction assistée',spec:'ATF Dexron II/III أو حسب غطاء الخزان'},{id:'brakefluid',interval:24,months:true,ar:'سائل الفرامل',fr:'Liquide de frein',spec:'DOT4 / HZY4',cap:'كل سنتين أو عند تغير اللون'},{id:'clutchfluid',interval:24,months:true,ar:'سائل الكلاتش إن كان هيدروليكي',fr:'Liquide embrayage',spec:'DOT4 / HZY4',cap:'كل سنتين'},{id:'coolant',interval:24,months:true,ar:'السائل المبرّد',fr:'Liquide refroidissement',spec:'Glycol 50/50 OAT/HOAT',cap:'كل سنتين أو حسب لون/حالة السائل'},{id:'belts',interval:20000,ar:'فحص السيور والخراطيم',fr:'Courroies & durites',cap:'فحص دوري وتبديل عند التشقق'},{id:'grease',interval:5000,ar:'تشحيم المفاصل والشاسيه والكرودان',fr:'Graissage châssis/croisillons',cap:'كل 5,000 كم أو بعد الغسل/الوحل'}];
-const LOAD_ITEMS=[{id:'eng',engineOil:true,ar:'زيت المحرك + الفلتر',fr:'Huile moteur + filtre',spec:'CF-4/CH-4 15W-40',cap:'20 L (رسمي)'},{id:'transoil',interval:1000,ar:'زيت ناقل الحركة (تبديل)',fr:'Huile boîte/transmission',spec:'8# / ATF',cap:'38 L (رسمي)'},{id:'lpfilter',interval:1000,ar:'فلتر الضغط المنخفض',fr:'Filtre basse pression'},{id:'hydret',interval:1000,ar:'فلتر رجوع الهيدروليك',fr:'Filtre retour hydr.'},{id:'axles',interval:700,ar:'زيت الجسور AV+AR',fr:'Huile ponts',spec:'85W-90 GL-5 (ZF: +LS)',cap:'12 L ×2 (رسمي)'},{id:'airdryer',interval:700,ar:'علبة تجفيف الهواء',fr:"Sécheur d'air"},{id:'pilotf',interval:700,ar:'الفلتر التمهيدي (pilote)',fr:'Filtre pilote'},{id:'brakefluid',interval:700,ar:'سائل الفرامل',fr:'Liquide de frein',spec:'HZY4 synth.'},{id:'antifreeze',interval:2000,ar:'السائل المبرّد',fr:'Antigel',spec:'Glycol 50/50',cap:'غير مدوّنة بالدفتر — قِسها عند التبديل'},{id:'hydoil',interval:2500,ar:'الزيت الهيدروليكي (تبديل كامل)',fr:'Huile hydraulique',spec:'ISO VG 46',cap:'110 L (رسمي)'}];
+/* Lovol FL936H — programme officiel du manuel fourni.
+   Les filtres carburant du moteur ne reçoivent PAS de périodicité ici: le manuel Lovol renvoie au manuel moteur.
+   Le filtre à air est conditionnel (voyant + 6 nettoyages), jamais une échéance d'heures inventée. */
+const LOAD_H_ITEMS=[
+  {id:'eng',engineOil:true,ar:'زيت المحرك + الفلتر',fr:'Huile moteur + filtre',spec:'CF-4/CH-4 15W-40',cap:'20 L (رسمي) · دوريته من دليل Weichai'},
+  {id:'fuelf',manualOnly:true,ar:'مصفاة الكازوال الرئيسية (عنصر ×2)',fr:'Filtre gasoil principal (éléments ×2)',cap:'OEM 13020488 ×2 · بدون دورية في دليل Lovol؛ اتبع دليل محرك Weichai/حالة الوقود'},
+  {id:'pref',manualOnly:true,ar:'المصفاة الأولية للكازوال / فاصل الماء',fr:'Préfiltre gasoil / séparateur d’eau',cap:'OEM 13022658 · فرّغ الماء يومياً؛ الاستبدال حسب دليل المحرك/الحالة'},
+  {id:'airf',conditionOnly:'airFilter',ar:'فلتر الهواء الخارجي + الداخلي',fr:'Filtre à air extérieur + sécurité',cap:'تنظيف ≤700 kPa؛ بدّل الزوج عند بقاء مؤشر الانسداد أو بعد 6 تنظيفات'},
+  {id:'transoil',milestones:[150,700,1500],tolerances:[50,100,100],repeatEvery:1000,plan:'150 ±50 h، ثم 700 ±100 h، ثم 1500 ±100 h وبعدها كل 1000 h',ar:'زيت ناقل الحركة (تبديل)',fr:'Huile boîte/transmission',spec:'8# / ATF',cap:'38 L (رسمي)'},
+  {id:'lpfilter',milestones:[150,700,1500],tolerances:[50,100,100],repeatEvery:1000,plan:'150 ±50 h، ثم 700 ±100 h، ثم 1500 ±100 h وبعدها كل 1000 h',ar:'فلتر الضغط المنخفض',fr:'Filtre basse pression'},
+  {id:'hydret',milestones:[150,700,1500],tolerances:[50,100,100],repeatEvery:1000,plan:'150 ±50 h، ثم 700 ±100 h، ثم 1500 ±100 h وبعدها كل 1000 h',ar:'فلتر رجوع الهيدروليك',fr:'Filtre retour hydraulique'},
+  {id:'fueltank',milestones:[700,1500],tolerances:[100,100],repeatEvery:1000,plan:'700 ±100 h، ثم 1500 ±100 h وبعدها كل 1000 h',ar:'تنظيف خزان الوقود',fr:'Nettoyage réservoir carburant'},
+  {id:'axles',milestones:[700,1500],tolerances:[100,100],repeatEvery:1000,plan:'700 ±100 h، ثم 1500 ±100 h وبعدها كل 1000 h',ar:'زيت الجسور AV+AR',fr:'Huile ponts',spec:'85W-90 GL-5 (ZF: +LS)',cap:'12 L ×2 (رسمي)'},
+  {id:'airdryer',milestones:[700,1500],tolerances:[100,100],repeatEvery:1000,plan:'700 ±100 h، ثم 1500 ±100 h وبعدها كل 1000 h',ar:'علبة تجفيف الهواء',fr:"Sécheur d'air"},
+  {id:'pilotf',milestones:[700,1500],tolerances:[100,100],repeatEvery:1000,plan:'700 ±100 h، ثم 1500 ±100 h وبعدها كل 1000 h',ar:'الفلتر التمهيدي (pilote)',fr:'Filtre pilote'},
+  {id:'brakefluid',milestones:[700,1500],tolerances:[100,100],repeatEvery:1000,plan:'700 ±100 h، ثم 1500 ±100 h وبعدها كل 1000 h',ar:'سائل الفرامل',fr:'Liquide de frein',spec:'HZY4 synth.'},
+  {id:'antifreeze',milestones:[2000],tolerances:[100],repeatEvery:2000,plan:'كل 2000 ±100 h',ar:'السائل المبرّد',fr:'Antigel',spec:'Glycol 50/50',cap:'السعة غير مذكورة في الصفحات المرفوعة؛ قِسها عند التبديل'},
+  {id:'hydoil',milestones:[2500,3500],tolerances:[100,100],repeatEvery:1000,plan:'2500 ±100 h، ثم 3500 ±100 h وبعدها كل 1000 h',ar:'الزيت الهيدروليكي (تبديل كامل)',fr:'Huile hydraulique',spec:'L-HM 46 / L-HV 46',cap:'110 L (رسمي)'}
+];
+
+/* FL936F 2014: séparé volontairement. Ces lignes servent au registre et aux achats,
+   mais aucune périodicité automatique n'est héritée du manuel FL936H tant que le manuel/Serial F n'est pas fourni. */
+const LOAD_F_ITEMS=[
+  {id:'eng',manualOnly:true,ar:'زيت المحرك + الفلتر',fr:'Huile moteur + filtre',spec:'تأكيد بدليل المحرك/Serial',cap:'لا دورية آلية قبل دليل FL936F/المحرك'},
+  {id:'fuelf',manualOnly:true,ar:'مصفاة الكازوال الرئيسية',fr:'Filtre gasoil principal',cap:'رقم ودورية وفق Serial/الفلتر القديم'},
+  {id:'pref',manualOnly:true,ar:'المصفاة الأولية / فاصل الماء',fr:'Préfiltre / séparateur eau',cap:'رقم ودورية وفق Serial/الفلتر القديم'},
+  {id:'airf',manualOnly:true,ar:'فلتر الهواء',fr:'Filtre à air',cap:'الاستبدال حسب دليل FL936F أو مؤشر الانسداد'},
+  {id:'transoil',manualOnly:true,ar:'زيت ناقل الحركة',fr:'Huile transmission',cap:'لا تُنسخ دورية FL936H'},
+  {id:'lpfilter',manualOnly:true,ar:'فلتر الضغط المنخفض',fr:'Filtre basse pression',cap:'FL936F 2014: OEM 9D650-31A030200A0 — أكّد بالقطعة القديمة'},
+  {id:'hydret',manualOnly:true,ar:'فلتر رجوع الهيدروليك',fr:'Filtre retour hydraulique'},
+  {id:'fueltank',manualOnly:true,ar:'تنظيف خزان الوقود',fr:'Nettoyage réservoir carburant'},
+  {id:'axles',manualOnly:true,ar:'زيت الجسور',fr:'Huile ponts'},
+  {id:'airdryer',manualOnly:true,ar:'علبة تجفيف الهواء',fr:"Sécheur d'air"},
+  {id:'pilotf',manualOnly:true,ar:'الفلتر التمهيدي (pilote)',fr:'Filtre pilote'},
+  {id:'brakefluid',manualOnly:true,ar:'سائل الفرامل',fr:'Liquide de frein'},
+  {id:'antifreeze',manualOnly:true,ar:'السائل المبرّد',fr:'Antigel'},
+  {id:'hydoil',manualOnly:true,ar:'الزيت الهيدروليكي',fr:'Huile hydraulique'}
+];
 const JCB_ITEMS=[{id:'eng',engineOil:true,ar:'زيت المحرك + الفلتر',fr:'Huile moteur + filtre',spec:'CH-4/SJ 15W-40'},{id:'fuelf',interval:500,ar:'فلتر الوقود',fr:'Filtre carburant'},{id:'fuelfm',interval:1000,ar:'فلتر وقود المحرك',fr:'Filtre carb. moteur'},{id:'airfo',interval:1000,ar:'فلتر الهواء (خارجي)',fr:'Filtre à air ext.',cap:'غبار: أبكر'},{id:'airfi',interval:2000,ar:'فلتر الهواء (داخلي)',fr:'Filtre à air int.'},{id:'hydf',interval:500,ar:'فلتر الهيدروليك',fr:'Filtre hydr.'},{id:'transf',interval:500,ar:'فلتر ناقل الحركة',fr:'Filtre transmission'},{id:'transoil',interval:1000,ar:'زيت ناقل الحركة',fr:'Huile transmission',spec:'JCB EP / SAE30',cap:'≈15 L'},{id:'axlef',interval:1000,ar:'زيت الجسر الأمامي',fr:'Huile pont AV',spec:'HP90/HP+',cap:'13 L'},{id:'axler',interval:1000,ar:'زيت الجسر الخلفي',fr:'Huile pont AR',spec:'HP+/HP90',cap:'16.5–21 L*'},{id:'hubs',interval:1000,ar:'زيت المحاور ×2',fr:'Huile moyeux',spec:'HP90',cap:'1.9 L ×2'},{id:'hydoil',interval:2000,ar:'الزيت الهيدروليكي',fr:'Huile hydraulique',spec:'HP46/HP32',cap:'130 L'},{id:'coolant',interval:2000,ar:'السائل المبرّد',fr:'Refroidissement',spec:'JCB HP 50/50',cap:'17.5 L'},{id:'fead',interval:6000,ar:'سير FEAD + injecteurs',fr:'Courroie/injecteurs'}];
 
 /* oils: [ar, fr, ref/spec, suggestions] */
@@ -610,7 +650,19 @@ function baseFiltersFor(mc){if(mc.filters)return mc.filters; return mc.type==='t
 const EXC_REM=[["يومياً (10سا): فحص المستويات (محرك/هيدروليك/مبرّد)، تفريغ ماء فاصل الوقود، فحص السير والتسريبات", "Niveaux, purge eau, courroie"], ["كل 250سا: تشحيم محاور الملحقات (11 نقطة) وشحم محمل الدوران · فحص البطارية · تنظيف فلتر المكيّف", "250h: axes, palier rotation, batterie"], ["كل 500سا: تنظيف عنصر فلتر الهواء الأساسي · تنظيف المشعّ والمبرّدات", "500h: filtre à air, radiateurs"], ["كل 1000سا: شحم ترس الدوران والترس الصغير (7.9 كغ)", "1000h: couronne & pignon"], ["كل 2000سا: تنظيف مصفاة الشفط · فحص وتشحيم ذراع RCV · فحص وإعادة شدّ الخراطيم والمرابط", "2000h: crépine, RCV, flexibles"]];
 const TRK_REM=[['يومياً: مستويات، ضغط العجلات (≈8.3 bar)، تفريغ ماء خزان الهواء، الأضواء','Niveaux, pression pneus, purge air'],['الورشة: تشحيم 1×/أسبوع','Graissage 1×/sem'],['دورياً: jeu soupapes 0.3/0.4 مم، injecteurs 225 bar','Soupapes & injecteurs'],['اقتراح زيت المحرك: 15W-40 CI-4 (الرسمي 5W-40)','15W-40 pour la chaleur']];
 const JMC_REM=[['يومياً: زيت المحرك، مستوى المبرّد، التسربات، الأضواء، ضغط الإطارات، فرامل اليد، صوت المحرك','Daily checks'],['كل 5,000 كم: زيت المحرك + فلتر الزيت + تشحيم الشاسيه/الكرودان + فحص عام','Service 5,000 km'],['كل 10,000 كم: فلتر الوقود + فلتر الهواء حسب الغبار + فحص السيور والفرامل','Filters'],['كل 40,000 كم: زيت علبة السرعة اليدوية + زيت الجسر الخلفي + زيت الدركسيون حسب الحالة','Driveline oils'],['كل سنتين: DOT4/HZY4 للفرامل والكلتش + المبرّد 50/50','24 months'],['مصادر داخلية: شهادة المطابقة CK00007123، PI 24MQ1118MN037، مصادر JMC/JX493ZQ4A عامة. OEM النهائي يؤكد بالـVIN/الفلتر القديم.','Source note']];
-const LOAD_REM=[['يومياً (10سا): مستويات (محرك/هيدروليك/فرامل/مبرّد)، تسربات، ضغط العجلات (AV 0.30-0.32 · AR 0.28-0.30 MPa)، تفريغ ماء خزان الهواء، شحم مفاصل القفة','Niveaux, pression pneus, purge air, graissage'],['أسبوعياً (50سا): شدّ براغي عمود الإدارة، تفقّد الفرامل، شحم مفاصل الهيكل والجسر الخلفي، تنظيف breather علبة السرعة والجسر','Boulons cardan, freins, graissage, breathers'],['عزم براغي العجلات 500-585 N·m · ممنوع خلط ماركات المبرّد · ممنوع ماء الحنفية','Couple roues 500-585 N·m']];
+const LOAD_H_REM=[
+  ['يومياً (10سا): مستويات (محرك/هيدروليك/فرامل/مبرّد)، تسربات، ضغط العجلات (AV 0.30-0.32 · AR 0.28-0.30 MPa)، تفريغ ماء خزان الهواء وفاصل ماء الكازوال، شحم مفاصل القفة','Niveaux, pression pneus, purge air/eau, graissage'],
+  ['أسبوعياً (50سا): شدّ براغي عمود الإدارة، تفقّد الفرامل، شحم مفاصل الهيكل والجسر الخلفي، تنظيف breather علبة السرعة والجسر','Boulons cardan, freins, graissage, breathers'],
+  ['150 ±50سا: زيت ناقل الحركة + فلتر الضغط المنخفض + فلتر رجوع الهيدروليك (فترة التليين)','150 ±50 h: huile transmission + filtres basse pression/retour'],
+  ['700 ±100سا: كرّر خدمة 150سا + نظّف خزان الوقود + بدّل مجفف الهواء والفلتر pilote وزيت الجسور وسائل الفرامل','700 ±100 h: reprise 150 h + réservoir, sécheur, pilote, ponts, frein'],
+  ['كل 2000 ±100سا: المبرّد · 2500 ±100سا: زيت هيدروليك · فلتر الهواء: مؤشر الانسداد أو 6 تنظيفات فقط','Antigel 2000 h · hydraulique 2500 h · air: voyant ou 6 nettoyages'],
+  ['عزم براغي العجلات 500-585 N·m · ممنوع خلط ماركات المبرّد · ممنوع ماء الحنفية','Couple roues 500-585 N·m']
+];
+const LOAD_F_REM=[
+  ['FL936F 2014: هذه الآلة منفصلة عن FL936H. التسجيل متاح، لكن لا توجد أي دورية تلقائية قبل توفير دليل FL936F أو رقم Serial/دليل المحرك','FL936F: suivi manuel uniquement jusqu’au manuel/Serial'],
+  ['لا تنسخ مواعيد 150/700/1500/2500 ساعة من FL936H إلى FL936F','Ne pas copier les échéances FL936H vers FL936F'],
+  ['يومياً: مستويات، تسربات، ضغط العجلات، فرامل، تفريغ ماء فاصل الوقود عند وجوده','Contrôles quotidiens de sécurité']
+];
 const JCB_REM=[['يومياً (10سا): مستويات (محرك/هيدروليك/ناقل/مبرّد)، تسربات، ضغط العجلات، شحم نقاط القفة والذراع','Niveaux, fuites, graissage'],['أسبوعياً (50سا): تنظيف فاصل الماء، شحم المحاور والمفاصل','Séparateur d\'eau, graissage'],['الخدمة الأولى 100سا عند وكيل JCB المعتمد','1ère révision 100h (concessionnaire)'],['كل 2000سا: jeu des soupapes، crépines، bouchon réservoir hydr.','Soupapes, crépines'],['كل 6000سا: سير FEAD، injecteurs، أنابيب الوقود ع.ض.','Courroie FEAD, injecteurs'],['غبار/حرّ: قلّل الدوريات (زيت المحرك 250سا)','Conditions sévères']];
 
 const KEY='egtph_fleet_v3';
@@ -736,7 +788,8 @@ const FLEET_TEMPLATES={
   mercedes_atego:{cat:'truck',label:'Mercedes Atego',type:'truck2',unit:'km',eng:'Mercedes OM حسب النسخة',engine:'Mercedes diesel',engInt:15000,items:'lightTruck',sourceLevel:'vin_required',note:'القطع تختلف حسب VIN/Code moteur.'},
   volvo_fmx:{cat:'truck',label:'Volvo FMX / FH',type:'truck2',unit:'km',eng:'Volvo D11/D13 حسب النسخة',engine:'Volvo diesel',engInt:20000,items:'lightTruck',sourceLevel:'vin_required',note:'الشاحنات الثقيلة تحتاج VIN أو رقم الشاسيه.'},
   hyundai_hx220:{cat:'machine',label:'Hyundai HX220HD',type:'exc',unit:'h',eng:ENGINES.exc,engine:'Cummins 6BTAA-5.9',engInt:250,sourceLevel:'official',note:'قالب موجود مع فلاتر وزيوت مفصلة.'},
-  foton_fl936:{cat:'machine',label:'Foton Lovol FL936H / FL936F',type:'loader',unit:'h',eng:ENGINES.loader,engine:'Weichai WP6G125E22',engInt:250,sourceLevel:'official',note:'قالب موجود مع فلاتر وزيوت مفصلة.'},
+  foton_fl936h:{cat:'machine',label:'Foton Lovol FL936H',type:'loader',unit:'h',eng:ENGINES.loader,engine:'Weichai WP6G125E22',engInt:250,sourceLevel:'official',note:'جدول الصيانة الرسمي من دليل Lovol المرفوع: 150/700/1500/2500 ساعة، وفلاتر المحرك/الهواء حسب الدليل والحالة.'},
+  foton_fl936f:{cat:'machine',label:'Foton Lovol FL936F (suivi séparé)',type:'loader',unit:'h',eng:ENGINES.loader,engine:'Weichai WP6 — à confirmer',engInt:250,sourceLevel:'vin_required',note:'FL936F منفصل: التسجيل والسجل متاحان، لكن لا تُنشأ دوريات تلقائية ولا تُنسخ مواعيد FL936H قبل دليل FL936F/Serial.'},
   jcb_3cx:{cat:'machine',label:'JCB 3CX',type:'jcb',unit:'h',eng:ENGINES.jcb,engine:'JCB Dieselmax',engInt:500,sourceLevel:'official',note:'قالب موجود مع قطع JCB التي عندك وفلاتر مهمة.'},
   cat_320:{cat:'machine',label:'Caterpillar 320 / 323',type:'exc2',unit:'h',eng:'CAT C4.4/C7.1 حسب السيريال',engine:'CAT',engInt:250,items:'machine',sourceLevel:'vin_required',note:'CAT يعتمد على Serial Number في Parts.Cat لتأكيد القطع.'},
   komatsu_pc200:{cat:'machine',label:'Komatsu PC200 / PC210',type:'exc2',unit:'h',eng:'Komatsu SAA6D107 أو حسب النسخة',engine:'Komatsu',engInt:250,items:'machine',sourceLevel:'vin_required',note:'قالب وقائي؛ OEM بالرقم التسلسلي.'},
@@ -785,7 +838,13 @@ function populateAddLibrary(catValue){
   if(cat){ cat.innerHTML=FLEET_CATS.map(c=>'<option value="'+c[0]+'">'+c[1]+'</option>').join(''); if(catValue)cat.value=catValue; }
   setAddCat(cat&&cat.value?cat.value:'truck');
 }
-function itemsFor(mc){if(mc.items)return mc.items; if(mc.templateKey){const t=FLEET_TEMPLATES[mc.templateKey]; if(t&&t.items==='car')return GENERIC_CAR_ITEMS; if(t&&t.items==='lightTruck')return GENERIC_LIGHT_TRUCK_ITEMS;} return mc.type==='truck'?TRK_ITEMS:mc.type==='jmc'?JMC_ITEMS:mc.type==='loader'?LOAD_ITEMS:mc.type==='jcb'?JCB_ITEMS:(mc.type==='car'?GENERIC_CAR_ITEMS:(mc.type==='truck2'?GENERIC_LIGHT_TRUCK_ITEMS:(mc.type==='exc2'?GENERIC_MACHINE_ITEMS:EXC_ITEMS)));}
+function lovolLoaderVariant(mc){
+  const parts=[mc&&mc.templateKey,mc&&mc.name,mc&&mc.model,mc&&mc.info&&mc.info.model,mc&&mc.info&&mc.info.variant].filter(Boolean).join(' ').toUpperCase();
+  return /FL\s*936\s*F/.test(parts)?'FL936F':'FL936H';
+}
+function lovolLoaderLabel(mc){return lovolLoaderVariant(mc)==='FL936F'?'Foton Lovol FL936F':'Foton Lovol FL936H';}
+function itemsFor(mc){if(mc.items)return mc.items; if(mc.templateKey){const t=FLEET_TEMPLATES[mc.templateKey]; if(t&&t.items==='car')return GENERIC_CAR_ITEMS; if(t&&t.items==='lightTruck')return GENERIC_LIGHT_TRUCK_ITEMS;} return mc.type==='truck'?TRK_ITEMS:mc.type==='jmc'?JMC_ITEMS:mc.type==='loader'?(lovolLoaderVariant(mc)==='FL936F'?LOAD_F_ITEMS:LOAD_H_ITEMS):mc.type==='jcb'?JCB_ITEMS:(mc.type==='car'?GENERIC_CAR_ITEMS:(mc.type==='truck2'?GENERIC_LIGHT_TRUCK_ITEMS:(mc.type==='exc2'?GENERIC_MACHINE_ITEMS:EXC_ITEMS)));}
+function remindersFor(mc){if(mc.type==='loader')return lovolLoaderVariant(mc)==='FL936F'?LOAD_F_REM:LOAD_H_REM;return mc.type==='truck'?TRK_REM:mc.type==='jmc'?JMC_REM:mc.type==='jcb'?JCB_REM:EXC_REM;}
 function baseOilsFor(mc){if(mc.oils)return mc.oils; return mc.type==='truck'?TRK_OILS:mc.type==='jmc'?JMC_OILS:mc.type==='loader'?LOAD_OILS:mc.type==='jcb'?JCB_OILS:(mc.type==='car'||mc.type==='truck2'||mc.type==='exc2'?GENERIC_OILS:EXC_OILS);}
 
 /* ══════ كتالوج قابل للتعديل لكل آلة: OEM / زيوت / مشتريات ══════
@@ -846,7 +905,7 @@ function rowButton(kind,id,label,extra){return '<button class="catalog-btn '+(ex
 function renderFiltersRef(mc){
   const rows=catalogRows(mc,'filters');
   const body=rows.length?'<table class="otable"><thead><tr><th>القطعة</th><th>المرجع الأصلي (OEM)</th><th>المراجع التجارية</th><th>إجراء</th></tr></thead><tbody>'+rows.map(r=>'<tr><td class="fl">'+esc(r.ar)+'<div class="fr">'+esc(r.fr)+'</div>'+(recordSource(r)?'<div class="catalog-source">المصدر: '+esc(recordSource(r))+'</div>':'')+'</td><td class="ref ltr">'+esc(r.oem||'غير محدّد')+'</td><td class="sg">'+esc(r.cross||'—')+'</td><td><div class="catalog-actions">'+rowButton('filters',r.id,'✎ تعديل')+'</div></td></tr>').join('')+'</tbody></table>':'<div class="catalog-empty">لا مراجع مسجلة.</div>';
-  const note='<div class="note">المراجع التجارية معادلات فقط. قبل الشراء: طابق رقم OEM أو الدفتر/القطعة القديمة، والأبعاد، واللولب والحلقة. الإدخال اليدوي لا يصبح «مؤكداً» إلا عند تدوين مصدره.</div>';
+  const note='<div class="note">'+(mc.type==='loader'&&lovolLoaderVariant(mc)==='FL936F'?'⚠️ FL936F: لا تعتمد مراجع FL936H إلا إذا طابقت رقم القطعة القديمة أو EPC/Serial. ':'')+'المراجع التجارية معادلات فقط. قبل الشراء: طابق رقم OEM أو الدفتر/القطعة القديمة، والأبعاد، واللولب والحلقة. الإدخال اليدوي لا يصبح «مؤكداً» إلا عند تدوين مصدره.</div>';
   const box=document.getElementById('filtersRef');if(box)box.innerHTML='<div class="catalog-toolbar"><div class="note">يمكنك إضافة قطعة جديدة أو تعديل رقم OEM الموجود دون تغيير قاعدة بقية الآلات.</div><button class="catalog-btn primary" onclick="openCatalogModal(\'filters\',\'add\')">＋ إضافة OEM / قطعة</button></div>'+body+note;
 }
 function renderOilsRef(mc){
@@ -948,7 +1007,7 @@ function renderOilGuide(){
    +'<div class="og-b">50/50 = نصف ماء نصف antigel (يحمي حتى ~-36°م). <b>OAT (G12/G13)</b> تقنية حديثة طويلة العمر؛ <b>لا تخلط</b> أنواعاً مختلفة (G11 أزرق/أخضر مع G12 وردي) فقد يترسّب.</div></div>'
    +'<div class="note" style="margin-top:8px">📌 القاعدة الذهبية: <b>المواصفة (norme) أهم من الماركة.</b> أي زيت يطابق المواصفة في جدول الزيوت أعلاه يصلح، مهما كانت علامته التجارية.</div>';
 }
-function infoFor(mc){if(mc.profileInfo)return mc.profileInfo.concat(mc.info&&mc.info.vin?[['VIN',mc.info.vin]]:[]); return mc.type==='truck'?TRUCK_INFO:mc.type==='jmc'?jmcInfo(mc.info||{}):mc.type==='loader'?loadInfo(mc.info||{}):mc.type==='jcb'?jcbInfo(mc.info||{}):(mc.type==='car'||mc.type==='truck2'||mc.type==='exc2'?[['Type',mc.type],['Moteur',mc.engine||''],['Source',mc.sourceLevel||'VIN requis'],['Note',mc.sourceNote||'']].concat(mc.info&&mc.info.vin?[['VIN',mc.info.vin]]:[]):excInfo(mc.info||{}));}
+function infoFor(mc){if(mc.profileInfo)return mc.profileInfo.concat(mc.info&&mc.info.vin?[['VIN',mc.info.vin]]:[]); return mc.type==='truck'?TRUCK_INFO:mc.type==='jmc'?jmcInfo(mc.info||{}):mc.type==='loader'?loadInfo(mc.info||{},mc):mc.type==='jcb'?jcbInfo(mc.info||{}):(mc.type==='car'||mc.type==='truck2'||mc.type==='exc2'?[['Type',mc.type],['Moteur',mc.engine||''],['Source',mc.sourceLevel||'VIN requis'],['Note',mc.sourceNote||'']].concat(mc.info&&mc.info.vin?[['VIN',mc.info.vin]]:[]):excInfo(mc.info||{}));}
 function unit(mc){return mc.unit||(isRoadType(mc.type)?'km':'h');}
 function todayISO(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
@@ -965,8 +1024,33 @@ function workDaysBetween(fromISO,toISO){
 }
 function lastReadOf(mc,id){const done=(mc&&mc.done&&typeof mc.done==='object')?mc.done:{};const v=done[id];if(v==null)return null;return (typeof v==='object')?v.r:v;}
 function lastDateOf(mc,id){const done=(mc&&mc.done&&typeof mc.done==='object')?mc.done:{};const v=done[id];return (v!=null&&typeof v==='object'&&v.d)?v.d:null;}
-function intervalOf(mc,it){if(it.months)return (it.interval||12)*30; if(it.engineOil){if(isRoadType(mc.type))return mc.engInt||5000;if(mc.type==='jcb')return mc.engInt||500;return mc.engInt||250;}return it.interval;}
-function capLabel(mc,it){if(it.engineOil){if(mc.type==='exc')return mc.engInt===500?'20 L':'14 L';if(mc.type==='truck')return mc.engine==='WP12'?'28 L':'24 L';if(mc.type==='jmc')return '≈6–7 L زيت محرك (مرجعي؛ تحقق بالعصا)';if(mc.type==='jcb')return '12–15 L';return '20 L (رسمي)';}return it.cap||'';}
+function isManualMaintenance(it){return !!(it&&(it.manualOnly||it.conditionOnly));}
+function toleranceFor(it,due){
+  if(Array.isArray(it&&it.milestones)&&Array.isArray(it.tolerances)){
+    const idx=it.milestones.indexOf(due);
+    if(idx>=0&&Number.isFinite(+it.tolerances[idx]))return +it.tolerances[idx];
+    const last=it.tolerances[it.tolerances.length-1];if(Number.isFinite(+last))return +last;
+  }
+  return Number.isFinite(+(it&&it.tolerance))?+it.tolerance:0;
+}
+function nextMilestoneAfter(last,it){
+  const points=Array.isArray(it&&it.milestones)?it.milestones.map(Number).filter(Number.isFinite).sort((a,b)=>a-b):[];
+  if(!points.length)return null;
+  const base=last==null?-1:Number(last);
+  const direct=points.find(x=>x>base);if(direct!=null)return direct;
+  const repeat=Number(it&&it.repeatEvery);
+  if(!Number.isFinite(repeat)||repeat<=0)return null;
+  const anchor=points[points.length-1];
+  return anchor+Math.max(0,Math.ceil((base-anchor+1)/repeat))*repeat;
+}
+function scheduleLabel(mc,it){
+  if(it&&it.conditionOnly==='airFilter')return 'حسب مؤشر الانسداد أو 6 تنظيفات';
+  if(it&&it.manualOnly)return lovolLoaderVariant(mc)==='FL936F'?'يدوي — دليل FL936F/Serial مطلوب':'يدوي — دليل المحرك/الحالة';
+  if(it&&it.milestones)return it.plan||'برنامج المصنع حسب مراحل الساعات';
+  const n=intervalOf(mc,it);return Number.isFinite(n)?'كل '+fmt(n)+' '+unit(mc):'حسب الدليل';
+}
+function intervalOf(mc,it){if(isManualMaintenance(it)||Array.isArray(it&&it.milestones))return null; if(it.months)return (it.interval||12)*30; if(it.engineOil){if(isRoadType(mc.type))return mc.engInt||5000;if(mc.type==='jcb')return mc.engInt||500;return mc.engInt||250;}return it.interval;}
+function capLabel(mc,it){if(it.engineOil){if(mc.type==='exc')return mc.engInt===500?'20 L':'14 L';if(mc.type==='truck')return mc.engine==='WP12'?'28 L':'24 L';if(mc.type==='jmc')return '≈6–7 L زيت محرك (مرجعي؛ تحقق بالعصا)';if(mc.type==='jcb')return '12–15 L';return mc.type==='loader'&&lovolLoaderVariant(mc)==='FL936F'?'تأكيد بالسيريال/دليل المحرك':'20 L (رسمي)';}return it.cap||'';}
 // العدّاد المعتمد للتحذيرات: آخر قراءة فعلية مسجّلة (من الصيانة أو من رِلڤيه)
 function currentReading(mc){return mc.reading||0;}
 
@@ -1027,24 +1111,78 @@ function estReadingToday(mc){
   return{val:base+added,added,hasEst:added>0,days,rate,lastDate};
 }
 
+function airFilterCleaningEntries(mc){
+  const h=mc&&mc.conditionHistory&&typeof mc.conditionHistory==='object'?mc.conditionHistory:{};
+  return Array.isArray(h.airf)?h.airf:[];
+}
+function cleaningAfterReplacement(entry,last){
+  if(!last)return true;
+  if(entry&&entry.d&&last.d){
+    if(entry.d>last.d)return true;
+    if(entry.d<last.d)return false;
+  }
+  return Number(entry&&entry.r)>Number(last.r);
+}
+function airFilterCleanCount(mc){
+  const last=(mc&&mc.done&&mc.done.airf&&typeof mc.done.airf==='object')?mc.done.airf:null;
+  return airFilterCleaningEntries(mc).filter(e=>cleaningAfterReplacement(e,last)).length;
+}
 function statusOf(mc,it){
-  const intv=intervalOf(mc,it),last=lastReadOf(mc,it.id);
-  if(last==null)return{cls:'st-none',label:'غير مسجّل',rem:null};
-  const cur=currentReading(mc);const due=last+intv,rem=due-cur;
-  const thr=Math.max(isRoadType(mc.type)?500:30,Math.round(intv*0.1));
-  // تقدير تاريخي: خاص بالآلة (إن وُجد) > مُستنتَج من سجلّها الفعلي > عام افتراضي — مستقل تماماً عن العدّاد المُسجَّل
+  const last=lastReadOf(mc,it.id);
+  if(it&&it.conditionOnly){
+    const count=it.conditionOnly==='airFilter'?airFilterCleanCount(mc):0;
+    const replace=count>=6;
+    return {cls:'st-manual',label:replace?'بدّل الزوج':'حسب المؤشر',rem:null,due:null,urgency:null,condition:true,cleanCount:count,replace};
+  }
+  if(it&&it.manualOnly)return {cls:'st-manual',label:lovolLoaderVariant(mc)==='FL936F'?'دليل F مطلوب':'حسب الدليل',rem:null,due:null,urgency:null,manual:true};
+  const planned=Array.isArray(it&&it.milestones)?nextMilestoneAfter(last,it):null;
+  if(last==null){
+    return {cls:'st-none',label:'غير مسجّل',rem:null,due:null,planDue:planned};
+  }
+  const intv=intervalOf(mc,it);
+  const due=planned!=null?planned:(Number.isFinite(intv)?last+intv:null);
+  if(!Number.isFinite(due))return {cls:'st-none',label:'غير مسجّل',rem:null,due:null};
+  const cur=currentReading(mc);const rem=due-cur;
+  const normalThr=Math.max(isRoadType(mc.type)?500:30,Math.round((intv||0)*0.1));
+  const tolerance=toleranceFor(it,due);
+  const beforeWindow=tolerance||normalThr;
+  // تقدير تاريخي: خاص بالآلة (إن وُجد) > مُستنتج من سجلّها الفعلي > عام افتراضي — مستقل تماماً عن العدّاد المُسجَّل
   let days=null,estDate=null;
   const rate=effectiveRate(mc);
   if(rate){
     const pts=historyPoints(mc);const lastPt=pts.length?pts[pts.length-1]:{r:cur,d:todayISO()};
     const steps=(due-lastPt.r)/rate;
     estDate=addWorkdays(lastPt.d,steps);
-    days=workDaysBetween(todayISO(),estDate)-workDaysBetween(estDate,todayISO()); // موجب=باق · سالب=فائت
+    days=workDaysBetween(todayISO(),estDate)-workDaysBetween(estDate,todayISO());
   }
-  if(rem<0)return{cls:'st-late',label:'متأخّر',urgency:'late',rem,due,est:cur,days,estDate};
-  if(rem<=thr)return{cls:'st-soon',label:'في وقته',urgency:'now',rem,due,est:cur,days,estDate};
-  if(days!=null && days<=alertDaysThreshold())return{cls:'st-soon',label:'قريب',urgency:'soon',rem,due,est:cur,days,estDate};
-  return{cls:'st-ok',label:'سليم',urgency:'ok',rem,due,est:cur,days,estDate};
+  if(rem<-(tolerance||0))return {cls:'st-late',label:'متأخّر',urgency:'late',rem,due,est:cur,days,estDate,tolerance};
+  if(rem<=beforeWindow)return {cls:'st-soon',label:'في وقته',urgency:'now',rem,due,est:cur,days,estDate,tolerance};
+  if(days!=null && days<=alertDaysThreshold())return {cls:'st-soon',label:'قريب',urgency:'soon',rem,due,est:cur,days,estDate,tolerance};
+  return {cls:'st-ok',label:'سليم',urgency:'ok',rem,due,est:cur,days,estDate,tolerance};
+}
+function recordAirFilterCleaning(){
+  const mc=getActive();const it=mc&&itemsFor(mc).find(x=>x.id==='airf'&&x.conditionOnly==='airFilter');if(!mc||!it)return;
+  const current=airFilterCleanCount(mc);
+  if(current>=6){alert('تم بلوغ 6 تنظيفات منذ آخر تبديل. بدّل الفلتر الخارجي والداخلي معاً، ثم سجّل «بدّل الزوج».');return;}
+  const rv=prompt('عداد الساعات عند تنظيف فلتر الهواء الخارجي:',mc.reading||0);if(rv===null)return;
+  const r=Math.max(0,parseInt(rv,10)||0);
+  const dv=prompt('تاريخ التنظيف (سنة-شهر-يوم):',todayISO());if(dv===null)return;
+  const d=(dv&&dv.trim())?dv.trim():todayISO();
+  if(!mc.conditionHistory||typeof mc.conditionHistory!=='object')mc.conditionHistory={};
+  if(!Array.isArray(mc.conditionHistory.airf))mc.conditionHistory.airf=[];
+  mc.conditionHistory.airf.push({r,d});
+  if(r>(mc.reading||0))mc.reading=r;
+  save();renderDetail();
+}
+function editAirFilterCleaning(i){
+  const mc=getActive(),arr=airFilterCleaningEntries(mc),e=arr[i];if(!e)return;
+  const rv=prompt('عداد الساعات عند التنظيف:',e.r!=null?e.r:'');if(rv===null)return;
+  const r=Math.max(0,parseInt(rv,10)||0);const dv=prompt('تاريخ التنظيف (سنة-شهر-يوم):',e.d||todayISO());if(dv===null)return;
+  arr[i]={r,d:(dv&&dv.trim())?dv.trim():todayISO()};if(r>(mc.reading||0))mc.reading=r;save();renderDetail();
+}
+function deleteAirFilterCleaning(i){
+  const mc=getActive(),arr=airFilterCleaningEntries(mc);if(!arr[i])return;
+  if(!confirm('حذف تسجيل تنظيف فلتر الهواء؟'))return;arr.splice(i,1);save();renderDetail();
 }
 
 function toggleRateLock(kind,on){
@@ -1294,7 +1432,7 @@ function fillLogForm(){
   document.getElementById('logDate').value=todayISO();
   document.getElementById('logNote').value='';
   document.getElementById('logHint').textContent='('+u+')';
-  document.getElementById('logItems').innerHTML=itemsFor(mc).map(it=>'<label class="logitem"><input type="checkbox" value="'+it.id+'"><span class="nm">'+it.ar+'<div class="fr">'+(it.fr||'')+'</div></span></label>').join('');
+  document.getElementById('logItems').innerHTML=itemsFor(mc).map(it=>'<label class="logitem"><input type="checkbox" value="'+it.id+'"><span class="nm">'+it.ar+(it.conditionOnly==='airFilter'?' (استبدال الزوج)':'')+'<div class="fr">'+(it.fr||'')+'</div></span></label>').join('');
 }
 function goGarage(){DB.active=null;save();renderGarage();}
 
@@ -1349,7 +1487,11 @@ function renderForecast(){
     // صفوف الأصناف
     const rows=itemsFor(mc).map(it=>{
       const s=statusOf(mc,it);
-      if(s.cls==='st-none')return '<tr class="fc-na"><td>'+esc(it.ar)+'</td><td>—</td><td>غير مسجّل</td><td>—</td></tr>';
+      if(s.cls==='st-manual'){
+        const info=it.conditionOnly==='airFilter'?'المؤشر أو 6 تنظيفات · المسجل: '+airFilterCleanCount(mc)+'/6':scheduleLabel(mc,it);
+        return '<tr class="fc-na"><td>'+esc(it.ar)+'</td><td>—</td><td>'+esc(s.label)+'</td><td class="fc-when">'+esc(info)+'</td></tr>';
+      }
+      if(s.cls==='st-none')return '<tr class="fc-na"><td>'+esc(it.ar)+'</td><td>'+(s.planDue!=null?fmt(s.planDue)+' '+u:'—')+'</td><td>غير مسجّل</td><td class="fc-when">'+(s.planDue!=null?'أول مرحلة رسمية — سجّلها عند إنجازها':'—')+'</td></tr>';
       const badge='<span class="albadge '+(s.urgency==='late'?'late':s.urgency==='now'?'now':s.urgency==='soon'?'soon':'')+'" style="'+(s.urgency==='ok'?'background:#e8f5ee;color:#1a7a47':'')+'">'+s.label+'</span>';
       const when = s.estDate
         ? ((s.days!=null&&s.days<0)?('منذ ~'+Math.abs(s.days)+' يوم · '+esc(s.estDate)):('~'+(s.days!=null?s.days+' يوم · ':'')+esc(s.estDate)))
@@ -1463,7 +1605,7 @@ function renderDetail(){
   try{
   document.getElementById('garageView').style.display='none';document.getElementById('detailView').style.display='block';
   document.getElementById('hdrTitle').textContent=mc.name;document.getElementById('dName').textContent=mc.name;
-  document.getElementById('dType').textContent=mc.type==='truck'?'Shacman F2000 · شاحنة':mc.type==='jmc'?'JMC Dump Truck 4×2 · شاحنة':mc.type==='loader'?'Foton Lovol FL936 H/F · chargeur':mc.type==='jcb'?'JCB 3CX Sitemaster · tractopelle':mc.type==='car'?'سيارة / Véhicule':mc.type==='truck2'?'شاحنة مخصصة / Camion':mc.type==='exc2'?'آلة TP مخصصة':'Hyundai HX220HD · بيلة';
+  document.getElementById('dType').textContent=mc.type==='truck'?'Shacman F2000 · شاحنة':mc.type==='jmc'?'JMC Dump Truck 4×2 · شاحنة':mc.type==='loader'?(lovolLoaderLabel(mc)+' · chargeur'):mc.type==='jcb'?'JCB 3CX Sitemaster · tractopelle':mc.type==='car'?'سيارة / Véhicule':mc.type==='truck2'?'شاحنة مخصصة / Camion':mc.type==='exc2'?'آلة TP مخصصة':'Hyundai HX220HD · بيلة';
   document.getElementById('dEng').textContent=mc.eng||'';
   const u=unit(mc);
   document.getElementById('readLbl').innerHTML=(u==='km'?'العدّاد (km) · <b>Compteur kilométrique</b>':'عدّاد الساعات · <b>Compteur horaire</b>');
@@ -1473,11 +1615,11 @@ function renderDetail(){
 
   const ob=document.getElementById('optBox');ob.innerHTML='';
   if(mc.type==='exc'){const v=mc.engInt||250;ob.innerHTML='<div class="optrow"><div class="k">دورية زيت المحرك<br><span class="fr">Intervalle vidange</span></div><div class="seg"><button class="'+(v===250?'on':'')+'" onclick="setEngInt(250)">250 h</button><button class="'+(v===500?'on':'')+'" onclick="setEngInt(500)">500</button><input type="number" class="segnum'+((v!==250&&v!==500)?' on':'')+'" value="'+((v!==250&&v!==500)?v:'')+'" placeholder="أخرى" min="50" step="50" onchange="setEngIntCustom(this.value)"><span style="font-size:11px;color:var(--muted);align-self:center">h</span></div></div><div class="subnote">دفتر HX220HD: <b>-#1161 → 250 h / 14 L</b> · <b>#1162- → 500 h / 20 L</b>. اقتراح للغبار: 250 h.</div>';}
-  else if(mc.type==='loader'){const v=mc.engInt||250;ob.innerHTML='<div class="optrow"><div class="k">دورية زيت المحرك<br><span class="fr">Intervalle vidange</span></div><div class="seg"><button class="'+(v===250?'on':'')+'" onclick="setEngInt(250)">250 h</button><button class="'+(v===500?'on':'')+'" onclick="setEngInt(500)">500</button><input type="number" class="segnum'+((v!==250&&v!==500)?' on':'')+'" value="'+((v!==250&&v!==500)?v:'')+'" placeholder="أخرى" min="50" step="50" onchange="setEngIntCustom(this.value)"><span style="font-size:11px;color:var(--muted);align-self:center">h</span></div></div><div class="subnote">زيت المحرك وفق دفتر <b>Weichai WP6</b> (عادةً 250سا في الغبار). باقي المواعيد <b>رسمية من دفتر Lovol</b> — ناقل الحركة ~1000سا، هيدروليك 2500سا، مبرّد 2000سا، جسور 700سا.</div>';}
+  else if(mc.type==='loader'){const isF=lovolLoaderVariant(mc)==='FL936F';const v=mc.engInt||250;ob.innerHTML=isF?'<div class="subnote">⚠️ <b>FL936F:</b> لا تظهر دوريات آلية هنا ولا تُنسخ من FL936H. راجع دليل FL936F أو دليل المحرك/Serial ثم سجّل الصيانة يدوياً.</div>':'<div class="optrow"><div class="k">دورية زيت المحرك<br><span class="fr">Intervalle vidange — Weichai</span></div><div class="seg"><button class="'+(v===250?'on':'')+'" onclick="setEngInt(250)">250 h</button><button class="'+(v===500?'on':'')+'" onclick="setEngInt(500)">500</button><input type="number" class="segnum'+((v!==250&&v!==500)?' on':'')+'" value="'+((v!==250&&v!==500)?v:'')+'" placeholder="أخرى" min="50" step="50" onchange="setEngIntCustom(this.value)"><span style="font-size:11px;color:var(--muted);align-self:center">h</span></div></div><div class="subnote">زيت المحرك حسب دليل <b>Weichai</b>. جدول Lovol الرسمي: <b>150±50</b> للتليين، ثم <b>700±100</b>، ثم <b>1500±100</b>، بعدها مراحل 1000سا؛ الهيدروليك 2500±100 والمبرّد 2000±100.</div>';}
   else if(mc.type==='jcb'){const v=mc.engInt||250;ob.innerHTML='<div class="optrow"><div class="k">دورية زيت المحرك<br><span class="fr">Intervalle vidange</span></div><div class="seg"><button class="'+(v===250?'on':'')+'" onclick="setEngInt(250)">250 h</button><button class="'+(v===500?'on':'')+'" onclick="setEngInt(500)">500</button><input type="number" class="segnum'+((v!==250&&v!==500)?' on':'')+'" value="'+((v!==250&&v!==500)?v:'')+'" placeholder="أخرى" min="50" step="50" onchange="setEngIntCustom(this.value)"><span style="font-size:11px;color:var(--muted);align-self:center">h</span></div></div><div class="subnote">دفتر JCB: زيت المحرك + فلترو <b>500سا عادي · 250سا قاسية</b> (غبار/حرّ — حالة EGTPH، note 4). زيت ناقل الحركة والجسور 1000سا · الفلاتر 500سا · الهيدروليك والمبرّد 2000سا.</div>';}
   else{const e=mc.engine||'WP10',vi=mc.engInt||5000;ob.innerHTML='<div class="optrow"><div class="k">المحرك Weichai<br><span class="fr">Moteur</span></div><div class="seg"><button class="'+(e==='WP10'?'on':'')+'" onclick="setEngine(\'WP10\')">WP10</button><button class="'+(e==='WP12'?'on':'')+'" onclick="setEngine(\'WP12\')">WP12</button></div></div><div class="optrow"><div class="k">دورية زيت المحرك<br><span class="fr">Vidange</span></div><div class="seg"><button class="'+(vi===5000?'on':'')+'" onclick="setEngInt(5000)">5000</button><button class="'+(vi===10000?'on':'')+'" onclick="setEngInt(10000)">10000</button><input type="number" class="segnum'+((vi!==5000&&vi!==10000)?' on':'')+'" value="'+((vi!==5000&&vi!==10000)?vi:'')+'" placeholder="أخرى" min="500" step="500" onchange="setEngIntCustom(this.value)"><span style="font-size:11px;color:var(--muted);align-self:center">km</span></div></div><div class="subnote">رسمي: CI-4 5W-40 · 24 L. <b>اقتراح EGTPH</b>: 15W-40 CI-4 للحرّ. اكتب دوريتك المخصّصة في الخانة (مثلاً 8000 لـ WP10).</div>';}
 
-  const _bn={loader:'ℹ️ زيت ناقل الحركة والفلتران: أوّل تبديل عند 150سا (بعد فترة التليين) ثم كل ~1000سا — ⚠️ تقدير: تأكّد من دفتر آلتك',jcb:'🆕 آلة جديدة — من service manual الرسمي لـJCB: <b>براغي العجلات تُفحص كل ساعتين</b> حتى تثبت على العزم (680 N·m) ثم يومياً قبل العمل · <b>فلتر ناقل الحركة: أول تبديل عند 100سا</b> ثم كل 500سا، وزيته كل 1000سا'};
+  const _bn={loader:'📘 FL936H — من دليل Lovol المرفوع: خدمة تليين 150±50سا، ثم 700±100سا، ثم 1500±100سا؛ فلاتر وقود المحرك لا موعد لها في الدليل، وفلتر الهواء حسب المؤشر/6 تنظيفات.',jcb:'🆕 آلة جديدة — من service manual الرسمي لـJCB: <b>براغي العجلات تُفحص كل ساعتين</b> حتى تثبت على العزم (680 N·m) ثم يومياً قبل العمل · <b>فلتر ناقل الحركة: أول تبديل عند 100سا</b> ثم كل 500سا، وزيته كل 1000سا'};if(mc.type==='loader'&&lovolLoaderVariant(mc)==='FL936F')_bn.loader='⚠️ FL936F 2014: سجلّ يدوي منفصل؛ لا تُطبّق مواعيد FL936H ولا تظهر تنبيهات دورية قبل دليل FL936F/Serial.';
   document.getElementById('estBanner').innerHTML=_bn[mc.type]?'<div class="estbanner">'+_bn[mc.type]+'</div>':'';
 
   // identity
@@ -1485,12 +1627,23 @@ function renderDetail(){
 
   // items
   const wrap=document.getElementById('items');wrap.innerHTML='';
-  itemsFor(mc).forEach(it=>{const intv=intervalOf(mc,it),st=statusOf(mc,it),last=lastReadOf(mc,it.id),ldate=lastDateOf(mc,it.id);
+  itemsFor(mc).forEach(it=>{const st=statusOf(mc,it),last=lastReadOf(mc,it.id),ldate=lastDateOf(mc,it.id);
     let remTxt='';if(st.rem!==null)remTxt=st.rem<0?('+'+fmt(Math.abs(st.rem))):fmt(st.rem);
-    let lastInfo=(last==null)?'<span class="last-info">لم تُسجَّل · <span class="fr">Non enregistré</span></span>':'<span class="last-info">آخر: <b>'+fmt(last)+'</b> '+u+(ldate?' <span class="ltr">📅'+esc(ldate)+'</span>':'')+' · القادمة: <b>'+fmt(st.due)+'</b></span>';
-    const tags=[];const cp=capLabel(mc,it);if(it.spec)tags.push('<span class="tag">'+it.spec+'</span>');if(cp)tags.push('<span class="tag cap">'+cp+'</span>');tags.push('<span class="tag intv">كل '+fmt(intv)+' '+u+'</span>');
+    let lastInfo='';
+    if(last==null){
+      lastInfo='<span class="last-info">لم تُسجَّل · <span class="fr">Non enregistré</span>'+(st.planDue!=null?' · أول مرحلة رسمية: <b>'+fmt(st.planDue)+' '+u+'</b>':'')+'</span>';
+    }else{
+      lastInfo='<span class="last-info">آخر: <b>'+fmt(last)+'</b> '+u+(ldate?' <span class="ltr">📅'+esc(ldate)+'</span>':'')+(st.due!=null?' · القادمة: <b>'+fmt(st.due)+' '+u+'</b>':'')+'</span>';
+    }
+    const tags=[];const cp=capLabel(mc,it);if(it.spec)tags.push('<span class="tag">'+it.spec+'</span>');if(cp)tags.push('<span class="tag cap">'+cp+'</span>');tags.push('<span class="tag intv">'+esc(scheduleLabel(mc,it))+'</span>');
+    let conditionCtl='';
+    if(it.conditionOnly==='airFilter'){
+      const count=airFilterCleanCount(mc);
+      conditionCtl='<div class="condition-control"><span>تنظيفات الخارجي منذ آخر تبديل: <b>'+count+' / 6</b> · المؤشر باقٍ مضاءً = بدّل الزوج فوراً.</span><button class="set-btn" onclick="recordAirFilterCleaning()">＋ سجّل تنظيف</button></div>';
+    }
+    const doneTxt=it.conditionOnly==='airFilter'?'✓ بدّل الزوج':'✓ تمّ الآن';
     const d=document.createElement('div');d.className='item';
-    d.innerHTML='<div class="item-top"><div class="item-info"><div class="item-name">'+it.ar+'</div><div class="item-fr">'+it.fr+'</div><div class="item-spec">'+tags.join('')+'</div></div><div class="status '+st.cls+'">'+(st.rem!==null?'<span class="big ltr">'+remTxt+'</span>':'')+st.label+'</div></div><div class="item-bottom">'+lastInfo+'<button class="set-btn" onclick="setLast(\''+it.id+'\')">✎</button><button class="done-btn" onclick="markDone(\''+it.id+'\')">✓ تمّ الآن</button></div>';
+    d.innerHTML='<div class="item-top"><div class="item-info"><div class="item-name">'+it.ar+'</div><div class="item-fr">'+it.fr+'</div><div class="item-spec">'+tags.join('')+'</div></div><div class="status '+st.cls+'">'+(st.rem!==null?'<span class="big ltr">'+remTxt+'</span>':'')+st.label+'</div></div><div class="item-bottom">'+lastInfo+'<button class="set-btn" onclick="setLast(\''+it.id+'\')">✎</button><button class="done-btn" onclick="markDone(\''+it.id+'\')">'+doneTxt+'</button></div>'+conditionCtl;
     wrap.appendChild(d);});
 
   renderHistory(mc);
@@ -1511,7 +1664,7 @@ function renderDetail(){
   document.getElementById('accRef').innerHTML=buildAcc(mc);
   document.getElementById('tireRef').innerHTML=buildTires(mc);
 
-  const rem=mc.type==='truck'?TRK_REM:mc.type==='jmc'?JMC_REM:mc.type==='loader'?LOAD_REM:mc.type==='jcb'?JCB_REM:EXC_REM;
+  const rem=remindersFor(mc);
   document.getElementById('remRef').innerHTML=rem.map(r=>'<div class="check-row"><span class="dot">◆</span><div>'+r[0]+'<div class="fr">'+r[1]+'</div></div></div>').join('');
   }catch(e){
     try{flash('⚠ خطأ في عرض الآلة: '+e.message);}catch(_){}
@@ -1564,7 +1717,7 @@ function openLog(){const mc=getActive();const u=unit(mc);logEditIdx=null;
   document.getElementById('logDate').value=todayISO();
   document.getElementById('logNote').value='';
   document.getElementById('logHint').textContent='('+u+')';
-  document.getElementById('logItems').innerHTML=itemsFor(mc).map(it=>'<label class="logitem"><input type="checkbox" value="'+it.id+'"><span class="nm">'+it.ar+'<div class="fr">'+(it.fr||'')+'</div></span></label>').join('');
+  document.getElementById('logItems').innerHTML=itemsFor(mc).map(it=>'<label class="logitem"><input type="checkbox" value="'+it.id+'"><span class="nm">'+it.ar+(it.conditionOnly==='airFilter'?' (استبدال الزوج)':'')+'<div class="fr">'+(it.fr||'')+'</div></span></label>').join('');
   setDetailTab('log');window.scrollTo(0,0);}
 function editHistory(i){const mc=getActive();const e=(mc.history||[])[i];if(!e)return;const u=unit(mc);logEditIdx=i;
   document.getElementById('logTitle').textContent='✏️ تعديل سجلّ صيانة';
@@ -1573,7 +1726,7 @@ function editHistory(i){const mc=getActive();const e=(mc.history||[])[i];if(!e)r
   document.getElementById('logNote').value=e.note||'';
   document.getElementById('logHint').textContent='('+u+')';
   const sel=new Set(e.ids||[]);
-  document.getElementById('logItems').innerHTML=itemsFor(mc).map(it=>'<label class="logitem"><input type="checkbox" value="'+it.id+'"'+(sel.has(it.id)?' checked':'')+'><span class="nm">'+it.ar+'<div class="fr">'+(it.fr||'')+'</div></span></label>').join('');
+  document.getElementById('logItems').innerHTML=itemsFor(mc).map(it=>'<label class="logitem"><input type="checkbox" value="'+it.id+'"'+(sel.has(it.id)?' checked':'')+'><span class="nm">'+it.ar+(it.conditionOnly==='airFilter'?' (استبدال الزوج)':'')+'<div class="fr">'+(it.fr||'')+'</div></span></label>').join('');
   setDetailTab('log');window.scrollTo(0,0);}
 function closeLog(){logEditIdx=null;}
 function cancelLogTab(){logEditIdx=null;setDetailTab('maint');}
@@ -1603,6 +1756,7 @@ function renderHistory(mc){const el=document.getElementById('histRef');if(!el)re
   const ev=[];
   (mc.history||[]).forEach((e,i)=>ev.push({type:'maint',r:e.r,d:e.d,ids:e.ids,note:e.note,idx:i}));
   (mc.readings||[]).forEach((e,i)=>ev.push({type:'read',r:e.r,d:e.d,idx:i}));
+  airFilterCleaningEntries(mc).forEach((e,i)=>ev.push({type:'airclean',r:e.r,d:e.d,idx:i}));
   const rate=usageRate(mc);
   let head='';
   if(rate){head='<div class="hentry" style="background:rgba(10,125,58,.06);border-color:#bfe3cb"><div class="htop"><span>📊 معدّل الاستعمال</span></div><div class="hitems">≈ <b>'+fmt(Math.round(rate.perMonth))+' '+u+'</b> في الشهر ('+fmt(Math.round(rate.perDay*10)/10)+'/يوم) — محسوب من '+esc(rate.from.d)+' إلى '+esc(rate.to.d)+'</div></div>';}
@@ -1614,6 +1768,8 @@ function renderHistory(mc){const el=document.getElementById('histRef');if(!el)re
     let gap='';const older=ev[idx+1];if(older&&typeof older.r==='number'&&typeof e.r==='number'){const g=e.r-older.r;if(g>0)gap='<span class="hgap"> · +'+fmt(g)+' '+u+'</span>';}
     if(e.type==='read'){
       return '<div class="hentry" style="border-style:dashed"><div class="htop"><span>📈 قراءة عدّاد: '+fmt(e.r)+' '+u+'</span><span class="hdate">📅 '+esc(e.d||'')+' <button class="hedit" onclick="editReading('+e.idx+')">تعديل</button> <button class="hdel" onclick="deleteReading('+e.idx+')">حذف</button></span></div>'+gap+'</div>';}
+    if(e.type==='airclean'){
+      return '<div class="hentry" style="border-style:dashed;background:rgba(184,134,47,.05)"><div class="htop"><span>🧹 تنظيف فلتر الهواء الخارجي · '+fmt(e.r)+' '+u+'</span><span class="hdate">📅 '+esc(e.d||'')+' <button class="hedit" onclick="editAirFilterCleaning('+e.idx+')">تعديل</button> <button class="hdel" onclick="deleteAirFilterCleaning('+e.idx+')">حذف</button></span></div>'+gap+'</div>';}
     const names=(e.ids||[]).map(id=>labelOf[id]||id).join('، ');
     const allTxt=(e.ids&&nItems&&e.ids.length===nItems)?' (الكل)':'';
     const manualTxt=e.manual?' · ضبط يدوي':'';
@@ -1639,15 +1795,16 @@ function deleteMachine(){const mc=getActive();if(confirm('حذف "'+mc.name+'"؟
 
 function doPrint(){
   const mc=getActive();const u=unit(mc);
-  const typeName=mc.type==='truck'?'Shacman F2000':mc.type==='jmc'?'JMC Dump Truck 4×2':mc.type==='loader'?'Foton FL936':mc.type==='jcb'?'JCB 3CX Sitemaster':mc.type==='car'?'Véhicule / سيارة':mc.type==='truck2'?'Camion personnalisé / شاحنة مخصصة':mc.type==='exc2'?'Machine TP personnalisée / آلة TP مخصصة':'Hyundai HX220HD';
+  const typeName=mc.type==='truck'?'Shacman F2000':mc.type==='jmc'?'JMC Dump Truck 4×2':mc.type==='loader'?lovolLoaderLabel(mc):mc.type==='jcb'?'JCB 3CX Sitemaster':mc.type==='car'?'Véhicule / سيارة':mc.type==='truck2'?'Camion personnalisé / شاحنة مخصصة':mc.type==='exc2'?'Machine TP personnalisée / آلة TP مخصصة':'Hyundai HX220HD';
   let id=infoFor(mc).filter(r=>r[1]).map(r=>'<div class="c"><div class="k">'+esc(r[0])+'</div><div class="v">'+esc(r[1])+'</div></div>').join('');
   let oils='<table class="pa-t"><tr><th>المادة</th><th>المرجع</th><th>اقتراح</th></tr>'+oilsFor(mc).map(r=>'<tr><td>'+esc(r[0])+' / '+esc(r[1])+'</td><td>'+esc(r[2])+'</td><td>'+esc(r[3])+'</td></tr>').join('')+'</table>';
   let filt='<table class="pa-t"><tr><th>الفلتر</th><th>المرجع الأصلي OEM</th><th>المراجع التجارية</th></tr>'+filtersFor(mc).map(r=>'<tr><td>'+esc(r[0])+' / '+esc(r[1])+'</td><td>'+esc(r[2])+'</td><td>'+esc(r[3])+'</td></tr>').join('')+'</table>';
   const purchaseRows=catalogRows(mc,'purchases');
   let buys='<table class="pa-t"><tr><th>التاريخ/الفاتورة</th><th>المرجع والتعيين</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr>'+purchaseRows.map(r=>{const q=numOrNull(r.qty),p=numOrNull(r.unitPrice),total=q!=null&&p!=null?q*p:null;return '<tr><td>'+esc(r.date||'—')+(r.invoice?' · '+esc(r.invoice):'')+'</td><td>'+esc(r.ref||'—')+' · '+esc(r.designation||'—')+'</td><td>'+esc(r.qty||'—')+'</td><td>'+esc(r.unitPrice||'—')+'</td><td>'+esc(total==null?'—':fmt(total)+' دج')+'</td></tr>';}).join('')+'</table>';
-  let rows=itemsFor(mc).map(it=>{const intv=intervalOf(mc,it),s=statusOf(mc,it),last=lastReadOf(mc,it.id),ldate=lastDateOf(mc,it.id);const cp=capLabel(mc,it);
-    const stt=s.cls==='st-late'?'متأخّر':s.cls==='st-soon'?'قريب':s.cls==='st-ok'?'سليم':'—';
-    return '<tr><td>'+esc(it.ar)+'</td><td>'+esc((it.spec||'')+(cp?' · '+cp:''))+'</td><td>كل '+fmt(intv)+' '+u+'</td><td>'+(last!=null?fmt(last)+' '+u+(ldate?' ('+esc(ldate)+')':''):'—')+'</td><td>'+(s.due!=null?fmt(s.due)+' '+u:'—')+'</td><td>'+stt+(s.rem!=null?' ('+(s.rem<0?'+':'')+fmt(s.rem)+')':'')+'</td></tr>';}).join('');
+  let rows=itemsFor(mc).map(it=>{const s=statusOf(mc,it),last=lastReadOf(mc,it.id),ldate=lastDateOf(mc,it.id);const cp=capLabel(mc,it);
+    const stt=s.cls==='st-late'?'متأخّر':s.cls==='st-soon'?'قريب':s.cls==='st-ok'?'سليم':s.cls==='st-manual'?s.label:'—';
+    const due=s.due!=null?fmt(s.due)+' '+u:(s.planDue!=null?fmt(s.planDue)+' '+u:'—');
+    return '<tr><td>'+esc(it.ar)+'</td><td>'+esc((it.spec||'')+(cp?' · '+cp:''))+'</td><td>'+esc(scheduleLabel(mc,it))+'</td><td>'+(last!=null?fmt(last)+' '+u+(ldate?' ('+esc(ldate)+')':''):'—')+'</td><td>'+due+'</td><td>'+stt+(s.rem!=null?' ('+(s.rem<0?'+':'')+fmt(s.rem)+')':'')+'</td></tr>';}).join('');
   const d=new Date().toLocaleDateString('fr-FR');
   document.getElementById('printArea').innerHTML=
     '<div class="pa-head"><div class="lg">EGTPH</div><div><h2>'+esc(mc.name)+' — '+typeName+'</h2><div class="s">EGTPH ABDI YOUSSOUF ISLAM · Oued Sly, Chlef · ⚙️ '+esc(mc.eng)+' · العدّاد: '+fmt(mc.reading)+' '+u+'</div></div></div>'+
@@ -1665,7 +1822,7 @@ function closeAdd(){document.getElementById('addOverlay').classList.remove('show
 function initAddLibrary(){const cat=document.getElementById('addCat');const current=cat&&cat.value?cat.value:'truck';populateAddLibrary(current);loadFleetLibraryCloud(false).then(ok=>{if(ok)populateAddLibrary(document.getElementById('addCat')&&document.getElementById('addCat').value?document.getElementById('addCat').value:current);});}
 function setAddCat(cat){const sel=document.getElementById('addTpl');const arr=Object.entries(FLEET_TEMPLATES).filter(([k,t])=>t.cat===cat);sel.innerHTML=arr.map(([k,t])=>'<option value="'+k+'">'+t.label+'</option>').join('');pickTemplate(sel.value);}
 function pickTemplate(key){addType=key;const t=FLEET_TEMPLATES[key]||FLEET_TEMPLATES.generic_truck;document.getElementById('addReadLbl').textContent=(t.unit==='h')?'عدّاد الساعات الحالي (h)':'العدّاد الحالي (km)';document.getElementById('tplNote').innerHTML='📌 '+esc(t.note||'')+'<br><b>درجة المصدر:</b> '+(t.sourceLevel==='official'?'موثّق/رسمي':t.sourceLevel==='vin_required'?'يلزم VIN/Serial لتأكيد OEM':'احتياطي آمن');}
-function pickType(t){const map={truck:'shacman_f2000',jmc:'jmc_4x2',exc:'hyundai_hx220',loader:'foton_fl936',jcb:'jcb_3cx'};pickTemplate(map[t]||t);}
+function pickType(t){const map={truck:'shacman_f2000',jmc:'jmc_4x2',exc:'hyundai_hx220',loader:'foton_fl936h',jcb:'jcb_3cx'};pickTemplate(map[t]||t);}
 async function decodeVinOnline(){const vin=(document.getElementById('addVin').value||'').trim().toUpperCase();const box=document.getElementById('vinResult');if(!vin){box.textContent='أدخل VIN أولاً';return;}box.textContent='جار البحث عبر الإنترنت...';const localJmc=()=>{if(vin==='LEFYFCC23SHN09912'||vin.startsWith('LEF')){document.getElementById('addTpl').value='jmc_4x2';pickTemplate('jmc_4x2');const txt=(vin==='LEFYFCC23SHN09912'?'مطابقة داخلية: JMC Dump Truck 4×2 CLW5042ZXJX2 · ':'JMC / Jiangling Motors محتمل · ')+'محرك JX493ZQ4A · 2771cc · 68kW/92HP · Euro II · بيانات من الشهادة و PI. ملاحظة: NHTSA قد لا يرجع تفاصيل للشاحنات الصينية غير المباعة في أمريكا.';box.textContent=txt;if(!document.getElementById('addName').value.trim())document.getElementById('addName').value='JMC 2025';return true;}return false;};try{const url='https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/'+encodeURIComponent(vin)+'?format=json';const r=await fetch(url,{cache:'no-store'});const j=await r.json();const v=(j.Results&&j.Results[0])||{};const make=v.Make||'';const model=v.Model||'';const year=v.ModelYear||'';const engine=[v.EngineModel,v.DisplacementL?v.DisplacementL+'L':'',v.FuelTypePrimary].filter(Boolean).join(' ');let txt=[year,make,model].filter(Boolean).join(' ');if(engine)txt+=' · '+engine;if(txt.trim()){box.textContent=txt;if(!document.getElementById('addName').value.trim())document.getElementById('addName').value=txt;}else if(!localJmc()){box.textContent='لم يرجع NHTSA معلومات كافية. جرّب كتابة الماركة/الموديل أو استعمل القالب المناسب، وسيبقى VIN محفوظاً داخل البطاقة.';}}catch(e){if(!localJmc())box.textContent='تعذّر البحث: تحقق من الإنترنت. تم حفظ VIN عند الإضافة ويمكن التأكيد لاحقاً من الوكيل/الكتالوج.';}}
 function confirmAdd(){const t=FLEET_TEMPLATES[addType]||FLEET_TEMPLATES.generic_truck;const name=document.getElementById('addName').value.trim()||t.label;const vin=(document.getElementById('addVin').value||'').trim();const read=Math.max(0,+document.getElementById('addRead').value||0);const mc={id:m(),name:name,type:t.type,templateKey:addType,unit:t.unit,eng:t.eng,engine:t.engine,engInt:t.engInt||250,reading:read,done:{},info:{},sourceLevel:t.sourceLevel,sourceNote:t.note};if(vin)mc.info.vin=vin;if(addType==='jmc_4x2'){mc.info={vin:vin||'LEFYFCC23SHN09912',engno:'S2005638'};}if(t.info)mc.profileInfo=t.info;if(t.filters)mc.filters=t.filters;if(t.oils)mc.oils=t.oils;if(t.reminders)mc.reminders=t.reminders;DB.machines.push(mc);closeAdd();save();renderGarage();}
 function resetAll(){if(confirm('مسح كل البيانات وإرجاع الأسطول الأصلي؟')){try{localStorage.removeItem(KEY);}catch(e){}seed();migrate();save();renderGarage();}}
@@ -2145,7 +2302,7 @@ document.addEventListener('focusout',function(ev){
 */
 let _maintenanceAlertTimer=null;
 const MAINTENANCE_ALERT_ITEM_IDS=Array.from(new Set(
-  [EXC_ITEMS,TRK_ITEMS,JMC_ITEMS,LOAD_ITEMS,JCB_ITEMS,GENERIC_CAR_ITEMS,GENERIC_LIGHT_TRUCK_ITEMS,GENERIC_MACHINE_ITEMS]
+  [EXC_ITEMS,TRK_ITEMS,JMC_ITEMS,LOAD_H_ITEMS,LOAD_F_ITEMS,JCB_ITEMS,GENERIC_CAR_ITEMS,GENERIC_LIGHT_TRUCK_ITEMS,GENERIC_MACHINE_ITEMS]
     .filter(Array.isArray).flat().map(it=>String(it&&it.id||'')).filter(Boolean)
 ));
 
@@ -2200,7 +2357,7 @@ function maintenanceScheduleAlert(mc,it){
   };
 }
 function maintenanceMissingRecordAlert(mc){
-  const missing=itemsFor(mc).filter(it=>lastReadOf(mc,it.id)==null||!lastDateOf(mc,it.id));
+  const missing=itemsFor(mc).filter(it=>!isManualMaintenance(it)&&(lastReadOf(mc,it.id)==null||!lastDateOf(mc,it.id)));
   const open=missing.length>0;
   const examples=missing.slice(0,3).map(it=>String(it.ar||'')).filter(Boolean).join('، ');
   return {
