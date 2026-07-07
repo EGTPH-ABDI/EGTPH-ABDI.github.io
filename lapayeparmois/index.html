@@ -15569,21 +15569,21 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
 
 </script>
 
-<script id="egtph-v111-automatic-interaction-monitor">
+<script id="egtph-v115-conservative-maintenance-audit">
 /* ═══════════════════════════════════════════════════════════════
-   EGTPH v111 — مراقبة تفاعلات تلقائية + تدقيق التنفيذ الفعّال والصيانة
-   الهدف:
-   1) كشف المحركات/التنفيذات العامة التي استُبدلت فعلياً.
-   2) الحفاظ على صيانة التشغيل: أخطاء وقت التشغيل، مراجع الواجهة،
-      المسارات التي لم تُستعمل، التعريفات المرشحة للمراجعة، المؤقتات
-      ومستمعات الأحداث.
-   لا يغير DB أو الحسابات أو Firebase المالية. الرفع الصريح فقط يكتب
-   تقريراً تقنياً داخل maintenanceDiagnostics.
+   EGTPH v115 — تدقيق صيانة محافظ: المحركات الفعالة والتكرارات الحقيقية
+   قواعد التدقيق:
+   - لا يعد أعلام الحماية أو التخزين المؤقت محركات تنفيذ مستبدلة.
+   - لا يفحص السكربت نفسه عند البحث عن المصطلحات القديمة أو المؤقتات.
+   - لا يعتبر كلمة JavaScript داخل onclick مرجع واجهة مفقوداً.
+   - «مرشح مراجعة» ليس تصريح حذف؛ حذف أي طبقة يحتاج اختبار مسار كامل.
 ═══════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
-  var VERSION='111.0',startedAt=0,started=false,handlers={},pages={},errors=[],hooked=false,lastReport=null,sessionId='',interactionLog=[],interactionStats={},interactionTargets={},interactionTotal=0,interactionCoalesced=0,lastInteractionAt=0,lastInteractionByKey={},AUTO_LOG_LIMIT=1200;
+  var VERSION='115.0',AUDIT_ID='egtph-v115-conservative-maintenance-audit';
+  var startedAt=0,started=false,handlers={},pages={},errors=[],hooked=false,lastReport=null,sessionId='',interactionLog=[],interactionStats={},interactionTargets={},interactionTotal=0,interactionCoalesced=0,lastInteractionAt=0,lastInteractionByKey={},AUTO_LOG_LIMIT=1200;
   var EVENT_ATTRS=['onclick','onchange','onsubmit','oninput','onkeydown','onkeyup'];
+  var RESERVED_INLINE={catch:1,function:1,if:1,for:1,while:1,switch:1,return:1,new:1,Date:1,Math:1,JSON:1,parseInt:1,parseFloat:1,Number:1,String:1,Boolean:1,Array:1,Object:1,console:1,setTimeout:1,setInterval:1};
   function S(v){return String(v==null?'':v);}
   function A(v){return Array.isArray(v)?v:[];}
   function now(){return new Date().toISOString();}
@@ -15591,15 +15591,16 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
   function trimText(v,n){v=S(v).replace(/\s+/g,' ').trim();return v.length>(n||220)?v.slice(0,n||220)+'…':v;}
   function safe(fn,fallback){try{return fn();}catch(e){return fallback;}}
   function nodeList(q){return safe(function(){return Array.prototype.slice.call(document.querySelectorAll(q));},[]);}
-  function scriptRows(){return Array.prototype.slice.call(document.scripts||[]).filter(function(s){return s&&s.id!=='egtph-embedded-data';}).map(function(s,i){return {id:S(s.id||('script-'+i)),index:i,source:S(s.textContent||'')};});}
+  function scriptRows(options){
+    options=options||{};var includeSelf=!!options.includeSelf;
+    return Array.prototype.slice.call(document.scripts||[]).filter(function(s){return s&&s.id!=='egtph-embedded-data'&&(includeSelf||s.id!==AUDIT_ID);}).map(function(s,i){return {id:S(s.id||('script-'+i)),index:i,source:S(s.textContent||'')};});
+  }
   function lineOf(src,index){return S(src).slice(0,index).split('\n').length;}
   function rxEscape(s){return S(s).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
   function compact(s){return S(s).replace(/\/\*[\s\S]*?\*\//g,'').replace(/\/\/[^\n]*/g,'').replace(/\s+/g,'');}
   function hashText(s){var h=2166136261>>>0,x=S(s),i;for(i=0;i<x.length;i++){h^=x.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}return ('00000000'+h.toString(16)).slice(-8);}
   function fingerprintSource(s){return hashText(compact(s));}
   function fnFingerprint(fn){return safe(function(){return 'fn:'+fingerprintSource(Function.prototype.toString.call(fn));},'');}
-
-  /* يحافظ على الطول نفسه تقريباً حتى تبقى مواقع السطور صالحة. */
   function maskSource(src){
     src=S(src);var out='',i=0,n=src.length,state='normal',quote='',escaped=false,lastSig='';
     function blank(c){return c==='\n'?'\n':' ';}
@@ -15615,244 +15616,167 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
       }
       if(state==='line'){out+=blank(c);i++;if(c==='\n')state='normal';continue;}
       if(state==='block'){out+=blank(c);i++;if(c==='*'&&nx==='/'){out+=' ';i++;state='normal';}continue;}
-      if(state==='string'||state==='template'){
-        out+=blank(c);i++;
-        if(escaped){escaped=false;continue;}
-        if(c==='\\'){escaped=true;continue;}
-        if((state==='string'&&c===quote)||(state==='template'&&c==='`'))state='normal';
-        continue;
-      }
-      if(state==='regex'){
-        out+=blank(c);i++;
-        if(escaped){escaped=false;continue;}
-        if(c==='\\'){escaped=true;continue;}
-        if(c==='/'){while(i<n&&/[a-z]/i.test(src.charAt(i))){out+=' ';i++;}state='normal';}
-      }
+      if(state==='string'||state==='template'){out+=blank(c);i++;if(escaped){escaped=false;continue;}if(c==='\\'){escaped=true;continue;}if((state==='string'&&c===quote)||(state==='template'&&c==='`'))state='normal';continue;}
+      if(state==='regex'){out+=blank(c);i++;if(escaped){escaped=false;continue;}if(c==='\\'){escaped=true;continue;}if(c==='/'){while(i<n&&/[a-z]/i.test(src.charAt(i))){out+=' ';i++;}state='normal';}}
     }
     return out;
   }
   function depthBefore(mask,index){var d=0,i;for(i=0;i<index;i++){var c=mask.charAt(i);if(c==='{')d++;else if(c==='}')d=Math.max(0,d-1);}return d;}
   function balancedFunctionSource(src,start){
-    src=S(src);var open=src.indexOf('{',start);if(open<0)return '';
-    var mask=maskSource(src),depth=0,i;
+    src=S(src);var open=src.indexOf('{',start);if(open<0)return '';var mask=maskSource(src),depth=0,i;
     for(i=open;i<mask.length;i++){var c=mask.charAt(i);if(c==='{')depth++;else if(c==='}'){depth--;if(depth===0)return src.slice(start,i+1);}}
     return '';
   }
+  function balancedCallSource(src,start){
+    src=S(src);var mask=maskSource(src),open=mask.indexOf('(',start),depth=0,i;if(open<0)return '';
+    for(i=open;i<mask.length;i++){var c=mask.charAt(i);if(c==='(')depth++;else if(c===')'){depth--;if(depth===0)return src.slice(start,i+1);}}
+    return '';
+  }
   function resolvePath(path){var p=S(path).replace(/^window\./,''),cur=window;if(!p)return null;p.split('.').forEach(function(k){if(cur!=null)cur=cur[k];});return cur;}
-  function callsFromText(text){var out=[],seen={},r=/(?:window\.)?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\(/g,m;while((m=r.exec(S(text)))){var name=S(m[1]);if(!seen[name]){seen[name]=1;out.push(name);}}return out;}
+  function inlineCallPaths(text){
+    var out=[],seen={},r=/(?:window\.)?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\(/g,m;
+    while((m=r.exec(S(text)))){var path=S(m[1]);if(RESERVED_INLINE[path])continue;if(typeof resolvePath(path)!=='function')continue;if(!seen[path]){seen[path]=1;out.push(path);}}
+    return out;
+  }
+  function functionHasRuntimeEffects(src){return /\b(?:setTimeout|setInterval|addEventListener|saveDB|rawPersist|localStorage|fbFetch|fetch|DB\s*=|firebase|indexedDB)\b/.test(maskSource(src));}
+  function scriptHasRuntimeEffects(src){return /\b(?:setTimeout|setInterval|addEventListener|saveDB|rawPersist|localStorage|fbFetch|fetch|DB\s*=|firebase|indexedDB)\b/.test(maskSource(src));}
+  function isGuardName(name,rhs){return /(?:GUARD|SUPPRESS|CLEAN|LOCK|READY|INITIALI[ZS]ED|ENABLE|DISABLE|RECOVERY|INTERLOCK|FLAG)/i.test(S(name))||/^(?:true|false)\b/.test(S(rhs).trim());}
+  function isCacheName(name){return /(?:BLOB|CACHE|LAST|TOKEN|SESSION|STAMP|TIME)/i.test(S(name));}
+  function isAliasExpression(rhs){rhs=S(rhs).trim();return /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?$/.test(rhs)&&!/^(?:true|false|null|undefined|NaN|Infinity)$/.test(rhs);}
 
-  /* جميع التعريفات، محلية وعامة، لاكتشاف مرشحات الصيانة فقط. */
-  function allDefinitions(){
-    var rows=scriptRows(),out=[],seen={},patterns=[
+  function allDefinitions(rows){
+    rows=rows||scriptRows();var out=[],seen={},patterns=[
       {kind:'function',re:/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g,nameAt:1,fnAt:function(m){return m.index;}},
       {kind:'assigned_function',re:/\b(?:var|let|const)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?function\b/g,nameAt:1,fnAt:function(m,row){return row.source.indexOf('function',m.index);}},
       {kind:'window_function',re:/\b(?:window|globalThis)\.([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?function\b/g,nameAt:1,fnAt:function(m,row){return row.source.indexOf('function',m.index);}}
     ];
-    rows.forEach(function(row){
-      var mask=maskSource(row.source);
-      patterns.forEach(function(p){var r=new RegExp(p.re.source,'g'),m;while((m=r.exec(mask))){var name=S(m[p.nameAt]),key=row.id+'|'+name+'|'+m.index;if(seen[key])continue;seen[key]=1;var start=p.fnAt(m,row),body=start>=0?balancedFunctionSource(row.source,start):'';out.push({name:name,scriptId:row.id,scriptIndex:row.index,line:lineOf(row.source,m.index),kind:p.kind,scope:depthBefore(mask,m.index)===0?'top_level':'local',sourceFingerprint:body?'fn:'+fingerprintSource(body):''});}});
-    });
+    rows.forEach(function(row){var mask=maskSource(row.source);patterns.forEach(function(p){var r=new RegExp(p.re.source,'g'),m;while((m=r.exec(mask))){var name=S(m[p.nameAt]),key=row.id+'|'+name+'|'+m.index;if(seen[key])continue;seen[key]=1;var start=p.fnAt(m,row),body=start>=0?balancedFunctionSource(row.source,start):'';out.push({name:name,scriptId:row.id,scriptIndex:row.index,line:lineOf(row.source,m.index),kind:p.kind,scope:depthBefore(mask,m.index)===0?'top_level':'local',sourceFingerprint:body?'fn:'+fingerprintSource(body):''});}});});
     return {rows:rows,defs:out};
   }
 
-  /* مزوّدو التنفيذ العام فقط: هؤلاء يمكن معرفة من استبدلهم لاحقاً. */
-  function providerRows(){
-    var rows=scriptRows(),out=[],seq=0;
+  /* مزودو التنفيذ العام فقط. لا تدخل قيم window البسيطة هنا. */
+  function providerRows(rows){
+    rows=rows||scriptRows();var out=[],seq=0;
     rows.forEach(function(row){
       var mask=maskSource(row.source),patterns=[
         {kind:'top_level_function',re:/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g,nameAt:1,fnAt:function(m){return m.index;}},
-        {kind:'top_level_var_function',re:/\bvar\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?function\b/g,nameAt:1,fnAt:function(m,row){return row.source.indexOf('function',m.index);}}
+        {kind:'top_level_var_function',re:/\bvar\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?function\b/g,nameAt:1,fnAt:function(m,row){return row.source.indexOf('function',m.index);}},
+        {kind:'global_function_assignment',re:/\b(?:window|globalThis)\.([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?function\b/g,nameAt:1,fnAt:function(m,row){return row.source.indexOf('function',m.index);}}
       ];
-      patterns.forEach(function(p){var r=new RegExp(p.re.source,'g'),m;while((m=r.exec(mask))){if(depthBefore(mask,m.index)!==0)continue;var fnStart=p.fnAt(m,row),src=balancedFunctionSource(row.source,fnStart);if(!src)continue;out.push({seq:seq++,name:S(m[p.nameAt]),scriptId:row.id,scriptIndex:row.index,line:lineOf(row.source,m.index),kind:p.kind,sourceFingerprint:'fn:'+fingerprintSource(src),sourcePreview:trimText(src,180),replacement:false,guarded:false});}});
+      patterns.forEach(function(p){var r=new RegExp(p.re.source,'g'),m;while((m=r.exec(mask))){if(depthBefore(mask,m.index)!==0&&p.kind!=='global_function_assignment')continue;var start=p.fnAt(m,row),body=balancedFunctionSource(row.source,start);if(!body)continue;out.push({seq:seq++,name:S(m[p.nameAt]),scriptId:row.id,scriptIndex:row.index,line:lineOf(row.source,m.index),kind:p.kind,sourceFingerprint:'fn:'+fingerprintSource(body),runtimeEffects:functionHasRuntimeEffects(body)});}});
       var assign=/\b(?:window|globalThis)\.([A-Za-z_$][\w$]*)\s*=\s*([^;\n]+)/g,a;
       while((a=assign.exec(mask))){
-        var name=S(a[1]),rhs=S(row.source.slice(a.index+(a[0].indexOf('=')+1),a.index+a[0].length)).trim(),kind='global_value',fp='',preview=trimText(rhs,180),guarded=/^(?:window|globalThis)\.[A-Za-z_$][\w$]*\s*\|\|/.test(rhs);
-        var fpos=row.source.indexOf('function',a.index),directFn=/^(?:async\s+)?function\b/.test(rhs);
-        if(directFn&&fpos>=a.index){var fsrc=balancedFunctionSource(row.source,fpos);fp=fsrc?'fn:'+fingerprintSource(fsrc):'';kind='global_function';preview=trimText(fsrc||rhs,180);}
-        else if(/^([A-Za-z_$][\w$]*)\b/.test(rhs)){kind='global_alias';}
-        else if(guarded)kind='guarded_global_assignment';
-        out.push({seq:seq++,name:name,scriptId:row.id,scriptIndex:row.index,line:lineOf(row.source,a.index),kind:kind,sourceFingerprint:fp,sourcePreview:preview,replacement:true,guarded:guarded,rhs:rhs});
+        var name=S(a[1]),rhs=S(row.source.slice(a.index+(a[0].indexOf('=')+1),a.index+a[0].length)).trim();
+        if(/^(?:async\s+)?function\b/.test(rhs))continue;
+        if(/^(?:window|globalThis)\.[A-Za-z_$][\w$]*\s*\|\|/.test(rhs))continue;
+        if(isAliasExpression(rhs))out.push({seq:seq++,name:name,scriptId:row.id,scriptIndex:row.index,line:lineOf(row.source,a.index),kind:'global_alias',sourceFingerprint:'',runtimeEffects:false,aliasOf:rhs});
       }
     });
     return out.sort(function(a,b){return a.scriptIndex-b.scriptIndex||a.line-b.line||a.seq-b.seq;});
   }
-  function hasPriorCapture(rows,provider){
-    var row=rows.filter(function(x){return x.id===provider.scriptId;})[0];if(!row)return false;
-    var n=rxEscape(provider.name),src=row.source;
-    return new RegExp('(?:var|let|const)\\s+[A-Za-z_$][\\w$]*\\s*=\\s*(?:window|globalThis)\\.'+n+'\\b').test(src) || new RegExp('(?:window|globalThis)\\.'+n+'\\s*\\|\\|').test(src);
-  }
-  function analyzeImplementations(){
-    var providers=providerRows(),rows=scriptRows(),groups={},active=[],retired=[],wrapperProtected=[],localCollisions={};
-    providers.forEach(function(p){(groups[p.name]||(groups[p.name]=[])).push(p);});
-    var allNameCounts={};rows.forEach(function(row){var mask=maskSource(row.source),r=/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g,m;while((m=r.exec(mask))){allNameCounts[m[1]]=(allNameCounts[m[1]]||0)+1;}});
-    Object.keys(allNameCounts).forEach(function(n){if(allNameCounts[n]>1&&!groups[n])localCollisions[n]=allNameCounts[n];});
-    Object.keys(groups).sort().forEach(function(name){
-      var list=groups[name].sort(function(a,b){return a.scriptIndex-b.scriptIndex||a.line-b.line||a.seq-b.seq;}),current=window[name],curFp=typeof current==='function'?fnFingerprint(current):'',matched=null,i;
-      for(i=list.length-1;i>=0;i--){if(list[i].sourceFingerprint&&list[i].sourceFingerprint===curFp){matched=list[i];break;}}
-      var terminal=list[list.length-1];
-      if(matched){active.push({name:name,state:'active_source_matched',provider:matched,globalFingerprint:curFp,providers:list.length});}
-      else if(typeof current==='function'&&terminal&&terminal.replacement){active.push({name:name,state:'active_binding_via_alias_or_wrapper',provider:terminal,globalFingerprint:curFp,providers:list.length});}
-      for(i=0;i<list.length;i++){
-        var p=list[i],isCurrent=(matched===p)||(!matched&&p===terminal&&typeof current==='function');if(isCurrent)continue;
-        var later=list.slice(i+1);if(!later.length)continue;
-        var protectedByWrapper=hasPriorCapture(rows,later[0])||later.some(function(x){return x.guarded;});
-        var rec={name:name,provider:p,replacedBy:later[0],currentBindingFingerprint:curFp,reason:protectedByWrapper?'استبدل ظاهرياً لكن توجد إشارة Wrapper/التقاط سابق؛ لا يحذف قبل فحص السلسلة':'تم استبداله ولا يطابق التنفيذ المرتبط حالياً بالاسم العام'};
-        if(protectedByWrapper)wrapperProtected.push(rec);else retired.push(rec);
-      }
-    });
-    return {providers:providers,groups:groups,active:active,retired:retired,wrapperProtected:wrapperProtected,localCollisions:localCollisions};
-  }
-
-  function staticSchedulers(rows){
-    var out=[];
-    rows.forEach(function(row){var mask=maskSource(row.source),r=/\b(setInterval|setTimeout)\s*\(/g,m;while((m=r.exec(mask))){var preview=trimText(row.source.slice(m.index,m.index+260),260);out.push({scriptId:row.id,scriptIndex:row.index,line:lineOf(row.source,m.index),kind:m[1],preview:preview,signature:m[1]+':'+compact(preview.slice(0,190))});}});
-    var by={};out.forEach(function(x){(by[x.signature]||(by[x.signature]=[])).push(x);});
-    var repeats=[];Object.keys(by).forEach(function(k){if(by[k].length>1)repeats.push({signature:k,count:by[k].length,locations:by[k].map(function(x){return x.scriptId+':'+x.line;})});});
-    return {all:out,repeated:repeats};
-  }
-  function staticListeners(rows){
-    var out=[];
-    rows.forEach(function(row){var mask=maskSource(row.source),r=/\baddEventListener\s*\(/g,m;while((m=r.exec(mask))){out.push({scriptId:row.id,scriptIndex:row.index,line:lineOf(row.source,m.index),preview:trimText(row.source.slice(m.index-80,m.index+220),260)});}});
+  function globalStateRows(rows){
+    rows=rows||scriptRows();var out=[],seen={};
+    rows.forEach(function(row){var mask=maskSource(row.source),r=/\b(?:window|globalThis)\.([A-Za-z_$][\w$]*)\s*=\s*([^;\n]+)/g,m;while((m=r.exec(mask))){var name=S(m[1]),rhs=S(row.source.slice(m.index+(m[0].indexOf('=')+1),m.index+m[0].length)).trim(),key=row.id+'|'+name+'|'+m.index;if(seen[key])continue;seen[key]=1;if(/^(?:async\s+)?function\b/.test(rhs)||isAliasExpression(rhs))continue;var kind=isGuardName(name,rhs)?'protective_guard_or_flag':(isCacheName(name)?'cache_or_snapshot_state':'global_state_value');out.push({name:name,scriptId:row.id,scriptIndex:row.index,line:lineOf(row.source,m.index),kind:kind});}});
     return out;
   }
-  function scriptInventory(defs,impl,schedulers,listeners){
-    var rows=scriptRows(),byScript={},activeBy={},retiredBy={},protectedBy={},providerBy={};
-    impl.providers.forEach(function(p){(providerBy[p.scriptId]||(providerBy[p.scriptId]=[])).push(p);});
-    impl.active.forEach(function(x){(activeBy[x.provider.scriptId]||(activeBy[x.provider.scriptId]=[])).push(x.name);});
-    impl.retired.forEach(function(x){(retiredBy[x.provider.scriptId]||(retiredBy[x.provider.scriptId]=[])).push(x.name);});
-    impl.wrapperProtected.forEach(function(x){(protectedBy[x.provider.scriptId]||(protectedBy[x.provider.scriptId]=[])).push(x.name);});
-    defs.forEach(function(d){(byScript[d.scriptId]||(byScript[d.scriptId]=[])).push(d);});
-    var results=[];
-    rows.forEach(function(row){
-      var ownDefs=byScript[row.id]||[],activeNames=activeBy[row.id]||[],retiredNames=retiredBy[row.id]||[],protectedNames=protectedBy[row.id]||[],timers=schedulers.all.filter(function(x){return x.scriptId===row.id;}),events=listeners.filter(function(x){return x.scriptId===row.id;}),src=row.source;
-      var dbTouch=/\b(?:saveDB|rawPersist|localStorage|fbFetch|fetch|DB\s*=|window\.DB)\b/.test(maskSource(src)),wrapped=/\b(?:var|let|const)\s+[A-Za-z_$][\w$]*\s*=\s*(?:window|globalThis)\./.test(maskSource(src)),classification='local_layer_needs_review',reason='طبقة محلية أو IIFE؛ لا يمكن وصفها بأنها متوقفة من التحليل الثابت وحده.';
-      if(activeNames.length){classification='active_provider_layer';reason='يوفر تنفيذاً عاماً مرتبطاً حالياً بالمتصفح.';}
-      else if(protectedNames.length||wrapped){classification='protected_wrapper_layer';reason='طبقة Wrapper/التقاط سابق؛ قد تستدعي التنفيذ الأقدم.';}
-      else if(retiredNames.length&&!timers.length&&!events.length&&!dbTouch){classification='superseded_cleanup_candidate';reason='يوفر تنفيذات عامة استُبدلت ولا يحمل مؤقتاً أو مستمعاً أو علامة حفظ ظاهرة.';}
-      else if(timers.length||events.length||dbTouch){classification='runtime_side_effect_layer';reason='تسجل مؤقتاً/مستمعاً أو تمس التخزين/المزامنة؛ لا تحذف قبل اختبار أثرها.';}
-      results.push({scriptId:row.id,scriptIndex:row.index,characters:row.source.length,definitions:ownDefs.length,topLevelDefinitions:ownDefs.filter(function(d){return d.scope==='top_level';}).length,activeBindings:activeNames,retiredProviders:retiredNames,wrapperProtectedProviders:protectedNames,timers:timers.map(function(x){return {line:x.line,kind:x.kind};}),eventListeners:events.map(function(x){return {line:x.line};}),classification:classification,reason:reason});
+  function capturedByLater(rows,name,afterScriptIndex){
+    var n=rxEscape(name),re1=new RegExp('(?:var|let|const)\\s+[A-Za-z_$][\\w$]*\\s*=\\s*(?:window|globalThis)\\.'+n+'\\b'),re2=new RegExp('(?:window|globalThis)\\.'+n+'\\s*\\|\\|');
+    return rows.some(function(row){return row.scriptIndex>afterScriptIndex&&(re1.test(row.source)||re2.test(row.source));});
+  }
+  function analyzeImplementations(rows){
+    rows=rows||scriptRows();var providers=providerRows(rows),groups={},active=[],directReview=[],protectedHistory=[],localCollisions={};
+    providers.forEach(function(p){(groups[p.name]||(groups[p.name]=[])).push(p);});
+    var counts={};rows.forEach(function(row){var mask=maskSource(row.source),r=/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g,m;while((m=r.exec(mask))){counts[m[1]]=(counts[m[1]]||0)+1;}});Object.keys(counts).forEach(function(name){if(counts[name]>1&&!groups[name])localCollisions[name]=counts[name];});
+    Object.keys(groups).sort().forEach(function(name){
+      var list=groups[name].sort(function(a,b){return a.scriptIndex-b.scriptIndex||a.line-b.line||a.seq-b.seq;}),current=resolvePath(name),fp=typeof current==='function'?fnFingerprint(current):'',matched=null,i;
+      for(i=list.length-1;i>=0;i--){if(list[i].sourceFingerprint&&list[i].sourceFingerprint===fp){matched=list[i];break;}}
+      var terminal=list[list.length-1];
+      if(matched)active.push({name:name,state:'active_source_matched',provider:matched,providers:list.length});
+      else if(typeof current==='function')active.push({name:name,state:'active_alias_or_wrapper_or_unmatched',provider:terminal,providers:list.length});
+      for(i=0;i<list.length;i++){
+        var p=list[i];if(p===matched||!p.sourceFingerprint)continue;var later=list.slice(i+1);if(!later.length)continue;
+        var laterDirect=later.some(function(x){return !!x.sourceFingerprint;}),captured=capturedByLater(rows,name,p.scriptIndex),wrapped=captured||later.some(function(x){return x.kind==='global_alias';}),eligible=!!matched&&laterDirect&&!wrapped&&!p.runtimeEffects;
+        var rec={name:name,provider:p,replacedBy:later[0],currentBindingFingerprint:fp,reason:eligible?'دالة عامة مباشرة استبدلت بدالة عامة لاحقة، بلا Wrapper أو مؤقت/حفظ ظاهر داخل الدالة. تحتاج اختباراً كاملاً قبل الحذف.':'تنفيذ سابق محفوظ للحماية: يوجد Wrapper/التقاط سابق أو Alias أو أثر تشغيل، فلا يعد مرشح حذف.',certainty:eligible?'medium':'protected'};
+        if(eligible)directReview.push(rec);else protectedHistory.push(rec);
+      }
     });
-    return results;
+    return {providers:providers,groups:groups,active:active,directReview:directReview,protectedHistory:protectedHistory,localCollisions:localCollisions};
   }
-
+  function staticSchedulers(rows){
+    var out=[];rows.forEach(function(row){var mask=maskSource(row.source),r=/\b(setInterval|setTimeout)\s*\(/g,m;while((m=r.exec(mask))){var call=balancedCallSource(row.source,m.index),norm=compact(call),kind=m[1];out.push({scriptId:row.id,scriptIndex:row.index,line:lineOf(row.source,m.index),kind:kind,preview:trimText(call,260),signature:kind+':'+norm});}});
+    var by={};out.forEach(function(x){(by[x.signature]||(by[x.signature]=[])).push(x);});var exact=[];Object.keys(by).forEach(function(k){if(by[k].length>1)exact.push({signature:k,count:by[k].length,locations:by[k].map(function(x){return x.scriptId+':'+x.line;}),risk:k.indexOf('setInterval:')===0?'ongoing_repeat_needs_manual_check':'one_shot_repeat_not_a_cleanup_decision'});});
+    return {all:out,exactDuplicates:exact};
+  }
+  function staticListeners(rows){var out=[];rows.forEach(function(row){var mask=maskSource(row.source),r=/\baddEventListener\s*\(/g,m;while((m=r.exec(mask))){out.push({scriptId:row.id,scriptIndex:row.index,line:lineOf(row.source,m.index),preview:trimText(row.source.slice(m.index-80,m.index+220),260)});}});return out;}
+  function scriptInventory(rows,defs,impl,schedulers,listeners,states){
+    var byScript={},activeBy={},reviewBy={},protectedBy={},stateBy={};defs.forEach(function(d){(byScript[d.scriptId]||(byScript[d.scriptId]=[])).push(d);});impl.active.forEach(function(x){(activeBy[x.provider.scriptId]||(activeBy[x.provider.scriptId]=[])).push(x.name);});impl.directReview.forEach(function(x){(reviewBy[x.provider.scriptId]||(reviewBy[x.provider.scriptId]=[])).push(x.name);});impl.protectedHistory.forEach(function(x){(protectedBy[x.provider.scriptId]||(protectedBy[x.provider.scriptId]=[])).push(x.name);});states.forEach(function(x){(stateBy[x.scriptId]||(stateBy[x.scriptId]=[])).push(x.name);});
+    return rows.map(function(row){var timers=schedulers.all.filter(function(x){return x.scriptId===row.id;}),events=listeners.filter(function(x){return x.scriptId===row.id;}),activeNames=activeBy[row.id]||[],reviewNames=reviewBy[row.id]||[],protectedNames=protectedBy[row.id]||[],stateNames=stateBy[row.id]||[],effect=scriptHasRuntimeEffects(row.source),classification='local_or_historical_layer',reason='طبقة محلية/تاريخية؛ لا يثبت التحليل الثابت وحده أنها متوقفة.';
+      if(activeNames.length){classification='active_public_execution_layer';reason='يوفر دالة عامة مرتبطة بالتنفيذ الحالي.';}
+      else if(protectedNames.length){classification='protected_execution_history';reason='يوجد التقاط سابق أو Wrapper/Alias؛ لا تحذف.';}
+      else if(effect||stateNames.length){classification='operational_state_or_side_effect_layer';reason=stateNames.length?'يحمل حراس/حالة عامة أو آثار تشغيل؛ لا يعد طبقة تنفيذ مستبدلة.':'يسجل مؤقتاً/مستمعاً أو يمس التخزين/المزامنة؛ لا يحذف قبل اختبار.';}
+      else if(reviewNames.length){classification='manual_direct_replacement_review';reason='يحتوي دوال عامة استبدلت مباشرة؛ راجعها باختبار المسار الكامل قبل أي حذف.';}
+      return {scriptId:row.id,scriptIndex:row.index,characters:row.source.length,definitions:(byScript[row.id]||[]).length,activeBindings:activeNames,directReplacementReview:reviewNames,protectedExecutionHistory:protectedNames,globalStateNames:stateNames,timers:timers.map(function(x){return {line:x.line,kind:x.kind};}),eventListeners:events.map(function(x){return {line:x.line};}),classification:classification,reason:reason};
+    });
+  }
   function liveHandlers(){
-    var out={},missing=[];
-    nodeList(EVENT_ATTRS.map(function(a){return '['+a+']';}).join(',')).forEach(function(el){EVENT_ATTRS.forEach(function(attr){var code=el.getAttribute&&el.getAttribute(attr);if(!code)return;callsFromText(code).forEach(function(path){if(!out[path])out[path]={path:path,attrs:[],nodes:0};out[path].nodes++;if(out[path].attrs.indexOf(attr)<0)out[path].attrs.push(attr);});});});
-    Object.keys(out).sort().forEach(function(path){if(typeof resolvePath(path)!=='function')missing.push({path:path,attrs:out[path].attrs,nodes:out[path].nodes});});
-    return {map:out,missing:missing};
+    var out={},missing=[];nodeList(EVENT_ATTRS.map(function(a){return '['+a+']';}).join(',')).forEach(function(el){EVENT_ATTRS.forEach(function(attr){var code=el.getAttribute&&el.getAttribute(attr);if(!code)return;inlineCallPaths(code).forEach(function(path){if(!out[path])out[path]={path:path,attrs:[],nodes:0};out[path].nodes++;if(out[path].attrs.indexOf(attr)<0)out[path].attrs.push(attr);});});});
+    Object.keys(out).sort().forEach(function(path){if(typeof resolvePath(path)!=='function')missing.push({path:path,attrs:out[path].attrs,nodes:out[path].nodes});});return {map:out,missing:missing};
   }
-  function markPath(path){path=S(path);if(!path||path.indexOf('data:')===0)return;var fn=resolvePath(path),fp=typeof fn==='function'?fnFingerprint(fn):'';if(!handlers[path])handlers[path]={count:0,fingerprints:{}};handlers[path].count++;if(fp)handlers[path].fingerprints[fp]=(handlers[path].fingerprints[fp]||0)+1;}
+  function markPath(path){path=S(path);if(!path)return;var fn=resolvePath(path),fp=typeof fn==='function'?fnFingerprint(fn):'';if(!handlers[path])handlers[path]={count:0,fingerprints:{}};handlers[path].count++;if(fp)handlers[path].fingerprints[fp]=(handlers[path].fingerprints[fp]||0)+1;}
   function activePageId(){var p=safe(function(){return document.querySelector('.page.active');},null);return p?S(p.id||'').replace(/^page-/,''):'';}
   function activeModalId(){var p=safe(function(){return document.querySelector('.mo.open,.modal.open,[role="dialog"].open');},null);return p?S(p.id||p.getAttribute&&p.getAttribute('aria-label')||'modal'):'';}
   function compactClass(el){var v=S(el&&el.className||'');return v.replace(/\s+/g,' ').trim().split(' ').filter(Boolean).slice(0,4).join('.');}
-  function targetInfo(el){
-    el=el||{};var data={};
-    ['data-action','data-page','data-id','data-type'].forEach(function(k){var v=safe(function(){return el.getAttribute(k);},'');if(v)data[k.slice(5)]=trimText(v,70);});
-    var tag=S(el.tagName||'').toLowerCase(),id=S(el.id||''),name=S(el.name||''),type=S(el.type||''),role=S(safe(function(){return el.getAttribute('role');},''));
-    return {tag:tag,id:id,name:name,type:type,role:role,classes:compactClass(el),data:data};
-  }
+  function targetInfo(el){el=el||{};var data={};['data-action','data-page','data-id','data-type'].forEach(function(k){var v=safe(function(){return el.getAttribute(k);},'');if(v)data[k.slice(5)]=trimText(v,70);});return {tag:S(el.tagName||'').toLowerCase(),id:S(el.id||''),name:S(el.name||''),type:S(el.type||''),role:S(safe(function(){return el.getAttribute('role');},'')),classes:compactClass(el),data:data};}
   function targetKey(info,page,modal){return [page||'',modal||'',info.tag||'',info.id||'',info.name||'',info.type||'',info.role||'',info.classes||'',JSON.stringify(info.data||{})].join('|');}
   function nearestInteractive(el){return el&&el.closest?el.closest('button,input,select,textarea,a,form,[onclick],[onchange],[onsubmit],[oninput],[data-action],[data-page],[role="button"]')||el:el;}
   function actionRoutes(el,eventType){
-    var paths=[],attrs=[],dataActions=[],seen={},node=el,depth=0,eventAttr='on'+S(eventType||'').toLowerCase();
-    function addPath(p){p=S(p);if(!p||seen[p])return;seen[p]=1;paths.push(p);}
-    while(node&&node!==document&&depth<8){
-      var attrsToRead=[eventAttr].concat(EVENT_ATTRS);
-      attrsToRead.forEach(function(attr){var code=safe(function(){return node.getAttribute&&node.getAttribute(attr);},'');if(!code)return;if(attrs.indexOf(attr)<0)attrs.push(attr);callsFromText(code).forEach(addPath);});
-      var action=safe(function(){return node.getAttribute&&node.getAttribute('data-action');},'');
-      if(action){dataActions.push(trimText(action,90));if(/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\(/.test(action))callsFromText(action).forEach(addPath);}
-      var href=safe(function(){return node.getAttribute&&node.getAttribute('href');},'');if(/^\s*javascript:/i.test(href))callsFromText(href.replace(/^\s*javascript:/i,'')).forEach(addPath);
-      node=node.parentElement;depth++;
-    }
+    var paths=[],attrs=[],dataActions=[],seen={},node=el,depth=0,eventAttr='on'+S(eventType||'').toLowerCase();function add(p){if(!seen[p]){seen[p]=1;paths.push(p);}}
+    while(node&&node!==document&&depth<8){var attrsToRead=[eventAttr].concat(EVENT_ATTRS);attrsToRead.forEach(function(attr){var code=safe(function(){return node.getAttribute&&node.getAttribute(attr);},'');if(!code)return;if(attrs.indexOf(attr)<0)attrs.push(attr);inlineCallPaths(code).forEach(add);});var action=safe(function(){return node.getAttribute&&node.getAttribute('data-action');},'');if(action){dataActions.push(trimText(action,90));inlineCallPaths(action).forEach(add);}var href=safe(function(){return node.getAttribute&&node.getAttribute('href');},'');if(/^\s*javascript:/i.test(href))inlineCallPaths(href.replace(/^\s*javascript:/i,'')).forEach(add);node=node.parentElement;depth++;}
     return {paths:paths,attrs:attrs,dataActions:dataActions};
   }
-  function recordInteraction(ev){
-    var target=nearestInteractive(ev&&ev.target),type=S(ev&&ev.type||''),page=activePageId(),modal=activeModalId(),info=targetInfo(target),routes=actionRoutes(target,type),key=type+'|'+targetKey(info,page,modal),stamp=Date.now(),noisy=(type==='input'||type==='keydown'||type==='keyup');
-    interactionTotal++;lastInteractionAt=stamp;interactionStats[type]=(interactionStats[type]||0)+1;
-    routes.paths.forEach(markPath);
-    var targetBucket=targetKey(info,page,modal);interactionTargets[targetBucket]=(interactionTargets[targetBucket]||0)+1;
-    if(noisy&&lastInteractionByKey[key]&&stamp-lastInteractionByKey[key]<800){interactionCoalesced++;lastInteractionByKey[key]=stamp;return;}
-    lastInteractionByKey[key]=stamp;
-    var field=null;
-    if(type==='input'||type==='change'){field={isInput:true,hasContent:!!S(safe(function(){return target&&target.value;},'')),checked:!!safe(function(){return target&&target.checked;},false)};}
-    interactionLog.push({seq:interactionTotal,at:new Date(stamp).toISOString(),type:type,page:page,modal:modal,target:info,declaredRoutes:routes.paths,inlineAttributes:routes.attrs,dataActions:routes.dataActions,field:field});
-    if(interactionLog.length>AUTO_LOG_LIMIT)interactionLog=interactionLog.slice(-AUTO_LOG_LIMIT);
-  }
-  function captureEvent(ev){
-    recordInteraction(ev);
-    var nav=ev&&ev.target&&ev.target.closest?ev.target.closest('[id^="nav-"],.bb[data-page],.nv'):null;
-    if(nav){var key=S(nav.id||nav.getAttribute('data-page')||nav.textContent).trim();if(key)pages[key]=(pages[key]||0)+1;}
-  }
-  function recordError(kind,message,source,line){var item={at:now(),kind:S(kind),message:trimText(message,240),source:trimText(source,160),line:Math.max(0,Number(line)||0)};errors.push(item);if(errors.length>80)errors=errors.slice(-80);}
-  function start(options){
-    options=options||{};
-    if(started&&!options.reset){renderPanel();return status();}
-    startedAt=Date.now();started=true;handlers={};pages={};errors=[];sessionId='maint_'+startedAt.toString(36)+'_'+Math.random().toString(36).slice(2,8);interactionLog=[];interactionStats={};interactionTargets={};interactionTotal=0;interactionCoalesced=0;lastInteractionAt=0;lastInteractionByKey={};
-    if(!hooked){hooked=true;['pointerdown','click','dblclick','change','submit','input','keydown','keyup','focusin'].forEach(function(type){document.addEventListener(type,captureEvent,true);});window.addEventListener('error',function(e){recordError('error',e&&e.message,e&&e.filename,e&&e.lineno);},true);window.addEventListener('unhandledrejection',function(e){recordError('unhandledrejection',e&&e.reason&&e.reason.message||e&&e.reason,'',0);});}
-    renderPanel();return status();
-  }
+  function recordInteraction(ev){var target=nearestInteractive(ev&&ev.target),type=S(ev&&ev.type||''),page=activePageId(),modal=activeModalId(),info=targetInfo(target),routes=actionRoutes(target,type),key=type+'|'+targetKey(info,page,modal),stamp=Date.now(),noisy=(type==='input'||type==='keydown'||type==='keyup');interactionTotal++;lastInteractionAt=stamp;interactionStats[type]=(interactionStats[type]||0)+1;routes.paths.forEach(markPath);var bucket=targetKey(info,page,modal);interactionTargets[bucket]=(interactionTargets[bucket]||0)+1;if(noisy&&lastInteractionByKey[key]&&stamp-lastInteractionByKey[key]<800){interactionCoalesced++;lastInteractionByKey[key]=stamp;return;}lastInteractionByKey[key]=stamp;var field=null;if(type==='input'||type==='change')field={isInput:true,hasContent:!!S(safe(function(){return target&&target.value;},'')),checked:!!safe(function(){return target&&target.checked;},false)};interactionLog.push({seq:interactionTotal,at:new Date(stamp).toISOString(),type:type,page:page,modal:modal,target:info,declaredRoutes:routes.paths,inlineAttributes:routes.attrs,dataActions:routes.dataActions,field:field});if(interactionLog.length>AUTO_LOG_LIMIT)interactionLog=interactionLog.slice(-AUTO_LOG_LIMIT);}
+  function captureEvent(ev){recordInteraction(ev);var nav=ev&&ev.target&&ev.target.closest?ev.target.closest('[id^="nav-"],.bb[data-page],.nv'):null;if(nav){var key=S(nav.id||nav.getAttribute('data-page')||nav.textContent).trim();if(key)pages[key]=(pages[key]||0)+1;}}
+  function recordError(kind,message,source,line){errors.push({at:now(),kind:S(kind),message:trimText(message,240),source:trimText(source,160),line:Math.max(0,Number(line)||0)});if(errors.length>80)errors=errors.slice(-80);}
+  function start(options){options=options||{};if(started&&!options.reset){renderPanel();return status();}startedAt=Date.now();started=true;handlers={};pages={};errors=[];sessionId='maint_'+startedAt.toString(36)+'_'+Math.random().toString(36).slice(2,8);interactionLog=[];interactionStats={};interactionTargets={};interactionTotal=0;interactionCoalesced=0;lastInteractionAt=0;lastInteractionByKey={};if(!hooked){hooked=true;['pointerdown','click','dblclick','change','submit','input','keydown','keyup','focusin'].forEach(function(type){document.addEventListener(type,captureEvent,true);});window.addEventListener('error',function(e){recordError('error',e&&e.message,e&&e.filename,e&&e.lineno);},true);window.addEventListener('unhandledrejection',function(e){recordError('unhandledrejection',e&&e.reason&&e.reason.message||e&&e.reason,'',0);});}renderPanel();return status();}
   function reset(){return start({reset:true});}
   function status(){return {version:VERSION,started:started,automaticMonitoring:true,sessionId:sessionId,startedAt:startedAt?new Date(startedAt).toISOString():'',durationSeconds:startedAt?Math.max(0,Math.round((Date.now()-startedAt)/1000)):0,uiCalls:Object.assign({},handlers),pages:Object.assign({},pages),errors:A(errors),interactions:{total:interactionTotal,recorded:interactionLog.length,coalesced:interactionCoalesced,uniqueTargets:Object.keys(interactionTargets).length,lastInteractionAt:lastInteractionAt?new Date(lastInteractionAt).toISOString():'',byType:Object.assign({},interactionStats)}};}
-  function scanDeprecated(corpus){return ['finalSettlement15DayRuleScope','exit_up_to_15_inclusive','exit_from_16_single_endpoint','remainder<=15','remDays<=15'].filter(function(term){return S(corpus).indexOf(term)>=0;});}
+  function scanDeprecated(rows){var terms=['finalSettlement15DayRuleScope','exit_up_to_15_inclusive','exit_from_16_single_endpoint','remainder<=15','remDays<=15'],out=[];terms.forEach(function(term){var locations=[];rows.forEach(function(row){var mask=maskSource(row.source),at=mask.indexOf(term);if(at>=0)locations.push(row.id+':'+lineOf(row.source,at));});if(locations.length)out.push({term:term,locations:locations});});return out;}
   function countToken(maskedCorpus,name){var r=new RegExp('\\b'+rxEscape(name)+'\\b','g'),n=0;while(r.exec(maskedCorpus))n++;return n;}
-
   function makeReport(){
-    var meta=allDefinitions(),defs=meta.defs,rows=meta.rows,impl=analyzeImplementations(),sched=staticSchedulers(rows),listeners=staticListeners(rows),live=liveHandlers(),maskedCorpus=rows.map(function(x){return maskSource(x.source);}).join('\n'),by={},staticCandidates=[],duplicates=[],definitionIndex=[];
-    defs.forEach(function(d){(by[d.name]||(by[d.name]=[])).push(d);});
-    Object.keys(by).sort().forEach(function(name){
-      var list=by[name],refs=countToken(maskedCorpus,name),globalCallable=typeof window[name]==='function';
-      definitionIndex.push({name:name,definitions:list.length,staticReferences:refs,globalCallable:globalCallable,locations:list.map(function(d){return d.scriptId+':'+d.line;}).slice(0,20)});
-      if(refs<=1)staticCandidates.push({name:name,locations:list.map(function(d){return d.scriptId+':'+d.line;}).slice(0,16),reason:'تعريف ظاهر دون مرجع نصي آخر؛ مرشح مراجعة فقط'});
-      if(list.length>1)duplicates.push({name:name,definitions:list.length,locations:list.map(function(d){return d.scriptId+':'+d.line;}).slice(0,20)});
-    });
+    var rows=scriptRows(),meta=allDefinitions(rows),defs=meta.defs,impl=analyzeImplementations(rows),states=globalStateRows(rows),sched=staticSchedulers(rows),listeners=staticListeners(rows),live=liveHandlers(),maskedCorpus=rows.map(function(x){return maskSource(x.source);}).join('\n'),by={},advisories=[],duplicates=[],definitionIndex=[];
+    defs.forEach(function(d){(by[d.name]||(by[d.name]=[])).push(d);});Object.keys(by).sort().forEach(function(name){var list=by[name],refs=countToken(maskedCorpus,name),globalCallable=typeof resolvePath(name)==='function';definitionIndex.push({name:name,definitions:list.length,staticReferences:refs,globalCallable:globalCallable,locations:list.map(function(d){return d.scriptId+':'+d.line;}).slice(0,20)});if(refs<=1&&list.length===1&&!globalCallable)advisories.push({name:name,locations:list.map(function(d){return d.scriptId+':'+d.line;}).slice(0,12),certainty:'low',reason:'لا يظهر له مرجع نصي آخر؛ قد يكون مساراً داخلياً أو ديناميكياً. لا يعد مرشح حذف.'});if(list.length>1)duplicates.push({name:name,definitions:list.length,locations:list.map(function(d){return d.scriptId+':'+d.line;}).slice(0,20)});});
     var untriggered=Object.keys(live.map).sort().filter(function(path){return !handlers[path];}).map(function(path){return {path:path,attrs:live.map[path].attrs,nodes:live.map[path].nodes,currentBindingFingerprint:typeof resolvePath(path)==='function'?fnFingerprint(resolvePath(path)):''};});
     var uiUsed=Object.keys(handlers).sort().map(function(path){return {path:path,count:handlers[path].count,fingerprints:Object.keys(handlers[path].fingerprints||{})};});
-    var engines=scriptInventory(defs,impl,sched,listeners),scriptCleanup=engines.filter(function(x){return x.classification==='superseded_cleanup_candidate';}),protectedLayers=engines.filter(function(x){return x.classification==='protected_wrapper_layer'||x.classification==='runtime_side_effect_layer';}),id='maintenance_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),corpus=rows.map(function(x){return x.source;}).join('\n'),runtime=status(),unmappedMap={},unmapped=[];
-    interactionLog.forEach(function(x){if(A(x.declaredRoutes).length)return;var k=[x.type,x.page,x.modal,x.target&&x.target.tag,x.target&&x.target.id,x.target&&x.target.name,x.target&&x.target.type,x.target&&x.target.classes].join('|');if(!unmappedMap[k])unmappedMap[k]={eventType:x.type,page:x.page,modal:x.modal,target:x.target,count:0};unmappedMap[k].count++;});
-    Object.keys(unmappedMap).sort().forEach(function(k){unmapped.push(unmappedMap[k]);});
-    return {id:id,schema:'egtph-maintenance-active-duplicate-and-runtime-audit-v4',generatedAt:now(),version:VERSION,scope:'active-global-implementation-plus-automatic-runtime-interaction-monitoring-and-script-inventory',limitations:'تبدأ المراقبة تلقائياً وتلتقط النقر والإدخال والتغيير والإرسال والتنقل وأخطاء التشغيل، دون حفظ القيم التي يكتبها المستخدم. تحدد التنفيذ العام المرتبط فعلياً بالمتصفح، لكنها لا تستطيع إثبات أن دالة محلية داخل IIFE متوقفة دون اختبار مسارها. «مرشح تنظيف» لا يعني الحذف التلقائي.',runtime:runtime,
-      summary:{scripts:rows.length,definitions:defs.length,uniqueDefinitionNames:Object.keys(by).length,publicProviderRecords:impl.providers.length,publicImplementationGroups:Object.keys(impl.groups).length,activeGlobalBindings:impl.active.length,supersededGlobalCandidates:impl.retired.length,wrapperProtectedPreviousProviders:impl.wrapperProtected.length,scriptCleanupCandidates:scriptCleanup.length,protectedOrRuntimeLayers:protectedLayers.length,staticReviewCandidates:staticCandidates.length,duplicateDefinitions:duplicates.length,scheduledRegistrations:sched.all.length,repeatedSchedulerSignatures:sched.repeated.length,eventListenerRegistrations:listeners.length,renderedHandlers:Object.keys(live.map).length,untriggeredRenderedHandlers:untriggered.length,missingRenderedHandlers:live.missing.length,runtimeErrors:errors.length,automaticInteractions:runtime.interactions.total,recordedInteractionSamples:runtime.interactions.recorded,coalescedNoisyInteractions:runtime.interactions.coalesced,unmappedInteractiveTargets:unmapped.length},
-      activeBindings:impl.active.slice(0,1800),engineInventory:engines.slice(0,1000),cleanupCandidates:{supersededGlobalProviders:impl.retired.slice(0,1800),supersededScriptLayers:scriptCleanup.slice(0,500),wrapperProtectedPreviousProviders:impl.wrapperProtected.slice(0,1800),protectedOrRuntimeLayers:protectedLayers.slice(0,800),staticUnreferenced:staticCandidates.slice(0,1200),duplicateDefinitions:duplicates.slice(0,1200),localSameNameInformational:Object.keys(impl.localCollisions).sort().map(function(n){return {name:n,count:impl.localCollisions[n]};}).slice(0,1200),untriggeredRenderedHandlers:untriggered.slice(0,800),missingRenderedHandlers:live.missing.slice(0,800),repeatedSchedulerSignatures:sched.repeated.slice(0,600),deprecatedTermsStillPresent:scanDeprecated(corpus),unmappedInteractiveTargets:unmapped.slice(0,800)},
-      runtimeHandlerUsage:uiUsed,automaticInteractionTelemetry:{sessionId:sessionId,startedAutomatically:true,summary:runtime.interactions,events:interactionLog.slice(-800),unmappedInteractiveTargets:unmapped.slice(0,800)},publicProviderTimeline:impl.providers.slice(0,4500),definitionIndex:definitionIndex.slice(0,3000),schedulerInventory:sched.all.slice(0,1800),eventListenerInventory:listeners.slice(0,1800),loadedScripts:rows.map(function(r){return {id:r.id,characters:r.source.length};})};
+    var engines=scriptInventory(rows,defs,impl,sched,listeners,states),scriptReviews=engines.filter(function(x){return x.classification==='manual_direct_replacement_review';}),protectedLayers=engines.filter(function(x){return x.classification==='protected_execution_history'||x.classification==='operational_state_or_side_effect_layer';}),runtime=status(),unmappedMap={},unmapped=[];interactionLog.forEach(function(x){if(A(x.declaredRoutes).length)return;var k=[x.type,x.page,x.modal,x.target&&x.target.tag,x.target&&x.target.id,x.target&&x.target.name,x.target&&x.target.type,x.target&&x.target.classes].join('|');if(!unmappedMap[k])unmappedMap[k]={eventType:x.type,page:x.page,modal:x.modal,target:x.target,count:0};unmappedMap[k].count++;});Object.keys(unmappedMap).sort().forEach(function(k){unmapped.push(unmappedMap[k]);});
+    return {id:'maintenance_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),schema:'egtph-maintenance-conservative-active-implementation-audit-v5',generatedAt:now(),version:VERSION,scope:'public-executable-implementation-analysis-plus-automatic-runtime-interaction-monitoring; guards/cache/state and this audit script are excluded from cleanup inference.',limitations:'الدوال داخل IIFE أو المسارات الديناميكية لا يمكن إثبات توقفها بالتحليل الثابت. المرشحات هنا مراجعة فقط؛ لا تحذف شيئاً قبل اختبار التشغيل والطباعة والمزامنة والحسابات.',analysisExclusions:{auditScript:AUDIT_ID,nonExecutableGlobalState:'أعلام الحماية والـcache لا تعامل كمحركات تنفيذ مستبدلة.',inlineLanguageTokens:'كلمات catch/function/if وطرق Date المحلية لا تعامل كمراجع واجهة.'},runtime:runtime,
+      summary:{scriptsAnalyzed:rows.length,auditScriptExcluded:true,definitions:defs.length,uniqueDefinitionNames:Object.keys(by).length,publicExecutableProviders:impl.providers.length,publicImplementationGroups:Object.keys(impl.groups).length,activePublicBindings:impl.active.length,directExecutableReplacementReview:impl.directReview.length,protectedExecutableHistory:impl.protectedHistory.length,globalStateAssignmentsExcluded:states.length,manualScriptReview:scriptReviews.length,protectedOrOperationalLayers:protectedLayers.length,staticAdvisoriesLowConfidence:advisories.length,duplicateDefinitions:duplicates.length,scheduledRegistrations:sched.all.length,exactDuplicateSchedulerCalls:sched.exactDuplicates.length,eventListenerRegistrations:listeners.length,renderedHandlers:Object.keys(live.map).length,untriggeredRenderedHandlers:untriggered.length,actualMissingRenderedHandlers:live.missing.length,runtimeErrors:errors.length,automaticInteractions:runtime.interactions.total,recordedInteractionSamples:runtime.interactions.recorded,coalescedNoisyInteractions:runtime.interactions.coalesced,unmappedInteractiveTargets:unmapped.length},
+      activeBindings:impl.active.slice(0,1800),engineInventory:engines.slice(0,1000),cleanupCandidates:{directExecutableReplacementReview:impl.directReview.slice(0,1800),manualScriptReview:scriptReviews.slice(0,500),protectedExecutableHistory:impl.protectedHistory.slice(0,1800),protectedOrOperationalLayers:protectedLayers.slice(0,800),globalStateExcluded:states.slice(0,1200),staticAdvisoriesLowConfidence:advisories.slice(0,1200),duplicateDefinitions:duplicates.slice(0,1200),localSameNameInformational:Object.keys(impl.localCollisions).sort().map(function(n){return {name:n,count:impl.localCollisions[n]};}).slice(0,1200),untriggeredRenderedHandlers:untriggered.slice(0,800),actualMissingRenderedHandlers:live.missing.slice(0,800),exactDuplicateSchedulerCalls:sched.exactDuplicates.slice(0,600),deprecatedExecutableTerms:scanDeprecated(rows),unmappedInteractiveTargets:unmapped.slice(0,800)},
+      runtimeHandlerUsage:uiUsed,automaticInteractionTelemetry:{sessionId:sessionId,startedAutomatically:true,summary:runtime.interactions,events:interactionLog.slice(-800),unmappedInteractiveTargets:unmapped.slice(0,800)},publicProviderTimeline:impl.providers.slice(0,4500),definitionIndex:definitionIndex.slice(0,3000),schedulerInventory:sched.all.slice(0,1800),eventListenerInventory:listeners.slice(0,1800),loadedScripts:scriptRows({includeSelf:true}).map(function(r){return {id:r.id,characters:r.source.length,auditExcludedFromInference:r.id===AUDIT_ID};})};
   }
-
   function child(endpoint,path){var m=S(endpoint).match(/^(.*)\.json(\?.*)?$/),bits=A(path).map(function(p){return encodeURIComponent(S(p));});return m?m[1]+'/'+bits.join('/')+'.json'+(m[2]||''):endpoint;}
-  async function upload(){
-    var report=makeReport();lastReport=report;renderPanel(report);
-    try{
-      if(typeof window.egtphEnsureAuthenticated!=='function')throw new Error('مساعد مصادقة Firebase غير جاهز');
-      await window.egtphEnsureAuthenticated();
-      var cfg=typeof window._cloudCfg==='function'?window._cloudCfg():null;if(!cfg||!cfg.endpoint)throw new Error('إعداد Firebase أو رمز الدخول غير جاهز');
-      var put=typeof window.fbFetch==='function'?window.fbFetch:fetch,headers={'Content-Type':'application/json'};
-      var r=await put(child(cfg.endpoint,['maintenanceDiagnostics','reports',report.id]),{method:'PUT',headers:headers,body:JSON.stringify(report)},1);if(!r.ok)throw new Error('HTTP '+r.status);await r.json();
-      var latest={id:report.id,generatedAt:report.generatedAt,version:report.version,summary:report.summary,scope:report.scope};
-      var l=await put(child(cfg.endpoint,['maintenanceDiagnostics','latest']),{method:'PUT',headers:headers,body:JSON.stringify(latest)},1);if(!l.ok)throw new Error('HTTP '+l.status);await l.json();
-      show('✅ حُفظ تقرير التكرارات والصيانة في Firebase: maintenanceDiagnostics/reports/'+report.id,false);return report;
-    }catch(e){show('❌ لم يُرفع التقرير: '+trimText(e&&e.message||e,180),true);throw e;}
-  }
+  async function upload(){var report=makeReport();lastReport=report;renderPanel(report);try{if(typeof window.egtphEnsureAuthenticated!=='function')throw new Error('مساعد مصادقة Firebase غير جاهز');await window.egtphEnsureAuthenticated();var cfg=typeof window._cloudCfg==='function'?window._cloudCfg():null;if(!cfg||!cfg.endpoint)throw new Error('إعداد Firebase أو رمز الدخول غير جاهز');var put=typeof window.fbFetch==='function'?window.fbFetch:fetch,headers={'Content-Type':'application/json'};var r=await put(child(cfg.endpoint,['maintenanceDiagnostics','reports',report.id]),{method:'PUT',headers:headers,body:JSON.stringify(report)},1);if(!r.ok)throw new Error('HTTP '+r.status);await r.json();var latest={id:report.id,generatedAt:report.generatedAt,version:report.version,summary:report.summary,scope:report.scope};var l=await put(child(cfg.endpoint,['maintenanceDiagnostics','latest']),{method:'PUT',headers:headers,body:JSON.stringify(latest)},1);if(!l.ok)throw new Error('HTTP '+l.status);await l.json();show('✅ حُفظ تقرير الصيانة المحافظ في Firebase: maintenanceDiagnostics/reports/'+report.id,false);return report;}catch(e){show('❌ لم يُرفع التقرير: '+trimText(e&&e.message||e,180),true);throw e;}}
   function show(text,isError){var el=document.getElementById('v110MaintStatus');if(el){el.textContent=text;el.style.color=isError?'var(--red)':'var(--green1)';}}
   function preview(){var r=makeReport();lastReport=r;renderPanel(r);return r;}
   function providerLabel(x){return esc(x.name)+' — '+esc(x.provider.scriptId+':'+x.provider.line)+' → '+esc(x.replacedBy.scriptId+':'+x.replacedBy.line);}
   function scriptLabel(x){return esc(x.scriptId)+' — '+esc(x.classification)+' — '+esc(x.reason);}
+  function stateLabel(x){return esc(x.name)+' — '+esc(x.kind)+' — '+esc(x.scriptId+':'+x.line);}
   function renderPanel(report){
-    var page=document.getElementById('page-admin');if(!page)return;var panel=document.getElementById('v110MaintenancePanel');if(!panel){panel=document.createElement('section');panel.id='v110MaintenancePanel';panel.className='sec';page.appendChild(panel);}
-    var r=report||lastReport,st=status(),html='<div class="sechdr"><h3>🧬 تدقيق المحركات والتكرارات + صيانة الكود</h3></div><div class="secbody"><div class="abox warn"><b>المراقبة تعمل تلقائياً:</b> تسجل النقر، الإدخال، التغيير، الإرسال، التنقل وأخطاء التشغيل طوال الجلسة، ثم يدمج التقرير هذه الاستعمالات مع خريطة المحركات والتكرارات. لا تحفظ القيم التي تكتبها في الحقول، ولا ترفع أي شيء إلى Firebase إلا عند ضغط زر الحفظ.</div><div class="v108-maint-actions"><button class="btn2" type="button" onclick="window.EGTPH_MAINTENANCE.preview()">🔎 تحليل شامل الآن</button><button class="btn2" type="button" onclick="window.EGTPH_MAINTENANCE.reset()">↻ تصفير سجل هذه الجلسة</button><button class="btn1" type="button" onclick="window.EGTPH_MAINTENANCE.upload().catch(function(){})">☁️ حفظ التقرير في Firebase</button></div><div id="v110MaintStatus" style="font-size:11px;margin-top:10px;color:var(--gray)">مراقبة تلقائية منذ '+(startedAt?new Date(startedAt).toLocaleString('fr-DZ'):'—')+' — '+st.interactions.total+' تفاعل مرصود، '+st.interactions.uniqueTargets+' عناصر فريدة، '+st.errors.length+' أخطاء تشغيل.</div>';
-    if(r){
-      html+='<div class="v108-maint-grid"><div><b>محركات عامة فعالة:</b> '+r.summary.activeGlobalBindings+'</div><div><b>تنفيذات مستبدلة:</b> '+r.summary.supersededGlobalCandidates+'</div><div><b>طبقات مرشحة للتنظيف:</b> '+r.summary.scriptCleanupCandidates+'</div><div><b>طبقات محمية/تشغيلية:</b> '+r.summary.protectedOrRuntimeLayers+'</div><div><b>مؤقتات مسجلة:</b> '+r.summary.scheduledRegistrations+'</div><div><b>مستمعات أحداث:</b> '+r.summary.eventListenerRegistrations+'</div><div><b>واجهة لم تُستخدم:</b> '+r.summary.untriggeredRenderedHandlers+'</div><div><b>أخطاء تشغيل:</b> '+r.summary.runtimeErrors+'</div><div><b>تفاعلات تلقائية مرصودة:</b> '+r.summary.automaticInteractions+'</div><div><b>عناصر تفاعلية بلا مسار معلن:</b> '+r.summary.unmappedInteractiveTargets+'</div></div>';
-      var retired=A(r.cleanupCandidates.supersededGlobalProviders).slice(0,10),scripts=A(r.cleanupCandidates.supersededScriptLayers).slice(0,8),protectedRows=A(r.cleanupCandidates.wrapperProtectedPreviousProviders).slice(0,8),miss=A(r.cleanupCandidates.missingRenderedHandlers).slice(0,8),timers=A(r.cleanupCandidates.repeatedSchedulerSignatures).slice(0,8),stat=A(r.cleanupCandidates.staticUnreferenced).slice(0,8),unmapped=A(r.cleanupCandidates.unmappedInteractiveTargets).slice(0,8),old=A(r.cleanupCandidates.deprecatedTermsStillPresent);
-      html+='<div class="v108-maint-results">'+
-        (retired.length?'<div class="abox danger"><b>مرشحات تنظيف: تنفيذ عام مستبدل ولا يطابق التنفيذ الحالي</b><br>'+retired.map(providerLabel).join('<br>')+'</div>':'<div class="abox ok">✅ لا توجد تنفيذات عامة مستبدلة بلا علامة حماية في النتيجة الحالية.</div>')+
-        (scripts.length?'<div class="abox danger"><b>طبقات يمكن بدء مراجعتها للتنظيف</b><br>'+scripts.map(scriptLabel).join('<br>')+'</div>':'')+
-        (protectedRows.length?'<div class="abox warn"><b>لا تحذف الآن: تنفيذ سابق قد تستدعيه Wrapper</b><br>'+protectedRows.map(providerLabel).join('<br>')+'</div>':'')+
-        (timers.length?'<div class="abox warn"><b>توقيعات مؤقت متكررة — فحص يدوي قبل الحذف</b><br>'+timers.map(function(x){return esc(x.count+' × '+x.locations.join('، '));}).join('<br>')+'</div>':'')+
-        (miss.length?'<div class="abox danger"><b>مراجع واجهة مفقودة</b><br>'+miss.map(function(x){return esc(x.path)+' ('+esc(x.attrs.join(','))+')';}).join('<br>')+'</div>':'<div class="abox ok">✅ لا توجد مراجع واجهة مفقودة في العناصر المعروضة الآن.</div>')+
-        (unmapped.length?'<div class="abox warn"><b>عناصر استعملت تلقائياً لكن بلا دالة inline معلنة</b><br>'+unmapped.map(function(x){return esc(x.eventType+' — '+(x.target&&((x.target.tag||'')+'#'+(x.target.id||x.target.name||''))||'عنصر')+' × '+x.count);}).join('<br>')+'</div>':'')+(stat.length?'<div class="abox warn"><b>تعريفات مرشحة للمراجعة الثابتة</b><br>'+stat.map(function(x){return esc(x.name)+' — '+esc(x.locations.join(', '));}).join('<br>')+'</div>':'')+
-        (old.length?'<div class="abox danger"><b>مصطلحات قديمة باقية</b><br>'+old.map(esc).join('<br>')+'</div>':'<div class="abox ok">✅ لا توجد المصطلحات القديمة المحددة في الفحص.</div>')+
-      '</div>';
+    var page=document.getElementById('page-admin');if(!page)return;var panel=document.getElementById('v110MaintenancePanel');if(!panel){panel=document.createElement('section');panel.id='v110MaintenancePanel';panel.className='sec';page.appendChild(panel);}var r=report||lastReport,st=status(),html='<div class="sechdr"><h3>🧬 تدقيق المحركات الفعالة + صيانة محافظة</h3></div><div class="secbody"><div class="abox warn"><b>المراقبة تعمل تلقائياً:</b> تسجل الاستعمال وأخطاء التشغيل طوال الجلسة دون حفظ القيم المكتوبة. هذا التدقيق لا يعد أعلام الحماية أو cache محركات مستبدلة، ويستثني نفسه من الفحص، ولا يرفع شيئاً إلا عند ضغط الحفظ.</div><div class="v108-maint-actions"><button class="btn2" type="button" onclick="window.EGTPH_MAINTENANCE.preview()">🔎 تحليل شامل الآن</button><button class="btn2" type="button" onclick="window.EGTPH_MAINTENANCE.reset()">↻ تصفير سجل هذه الجلسة</button><button class="btn1" type="button" onclick="window.EGTPH_MAINTENANCE.upload().catch(function(){})">☁️ حفظ التقرير في Firebase</button></div><div id="v110MaintStatus" style="font-size:11px;margin-top:10px;color:var(--gray)">مراقبة تلقائية منذ '+(startedAt?new Date(startedAt).toLocaleString('fr-DZ'):'—')+' — '+st.interactions.total+' تفاعل مرصود، '+st.interactions.uniqueTargets+' عناصر فريدة، '+st.errors.length+' أخطاء تشغيل.</div>';
+    if(r){var c=r.cleanupCandidates,direct=A(c.directExecutableReplacementReview).slice(0,10),scripts=A(c.manualScriptReview).slice(0,8),protectedRows=A(c.protectedExecutableHistory).slice(0,8),states=A(c.globalStateExcluded).slice(0,8),miss=A(c.actualMissingRenderedHandlers).slice(0,8),timers=A(c.exactDuplicateSchedulerCalls).slice(0,8),stat=A(c.staticAdvisoriesLowConfidence).slice(0,8),old=A(c.deprecatedExecutableTerms).slice(0,8),unmapped=A(c.unmappedInteractiveTargets).slice(0,8);
+      html+='<div class="v108-maint-grid"><div><b>دوال عامة فعالة:</b> '+r.summary.activePublicBindings+'</div><div><b>مراجعة استبدال مباشر:</b> '+r.summary.directExecutableReplacementReview+'</div><div><b>سجل محمي بـ Wrapper:</b> '+r.summary.protectedExecutableHistory+'</div><div><b>حراس/حالة مستبعدة:</b> '+r.summary.globalStateAssignmentsExcluded+'</div><div><b>مؤقتات مسجلة:</b> '+r.summary.scheduledRegistrations+'</div><div><b>مؤقتات متطابقة تماماً:</b> '+r.summary.exactDuplicateSchedulerCalls+'</div><div><b>مراجع واجهة مفقودة فعلاً:</b> '+r.summary.actualMissingRenderedHandlers+'</div><div><b>أخطاء تشغيل:</b> '+r.summary.runtimeErrors+'</div><div><b>تفاعلات تلقائية:</b> '+r.summary.automaticInteractions+'</div><div><b>عناصر Event Delegation/DOM:</b> '+r.summary.unmappedInteractiveTargets+'</div></div><div class="v108-maint-results">'+
+        (direct.length?'<div class="abox warn"><b>مراجعة فقط: دوال تنفيذ عامة استبدلت مباشرة</b><br>'+direct.map(providerLabel).join('<br>')+'</div>':'<div class="abox ok">✅ لا توجد دوال عامة مستبدلة مباشرة تستوفي شروط المراجعة المحافظة.</div>')+
+        (scripts.length?'<div class="abox warn"><b>ملفات تحتاج مراجعة يدوية بعد اختبار كامل</b><br>'+scripts.map(scriptLabel).join('<br>')+'</div>':'')+
+        (protectedRows.length?'<div class="abox warn"><b>لا تحذف: تاريخ تنفيذ قد تستدعيه Wrapper/Alias</b><br>'+protectedRows.map(providerLabel).join('<br>')+'</div>':'')+
+        (states.length?'<div class="abox ok"><b>حراس وحالة عامة مستبعدة من التنظيف تلقائياً</b><br>'+states.map(stateLabel).join('<br>')+'</div>':'')+
+        (timers.length?'<div class="abox warn"><b>نداءات مؤقت متطابقة تماماً — ليست قرار حذف</b><br>'+timers.map(function(x){return esc(x.count+' × '+x.locations.join('، ')+' — '+x.risk);}).join('<br>')+'</div>':'')+
+        (miss.length?'<div class="abox danger"><b>مراجع واجهة مفقودة فعلاً</b><br>'+miss.map(function(x){return esc(x.path)+' ('+esc(x.attrs.join(','))+')';}).join('<br>')+'</div>':'<div class="abox ok">✅ لا توجد مراجع واجهة مفقودة فعلاً؛ تم تجاهل كلمات JavaScript غير المرتبطة بالواجهة.</div>')+
+        (unmapped.length?'<div class="abox warn"><b>تفاعلات بلا مسار inline — غالباً Event Delegation أو DOM</b><br>'+unmapped.map(function(x){return esc(x.eventType+' — '+(x.target&&((x.target.tag||'')+'#'+(x.target.id||x.target.name||''))||'عنصر')+' × '+x.count);}).join('<br>')+'</div>':'')+
+        (stat.length?'<div class="abox warn"><b>إشارات ثابتة ضعيفة — لا تعد مرشحات حذف</b><br>'+stat.map(function(x){return esc(x.name)+' — '+esc(x.locations.join(', '));}).join('<br>')+'</div>':'')+
+        (old.length?'<div class="abox danger"><b>مصطلحات قديمة داخل سكربتات تنفيذية</b><br>'+old.map(function(x){return esc(x.term)+' — '+esc(x.locations.join(', '));}).join('<br>')+'</div>':'<div class="abox ok">✅ لا توجد مصطلحات قديمة داخل سكربتات التنفيذ؛ تم استثناء نص التدقيق نفسه.</div>')+'</div>';
     }
-    html+='</div>';panel.innerHTML=html;
+    panel.innerHTML=html+'</div>';
   }
-  function expose(){window.EGTPH_MAINTENANCE={version:VERSION,start:start,reset:reset,preview:preview,upload:upload,status:status,makeReport:makeReport,analyzeImplementations:analyzeImplementations,engineInventory:function(){var m=allDefinitions(),i=analyzeImplementations(),s=staticSchedulers(m.rows),l=staticListeners(m.rows);return scriptInventory(m.defs,i,s,l);}};}
+  function expose(){window.EGTPH_MAINTENANCE={version:VERSION,start:start,reset:reset,preview:preview,upload:upload,status:status,makeReport:makeReport,analyzeImplementations:function(){return analyzeImplementations(scriptRows());},engineInventory:function(){var rows=scriptRows(),m=allDefinitions(rows),i=analyzeImplementations(rows),s=staticSchedulers(rows),l=staticListeners(rows),g=globalStateRows(rows);return scriptInventory(rows,m.defs,i,s,l,g);}};}
   function install(){expose();start();renderPanel();}
   install();[1200,5000,15000].forEach(function(ms){setTimeout(function(){expose();renderPanel();},ms);});
 })();
