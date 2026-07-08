@@ -730,14 +730,57 @@ function migrate(){let ch=false;
   // لا تُعاد إضافة آلات محذوفة تلقائياً؛ ولا يُنشأ كتالوج مخصص قبل أول تعديل يدوي.
   if(ch&&!MEM_ONLY){try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}}
 }
-// طابع زمني بدقّة الميلي-ثانية مع ضمان تصاعد صارم (الأحدث يغلب دائماً حتى لو نفس الميلي)
-let _lastMod=0;
-function nextMod(){ let t=Date.now(); try{t+=(performance.now()%1)/1000;}catch(e){} if(t<=_lastMod)t=_lastMod+0.001; _lastMod=t; return t; }
-let ft;function save(){
+// طابع مزامنة موحّد: يُصحَّح بساعة Firebase Server ولا يعتمد على ساعة الجهاز وحدها.
+// كل تعديل آلة يوسَم مباشرة بالآلة المقصودة، وليس بـ DB.active فقط.
+const SYNC_SCHEMA_VERSION=4;
+const DIRTY_MACHINES_KEY='egtph_parc_dirty_machines_v4';
+const DEVICE_ID_KEY='egtph_parc_device_id_v4';
+let _lastMod=0,_serverOffset=0,_serverOffsetAt=0;
+function getDeviceId(){
+  try{
+    let id=localStorage.getItem(DEVICE_ID_KEY);
+    if(!id){ id='dev_'+Math.random().toString(36).slice(2)+'_'+Date.now().toString(36); localStorage.setItem(DEVICE_ID_KEY,id); }
+    return id;
+  }catch(e){ return 'dev_memory'; }
+}
+function serverNow(){ return Date.now()+(_serverOffset||0); }
+function nextMod(){ let t=serverNow(); try{t+=(performance.now()%1)/1000;}catch(e){} if(t<=_lastMod)t=_lastMod+0.001; _lastMod=t; return t; }
+function _loadDirtyMachines(){try{return new Set(JSON.parse(localStorage.getItem(DIRTY_MACHINES_KEY)||'[]').map(String));}catch(e){return new Set();}}
+let _dirtyMachines=_loadDirtyMachines();
+function _saveDirtyMachines(){try{localStorage.setItem(DIRTY_MACHINES_KEY,JSON.stringify(Array.from(_dirtyMachines)));}catch(e){}}
+function markDirtyMachine(id){ if(id==null)return; _dirtyMachines.add(String(id)); _saveDirtyMachines(); _fbDirty=true; }
+function clearDirtyMachines(ids){
+  if(!ids){_dirtyMachines.clear();}
+  else{ids.forEach(id=>_dirtyMachines.delete(String(id)));}
+  _saveDirtyMachines();
+}
+function touchMachine(ref,reason){
+  try{
+    if(!DB||!Array.isArray(DB.machines))return null;
+    const id=(ref&&typeof ref==='object')?ref.id:ref;
+    if(id==null)return null;
+    const mc=(ref&&typeof ref==='object'&&ref.id)?ref:DB.machines.find(x=>String(x.id)===String(id));
+    if(!mc)return null;
+    const t=nextMod();
+    mc._mod=t;
+    mc._rev=(Number(mc._rev)||0)+1;
+    mc._device=getDeviceId();
+    mc._dirty=true;
+    if(reason)mc._lastChange=reason;
+    DB._mod=Math.max(Number(DB._mod)||0,t);
+    DB._device=getDeviceId();
+    markDirtyMachine(mc.id);
+    return mc;
+  }catch(e){return null;}
+}
+function touchActive(reason){return DB&&DB.active?touchMachine(DB.active,reason||'active-save'):null;}
+function touchMachines(ids,reason){(ids||[]).forEach(id=>touchMachine(id,reason||'batch-save'));}
+let ft;function save(machineId){
   try{
     DB._mod=nextMod();
-    const a=DB.machines&&DB.active?DB.machines.find(x=>x.id===DB.active):null;
-    if(a) a._mod=nextMod();
+    DB._device=getDeviceId();
+    const target=(machineId!==undefined)?machineId:DB.active;
+    if(target!==false&&target!=null)touchMachine(target,'save');
     if(!MEM_ONLY) localStorage.setItem(KEY,JSON.stringify(DB));
     flash('✓ تمّ الحفظ');
   }catch(e){flash('⚠ الحفظ غير متاح هنا');}
@@ -1190,7 +1233,7 @@ function toggleRateLock(kind,on){
   const now=new Date().toISOString();
   if(kind==='truck'){DB.settings.rateLockTruck=!!on; if(on)DB.settings.rateLockTruckAt=now;}
   else{DB.settings.rateLockMachine=!!on; if(on)DB.settings.rateLockMachineAt=now;}
-  save();flash(on?'🔒 قُفل المعدّل':'🔓 فُكّ القفل');
+  save(false);flash(on?'🔒 قُفل المعدّل':'🔓 فُكّ القفل');
   const mc=getActive();if(mc)renderRateTab(mc);
 }
 // ── تبويب المعدّل اليومي: خانة إدخال + تأكيد + تاريخ فقط — لا علاقة له بالعدّاد الفعلي ──
@@ -1200,7 +1243,7 @@ function setGlobalRate(kind,v){
   if(!DB.settings)DB.settings={};
   if(kind==='truck'){DB.settings.rateTruck=val;DB.settings.rateTruckSetAt=new Date().toISOString();}
   else{DB.settings.rateMachine=val;DB.settings.rateMachineSetAt=new Date().toISOString();}
-  save();flash('✓ طُبِّق على كل '+(kind==='truck'?'الشاحنات':'الآلات'));
+  save(false);flash('✓ طُبِّق على كل '+(kind==='truck'?'الشاحنات':'الآلات'));
   const mc=getActive();if(mc)renderRateTab(mc);
 }
 function setCustomRate(v){
@@ -1276,7 +1319,7 @@ function alertWhenTxt(s){
   if(s.days!=null)return 'بعد ~'+s.days+' يوم عمل (تقدير) · '+esc(s.estDate||'');
   return 'قريب بالعدّاد (باقي '+fmt(s.rem)+')';
 }
-function setAlertDays(v){if(!DB.settings)DB.settings={};DB.settings.alertDays=Math.max(1,parseInt(v,10)||10);save();renderGarage();}
+function setAlertDays(v){if(!DB.settings)DB.settings={};DB.settings.alertDays=Math.max(1,parseInt(v,10)||10);save(false);renderGarage();}
 function renderDashRatePanel(){
   const box=document.getElementById('dashRatePanel');if(!box)return;
   const t=globalRateOf('truck'),m=globalRateOf('machine');
@@ -1301,7 +1344,7 @@ function saveDashRates(){
   if(!DB.settings)DB.settings={};
   DB.settings.rateTruck=t;DB.settings.rateTruckSetAt=new Date().toISOString();
   DB.settings.rateMachine=m;DB.settings.rateMachineSetAt=new Date().toISOString();
-  save();flash('✓ طُبِّق المعدّل العام على كل العتاد');renderGarage();
+  save(false);flash('✓ طُبِّق المعدّل العام على كل العتاد');renderGarage();
 }
 function renderAlertsCard(){
   const box=document.getElementById('alertsCard');if(!box)return;
@@ -1434,7 +1477,7 @@ function fillLogForm(){
   document.getElementById('logHint').textContent='('+u+')';
   document.getElementById('logItems').innerHTML=itemsFor(mc).map(it=>'<label class="logitem"><input type="checkbox" value="'+it.id+'"><span class="nm">'+it.ar+(it.conditionOnly==='airFilter'?' (استبدال الزوج)':'')+'<div class="fr">'+(it.fr||'')+'</div></span></label>').join('');
 }
-function goGarage(){DB.active=null;save();renderGarage();}
+function goGarage(){DB.active=null;try{if(!MEM_ONLY)localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}renderGarage();}
 
 // ── سجل العتاد ──
 function openRegister(){
@@ -1445,7 +1488,7 @@ function openRegister(){
 }
 function closeRegister(){const ov=document.getElementById('regOverlay');if(ov)ov.style.display='none';document.body.style.overflow='';setTimeout(flushDeferredRender,50);}
 function fleetNoOf(mc,idx){return (mc.fleetNo!=null&&mc.fleetNo!=='')?mc.fleetNo:String(idx+1);}
-function setFleetNo(id,v){const mc=DB.machines.find(x=>x.id===id);if(!mc)return;const t=(v||'').trim();if(t==='')delete mc.fleetNo;else mc.fleetNo=t;save();}
+function setFleetNo(id,v){const mc=DB.machines.find(x=>x.id===id);if(!mc)return;const t=(v||'').trim();if(t==='')delete mc.fleetNo;else mc.fleetNo=t;save(id);}
 function renderRegister(){
   const ov=document.getElementById('regOverlay');if(!ov)return;
   const trucks=DB.machines.filter(m=>isRoadType(m.type));
@@ -1791,7 +1834,7 @@ function markDone(id){const mc=getActive();if(!mc.history)mc.history=[];mc.histo
   save();renderDetail();}
 function setLast(id){const mc=getActive(),curR=lastReadOf(mc,id),curD=lastDateOf(mc,id),u=unit(mc);const v=prompt('آخر تغيير على أيّ '+(u==='km'?'كيلومتر':'ساعة')+'؟\n(فارغ = حذف التسجيل اليدوي)',curR!=null?curR:'');if(v===null)return;if(!mc.history)mc.history=[];if(v.trim()===''){mc.history=mc.history.filter(h=>!(h&&h.manual===true&&Array.isArray(h.ids)&&h.ids.length===1&&h.ids[0]===id));recomputeDone(mc);save();renderDetail();return;}const n=parseInt(v,10);if(isNaN(n)||n<0)return;const dv=prompt('تاريخ التغيير؟ (سنة-شهر-يوم)\nمثال: 2026-06-10 · فارغ = تاريخ اليوم',curD||todayISO());const d=(dv&&dv.trim()!=='')?dv.trim():todayISO();mc.history=mc.history.filter(h=>!(h&&h.manual===true&&Array.isArray(h.ids)&&h.ids.length===1&&h.ids[0]===id));mc.history.push({r:n,d:d,ids:[id],note:'ضبط يدوي لآخر تغيير',manual:true});recomputeDone(mc);save();renderDetail();}
 function renameMachine(){const mc=getActive();const v=prompt('اسم/رقم الآلة',mc.name);if(v&&v.trim()){mc.name=v.trim();save();renderDetail();}}
-function deleteMachine(){const mc=getActive();if(confirm('حذف "'+mc.name+'"؟')){_markDeleted(mc.id);DB.machines=DB.machines.filter(x=>x.id!==mc.id);DB.active=null;save();renderGarage();}}
+function deleteMachine(){const mc=getActive();if(confirm('حذف "'+mc.name+'"؟')){_markDeleted(mc.id);DB.machines=DB.machines.filter(x=>x.id!==mc.id);DB.active=null;save(false);renderGarage();}}
 
 function doPrint(){
   const mc=getActive();const u=unit(mc);
@@ -1824,7 +1867,7 @@ function setAddCat(cat){const sel=document.getElementById('addTpl');const arr=Ob
 function pickTemplate(key){addType=key;const t=FLEET_TEMPLATES[key]||FLEET_TEMPLATES.generic_truck;document.getElementById('addReadLbl').textContent=(t.unit==='h')?'عدّاد الساعات الحالي (h)':'العدّاد الحالي (km)';document.getElementById('tplNote').innerHTML='📌 '+esc(t.note||'')+'<br><b>درجة المصدر:</b> '+(t.sourceLevel==='official'?'موثّق/رسمي':t.sourceLevel==='vin_required'?'يلزم VIN/Serial لتأكيد OEM':'احتياطي آمن');}
 function pickType(t){const map={truck:'shacman_f2000',jmc:'jmc_4x2',exc:'hyundai_hx220',loader:'foton_fl936h',jcb:'jcb_3cx'};pickTemplate(map[t]||t);}
 async function decodeVinOnline(){const vin=(document.getElementById('addVin').value||'').trim().toUpperCase();const box=document.getElementById('vinResult');if(!vin){box.textContent='أدخل VIN أولاً';return;}box.textContent='جار البحث عبر الإنترنت...';const localJmc=()=>{if(vin==='LEFYFCC23SHN09912'||vin.startsWith('LEF')){document.getElementById('addTpl').value='jmc_4x2';pickTemplate('jmc_4x2');const txt=(vin==='LEFYFCC23SHN09912'?'مطابقة داخلية: JMC Dump Truck 4×2 CLW5042ZXJX2 · ':'JMC / Jiangling Motors محتمل · ')+'محرك JX493ZQ4A · 2771cc · 68kW/92HP · Euro II · بيانات من الشهادة و PI. ملاحظة: NHTSA قد لا يرجع تفاصيل للشاحنات الصينية غير المباعة في أمريكا.';box.textContent=txt;if(!document.getElementById('addName').value.trim())document.getElementById('addName').value='JMC 2025';return true;}return false;};try{const url='https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/'+encodeURIComponent(vin)+'?format=json';const r=await fetch(url,{cache:'no-store'});const j=await r.json();const v=(j.Results&&j.Results[0])||{};const make=v.Make||'';const model=v.Model||'';const year=v.ModelYear||'';const engine=[v.EngineModel,v.DisplacementL?v.DisplacementL+'L':'',v.FuelTypePrimary].filter(Boolean).join(' ');let txt=[year,make,model].filter(Boolean).join(' ');if(engine)txt+=' · '+engine;if(txt.trim()){box.textContent=txt;if(!document.getElementById('addName').value.trim())document.getElementById('addName').value=txt;}else if(!localJmc()){box.textContent='لم يرجع NHTSA معلومات كافية. جرّب كتابة الماركة/الموديل أو استعمل القالب المناسب، وسيبقى VIN محفوظاً داخل البطاقة.';}}catch(e){if(!localJmc())box.textContent='تعذّر البحث: تحقق من الإنترنت. تم حفظ VIN عند الإضافة ويمكن التأكيد لاحقاً من الوكيل/الكتالوج.';}}
-function confirmAdd(){const t=FLEET_TEMPLATES[addType]||FLEET_TEMPLATES.generic_truck;const name=document.getElementById('addName').value.trim()||t.label;const vin=(document.getElementById('addVin').value||'').trim();const read=Math.max(0,+document.getElementById('addRead').value||0);const mc={id:m(),name:name,type:t.type,templateKey:addType,unit:t.unit,eng:t.eng,engine:t.engine,engInt:t.engInt||250,reading:read,done:{},info:{},sourceLevel:t.sourceLevel,sourceNote:t.note};if(vin)mc.info.vin=vin;if(addType==='jmc_4x2'){mc.info={vin:vin||'LEFYFCC23SHN09912',engno:'S2005638'};}if(t.info)mc.profileInfo=t.info;if(t.filters)mc.filters=t.filters;if(t.oils)mc.oils=t.oils;if(t.reminders)mc.reminders=t.reminders;DB.machines.push(mc);closeAdd();save();renderGarage();}
+function confirmAdd(){const t=FLEET_TEMPLATES[addType]||FLEET_TEMPLATES.generic_truck;const name=document.getElementById('addName').value.trim()||t.label;const vin=(document.getElementById('addVin').value||'').trim();const read=Math.max(0,+document.getElementById('addRead').value||0);const mc={id:m(),name:name,type:t.type,templateKey:addType,unit:t.unit,eng:t.eng,engine:t.engine,engInt:t.engInt||250,reading:read,done:{},info:{},sourceLevel:t.sourceLevel,sourceNote:t.note};if(vin)mc.info.vin=vin;if(addType==='jmc_4x2'){mc.info={vin:vin||'LEFYFCC23SHN09912',engno:'S2005638'};}if(t.info)mc.profileInfo=t.info;if(t.filters)mc.filters=t.filters;if(t.oils)mc.oils=t.oils;if(t.reminders)mc.reminders=t.reminders;DB.machines.push(mc);touchMachine(mc.id,'add');closeAdd();save(mc.id);renderGarage();}
 function resetAll(){if(confirm('مسح كل البيانات وإرجاع الأسطول الأصلي؟')){try{localStorage.removeItem(KEY);}catch(e){}seed();migrate();save();renderGarage();}}
 
 // ══════ حذف الآلات المكرّرة (بنفس الاسم) مع اختيار النسخة المُبقاة ══════
@@ -1886,7 +1929,7 @@ function confirmDedupe(){
   toDelete.forEach(id=>_markDeleted(id));
   DB.machines=(DB.machines||[]).filter(x=>!delSet.has(String(x.id)));
   if(DB.active && delSet.has(String(DB.active))) DB.active=null;
-  save();
+  save(false);
   closeDedupe();
   renderGarage();
   flash('✓ حُذف '+toDelete.length+' مكرّر — لن يعود');
@@ -1895,8 +1938,8 @@ function confirmDedupe(){
 function exportData(){try{const data=JSON.stringify(DB,null,2);const blob=new Blob([data],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');const d=new Date().toISOString().slice(0,10);a.href=url;a.download='egtph_parc_'+d+'.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},600);}catch(e){alert('تعذّر التصدير: '+e.message);}}
 function importData(input){const f=input.files&&input.files[0];if(!f){return;}const r=new FileReader();r.onload=function(){try{const obj=JSON.parse(r.result);if(!obj||!Array.isArray(obj.machines))throw new Error('ملف غير صالح');
   const merge=confirm('طريقة الاستيراد:\n\nموافق = دمج ذكي (يضيف الناقص ويحدّث الأقدم — لا يحذف بياناتك)\n\nإلغاء = استبدال كامل');
-  if(merge){ const st=mergeCloud({machines:obj.machines,deletedIds:obj.deletedIds||[]}); DB.active=null; save(); renderGarage(); alert('✓ دمج ذكي: أُضيف '+st.added+' · حُدِّث '+st.updated); }
-  else { if(!confirm('استبدال كل المحتوى الحالي بـ '+obj.machines.length+' آلة؟')){input.value='';return;} DB=obj;DB.active=null;if(!DB.deletedIds)DB.deletedIds=[];migrate();save();renderGarage();alert('✓ تمّ الاستيراد — '+obj.machines.length+' آلة'); }
+  if(merge){ const st=mergeCloud({machines:obj.machines,deletedIds:obj.deletedIds||[]}); DB.active=null; save(false); renderGarage(); alert('✓ دمج ذكي: أُضيف '+st.added+' · حُدِّث '+st.updated); }
+  else { if(!confirm('استبدال كل المحتوى الحالي بـ '+obj.machines.length+' آلة؟')){input.value='';return;} DB=obj;DB.active=null;if(!DB.deletedIds)DB.deletedIds=[];migrate();(DB.machines||[]).forEach(mc=>touchMachine(mc.id,'import-replace'));save(false);renderGarage();alert('✓ تمّ الاستيراد — '+obj.machines.length+' آلة'); }
 }catch(e){alert('خطأ في الاستيراد: '+e.message);}finally{input.value='';}};r.readAsText(f);}
 
 // ══════════════════════════════════════════
@@ -1936,13 +1979,43 @@ const MEM_ONLY=false;
 const fbAuto   = () => { try { return localStorage.getItem('egtph_parc_fb_auto') !== '0'; } catch(e){ return true; } };
 const fbLastTS = () => { try { return localStorage.getItem('egtph_parc_fb_last') || ''; } catch(e){ return ''; } };
 const _fbSetTS = t  => { try { localStorage.setItem('egtph_parc_fb_last', t); } catch(e){} };
+const fbLastHash = () => { try { return localStorage.getItem('egtph_parc_fb_hash') || ''; } catch(e){ return ''; } };
+const _fbSetHash = h => { try { if(h)localStorage.setItem('egtph_parc_fb_hash', h); } catch(e){} };
+function fbHashShort(h){ return h?String(h).slice(0,8):''; }
+try{ _fbLastHash=fbLastHash(); }catch(e){}
+async function fbRefreshServerTimeOffset(){
+  try{
+    const r=await fetch(FB_URL+'/.info/serverTimeOffset.json'+FB_AUTH_PARAM(),{cache:'no-store'});
+    if(r.ok){
+      const v=Number(await r.json());
+      if(Number.isFinite(v)){ _serverOffset=v; _serverOffsetAt=Date.now(); return v; }
+    }
+  }catch(e){}
+  return _serverOffset||0;
+}
+function fbServerISO(){ return new Date(serverNow()).toISOString(); }
+function stampDirtyMachinesForSync(reason){
+  const ids=Array.from(_dirtyMachines||[]);
+  if(!ids.length)return ids;
+  ids.forEach(id=>touchMachine(id,reason||'sync-stamp'));
+  try{ if(!MEM_ONLY)localStorage.setItem(KEY,JSON.stringify(DB)); }catch(e){}
+  return ids;
+}
+async function fbPrepareLocalForCloud(reason){
+  try{ await fbRefreshServerTimeOffset(); }catch(e){}
+  return stampDirtyMachinesForSync(reason||'cloud');
+}
 
 // ── شواهد الحذف (tombstones) ──
 if(!DB.deletedIds) DB.deletedIds=[];
 function _markDeleted(id){
   if(!DB.deletedIds) DB.deletedIds=[];
-  DB.deletedIds.push({id:id, t:Date.now()});
+  const t=nextMod();
+  DB.deletedIds.push({id:id, t:t, device:getDeviceId()});
   if(DB.deletedIds.length>1000) DB.deletedIds=DB.deletedIds.slice(-1000);
+  try{ _dirtyMachines.delete(String(id)); _saveDirtyMachines(); }catch(e){}
+  DB._mod=Math.max(Number(DB._mod)||0,t);
+  DB._device=getDeviceId();
   _fbDirty=true;
 }
 
@@ -1953,8 +2026,12 @@ async function _gzB64(str){const cs=new CompressionStream('gzip');const ab=await
 async function _b64Gz(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);const ds=new DecompressionStream('gzip');const ab=await new Response(new Blob([u]).stream().pipeThrough(ds)).arrayBuffer();return new TextDecoder().decode(ab);}
 
 function fbBuildData(){
-  return { app:'parc', version:3, savedAt:new Date().toISOString(),
-    machines:DB.machines||[], deletedIds:DB.deletedIds||[], settings:DB.settings||{}, _mod:DB._mod||Date.now() };
+  const core={machines:DB.machines||[], deletedIds:DB.deletedIds||[]};
+  const contentHash=fbHash(JSON.stringify(core));
+  const savedAt=fbServerISO();
+  return { app:'parc', version:4, syncSchema:SYNC_SCHEMA_VERSION, savedAt:savedAt,
+    savedAtLocal:new Date().toISOString(), deviceId:getDeviceId(), contentHash:contentHash,
+    machines:DB.machines||[], deletedIds:DB.deletedIds||[], settings:DB.settings||{}, _mod:DB._mod||serverNow() };
 }
 
 // ── فك ضغط gzip بـ JavaScript خالص (احتياطي لـ iOS القديم بدون DecompressionStream) ──
@@ -2038,43 +2115,46 @@ async function fbFetchData(){
       const bin=atob(raw.gz); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
       json=new TextDecoder().decode(_tinyInflate(u));
     }
-    const d=JSON.parse(json); d.savedAt=raw.savedAt||d.savedAt; return d;
+    const d=JSON.parse(json); d.savedAt=raw.savedAt||d.savedAt; d.contentHash=raw.contentHash||d.contentHash; d.deviceId=raw.deviceId||d.deviceId; return d;
   }
   return raw;
 }
 
-// ── الدمج الذكي: حذف يُطبَّق ولا يعود · جديد يُضاف · موجود يُحدَّث إذا أحدث (_mod) ──
+// ── الدمج الذكي: حذف يُطبَّق ولا يعود · جديد يُضاف · موجود يُحدَّث إذا أحدث (_mod) بعد تصحيح ساعة السيرفر ──
 function mergeCloud(data){
-  const stats={added:0,updated:0,deleted:0,kept:0};
-  const _NOWMAX=Date.now()+120000;
-  const _modOf=x=>{let v=(x&&x._mod)||0;return (v>_NOWMAX)?0:v;};
+  const stats={added:0,updated:0,deleted:0,kept:0,conflictLocalKept:0};
+  const _NOWMAX=serverNow()+120000;
+  const _modOf=x=>{let v=Number((x&&x._mod)||0);return (v>_NOWMAX)?0:v;};
+  const dirtyLocal=new Set(Array.from(_dirtyMachines||[]).map(String));
   // 1) اتحاد شواهد الحذف
   const localDel=DB.deletedIds||[];
-  const delMap=new Map(localDel.map(d=>[d.id,d.t||0]));
-  for(const d of (data.deletedIds||[])){ const t=d.t||0; if(!delMap.has(d.id)||t>delMap.get(d.id)) delMap.set(d.id,t); }
+  const delMap=new Map(localDel.map(d=>[String(d.id),Number(d.t)||0]));
+  for(const d of (data.deletedIds||[])){ const t=Number(d&&d.t)||0, id=String(d&&d.id); if(id&&(!delMap.has(id)||t>delMap.get(id))) delMap.set(id,t); }
   DB.deletedIds=Array.from(delMap, ([id,t])=>({id,t}));
   if(DB.deletedIds.length>1000) DB.deletedIds=DB.deletedIds.slice(-1000);
   // 2) دمج الآلات
-  const map=new Map((DB.machines||[]).map(x=>[x.id,x]));
+  const map=new Map((DB.machines||[]).map(x=>[String(x.id),x]));
   // طبّق الحذف على المحلي (إن كان الحذف أحدث من تعديل الآلة)
   for(const [id,ex] of Array.from(map.entries())){
     const dt=delMap.get(id);
-    if(dt!==undefined && dt>_modOf(ex)){ map.delete(id); stats.deleted++; }
+    if(dt!==undefined && dt>_modOf(ex)){ map.delete(id); clearDirtyMachines([id]); stats.deleted++; }
   }
   for(const inc of (data.machines||[])){
     if(!inc||!inc.id) continue;
-    const dt=delMap.get(inc.id);
+    const id=String(inc.id);
+    const dt=delMap.get(id);
     if(dt!==undefined && dt>_modOf(inc)) continue; // محذوف — لا يُعاد
-    const ex=map.get(inc.id);
-    if(!ex){ map.set(inc.id,inc); stats.added++; }
-    else if(_modOf(inc)>_modOf(ex)){ Object.assign(ex,inc); stats.updated++; }
-    else stats.kept++;
+    const ex=map.get(id);
+    if(!ex){ map.set(id,inc); stats.added++; continue; }
+    const im=_modOf(inc), em=_modOf(ex);
+    if(im>em){ Object.assign(ex,inc); if(!dirtyLocal.has(id)) clearDirtyMachines([id]); stats.updated++; }
+    else { if(dirtyLocal.has(id)&&em>im) stats.conflictLocalKept++; stats.kept++; }
   }
   DB.machines=Array.from(map.values());
   migrate(); // يحافظ على ترحيلات البيانات والسجلات المبدئية بعد أي دمج سحابي
-  // الإعدادات العامة: خذ الأحدث (حسب _mod الكلي)
+  // الإعدادات العامة: خذ الأحدث (حسب _mod الكلي بعد التصحيح)
   if(data.settings && typeof data.settings==='object'){
-    if((data._mod||0) > (DB._mod||0)) DB.settings=Object.assign({}, DB.settings||{}, data.settings);
+    if((Number(data._mod)||0) > (Number(DB._mod)||0)) DB.settings=Object.assign({}, DB.settings||{}, data.settings);
   }
   return stats;
 }
@@ -2091,7 +2171,7 @@ function fbStatus(state,title){
     const ic ={ok:'✓',sync:'⏳',off:'⚠️',err:'✗',new:'🔔'};
     const lt=fbLastTS();
     let txt=title||'';
-    if(state==='ok'){ txt = lt?('آخر مزامنة: '+fbFmtTS(lt)):(title||'متزامن'); }
+    if(state==='ok'){ const hs=fbHashShort(fbLastHash()); txt = lt?('آخر مزامنة: '+fbFmtTS(lt)+(hs?' · بصمة: '+hs:'')):(title||'متزامن'); }
     bar.style.display='block';
     bar.style.color=col[state]||'#555';
     bar.style.background=bg[state]||'#f0f0f0';
@@ -2099,7 +2179,7 @@ function fbStatus(state,title){
   }
   // حدّث نص الإعدادات أيضاً
   const el=document.getElementById('fb-last-txt');
-  if(el){ const lt=fbLastTS(); el.textContent=lt?('آخر مزامنة: '+fbFmtTS(lt)):'لم تتم أي مزامنة بعد'; }
+  if(el){ const lt=fbLastTS(),hs=fbHashShort(fbLastHash()); el.textContent=lt?('آخر مزامنة: '+fbFmtTS(lt)+(hs?' · بصمة: '+hs:'')):'لم تتم أي مزامنة بعد'; }
 }
 
 async function fbPush(silent){
@@ -2107,21 +2187,22 @@ async function fbPush(silent){
   if(!navigator.onLine){ if(!silent) flash('لا يوجد اتصال'); fbStatus('off','غير متصل'); return false; }
   // حارس مضادّ للطمس: لا ترفع قبل قراءة السحابة بنجاح هذه الجلسة
   if(!_fbSynced){ if(!silent) flash('⏳ لم تُقرأ السحابة بعد — جارٍ المزامنة أولاً'); try{ if(typeof fbSync==='function'){ await fbSync(silent); } }catch(e){} return false; }
+  await fbPrepareLocalForCloud('push');
   const data=fbBuildData();
   const core=JSON.stringify({machines:data.machines,deletedIds:data.deletedIds});
   const h=fbHash(core);
-  if(silent && h===_fbLastHash){ _fbDirty=false; return true; }
+  if(silent && h===_fbLastHash && !_dirtyMachines.size){ _fbDirty=false; return true; }
   _fbBusy=true; fbStatus('sync','جارٍ الرفع…');
   try{
     let body;
-    if(_gzOK){ const gz=await _gzB64(JSON.stringify(data)); body=JSON.stringify({app:'parc',version:3,savedAt:data.savedAt,gz}); }
+    if(_gzOK){ const gz=await _gzB64(JSON.stringify(data)); body=JSON.stringify({app:'parc',version:4,syncSchema:SYNC_SCHEMA_VERSION,savedAt:data.savedAt,contentHash:data.contentHash,deviceId:data.deviceId,gz}); }
     else body=JSON.stringify(data);
     const r=await fetch(FB_URL+FB_NODE_FN(),{method:'PUT',headers:{'Content-Type':'application/json'},body});
     if(!r.ok) throw new Error('HTTP '+r.status);
-    _fbLastHash=h; _fbDirty=false; _fbSetTS(data.savedAt); _lastPushedSavedAt=data.savedAt;
+    _fbLastHash=h; _fbDirty=false; clearDirtyMachines(); _fbSetTS(data.savedAt); _fbSetHash(h); _lastPushedSavedAt=data.savedAt;
     fbStatus('ok','آخر مزامنة: '+new Date(data.savedAt).toLocaleString('fr-DZ'));
     if(!silent) flash('☁️ تم الرفع ('+Math.round(body.length/1024)+' KB)');
-    const el=document.getElementById('fb-last-txt'); if(el) el.textContent='آخر مزامنة: '+new Date(data.savedAt).toLocaleString('fr-DZ');
+    const el=document.getElementById('fb-last-txt'); if(el) el.textContent='آخر مزامنة: '+new Date(data.savedAt).toLocaleString('fr-DZ')+' · بصمة: '+fbHashShort(h);
     _fbBusy=false; return true;
   }catch(e){ _fbBusy=false; fbStatus('err','فشل الرفع: '+e.message); if(!silent) flash('فشل الرفع: '+e.message); return false; }
 }
@@ -2147,21 +2228,24 @@ async function fbSync(silent){
   }
   let stats=null;
   _fbSynced=true; // قرأنا السحابة بنجاح هذه الجلسة → الرفع أصبح آمناً
-  if(data && data.machines){ stats=mergeCloud(data); _fbSetTS(data.savedAt); }
+  await fbPrepareLocalForCloud('sync-before-merge');
+  if(data && data.machines){ stats=mergeCloud(data); _fbSetTS(data.savedAt); if(data.contentHash)_fbSetHash(data.contentHash); }
   _fbBusy=false;
   const ok=await fbPush(true);
   try{ if(DB.active && !DB.machines.some(x=>x.id===DB.active)) DB.active=null; }catch(e){}
   if(!MEM_ONLY){ try{ localStorage.setItem(KEY,JSON.stringify(DB)); }catch(e){} }
   if(!ok){ if(!silent) flash('⚠️ تعذّر رفع البيانات — حاول مجدداً'); return false; }
   fbStatus('ok');
+  const changed=!!(stats && (stats.added||stats.updated||stats.deleted));
+  if(changed) safeRender();
   if(!silent){
-    if(stats && (stats.added||stats.updated||stats.deleted)){
+    if(changed){
       const parts=[];
       if(stats.added)   parts.push('جديد: '+stats.added);
       if(stats.updated) parts.push('محدّث: '+stats.updated);
       if(stats.deleted) parts.push('محذوف: '+stats.deleted);
+      if(stats.conflictLocalKept) parts.push('محلي محفوظ: '+stats.conflictLocalKept);
       flash('🔔 يوجد جديد — '+parts.join(' · '));
-      safeRender();
     } else {
       flash('✓ لا جديد — كل شيء متزامن');
     }
@@ -2198,12 +2282,15 @@ document.addEventListener('focusout',()=>{ setTimeout(flushDeferredRender,200); 
 
 async function fbAutoTick(){
   if(!fbAuto()||!navigator.onLine||_fbBusy) return;
-  let remoteNewer=false;
+  let remoteChanged=false;
   try{
-    const r=await fetch(FB_URL+FB_BASE+'/savedAt.json'+FB_AUTH_PARAM());
-    if(r.ok){ const ts=await r.json(); _fbSynced=true; remoteNewer=!!(ts && ts>(fbLastTS()||'')); }
+    const r=await fetch(FB_URL+FB_BASE+'/savedAt.json'+FB_AUTH_PARAM(),{cache:'no-store'});
+    let ts=''; if(r.ok){ ts=await r.json(); _fbSynced=true; }
+    let rh='';
+    try{ const hr=await fetch(FB_URL+FB_BASE+'/contentHash.json'+FB_AUTH_PARAM(),{cache:'no-store'}); if(hr.ok)rh=await hr.json(); }catch(e){}
+    remoteChanged=!!((ts && ts!==fbLastTS() && ts!==_lastPushedSavedAt) || (rh && rh!==fbLastHash() && rh!==_fbLastHash));
   }catch(e){ return; }
-  if(remoteNewer){ await fbSync(true); return; }
+  if(remoteChanged){ await fbSync(true); return; }
   if(_fbDirty) await fbPush(true);
 }
 
@@ -2249,15 +2336,18 @@ function fbToggleAuto(chk){
 async function fbStartupCheck(){
   if(!navigator.onLine){ fbStatus('off','غير متصل بالإنترنت'); return; }
   fbStatus('sync','جارٍ فحص السحابة…');
+  try{ await fbRefreshServerTimeOffset(); }catch(e){}
   try{
-    const r=await fetch(FB_URL+FB_BASE+'/savedAt.json'+FB_AUTH_PARAM());
+    const r=await fetch(FB_URL+FB_BASE+'/savedAt.json'+FB_AUTH_PARAM(),{cache:'no-store'});
     if(!r.ok){
       let hint='تحقّق من قواعد Firebase (HTTP '+r.status+')';
-      if(r.status===401||r.status===403) hint='⛔ مرفوض — أضِف قاعدة المسار egtph_parc_v3_ في Firebase';
+      if(r.status===401||r.status===403) hint='⛔ مرفوض — تحقّق من تسجيل الدخول وقواعد Firebase';
       fbStatus('err',hint); return;
     }
     const ts=await r.json(); const lt=fbLastTS(); _fbSynced=true;
-    if(ts && (!lt||ts>lt)){
+    let rh=''; try{ const hr=await fetch(FB_URL+FB_BASE+'/contentHash.json'+FB_AUTH_PARAM(),{cache:'no-store'}); if(hr.ok)rh=await hr.json(); }catch(e){}
+    const changed=!!((ts && ts!==lt) || (rh && rh!==fbLastHash()));
+    if(changed){
       if(fbAuto()){ fbStatus('new','يوجد جديد — جارٍ المزامنة…'); fbAutoTick(); }
       else { fbStatus('new','🔔 يوجد جديد في السحابة — اضغط للمزامنة'); }
     }
@@ -2472,7 +2562,8 @@ window.addEventListener('message',function(event){
 // ── ترحيل لمرة واحدة للقاعدة الجديدة: امسح طابع المزامنة القديم حتى لا يُساء فهم «لا جديد» ──
 try{
   const dbTag=localStorage.getItem('egtph_parc_dbtag');
-  if(dbTag!==FB_URL){ localStorage.removeItem('egtph_parc_fb_last'); localStorage.setItem('egtph_parc_dbtag',FB_URL); }
+  const tag=FB_URL+'|sync-v4';
+  if(dbTag!==tag){ localStorage.removeItem('egtph_parc_fb_last'); localStorage.removeItem('egtph_parc_fb_hash'); try{_fbLastHash='';}catch(e){} localStorage.setItem('egtph_parc_dbtag',tag); }
 }catch(e){}
 
 load();renderGarage();
@@ -2482,7 +2573,7 @@ fbStartLoop();
 setTimeout(fbStartStream,1500); // بثّ مباشر لحظي
 window.addEventListener('online', fbStartStream);
 document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible'){ fbStartStream(); try{ if(fbAuto()&&navigator.onLine&&!_fbBusy) fbAutoTick(); }catch(e){} } });
-try{ const c=document.getElementById('fb-auto-chk'); if(c) c.checked=fbAuto(); const lt=document.getElementById('fb-last-txt'); if(lt&&fbLastTS()) lt.textContent='آخر مزامنة: '+new Date(fbLastTS()).toLocaleString('fr-DZ'); }catch(e){}
+try{ const c=document.getElementById('fb-auto-chk'); if(c) c.checked=fbAuto(); const lt=document.getElementById('fb-last-txt'); if(lt&&fbLastTS()) lt.textContent='آخر مزامنة: '+new Date(fbLastTS()).toLocaleString('fr-DZ')+(fbLastHash()?' · بصمة: '+fbHashShort(fbLastHash()):''); }catch(e){}
 try{
   setTimeout(scheduleMaintenanceDashboardAlerts,900);
   setInterval(function(){ if(window.parent&&window.parent!==window) scheduleMaintenanceDashboardAlerts(); },60000);
