@@ -661,7 +661,7 @@ table tbody tr:last-child td{border-bottom:none}
     <div class="card" style="padding:0">
       <div class="table-container">
         <table>
-          <thead><tr><th>#</th><th>المشروع</th><th>رئيس الورشة</th><th>عدد العمال</th><th>الأسابيع</th><th>إجراءات</th></tr></thead>
+          <thead><tr><th>#</th><th>المشروع</th><th>رئيس الورشة</th><th>عدد العمال</th><th>الأسابيع</th><th>أجور المشروع</th><th>مصاريف المشروع</th><th>الإجمالي المالي</th><th>إجراءات</th></tr></thead>
           <tbody id="projectsTableBody"></tbody>
         </table>
       </div>
@@ -710,11 +710,9 @@ table tbody tr:last-child td{border-bottom:none}
         <span class="proj" id="weekProjectLabel" style="display:none"></span>
       </div>
       <div class="week-banner-actions">
-        <button class="btn primary-action" onclick="saveWeek()"><i class="fas fa-save"></i> حفظ وأرشفة</button>
-        <button class="btn" onclick="saveWeekAndStartNew()" title="حفظ الأسبوع الحالي وفتح أسبوع جديد فوراً لنفس المشروع"><i class="fas fa-forward"></i> أسبوع جديد</button>
-        <button class="btn" onclick="printWeek()"><i class="fas fa-print"></i> طباعة</button>
+        <button class="btn primary-action" onclick="saveWeek()"><i class="fas fa-save"></i> حفظ</button>
         <button class="btn" onclick="openAssignProjectModal()"><i class="fas fa-folder-tree"></i> تحويل لمشروع</button>
-        <button class="btn" onclick="cancelCurrentWeek()" style="background:rgba(212,32,32,0.25);border-color:rgba(212,32,32,0.5)" title="إلغاء وفتح أسبوع جديد فارغ"><i class="fas fa-times-circle"></i> إلغاء / جديد</button>
+        <button class="btn" onclick="cancelCurrentWeek()" style="background:rgba(212,32,32,0.25);border-color:rgba(212,32,32,0.5)" title="إلغاء المسودة أو إلغاء تعديل الأسبوع المحفوظ"><i class="fas fa-times-circle"></i> إلغاء</button>
       </div>
     </div>
 
@@ -874,6 +872,39 @@ table tbody tr:last-child td{border-bottom:none}
       <button class="btn btn-warning" onclick="importJSON()"><i class="fas fa-upload"></i> استيراد</button>
       <input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
     </div>
+
+    <div class="card">
+      <div class="card-header"><h3><i class="fas fa-filter"></i> تقارير متقدمة — تاريخ / شهر / عام</h3></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>نوع الفترة</label>
+          <select id="reportPeriodMode" onchange="advancedReportApplyPeriod(true)">
+            <option value="all">كل الفترة</option>
+            <option value="custom">من تاريخ إلى تاريخ</option>
+            <option value="month">شهر محدد</option>
+            <option value="year">عام محدد</option>
+            <option value="thisMonth">هذا الشهر</option>
+            <option value="lastMonth">الشهر الماضي</option>
+            <option value="last2Months">آخر شهرين</option>
+            <option value="thisYear">هذا العام</option>
+            <option value="lastYear">العام الماضي</option>
+          </select>
+        </div>
+        <div class="form-group"><label>من تاريخ</label><input type="date" id="reportFrom" onchange="setReportPeriodMode('custom');renderAdvancedReports()"></div>
+        <div class="form-group"><label>إلى تاريخ</label><input type="date" id="reportTo" onchange="setReportPeriodMode('custom');renderAdvancedReports()"></div>
+        <div class="form-group"><label>شهر</label><input type="month" id="reportMonth" onchange="setReportPeriodMode('month');advancedReportApplyPeriod(true)"></div>
+        <div class="form-group"><label>عام</label><input type="number" id="reportYear" min="2000" max="2100" step="1" onchange="setReportPeriodMode('year');advancedReportApplyPeriod(true)"></div>
+        <div class="form-group"><label>العامل</label><select id="reportWorker" onchange="renderAdvancedReports()"><option value="">كل العمال</option></select></div>
+        <div class="form-group"><label>الخدمة</label><select id="reportService" onchange="renderAdvancedReports()"><option value="">كل الخدمات</option></select></div>
+        <div class="form-group"><label>المشروع</label><select id="reportProject" onchange="renderAdvancedReports()"><option value="">كل المشاريع</option></select></div>
+      </div>
+      <div class="flex gap-2 flex-wrap mt-3">
+        <button class="btn btn-outline btn-sm" onclick="resetAdvancedReportsFilters()"><i class="fas fa-eraser"></i> مسح الفلاتر</button>
+        <button class="btn btn-primary btn-sm" onclick="renderAdvancedReports()"><i class="fas fa-rotate"></i> تحديث التقرير</button>
+      </div>
+      <div id="advancedReportSummary" class="summary-grid"></div>
+    </div>
+
     <div class="widget-grid">
       <div class="card">
         <div class="card-header"><h3><i class="fas fa-list-ul"></i> توزيع الأجور حسب العامل</h3></div>
@@ -883,6 +914,22 @@ table tbody tr:last-child td{border-bottom:none}
         <div class="card-header"><h3><i class="fas fa-trophy"></i> أعلى العمال أجراً</h3></div>
         <div id="topWorkers"></div>
       </div>
+    </div>
+
+    <div class="widget-grid">
+      <div class="card">
+        <div class="card-header"><h3><i class="fas fa-layer-group"></i> تقرير خدمات عمال القطعة</h3></div>
+        <div id="pieceServicesReport" style="overflow-x:auto"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3><i class="fas fa-money-bill-wave"></i> تقرير تسديدات العمال</h3></div>
+        <div id="workerPaymentsReport" style="overflow-x:auto"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3><i class="fas fa-folder-tree"></i> تقرير المشاريع والمصاريف</h3></div>
+      <div id="projectAdvancedReport" style="overflow-x:auto"></div>
     </div>
   </div>
 
@@ -1029,6 +1076,7 @@ let DB = {
   settings:{ darkMode:false }
 };
 let currentUser=null, editingWorkerId=null, editingWeekId=null, currentProjectId=null;
+let editingWeekOriginalProjectId=null, editingWeekReturnProjectId=null;
 let deleteCallback=null;
 let lastSaveTime=null, totalSaves=0;
 
@@ -1193,6 +1241,7 @@ async function loadDB(){
 
     if(stored){ try{ DB={...DB,...stored}; }catch(e){ console.error('DB merge error:',e); } }
     migrateDB();
+    discardPersistedArchivedEditDraft();
   }catch(e){
     console.error('loadDB error:',e);
     // الرجوع إلى localStorage كخطة بديلة
@@ -1266,6 +1315,69 @@ function cleanText(v){
 }
 function cleanEmail(v){ return String(v??'').trim().toLowerCase().replace(/[<>"']/g,''); }
 function isArchivedEdit(){ return !!editingWeekId; }
+function getEditingSourceWeek(){ return editingWeekId ? (DB.weeks||[]).find(w=>w.id===editingWeekId) : null; }
+function clearWeekEditMarkers(){
+  if(!DB.currentWeek) return;
+  delete DB.currentWeek._editWeekId;
+  delete DB.currentWeek._editOriginalProjectId;
+  delete DB.currentWeek._editReturnProjectId;
+}
+function resetCurrentWeekToIdle(oldRate,oldManualRate){
+  DB.currentWeek={
+    startDate:'',endDate:'',entries:[],expenses:[],projectId:null,
+    overtimeRate:oldRate??1.5,manualHourlyRate:oldManualRate??null,status:'idle',_mod:nextMod()
+  };
+  editingWeekId=null;
+  editingWeekOriginalProjectId=null;
+  editingWeekReturnProjectId=null;
+}
+function routeToWeekStoredPlace(projectId){
+  const pid=projectId||null;
+  if(pid){ currentProjectId=pid; openProjectWeeks(pid); }
+  else navigateTo('archive');
+}
+function discardPersistedArchivedEditDraft(){
+  const c=DB.currentWeek||{};
+  if(c._editWeekId){
+    const oldRate=c.overtimeRate??1.5;
+    const oldManualRate=c.manualHourlyRate??null;
+    resetCurrentWeekToIdle(oldRate,oldManualRate);
+  }
+}
+function isOriginalArchivedEntryId(entryId){
+  const src=getEditingSourceWeek();
+  return !!(src && (src.entries||[]).some(e=>e.id===entryId));
+}
+function recomputeStoredWeekTotals(week){
+  if(!week) return null;
+  const t=computeSavedWeekTotals(week.entries||[],week.expenses||[]);
+  week.total=t.wagesTotal;
+  week.expensesTotal=t.expensesTotal;
+  week.grandTotal=t.grandTotal;
+  week.financialTotalAfterPendingSettlement=t.financialTotalAfterPendingSettlement;
+  week.workersFinancialTotal=t.workersFinancialTotal;
+  week.workersCashOutTotal=t.workersCashOutTotal;
+  week.cashOutTotal=t.cashOutTotal;
+  week.debtDeductionTotal=t.deductionTotal;
+  week.pendingCreatedTotal=t.pendingCreatedTotal;
+  week.settledPendingTotal=t.settledPendingTotal;
+  week.paidNowTotal=t.paidNowTotal;
+  week.netTotal=t.wagesTotal;
+  week.financialPosting=buildWeekFinancialPosting(week,{refresh:true});
+  week._mod=nextMod();
+  return t;
+}
+function setWeekProjectDeep(weekId,projectId){
+  const wk=(DB.weeks||[]).find(x=>x.id===weekId);
+  if(!wk) return null;
+  const pid=projectId||null;
+  wk.projectId=pid;
+  (wk.entries||[]).forEach(e=>{ if(e) e.projectId=pid; });
+  (DB.pendingWages||[]).forEach(pw=>{ if(pw.weekId===weekId){ pw.projectId=pid; pw._mod=nextMod(); } });
+  wk.financialPosting=buildWeekFinancialPosting(wk,{refresh:true});
+  wk._mod=nextMod();
+  return wk;
+}
 
 /* تعديل أسبوع مؤرشف يعيد تسوية الحركات المرتبطة به في السجلات التابعة.
    لا تُضاف دفعة ثانية: يُحدَّث سجل الأجر المعلّق أو قسط الدين الأصلي نفسه. */
@@ -1309,10 +1421,15 @@ function lockArchivedFinanceControls(){
   if(!isArchivedEdit()) return;
   const root=document.getElementById('weekEntries');
   if(!root) return;
-  /* العامل لا يتغيّر لأن الحركات التابعة مرتبطة به. أما المبالغ المالية فتظل قابلة للتعديل والتسوية. */
+  /* في تعديل الأرشيف: الصفوف القديمة تبقى مرتبطة بعاملها، لكن الصفوف الجديدة مسموح اختيار عامل لها. */
   root.querySelectorAll('select[onchange*="workerId"]').forEach(el=>{
-    el.disabled=true; el.title='لا يمكن تغيير العامل في أسبوع مؤرشف لأن حركاته المالية مرتبطة به';
-    el.style.opacity='.62'; el.style.cursor='not-allowed';
+    const card=el.closest('.entry-card');
+    const entryId=card?.dataset?.entryId||'';
+    const locked=isOriginalArchivedEntryId(entryId);
+    el.disabled=locked;
+    el.title=locked?'لا يمكن تغيير عامل صف قديم لأنه مرتبط بحركات مالية سابقة':'اختر العامل للصف الجديد';
+    el.style.opacity=locked?'.62':'';
+    el.style.cursor=locked?'not-allowed':'';
   });
 }
 function getEntryCard(entryId){ return document.querySelector('.entry-card[data-entry-id="'+String(entryId).replace(/"/g,'')+'"]'); }
@@ -1794,50 +1911,106 @@ function deleteProject(id){
     saveDB(); renderProjects(); renderWorkers();
   });
 }
+function computeProjectTotals(projectId){
+  const weeks=(DB.weeks||[]).filter(w=>(w.projectId||null)===projectId);
+  const totals=weeks.reduce((acc,w)=>{
+    const exp=w.expensesTotal!=null?num(w.expensesTotal):(w.expenses||[]).reduce((s,e)=>s+num(e.amount??(num(e.qty)*num(e.price))),0);
+    const wages=w.total!=null?num(w.total):(w.entries||[]).reduce((s,e)=>s+postedEntryNet(e),0);
+    const settled=w.settledPendingTotal!=null?num(w.settledPendingTotal):num(buildWeekFinancialPosting(w).totals?.settledPendingTotal);
+    acc.weeks+=1;
+    acc.entries+=(w.entries||[]).length;
+    acc.wages+=wages;
+    acc.expenses+=exp;
+    acc.accounting+=w.grandTotal!=null?num(w.grandTotal):(wages+exp);
+    acc.financial+=w.financialTotalAfterPendingSettlement!=null?num(w.financialTotalAfterPendingSettlement):(wages+exp+settled);
+    acc.cashOut+=w.cashOutTotal!=null?num(w.cashOutTotal):(wages+exp+settled);
+    return acc;
+  },{weeks:0,entries:0,wages:0,expenses:0,accounting:0,financial:0,cashOut:0});
+  totals.pending=(DB.pendingWages||[]).filter(pw=>(pw.projectId||null)===projectId).reduce((s,pw)=>s+pendingWagesRemaining(pw),0);
+  return totals;
+}
 function renderProjects(){
   const tb=document.getElementById('projectsTableBody');
-  if(!DB.projects.length){ tb.innerHTML='<tr><td colspan="6"><div class="empty-state"><i class="fas fa-folder-open"></i><h4>لا توجد مشاريع</h4></div></td></tr>'; return; }
-  tb.innerHTML=DB.projects.map((p,i)=>`<tr>
-    <td><b>${i+1}</b></td>
-    <td><b>${p.name}</b>${p.note?`<br><span class="text-muted">${p.note}</span>`:''}</td>
-    <td>${p.chef||'—'}</td>
-    <td><span class="badge badge-primary">${DB.workers.filter(w=>w.projectId===p.id).length} عامل</span></td>
-    <td><button class="btn btn-info btn-xs" onclick="viewProjectWeeks('${p.id}')"><i class="fas fa-calendar-alt"></i> الأسابيع</button></td>
-    <td><button class="btn btn-outline btn-xs" onclick="openProjectModal('${p.id}')"><i class="fas fa-edit"></i></button> <button class="btn btn-danger btn-xs" onclick="deleteProject('${p.id}')"><i class="fas fa-trash"></i></button></td>
-  </tr>`).join('');
+  if(!DB.projects.length){ tb.innerHTML='<tr><td colspan="9"><div class="empty-state"><i class="fas fa-folder-open"></i><h4>لا توجد مشاريع</h4></div></td></tr>'; return; }
+  tb.innerHTML=DB.projects.map((p,i)=>{
+    const t=computeProjectTotals(p.id);
+    return `<tr>
+      <td><b>${i+1}</b></td>
+      <td><b>${p.name}</b>${p.note?`<br><span class="text-muted">${p.note}</span>`:''}</td>
+      <td>${p.chef||'—'}</td>
+      <td><span class="badge badge-primary">${DB.workers.filter(w=>w.projectId===p.id).length} عامل</span></td>
+      <td><button class="btn btn-info btn-xs" onclick="viewProjectWeeks('${p.id}')"><i class="fas fa-calendar-alt"></i> ${t.weeks} أسبوع</button></td>
+      <td><b style="color:var(--primary)">${money(t.wages)} دج</b></td>
+      <td><b style="color:var(--warning)">${money(t.expenses)} دج</b></td>
+      <td><b style="color:#c2410c">${money(t.financial)} دج</b><br><small class="text-muted">محاسبي: ${money(t.accounting)} · نقد: ${money(t.cashOut)}</small>${t.pending>0?`<br><span class="badge badge-warning">معلّق: ${money(t.pending)} دج</span>`:''}</td>
+      <td><div style="display:flex;gap:5px;flex-wrap:wrap;min-width:145px"><button class="btn btn-primary btn-xs" onclick="createWeekForProject('${p.id}')" title="أسبوع جديد داخل هذا المشروع"><i class="fas fa-plus"></i> أسبوع</button> <button class="btn btn-outline btn-xs" onclick="openProjectModal('${p.id}')" title="تعديل المشروع"><i class="fas fa-edit"></i></button> <button class="btn btn-danger btn-xs" onclick="deleteProject('${p.id}')" title="حذف المشروع"><i class="fas fa-trash"></i></button></div></td>
+    </tr>`;
+  }).join('');
 }
 function viewProjectWeeks(projectId){
-  currentProjectId=projectId;
-  const project=DB.projects.find(p=>p.id===projectId);
-  document.getElementById('projectWeeksTitle').innerHTML=`📅 أسابيع: ${project?.name||''}`;
+  openProjectWeeks(projectId);
+}
+function openProjectWeeks(projectId){
+  currentProjectId=projectId||currentProjectId;
+  const project=DB.projects.find(p=>p.id===currentProjectId);
+  const title=document.getElementById('projectWeeksTitle');
+  if(title) title.innerHTML=`📅 أسابيع: ${project?.name||''}`;
   navigateTo('project-weeks');
 }
 function renderProjectWeeks(){
   if(!currentProjectId) return;
   const tb=document.getElementById('projectWeeksTableBody');
   const weeks=DB.weeks.filter(w=>w.projectId===currentProjectId).sort((a,b)=>new Date(b.startDate)-new Date(a.startDate));
+  const pt=computeProjectTotals(currentProjectId);
+  const title=document.getElementById('projectWeeksTitle');
+  const project=DB.projects.find(p=>p.id===currentProjectId);
+  if(title) title.innerHTML=`📅 أسابيع: ${project?.name||''} <span class="badge badge-primary">أجور ${money(pt.wages)} دج</span> <span class="badge badge-warning">مصاريف ${money(pt.expenses)} دج</span> <span class="badge badge-gold">مالي ${money(pt.financial)} دج</span>`;
   if(!weeks.length){ tb.innerHTML='<tr><td colspan="6"><div class="empty-state"><i class="fas fa-calendar-xmark"></i><h4>لا توجد أسابيع</h4></div></td></tr>'; return; }
   tb.innerHTML=weeks.map(w=>{
-    const exp=(w.expenses||[]).reduce((s,e)=>s+(e.amount||0),0);
+    const exp=w.expensesTotal!=null?num(w.expensesTotal):(w.expenses||[]).reduce((s,e)=>s+num(e.amount??(num(e.qty)*num(e.price))),0);
+    const wages=w.total!=null?num(w.total):(w.entries||[]).reduce((s,e)=>s+postedEntryNet(e),0);
+    const financial=w.financialTotalAfterPendingSettlement!=null?num(w.financialTotalAfterPendingSettlement):num(w.grandTotal??(wages+exp))+num(w.settledPendingTotal);
     return `<tr>
       <td><b>${formatDateAR(w.startDate)}</b> → ${formatDateAR(w.endDate)}</td>
-      <td>${w.entries.length}</td>
-      <td>${money(w.total)} دج</td>
+      <td>${(w.entries||[]).length}</td>
+      <td>${money(wages)} دج</td>
       <td>${money(exp)} دج</td>
-      <td><b>${money(w.total+exp)} دج</b></td>
-      <td><div style="display:flex;gap:5px;flex-wrap:wrap;min-width:172px"><button class="btn btn-outline btn-xs" onclick="editWeek('${w.id}')" title="تعديل"><i class="fas fa-edit"></i></button> <button class="btn btn-info btn-xs" onclick="printArchivedWeek('${w.id}')" title="طباعة"><i class="fas fa-print"></i></button> <button class="btn btn-danger btn-xs" data-export-week="${w.id}" onclick="exportArchivedWeekPDF('${w.id}')" title="فتح لوحة حفظ PDF"><i class="fas fa-file-pdf"></i></button> <button class="btn btn-success btn-xs" data-export-week="${w.id}" onclick="shareArchivedWeekPDF('${w.id}')" title="فتح لوحة PDF ثم WhatsApp"><i class="fas fa-share-nodes"></i></button> <button class="btn btn-danger btn-xs" onclick="deleteWeek('${w.id}')" title="حذف"><i class="fas fa-trash"></i></button></div></td>
+      <td><b>${money(financial)} دج</b></td>
+      <td><div style="display:flex;gap:5px;flex-wrap:wrap;min-width:172px"><button class="btn btn-outline btn-xs" onclick="editWeek('${w.id}')" title="تعديل"><i class="fas fa-edit"></i></button> <button class="btn btn-info btn-xs" onclick="printArchivedWeek('${w.id}')" title="طباعة"><i class="fas fa-print"></i></button> <button class="btn btn-danger btn-xs" data-export-week="${w.id}" onclick="exportArchivedWeekPDF('${w.id}')" title="فتح PDF"><i class="fas fa-file-pdf"></i></button> <button class="btn btn-success btn-xs" data-export-week="${w.id}" onclick="shareArchivedWeekPDF('${w.id}')" title="مشاركة PDF"><i class="fas fa-share-nodes"></i></button> <button class="btn btn-danger btn-xs" onclick="deleteWeek('${w.id}')" title="حذف"><i class="fas fa-trash"></i></button></div></td>
     </tr>`;
-  }).join('');
+  }).join('')+`<tr style="background:var(--primary-soft);font-weight:900"><td>إجمالي المشروع</td><td>${pt.entries}</td><td>${money(pt.wages)} دج</td><td>${money(pt.expenses)} دج</td><td>${money(pt.financial)} دج</td><td></td></tr>`;
 }
-function createWeekForProject(){
-  if(!currentProjectId) return;
+function currentWeekHasWorkingData(){
+  const cw=DB.currentWeek||{};
+  return cw.status==='open' && (((cw.entries||[]).some(e=>e.workerId)) || ((cw.expenses||[]).some(e=>num(e.qty)*num(e.price)>0||e.label)));
+}
+function createWeekForProject(projectId=null){
+  const pid=projectId||currentProjectId;
+  if(!pid){ showToast('اختر مشروعاً أولاً','error'); return; }
+  const project=DB.projects.find(p=>p.id===pid);
+  if(!project){ showToast('المشروع غير موجود','error'); return; }
+  if(editingWeekId){
+    showToast('يوجد أسبوع مؤرشف مفتوح للتعديل. احفظه أو ألغِ التعديل قبل فتح أسبوع جديد.','warning');
+    navigateTo('week');
+    return;
+  }
+  if(currentWeekHasWorkingData()){
+    showToast('يوجد أسبوع مفتوح غير محفوظ. احفظه أو اضغط إلغاء / جديد قبل فتح أسبوع آخر.','warning');
+    navigateTo('week');
+    return;
+  }
   const t=new Date(); const d=t.getDay(); const ds=d===6?0:d+1;
   const sat=new Date(t); sat.setDate(t.getDate()-ds);
   const thu=new Date(sat); thu.setDate(sat.getDate()+5);
-  DB.currentWeek={ startDate:formatDate(sat), endDate:formatDate(thu), entries:[], expenses:[], projectId:currentProjectId, overtimeRate:1.5, status:'open' };
+  currentProjectId=pid;
+  DB.currentWeek={ startDate:formatDate(sat), endDate:formatDate(thu), entries:[], expenses:[], projectId:pid, overtimeRate:1.5, manualHourlyRate:null, status:'open', _mod:nextMod() };
+  clearWeekEditMarkers();
   editingWeekId=null;
+  editingWeekOriginalProjectId=null;
+  editingWeekReturnProjectId=null;
+  saveDB();
   navigateTo('week');
-  showToast('✅ أسبوع جديد جاهز للمشروع');
+  showToast('✅ أسبوع جديد جاهز داخل المشروع: '+project.name);
 }
 
 /* ====================================================
@@ -1945,17 +2118,22 @@ function clearGlobalManualHourlyRate(){
 }
 function editWeek(weekId){
   const week=DB.weeks.find(w=>w.id===weekId);if(!week)return;
-  /* يفتح أي أسبوع مؤرشف، لكن البصمة تمنع إعادة التسجيل المحاسبي للحركات السابقة. */
+  /* يفتح نسخة تعديل مؤقتة فقط. الأصل لا يتغير إلا بزر حفظ أو تحويل لمشروع. */
   editingWeekId=weekId;
+  editingWeekOriginalProjectId=week.projectId||null;
+  editingWeekReturnProjectId=week.projectId||null;
+  if(editingWeekReturnProjectId) currentProjectId=editingWeekReturnProjectId;
   DB.currentWeek={
     startDate:week.startDate,endDate:week.endDate,
     entries:week.entries.map(e=>({...e,services:(e.services||[]).map(x=>({...x}))})),
     expenses:(week.expenses||[]).map(e=>({...e})),projectId:week.projectId||null,
     overtimeRate:week.overtimeRate??1.5,manualHourlyRate:week.manualHourlyRate||null,
-    status:'open',_archiveFinancePosting:buildWeekFinancialPosting(week),_mod:nextMod()
+    status:'open',_archiveFinancePosting:buildWeekFinancialPosting(week),
+    _editWeekId:weekId,_editOriginalProjectId:editingWeekOriginalProjectId,_editReturnProjectId:editingWeekReturnProjectId,
+    _mod:nextMod()
   };
   navigateTo('week');
-  showToast('تم فتح الأسبوع للتعديل. يمكنك تعديل المعلّق وخصم الدين؛ عند الحفظ تُسوّى السجلات المالية التابعة دون تكرار.','success');
+  showToast('تم فتح نسخة مؤقتة للتعديل. الأصل يبقى في مكانه حتى تضغط حفظ أو تحويل لمشروع.','success');
 }
 function updateOvertimeRate(){
   DB.currentWeek.overtimeRate=num(document.getElementById('overtimeRate').value);
@@ -2155,15 +2333,15 @@ function removeEntryService(eid,idx){
   saveDB(); renderWeek(); renderWeekSummary();
 }
 function addWeekRow(){
-  if(isArchivedEdit()){ showToast('لا يمكن إضافة عامل جديد في أسبوع مؤرشف لأن حركاته المالية مثبتة.','warning'); return; }
   if(DB.currentWeek.status!=='open'){ showToast('افتح أسبوعاً جديداً أولاً','error'); return; }
-  DB.currentWeek.entries.push({id:generateId(),workerId:'',days:0,extraHours:0,services:[],note:'',debtDeduction:0,bonus:0,manualHourlyRate:null,_mod:nextMod()});
+  DB.currentWeek.entries.push({id:generateId(),workerId:'',days:0,extraHours:0,services:[],note:'',debtDeduction:0,bonus:0,manualHourlyRate:null,paidNow:null,settlePending:0,_mod:nextMod()});
   DB.currentWeek._mod=nextMod();
   saveDB(); renderWeek(); renderWeekSummary();
+  if(isArchivedEdit()) showToast('تمت إضافة صف جديد للأسبوع المؤرشف. عند الحفظ ستتغير القيمة المالية ويُسجّل الفرق.','success');
 }
 function removeWeekRow(id){
-  if(isArchivedEdit()){ showToast('لا يمكن حذف صف من أسبوع مؤرشف لأن ذلك يكسر رابط الحركة المالية المثبتة.','warning'); return; }
-  confirmDelete('صف العامل',()=>{
+  const label=isArchivedEdit()&&isOriginalArchivedEntryId(id)?'صف عامل من أسبوع مؤرشف — سيُلغى أثره المالي عند الحفظ إذا لم يكن مرتبطاً بتسديد لاحق':'صف العامل';
+  confirmDelete(label,()=>{
     _markDeleted(id);
     DB.currentWeek.entries=DB.currentWeek.entries.filter(e=>e.id!==id);
     DB.currentWeek._mod=nextMod();
@@ -2172,8 +2350,8 @@ function removeWeekRow(id){
 }
 function updateWeekEntry(id,f,v){
   const e=DB.currentWeek.entries.find(x=>x.id===id);if(!e)return;
-  if(isArchivedEdit()&&f==='workerId'){showToast('لا يمكن تغيير العامل في أسبوع مؤرشف لأن الحركات التابعة مرتبطة به.','warning');return;}
-  if(f==='workerId'){e.workerId=v;e.services=[];e.days=0;e.extraHours=0;e.debtDeduction=0;}
+  if(isArchivedEdit()&&f==='workerId'&&isOriginalArchivedEntryId(id)){showToast('لا يمكن تغيير عامل صف قديم لأنه مرتبط بحركات مالية سابقة. أضف صفاً جديداً بدل ذلك.','warning');return;}
+  if(f==='workerId'){e.workerId=v;e.services=[];e.days=0;e.extraHours=0;e.debtDeduction=0;e.paidNow=null;e.pendingAmount=0;e.settlePending=0;}
   else if(f==='days')e.days=num(v);
   else if(f==='extraHours')e.extraHours=num(v);
   else if(f==='note')e.note=cleanText(v);
@@ -2285,11 +2463,17 @@ function computeWeekTotals(){
     paidNowTotal+=paidNow;
     pendingCreatedTotal+=pendingCreated;
     settledPendingTotal+=settledPending;
-    const initial=DB.currentWeek?._archiveFinancePosting?.entries?.[e.id];
-    if(isArchivedEdit()&&initial) postArchiveAdjustmentTotal+=num(p.net)-num(initial.net);
   });
   const wagesTotal=dailyTotal+pieceTotal;
   const expensesTotal=(cw.expenses||[]).reduce((a,e)=>a+num(e.qty)*num(e.price),0);
+  if(isArchivedEdit()){
+    const src=getEditingSourceWeek();
+    const oldPosting=src?.financialPosting?.entries||DB.currentWeek?._archiveFinancePosting?.entries||{};
+    const currentNet=cw.entries.reduce((sum,e)=>sum+calcEntryParts(e).net,0);
+    const oldNet=(src?.entries||[]).reduce((sum,e)=>sum+num(oldPosting[e.id]?.net!==undefined?oldPosting[e.id].net:postedEntryNet(e)),0);
+    const oldExp=(src?.expenses||[]).reduce((sum,e)=>sum+num(e.amount??(num(e.qty)*num(e.price))),0);
+    postArchiveAdjustmentTotal=(currentNet+expensesTotal)-(oldNet+oldExp);
+  }
   const accountingTotal=wagesTotal+expensesTotal;
   const workersFinancialTotal=wagesTotal+settledPendingTotal;
   const financialTotalAfterPendingSettlement=accountingTotal+settledPendingTotal;
@@ -2340,7 +2524,10 @@ function startNewWeek(projectId){
   DB.currentWeek.projectId=projectId||null;
   DB.currentWeek.status='open';
   DB.currentWeek._mod=nextMod();
+  clearWeekEditMarkers();
   editingWeekId=null;
+  editingWeekOriginalProjectId=null;
+  editingWeekReturnProjectId=null;
   saveDB();
   loadWeekEditor();
   showToast('✅ أسبوع جديد مفتوح — أضف العمال والمصاريف');
@@ -2348,25 +2535,33 @@ function startNewWeek(projectId){
 
 /* ----- إلغاء الأسبوع الحالي وفتح أسبوع جديد ----- */
 function cancelCurrentWeek(){
-  const cw=DB.currentWeek;
-  const hasData=cw.entries.some(e=>e.workerId)||(cw.expenses||[]).length>0;
+  const cw=DB.currentWeek||{};
+  if(editingWeekId){
+    const src=getEditingSourceWeek();
+    const returnPid=(src?.projectId!==undefined?src.projectId:editingWeekOriginalProjectId)||null;
+    confirmDelete('إلغاء تعديل الأسبوع المحفوظ؟ سيبقى الأسبوع في مكانه الأصلي دون أي تغيير',()=>{
+      const oldRate=cw.overtimeRate??1.5;
+      const oldManualRate=cw.manualHourlyRate??null;
+      resetCurrentWeekToIdle(oldRate,oldManualRate);
+      saveDB();
+      showToast('تم إلغاء التعديل. الأسبوع بقي في مكانه الأصلي.','success');
+      routeToWeekStoredPlace(returnPid);
+    });
+    return;
+  }
+  const hasData=((cw.entries||[]).some(e=>e.workerId))||((cw.expenses||[]).some(e=>num(e.qty)*num(e.price)>0||e.label));
   if(hasData){
-    confirmDelete('إلغاء كل بيانات الأسبوع الحالي؟ لن يُحفظ شيء',()=>{
-      const oldRate=cw.overtimeRate;
-      const oldManualRate=cw.manualHourlyRate||null;
-      editingWeekId=null;
-      DB.currentWeek={startDate:'',endDate:'',entries:[],expenses:[],projectId:null,overtimeRate:oldRate,manualHourlyRate:oldManualRate,status:'idle',_mod:nextMod()};
+    confirmDelete('حذف مسودة الأسبوع المفتوح؟ لن تدخل الأرشيف أو المشروع',()=>{
+      const oldRate=cw.overtimeRate??1.5;
+      const oldManualRate=cw.manualHourlyRate??null;
+      resetCurrentWeekToIdle(oldRate,oldManualRate);
       saveDB(); loadWeekEditor();
-      showToast('تم الإلغاء');
+      showToast('تم حذف مسودة الأسبوع المفتوح');
     });
   } else {
-    // فارغ بدون بيانات - رجوع مباشر لـ idle
-    editingWeekId=null;
-    DB.currentWeek.status='idle';
-    DB.currentWeek.entries=[];
-    DB.currentWeek.expenses=[];
-    DB.currentWeek.projectId=null;
-    DB.currentWeek._mod=nextMod();
+    const oldRate=cw.overtimeRate??1.5;
+    const oldManualRate=cw.manualHourlyRate??null;
+    resetCurrentWeekToIdle(oldRate,oldManualRate);
     saveDB(); loadWeekEditor();
   }
 }
@@ -2486,6 +2681,9 @@ function removePendingOriginRecordIfEmpty(record){
 }
 function reconcileArchivedWeekFinancialEffects(weekId,entriesWithTotals,previousWeek){
   const sourceEntries=DB.currentWeek.entries||[];
+  const previousEntries=(previousWeek?.entries||[]);
+  const removedEntries=previousEntries.filter(prev=>!sourceEntries.some(cur=>cur.id===prev.id));
+  const allSourceEntriesForUnlink=[...sourceEntries,...removedEntries];
   const errors=[];
 
   /* تحقق قبل أي تعديل: لا نسمح بمحو حق سُدّد فعلياً في أسبوع لاحق. */
@@ -2500,6 +2698,18 @@ function reconcileArchivedWeekFinancialEffects(weekId,entriesWithTotals,previous
       const paid=(resolved.record.dates||[]).filter(d=>d.type==='pay').reduce((sum,d)=>sum+num(d.amount),0);
       if(num(next.pendingAmount)<paid){
         errors.push(`لا يمكن خفض المعلّق لـ ${next.workerName||'العامل'} إلى ${money(next.pendingAmount)} دج لأن ${money(paid)} دج منه سُدّد فعلياً لاحقاً. خفّض/صحّح ذلك التسديد أولاً.`);
+      }
+    }
+  });
+
+  removedEntries.forEach(source=>{
+    const resolved=resolvePendingRecordForEntry(weekId,source);
+    if(resolved.ambiguous){ errors.push(`تعذّر حذف صف قديم لأنه يملك أكثر من سجل معلّق محتمل.`); return; }
+    if(resolved.record){
+      const paid=(resolved.record.dates||[]).filter(d=>d.type==='pay').reduce((sum,d)=>sum+num(d.amount),0);
+      if(paid>0){
+        const name=source.workerName||DB.workers.find(w=>w.id===source.workerId)?.name||'العامل';
+        errors.push(`لا يمكن حذف صف ${name} من الأرشيف لأن ${money(paid)} دج من أجره المعلّق سُدّد لاحقاً. صفّر/صحّح التسديد أولاً أو اترك الصف وعدّل قيمته.`);
       }
     }
   });
@@ -2520,7 +2730,7 @@ function reconcileArchivedWeekFinancialEffects(weekId,entriesWithTotals,previous
     return {ok:false,errors};
   }
 
-  /* 1) تسوية المعلّق المنشأ من هذا الأسبوع. */
+  /* 1) تسوية المعلّق المنشأ من هذا الأسبوع للصفوف الحالية. */
   entriesWithTotals.forEach(next=>{
     const source=sourceEntries.find(e=>e.id===next.id)||next;
     const resolved=resolvePendingRecordForEntry(weekId,source);
@@ -2530,6 +2740,17 @@ function reconcileArchivedWeekFinancialEffects(weekId,entriesWithTotals,previous
     else if(record){
       record.total=0;
       (record.dates||[]).forEach(d=>{if(d.type==='add'&&(d.sourceEntryId===source.id||(!d.sourceEntryId&&d.weekId===weekId))){d.amount=0;d.note='إلغاء الأجر المعلّق بعد تصحيح الأسبوع';d.sourceEntryId=source.id;}});
+      removePendingOriginRecordIfEmpty(record);
+    }
+  });
+
+  /* 1-ب) الصفوف المحذوفة من أسبوع مؤرشف: نلغي آثارها التابعة إذا كانت آمنة. */
+  removedEntries.forEach(source=>{
+    const resolved=resolvePendingRecordForEntry(weekId,source);
+    const record=resolved.record;
+    if(record){
+      record.total=0;
+      (record.dates||[]).forEach(d=>{if(d.type==='add'&&(d.sourceEntryId===source.id||(!d.sourceEntryId&&d.weekId===weekId))){d.amount=0;d.note='إلغاء الأجر المعلّق بعد حذف الصف من الأسبوع';d.sourceEntryId=source.id;}});
       removePendingOriginRecordIfEmpty(record);
     }
   });
@@ -2558,11 +2779,17 @@ function reconcileArchivedWeekFinancialEffects(weekId,entriesWithTotals,previous
     }
     recalculateDebtPaid(debt);
   });
+  removedEntries.forEach(source=>{
+    const debt=(DB.debts||[]).find(d=>d.workerId===source.workerId);
+    if(!debt) return;
+    const sourcePayments=getDebtSourcePayments(debt,weekId,source);
+    if(sourcePayments.length){ debt.dates=debt.dates.filter(d=>!sourcePayments.includes(d)); recalculateDebtPaid(debt); }
+  });
 
   /* 3) أزل تسديدات المعلّق المنسوبة لهذا الأسبوع، ثم أعد توزيع القيمة الجديدة مرة واحدة فقط. */
   (DB.pendingWages||[]).forEach(pw=>{
     const before=(pw.dates||[]).length;
-    pw.dates=(pw.dates||[]).filter(d=>!sourceEntries.some(e=>pendingPaymentBelongsToEntry(d,weekId,e)));
+    pw.dates=(pw.dates||[]).filter(d=>!allSourceEntriesForUnlink.some(e=>pendingPaymentBelongsToEntry(d,weekId,e)));
     if(pw.dates.length!==before) recalculatePendingWagePaid(pw);
   });
   entriesWithTotals.forEach(next=>{
@@ -2633,8 +2860,10 @@ function makeArchivedEntriesWithTotals(weekId){
 }
 
 /* ----- حفظ وأرشفة الأسبوع ----- */
-function saveWeek(){
+function saveWeek(options={}){
   const cw=DB.currentWeek;
+  const hasProjectOverride=Object.prototype.hasOwnProperty.call(options,'projectIdOverride');
+  if(hasProjectOverride) cw.projectId=options.projectIdOverride||null;
   if(cw.status!=='open' && !editingWeekId){ showToast('لا يوجد أسبوع مفتوح','error'); return; }
   const validEntries=cw.entries.filter(e=>e.workerId);
   const validExpenses=(cw.expenses||[]).filter(e=>num(e.qty)*num(e.price)>0||e.label);
@@ -2691,7 +2920,11 @@ function saveWeek(){
   const t=computeSavedWeekTotals(entriesWithTotals,cw.expenses||[]);
   const previousPosting=previous?.financialPosting?.entries||{};
   if(isArchiveEditing){
-    t.postArchiveAdjustmentTotal=Math.round(entriesWithTotals.reduce((sum,e)=>sum+num(e.parts?.net)-num(previousPosting[e.id]?.net),0));
+    const currentNet=entriesWithTotals.reduce((sum,e)=>sum+num(e.parts?.net),0);
+    const previousNet=(previous?.entries||[]).reduce((sum,e)=>sum+num(previousPosting[e.id]?.net!==undefined?previousPosting[e.id].net:postedEntryNet(e)),0);
+    const currentExp=(cw.expenses||[]).reduce((sum,e)=>sum+num(e.qty)*num(e.price),0);
+    const previousExp=(previous?.expenses||[]).reduce((sum,e)=>sum+num(e.amount??(num(e.qty)*num(e.price))),0);
+    t.postArchiveAdjustmentTotal=Math.round((currentNet+currentExp)-(previousNet+previousExp));
   }
   entriesWithTotals=entriesWithTotals.map(e=>({
     ...e,
@@ -2737,15 +2970,19 @@ function saveWeek(){
     DB.weeks.unshift(weekData);
   }
 
+  /* إذا تم الحفظ داخل مشروع أو تحويله، نربط كل آثار الأسبوع التابعة بنفس المكان. */
+  setWeekProjectDeep(weekId,weekData.projectId||null);
+
   const oldRate=cw.overtimeRate;
   const oldManualRate=cw.manualHourlyRate||null;
-  DB.currentWeek={startDate:'',endDate:'',entries:[],expenses:[],projectId:null,overtimeRate:oldRate,manualHourlyRate:oldManualRate,status:'idle',_mod:nextMod()};
-  editingWeekId=null;
+  const destinationProjectId=weekData.projectId||null;
+  resetCurrentWeekToIdle(oldRate,oldManualRate);
   saveDB();
-  logActivity(`${isArchiveEditing?'تسوية وتعديل':'حفظ وأرشفة'} أسبوع: ${formatDateAR(weekData.startDate)} (${money(weekData.grandTotal)} دج)`);
-  showToast(isArchiveEditing?'✅ تم تعديل الأسبوع وتسوية السجلات المالية التابعة دون تكرار.':`✅ تم الحفظ كأسبوع مستقل! المجموع: ${money(weekData.grandTotal)} دج`,'success');
-  renderArchive(); renderDebts(); renderPendingWages(); loadDashboard();
-  loadWeekEditor();
+  logActivity(`${isArchiveEditing?'تسوية وتعديل':'حفظ'} أسبوع: ${formatDateAR(weekData.startDate)} (${money(weekData.grandTotal)} دج)`);
+  const placeText=destinationProjectId?`داخل المشروع: ${DB.projects.find(p=>p.id===destinationProjectId)?.name||''}`:'في الأرشيف العام';
+  showToast(isArchiveEditing?`✅ تم تحديث نفس الأسبوع ${placeText} دون تكرار مالي.`:`✅ تم حفظ الأسبوع ${placeText}. المجموع: ${money(weekData.grandTotal)} دج`,'success');
+  renderArchive(); renderDebts(); renderPendingWages(); renderProjects(); renderProjectWeeks(); loadDashboard();
+  routeToWeekStoredPlace(destinationProjectId);
 }
 
 function saveWeekAndStartNew(){
@@ -3028,6 +3265,95 @@ function updatePendingWagesBadge(){
   if(openCount>0){ badge.style.display='inline-flex'; badge.className='badge badge-debt'; badge.textContent=openCount; }
   else{ badge.style.display='none'; }
 }
+function getPendingOriginRef(pw){
+  if(!pw) return null;
+  const week=(DB.weeks||[]).find(w=>w.id===pw.weekId);
+  if(!week) return null;
+  let entry=null;
+  if(pw.sourceEntryId) entry=(week.entries||[]).find(e=>e.id===pw.sourceEntryId)||null;
+  if(!entry){
+    const candidates=(week.entries||[]).filter(e=>e.workerId===pw.workerId);
+    if(candidates.length===1) entry=candidates[0];
+  }
+  return entry?{week,entry}:null;
+}
+function syncPendingOriginWeekFromRecord(pw){
+  const ref=getPendingOriginRef(pw);
+  if(!ref) return false;
+  const net=postedEntryNet(ref.entry);
+  const pending=Math.min(Math.max(0,num(pw.total)),Math.max(0,net));
+  ref.entry.pendingAmount=pending;
+  ref.entry.paidNow=Math.max(0,net-pending);
+  if(ref.entry.parts) ref.entry.parts.net=net;
+  ref.entry.total=net;
+  ref.entry._mod=nextMod();
+  recomputeStoredWeekTotals(ref.week);
+  return true;
+}
+function removePendingPaymentsFromLinkedWeeks(pw){
+  (pw?.dates||[]).filter(d=>d&&d.type==='pay').forEach(d=>{
+    const week=(DB.weeks||[]).find(w=>w.id===d.paidByWeekId);
+    if(!week) return;
+    let targets=[];
+    if(d.paidByEntryId){
+      const e=(week.entries||[]).find(x=>x.id===d.paidByEntryId);
+      if(e) targets=[e];
+    }else{
+      targets=(week.entries||[]).filter(e=>e.workerId===pw.workerId);
+    }
+    let rest=num(d.amount);
+    targets.forEach(e=>{
+      if(rest<=0) return;
+      const cur=Math.max(0,num(e.settlePending));
+      const take=Math.min(cur,rest);
+      e.settlePending=Math.max(0,cur-take);
+      e._mod=nextMod();
+      rest-=take;
+    });
+    recomputeStoredWeekTotals(week);
+  });
+}
+function editPendingWage(pwId){
+  const pw=(DB.pendingWages||[]).find(x=>x.id===pwId);
+  if(!pw) return;
+  const w=DB.workers.find(x=>x.id===pw.workerId);
+  const paid=Math.max(0,num(pw.paid));
+  const ref=getPendingOriginRef(pw);
+  const netLimit=ref?postedEntryNet(ref.entry):Infinity;
+  const hint=ref?`\nحد الأجر الأصلي في الأسبوع: ${money(netLimit)} دج`:'';
+  const v=prompt(`تعديل الأجر المعلّق — ${w?.name||''}\nالحالي: ${money(pw.total)} دج\nالمسدد: ${money(paid)} دج${hint}\n\nاكتب إجمالي الأجر المعلّق الصحيح:`,String(pw.total||0));
+  if(v===null) return;
+  let target=Math.max(0,num(v));
+  if(target<paid){ showToast(`لا يمكن جعل المعلّق ${money(target)} دج لأنه سُدّد منه ${money(paid)} دج.`, 'error'); return; }
+  if(Number.isFinite(netLimit) && target>netLimit){ target=netLimit; showToast('تم تخفيض القيمة إلى حد أجر الصف الأصلي: '+money(netLimit)+' دج','warning'); }
+  pw.dates=Array.isArray(pw.dates)?pw.dates:[];
+  pw.total=target;
+  let add=pw.dates.find(d=>d.type==='add'&&(d.sourceEntryId===pw.sourceEntryId||d.weekId===pw.weekId));
+  if(add){ add.amount=target; add.note='تعديل يدوي لإجمالي الأجر المعلّق'; }
+  else pw.dates.unshift({id:generateId(),date:new Date().toISOString(),amount:target,note:'تعديل يدوي لإجمالي الأجر المعلّق',type:'add',weekId:pw.weekId,weekStart:pw.weekStart,sourceEntryId:pw.sourceEntryId});
+  pw._mod=nextMod();
+  recalculatePendingWagePaid(pw);
+  syncPendingOriginWeekFromRecord(pw);
+  saveDB(); renderPendingWages(); renderArchive(); renderProjects(); renderProjectWeeks(); loadDashboard();
+  showToast('✅ تم تعديل الأجر المعلّق وحفظ الأثر المالي.','success');
+}
+function deletePendingWage(pwId){
+  const pw=(DB.pendingWages||[]).find(x=>x.id===pwId);
+  if(!pw) return;
+  const w=DB.workers.find(x=>x.id===pw.workerId);
+  confirmDelete(`الأجر المعلّق لـ ${w?.name||'العامل'} — سيُزال رصيده من صفحة المعلّق وتُصحّح الأسابيع المرتبطة به`,()=>{
+    const snapshot=JSON.parse(JSON.stringify(pw));
+    removePendingPaymentsFromLinkedWeeks(pw);
+    pw.total=0;
+    recalculatePendingWagePaid(pw);
+    syncPendingOriginWeekFromRecord(pw);
+    moveToTrash('pendingWage',snapshot,`أجر معلّق ${w?.name||''}`);
+    _markDeleted(pw.id);
+    DB.pendingWages=(DB.pendingWages||[]).filter(x=>x.id!==pw.id);
+    saveDB(); renderPendingWages(); renderArchive(); renderProjects(); renderProjectWeeks(); loadDashboard();
+    showToast('✅ تم حذف الأجر المعلّق وتصحيح الأسابيع المرتبطة.','success');
+  });
+}
 function renderPendingWages(){
   const tb=document.getElementById('pendingWagesTableBody');
   const open=(DB.pendingWages||[]).filter(pw=>pendingWagesRemaining(pw)>0 || pw.total>0);
@@ -3051,7 +3377,11 @@ function renderPendingWages(){
       <td>${money(pw.paid)} دج</td>
       <td><span class="badge ${rem>0?'badge-debt':'badge-paid'}">${money(rem)} دج</span></td>
       <td>${last?formatDateAR(last.date):'—'}</td>
-      <td>${rem>0?`<button class="btn btn-success btn-xs" onclick="settlePendingWage('${pw.id}')"><i class="fas fa-hand-holding-usd"></i> تسديد</button>`:''}</td>
+      <td><div style="display:flex;gap:5px;flex-wrap:wrap;min-width:150px">
+        ${rem>0?`<button class="btn btn-success btn-xs" onclick="settlePendingWage('${pw.id}')"><i class="fas fa-hand-holding-usd"></i> تسديد</button>`:''}
+        <button class="btn btn-outline btn-xs" onclick="editPendingWage('${pw.id}')"><i class="fas fa-edit"></i> تعديل</button>
+        <button class="btn btn-danger btn-xs" onclick="deletePendingWage('${pw.id}')"><i class="fas fa-trash"></i> حذف</button>
+      </div></td>
     </tr>
     <tr><td colspan="7" style="padding:0;border:0">
       <details style="margin:0 8px 8px"><summary style="cursor:pointer;color:var(--text3);font-size:12px;padding:4px 0">📋 لماذا معلّق؟ — عرض التفاصيل (${pw.dates.length})</summary>
@@ -3072,7 +3402,7 @@ function settlePendingWage(pwId){
   pw.dates=Array.isArray(pw.dates)?pw.dates:[];
   pw.dates.push({id:generateId(),date:new Date().toISOString(),amount,note:'تسديد يدوي من صفحة الأجور المعلّقة',type:'pay'});
   recalculatePendingWagePaid(pw);
-  saveDB(); renderPendingWages(); loadDashboard();
+  saveDB(); renderPendingWages(); renderProjects(); renderProjectWeeks(); loadDashboard();
   showToast(`✅ تم تسديد ${money(amount)} دج لـ${w?.name||''}`,'success');
 }
 
@@ -3082,9 +3412,9 @@ function settlePendingWage(pwId){
 function renderArchive(){
   const tb=document.getElementById('archiveTableBody');
   const s=(document.getElementById('archiveSearch')?.value||'').toLowerCase();
-  let weeks=[...DB.weeks].sort((a,b)=>new Date(b.startDate)-new Date(a.startDate));
-  if(s){ weeks=weeks.filter(w=>{ const p=DB.projects.find(x=>x.id===w.projectId); return formatDateAR(w.startDate).includes(s)||(p?.name||'').toLowerCase().includes(s); }); }
-  if(!weeks.length){ tb.innerHTML='<tr><td colspan="11"><div class="empty-state"><i class="fas fa-box-open"></i><h4>الأرشيف فارغ</h4><p>الأسابيع المحفوظة تظهر هنا تلقائياً</p></div></td></tr>'; return; }
+  let weeks=[...DB.weeks].filter(w=>!w.projectId).sort((a,b)=>new Date(b.startDate)-new Date(a.startDate));
+  if(s){ weeks=weeks.filter(w=>formatDateAR(w.startDate).includes(s)); }
+  if(!weeks.length){ tb.innerHTML='<tr><td colspan="11"><div class="empty-state"><i class="fas fa-box-open"></i><h4>الأرشيف العام فارغ</h4><p>الأسابيع المحفوظة داخل المشاريع تظهر في ملف كل مشروع، وليس هنا.</p></div></td></tr>'; return; }
   tb.innerHTML=weeks.map(w=>{
     const project=DB.projects.find(p=>p.id===w.projectId);
     const exp=w.expensesTotal!=null?w.expensesTotal:(w.expenses||[]).reduce((s,e)=>s+(e.amount||0),0);
@@ -3812,34 +4142,18 @@ function refreshManualOTWorkers(){
    ==================================================== */
 function openAssignProjectModal(){
   if(!DB.projects.length){ showToast('لا توجد مشاريع — أضف مشروعاً أولاً','error'); return; }
-  const opts=DB.projects.map(p=>`<option value="${p.id}" ${DB.currentWeek.projectId===p.id?'selected':''}>${p.name}</option>`).join('');
-  const wOpts=DB.currentWeek.entries.filter(e=>e.workerId).map(e=>{
-    const w=DB.workers.find(x=>x.id===e.workerId);
-    return `<option value="${e.workerId}">${w?.number} - ${w?.name}</option>`;
-  }).join('');
-  openModal('تحويل / ربط بمشروع',`
+  const cw=DB.currentWeek||{};
+  if(cw.status!=='open' && !editingWeekId){ showToast('لا يوجد أسبوع مفتوح للتحويل','error'); return; }
+  const opts=DB.projects.map(p=>`<option value="${p.id}" ${cw.projectId===p.id?'selected':''}>${p.name}</option>`).join('');
+  openModal('تحويل الأسبوع إلى مشروع',`
     <div class="form-group">
-      <label><b>ربط الأسبوع كاملاً بمشروع</b></label>
-      <select id="assignProjectId"><option value="">— بدون مشروع —</option>${opts}</select>
+      <label><b>اختر المشروع</b></label>
+      <select id="assignProjectId">${opts}</select>
     </div>
-    <div class="divider"></div>
-    <div style="background:var(--bg2);padding:12px;border-radius:10px;margin-top:4px">
-      <label style="font-weight:700;display:block;margin-bottom:8px">نقل عامل محدد لمشروع آخر (يُغيّر مشروع العامل نهائياً)</label>
-      <div class="form-grid">
-        <div class="form-group"><label>العامل</label><select id="assignWorkerEntry"><option value="">— اختر —</option>${wOpts}</select></div>
-        <div class="form-group"><label>المشروع</label><select id="assignWorkerProject"><option value="">— اختر —</option>${opts}</select></div>
-      </div>
-    </div>`,()=>{
+    <div class="text-muted" style="margin-top:8px;line-height:1.8">زر التحويل يحفظ الأسبوع مباشرة داخل المشروع المختار. إذا كان أسبوعاً محفوظاً سابقاً في الأرشيف العام فسيُنقل إلى المشروع، وليس ينسخ مرة ثانية.</div>`,()=>{
     const pid=document.getElementById('assignProjectId').value;
-    const wid=document.getElementById('assignWorkerEntry').value;
-    const wpid=document.getElementById('assignWorkerProject').value;
-    DB.currentWeek.projectId=pid||null;
-    if(wid&&wpid){
-      const w=DB.workers.find(x=>x.id===wid);
-      if(w){ w.projectId=wpid; showToast('✅ تم نقل '+w.name+' للمشروع: '+DB.projects.find(p=>p.id===wpid)?.name); }
-    }
-    saveDB(); loadWeekEditor(); renderWorkers();
-    if(pid) showToast('✅ تم ربط الأسبوع بالمشروع: '+DB.projects.find(p=>p.id===pid)?.name);
+    if(!pid){ showToast('اختر مشروعاً صحيحاً','error'); return; }
+    saveWeek({projectIdOverride:pid});
   });
 }
 function assignArchivedWeekProject(weekId){
@@ -3848,10 +4162,21 @@ function assignArchivedWeekProject(weekId){
   const opts=DB.projects.map(p=>`<option value="${p.id}" ${wk?.projectId===p.id?'selected':''}>${p.name}</option>`).join('');
   openModal('تحويل الأسبوع لمشروع',`
     <div class="form-group"><label>اختر المشروع</label>
-    <select id="archAssignPid"><option value="">— بدون مشروع —</option>${opts}</select></div>`,()=>{
+    <select id="archAssignPid"><option value="">— بدون مشروع —</option>${opts}</select></div>
+    <div class="text-muted" style="margin-top:8px;line-height:1.8">سيتم تحويل الأسبوع كاملاً: الأجور، المصاريف، العمال داخل الكشف، وسجلات الأجور المعلّقة المرتبطة به. بعد التحويل يختفي من الأرشيف العام ويفتح ملف المشروع مباشرة.</div>`,()=>{
     const pid=document.getElementById('archAssignPid').value;
-    if(wk){ wk.projectId=pid||null; saveDB(); renderArchive(); renderProjectWeeks();
-      showToast('✅ '+(pid?'تم ربط الأسبوع بـ: '+DB.projects.find(p=>p.id===pid)?.name:'تم فصل الأسبوع عن المشروع')); }
+    if(wk){
+      setWeekProjectDeep(weekId,pid||null);
+      saveDB(); renderArchive(); renderProjects(); loadDashboard();
+      if(pid){
+        currentProjectId=pid;
+        showToast('✅ تم تحويل الأسبوع كاملاً وفتح المشروع: '+DB.projects.find(p=>p.id===pid)?.name);
+        openProjectWeeks(pid);
+      }else{
+        renderProjectWeeks();
+        showToast('✅ تم فصل الأسبوع كاملاً عن المشروع');
+      }
+    }
   });
 }
 
@@ -3901,6 +4226,11 @@ function loadDashboard(){
    التقارير
    ==================================================== */
 function renderReports(){
+  renderBasicReports();
+  renderAdvancedReportFilters();
+  renderAdvancedReports();
+}
+function renderBasicReports(){
   const wt=DB.workers.map(w=>({
     name:w.name,
     total:DB.weeks.reduce((s,wk)=>s+wk.entries.filter(e=>e.workerId===w.id).reduce((a,e)=>a+(e.total||e.parts?.net||0),0),0)
@@ -3917,18 +4247,252 @@ function renderReports(){
         <th style="padding:7px 8px;text-align:left">النسبة</th>
       </tr></thead><tbody>
       ${top.map(w=>`<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:7px 8px;text-align:right;font-weight:700">${w.name}</td>
+        <td style="padding:7px 8px;text-align:right;font-weight:700">${escapeHTML(w.name)}</td>
         <td style="padding:7px 8px;text-align:left;font-weight:800;color:var(--primary)">${money(w.total)} دج</td>
         <td style="padding:7px 8px;text-align:left;color:var(--text2)">${(w.total/sumTop*100).toFixed(1)}%</td>
       </tr>`).join('')}
       </tbody></table>`:'<div class="empty-state" style="padding:20px"><i class="fas fa-inbox"></i><p>لا توجد بيانات بعد</p></div>';
   }
   const tw=document.getElementById('topWorkers');
-  tw.innerHTML=wt.length?wt.slice(0,8).map((w,i)=>`
+  if(tw) tw.innerHTML=wt.length?wt.slice(0,8).map((w,i)=>`
     <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border)">
-      <span><b style="color:var(--primary)">${i+1}.</b> ${w.name}</span>
+      <span><b style="color:var(--primary)">${i+1}.</b> ${escapeHTML(w.name)}</span>
       <span class="badge badge-primary">${money(w.total)} دج</span>
     </div>`).join(''):'<div class="empty-state" style="padding:20px"><i class="fas fa-chart-simple"></i><p>لا توجد بيانات بعد</p></div>';
+}
+function setReportPeriodMode(mode){
+  const el=document.getElementById('reportPeriodMode');
+  if(el) el.value=mode;
+}
+function monthBounds(year,monthIndex0){
+  const s=new Date(year,monthIndex0,1);
+  const e=new Date(year,monthIndex0+1,0);
+  return {from:formatDate(s),to:formatDate(e)};
+}
+function advancedReportApplyPeriod(render=true){
+  const mode=document.getElementById('reportPeriodMode')?.value||'all';
+  const fromEl=document.getElementById('reportFrom');
+  const toEl=document.getElementById('reportTo');
+  const monthEl=document.getElementById('reportMonth');
+  const yearEl=document.getElementById('reportYear');
+  const today=new Date();
+  const setRange=(from,to)=>{ if(fromEl)fromEl.value=from||''; if(toEl)toEl.value=to||''; };
+  if(!monthEl?.value) monthEl.value=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  if(!yearEl?.value) yearEl.value=String(today.getFullYear());
+  if(mode==='all') setRange('','');
+  else if(mode==='thisMonth'){ const b=monthBounds(today.getFullYear(),today.getMonth()); setRange(b.from,b.to); }
+  else if(mode==='lastMonth'){ const d=new Date(today.getFullYear(),today.getMonth()-1,1); const b=monthBounds(d.getFullYear(),d.getMonth()); setRange(b.from,b.to); }
+  else if(mode==='last2Months'){
+    const first=new Date(today.getFullYear(),today.getMonth()-1,1);
+    const last=new Date(today.getFullYear(),today.getMonth()+1,0);
+    setRange(formatDate(first),formatDate(last));
+  }
+  else if(mode==='thisYear') setRange(`${today.getFullYear()}-01-01`,`${today.getFullYear()}-12-31`);
+  else if(mode==='lastYear'){ const y=today.getFullYear()-1; setRange(`${y}-01-01`,`${y}-12-31`); }
+  else if(mode==='month'){
+    const v=monthEl?.value||`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+    const [y,m]=v.split('-').map(Number);
+    const b=monthBounds(y||today.getFullYear(),(m||1)-1); setRange(b.from,b.to);
+  }
+  else if(mode==='year'){
+    const y=Number(yearEl?.value)||today.getFullYear(); setRange(`${y}-01-01`,`${y}-12-31`);
+  }
+  if(render) renderAdvancedReports();
+}
+function resetAdvancedReportsFilters(){
+  ['reportWorker','reportService','reportProject'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  setReportPeriodMode('all');
+  advancedReportApplyPeriod(true);
+}
+function renderAdvancedReportFilters(){
+  const workerSel=document.getElementById('reportWorker');
+  const serviceSel=document.getElementById('reportService');
+  const projectSel=document.getElementById('reportProject');
+  if(!workerSel||!serviceSel||!projectSel) return;
+  const current={worker:workerSel.value,service:serviceSel.value,project:projectSel.value};
+  const workers=[...(DB.workers||[])].sort((a,b)=>num(a.number)-num(b.number)||String(a.name||'').localeCompare(String(b.name||''),'ar'));
+  workerSel.innerHTML=`<option value="">كل العمال</option>`+workers.map(w=>`<option value="${escapeHTML(w.id)}">${escapeHTML((w.number?('#'+w.number+' — '):'')+w.name)} (${escapeHTML(w.type||'')})</option>`).join('');
+  const serviceNames=new Set();
+  (DB.workers||[]).forEach(w=>(w.services||[]).forEach(s=>{ if(s?.name) serviceNames.add(String(s.name)); }));
+  (DB.weeks||[]).forEach(w=>(w.entries||[]).forEach(e=>(e.services||[]).forEach(s=>{ if(s?.name) serviceNames.add(String(s.name)); })));
+  serviceSel.innerHTML=`<option value="">كل الخدمات</option>`+[...serviceNames].sort((a,b)=>a.localeCompare(b,'ar')).map(name=>`<option value="${escapeHTML(name)}">${escapeHTML(name)}</option>`).join('');
+  projectSel.innerHTML=`<option value="">كل المشاريع</option><option value="__none">الأرشيف العام بدون مشروع</option>`+(DB.projects||[]).map(p=>`<option value="${escapeHTML(p.id)}">${escapeHTML(p.name)}</option>`).join('');
+  if([...workerSel.options].some(o=>o.value===current.worker)) workerSel.value=current.worker;
+  if([...serviceSel.options].some(o=>o.value===current.service)) serviceSel.value=current.service;
+  if([...projectSel.options].some(o=>o.value===current.project)) projectSel.value=current.project;
+  const today=new Date();
+  const monthEl=document.getElementById('reportMonth'); if(monthEl&&!monthEl.value) monthEl.value=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  const yearEl=document.getElementById('reportYear'); if(yearEl&&!yearEl.value) yearEl.value=String(today.getFullYear());
+  if(!document.getElementById('reportPeriodMode')?.dataset.ready){
+    const mode=document.getElementById('reportPeriodMode'); if(mode) mode.dataset.ready='1';
+    advancedReportApplyPeriod(false);
+  }
+}
+function reportDateValue(v,end=false){
+  if(!v) return null;
+  const d=new Date(v+(String(v).length===10?(end?'T23:59:59':'T00:00:00'):''));
+  return isNaN(d.getTime())?null:d;
+}
+function reportWeekOverlapsRange(week,fromDate,toDate){
+  const ws=reportDateValue(week.startDate||week.archivedAt||week.createdAt,false);
+  const we=reportDateValue(week.endDate||week.startDate||week.archivedAt||week.createdAt,true);
+  if(!ws&&!we) return true;
+  const s=ws||we, e=we||ws;
+  if(fromDate && e<fromDate) return false;
+  if(toDate && s>toDate) return false;
+  return true;
+}
+function reportProjectName(projectId){
+  if(!projectId) return 'الأرشيف العام';
+  return DB.projects.find(p=>p.id===projectId)?.name||'مشروع محذوف/غير معروف';
+}
+function getReportFilters(){
+  return {
+    from:document.getElementById('reportFrom')?.value||'',
+    to:document.getElementById('reportTo')?.value||'',
+    workerId:document.getElementById('reportWorker')?.value||'',
+    serviceName:document.getElementById('reportService')?.value||'',
+    projectId:document.getElementById('reportProject')?.value||''
+  };
+}
+function getFilteredReportWeeks({includeWorkerService=false}={}){
+  const f=getReportFilters();
+  const fromDate=reportDateValue(f.from,false), toDate=reportDateValue(f.to,true);
+  return (DB.weeks||[]).filter(w=>{
+    if(!reportWeekOverlapsRange(w,fromDate,toDate)) return false;
+    const pid=w.projectId||null;
+    if(f.projectId==='__none' && pid) return false;
+    if(f.projectId && f.projectId!=='__none' && pid!==f.projectId) return false;
+    if(includeWorkerService && f.workerId && !(w.entries||[]).some(e=>e.workerId===f.workerId)) return false;
+    if(includeWorkerService && f.serviceName && !(w.entries||[]).some(e=>(e.services||[]).some(s=>s.name===f.serviceName))) return false;
+    return true;
+  });
+}
+function entryNetForReport(e){ return num(e.parts?.net??e.total??e.postedNet??0); }
+function entryPaidNowForReport(e,net){
+  if(e.paidNow!==undefined&&e.paidNow!==null) return Math.max(0,num(e.paidNow));
+  if(e.pendingAmount!==undefined&&e.pendingAmount!==null) return Math.max(0,net-num(e.pendingAmount));
+  return Math.max(0,net);
+}
+function renderAdvancedReports(){
+  renderAdvancedReportSummary();
+  renderPieceServicesReport();
+  renderWorkerPaymentsReport();
+  renderProjectAdvancedReport();
+}
+function renderAdvancedReportSummary(){
+  const box=document.getElementById('advancedReportSummary'); if(!box) return;
+  const weeks=getFilteredReportWeeks();
+  const totals=weeks.reduce((acc,w)=>{
+    const t=computeSavedWeekTotals(w.entries||[],w.expenses||[]);
+    acc.wages+=t.wagesTotal; acc.expenses+=t.expensesTotal; acc.cash+=t.cashOutTotal; acc.pending+=t.pendingCreatedTotal; acc.settled+=t.settledPendingTotal; acc.debt+=t.deductionTotal;
+    return acc;
+  },{wages:0,expenses:0,cash:0,pending:0,settled:0,debt:0});
+  const f=getReportFilters();
+  const range=(f.from||f.to)?`${f.from||'البداية'} → ${f.to||'النهاية'}`:'كل الفترة';
+  box.innerHTML=`
+    <div class="summary-box primary"><div class="lbl">الفترة</div><div class="val" style="font-size:14px">${escapeHTML(range)}</div></div>
+    <div class="summary-box"><div class="lbl">عدد الأسابيع</div><div class="val">${weeks.length}</div></div>
+    <div class="summary-box success"><div class="lbl">الأجور</div><div class="val">${money(totals.wages)}</div></div>
+    <div class="summary-box warning"><div class="lbl">المصاريف</div><div class="val">${money(totals.expenses)}</div></div>
+    <div class="summary-box"><div class="lbl">النقد الخارج</div><div class="val">${money(totals.cash)}</div></div>
+    <div class="summary-box danger"><div class="lbl">معلّق جديد</div><div class="val">${money(totals.pending)}</div></div>`;
+}
+function renderPieceServicesReport(){
+  const el=document.getElementById('pieceServicesReport'); if(!el) return;
+  const f=getReportFilters();
+  const weeks=getFilteredReportWeeks({includeWorkerService:true});
+  const map=new Map();
+  weeks.forEach(w=>{
+    (w.entries||[]).forEach(e=>{
+      const worker=DB.workers.find(x=>x.id===e.workerId);
+      const type=e.workerType||e.parts?.type||worker?.type||'';
+      if(type!=='قطعة') return;
+      if(f.workerId && e.workerId!==f.workerId) return;
+      (e.services||[]).forEach(s=>{
+        const serviceName=String(s.name||'').trim();
+        if(!serviceName) return;
+        if(f.serviceName && serviceName!==f.serviceName) return;
+        const qty=num(s.qty), price=num(s.price), amount=qty*price;
+        if(qty===0 && amount===0) return;
+        const pid=w.projectId||null;
+        const key=[e.workerId,serviceName,pid].join('|');
+        if(!map.has(key)) map.set(key,{worker:e.workerName||worker?.name||'غير معروف',service:serviceName,project:reportProjectName(pid),qty:0,amount:0,prices:new Set(),weeks:new Set()});
+        const r=map.get(key); r.qty+=qty; r.amount+=amount; if(price) r.prices.add(price); r.weeks.add(w.id);
+      });
+    });
+  });
+  const rows=[...map.values()].sort((a,b)=>b.amount-a.amount||a.worker.localeCompare(b.worker,'ar'));
+  const totalQty=rows.reduce((s,r)=>s+r.qty,0), totalAmount=rows.reduce((s,r)=>s+r.amount,0);
+  el.innerHTML=rows.length?`<table>
+    <thead><tr><th>العامل</th><th>الخدمة</th><th>المشروع</th><th>عدد/كمية</th><th>سعر الوحدة</th><th>عدد الأسابيع</th><th>المجموع</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr>
+      <td><b>${escapeHTML(r.worker)}</b></td><td>${escapeHTML(r.service)}</td><td>${escapeHTML(r.project)}</td>
+      <td style="text-align:left;font-weight:800">${money(r.qty)}</td><td style="text-align:left">${r.prices.size===1?money([...r.prices][0])+' دج':'متعدد'}</td>
+      <td style="text-align:center">${r.weeks.size}</td><td style="text-align:left;font-weight:900;color:var(--gold)">${money(r.amount)} دج</td>
+    </tr>`).join('')}
+    <tr style="background:var(--gold-soft);font-weight:900"><td colspan="3">الإجمالي</td><td style="text-align:left">${money(totalQty)}</td><td></td><td></td><td style="text-align:left">${money(totalAmount)} دج</td></tr>
+    </tbody></table>`:'<div class="empty-state" style="padding:20px"><i class="fas fa-layer-group"></i><p>لا توجد خدمات قطعة مطابقة للفلاتر</p></div>';
+}
+function renderWorkerPaymentsReport(){
+  const el=document.getElementById('workerPaymentsReport'); if(!el) return;
+  const f=getReportFilters();
+  const weeks=getFilteredReportWeeks({includeWorkerService:true});
+  const map=new Map();
+  weeks.forEach(w=>{
+    (w.entries||[]).forEach(e=>{
+      if(f.workerId && e.workerId!==f.workerId) return;
+      const net=entryNetForReport(e);
+      let ratio=1, includedNet=net;
+      if(f.serviceName){
+        const serviceAmount=(e.services||[]).filter(s=>s.name===f.serviceName).reduce((sum,s)=>sum+num(s.qty)*num(s.price),0);
+        if(serviceAmount<=0) return;
+        includedNet=serviceAmount; ratio=net>0?Math.min(1,serviceAmount/net):1;
+      }
+      const worker=DB.workers.find(x=>x.id===e.workerId);
+      const key=e.workerId||'unknown';
+      if(!map.has(key)) map.set(key,{worker:e.workerName||worker?.name||'غير معروف',type:e.workerType||worker?.type||'',due:0,paid:0,pending:0,settled:0,cash:0,debt:0,weeks:new Set()});
+      const r=map.get(key);
+      const paid=entryPaidNowForReport(e,net)*ratio;
+      const pending=(e.pendingAmount!==undefined?num(e.pendingAmount):Math.max(0,net-paid))*ratio;
+      const settled=num(e.settlePending)*ratio;
+      r.due+=includedNet; r.paid+=paid; r.pending+=pending; r.settled+=settled; r.cash+=paid+settled; r.debt+=num(e.debtDeduction??e.parts?.deduction)*ratio; r.weeks.add(w.id);
+    });
+  });
+  const rows=[...map.values()].sort((a,b)=>b.cash-a.cash||a.worker.localeCompare(b.worker,'ar'));
+  const totals=rows.reduce((a,r)=>{a.due+=r.due;a.paid+=r.paid;a.pending+=r.pending;a.settled+=r.settled;a.cash+=r.cash;a.debt+=r.debt;return a;},{due:0,paid:0,pending:0,settled:0,cash:0,debt:0});
+  const note=f.serviceName?`<div class="text-muted mb-2">عند اختيار خدمة، توزّع مبالغ الدفع والتسديد نسبياً على مبلغ الخدمة لأن البرنامج لا يسجل دفعة مستقلة لكل خدمة.</div>`:'';
+  el.innerHTML=note+(rows.length?`<table>
+    <thead><tr><th>العامل</th><th>النوع</th><th>الأسابيع</th><th>الأجر المستحق</th><th>مدفوع الآن</th><th>تسديد معلّق سابق</th><th>النقد المدفوع للعامل</th><th>معلّق جديد</th><th>خصم دين</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr>
+      <td><b>${escapeHTML(r.worker)}</b></td><td>${escapeHTML(r.type)}</td><td style="text-align:center">${r.weeks.size}</td>
+      <td style="text-align:left;font-weight:800">${money(r.due)}</td><td style="text-align:left;color:var(--primary)">${money(r.paid)}</td><td style="text-align:left;color:var(--gold)">${money(r.settled)}</td>
+      <td style="text-align:left;font-weight:900;color:var(--success)">${money(r.cash)}</td><td style="text-align:left;color:var(--danger)">${money(r.pending)}</td><td style="text-align:left;color:var(--warning)">${money(r.debt)}</td>
+    </tr>`).join('')}
+    <tr style="background:var(--primary-soft);font-weight:900"><td colspan="3">الإجمالي</td><td style="text-align:left">${money(totals.due)}</td><td style="text-align:left">${money(totals.paid)}</td><td style="text-align:left">${money(totals.settled)}</td><td style="text-align:left">${money(totals.cash)}</td><td style="text-align:left">${money(totals.pending)}</td><td style="text-align:left">${money(totals.debt)}</td></tr>
+    </tbody></table>`:'<div class="empty-state" style="padding:20px"><i class="fas fa-money-bill-wave"></i><p>لا توجد تسديدات مطابقة للفلاتر</p></div>');
+}
+function renderProjectAdvancedReport(){
+  const el=document.getElementById('projectAdvancedReport'); if(!el) return;
+  const weeks=getFilteredReportWeeks();
+  const map=new Map();
+  weeks.forEach(w=>{
+    const pid=w.projectId||'__none';
+    if(!map.has(pid)) map.set(pid,{project:reportProjectName(w.projectId||null),weeks:0,wages:0,daily:0,piece:0,expenses:0,cash:0,pending:0,settled:0,debt:0,accounting:0});
+    const r=map.get(pid), t=computeSavedWeekTotals(w.entries||[],w.expenses||[]);
+    r.weeks++; r.wages+=t.wagesTotal; r.daily+=t.dailyTotal; r.piece+=t.pieceTotal; r.expenses+=t.expensesTotal; r.cash+=t.cashOutTotal; r.pending+=t.pendingCreatedTotal; r.settled+=t.settledPendingTotal; r.debt+=t.deductionTotal; r.accounting+=t.accountingTotal;
+  });
+  const rows=[...map.values()].sort((a,b)=>b.accounting-a.accounting||a.project.localeCompare(b.project,'ar'));
+  const totals=rows.reduce((a,r)=>{['weeks','wages','daily','piece','expenses','cash','pending','settled','debt','accounting'].forEach(k=>a[k]+=r[k]);return a;},{weeks:0,wages:0,daily:0,piece:0,expenses:0,cash:0,pending:0,settled:0,debt:0,accounting:0});
+  el.innerHTML=rows.length?`<table>
+    <thead><tr><th>المشروع</th><th>عدد الأسابيع</th><th>أجور يوميين</th><th>أجور قطعة</th><th>إجمالي الأجور</th><th>المصاريف</th><th>المحاسبي</th><th>النقد الخارج</th><th>معلّق جديد</th><th>معلّق مسدّد</th><th>خصم دين</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr>
+      <td><b>${escapeHTML(r.project)}</b></td><td style="text-align:center">${r.weeks}</td><td style="text-align:left">${money(r.daily)}</td><td style="text-align:left;color:var(--gold)">${money(r.piece)}</td>
+      <td style="text-align:left;font-weight:800;color:var(--primary)">${money(r.wages)}</td><td style="text-align:left;color:var(--warning)">${money(r.expenses)}</td><td style="text-align:left;font-weight:900">${money(r.accounting)}</td>
+      <td style="text-align:left;color:var(--success);font-weight:800">${money(r.cash)}</td><td style="text-align:left;color:var(--danger)">${money(r.pending)}</td><td style="text-align:left;color:var(--gold)">${money(r.settled)}</td><td style="text-align:left">${money(r.debt)}</td>
+    </tr>`).join('')}
+    <tr style="background:var(--accent-soft);font-weight:900"><td>الإجمالي</td><td style="text-align:center">${totals.weeks}</td><td style="text-align:left">${money(totals.daily)}</td><td style="text-align:left">${money(totals.piece)}</td><td style="text-align:left">${money(totals.wages)}</td><td style="text-align:left">${money(totals.expenses)}</td><td style="text-align:left">${money(totals.accounting)}</td><td style="text-align:left">${money(totals.cash)}</td><td style="text-align:left">${money(totals.pending)}</td><td style="text-align:left">${money(totals.settled)}</td><td style="text-align:left">${money(totals.debt)}</td></tr>
+    </tbody></table>`:'<div class="empty-state" style="padding:20px"><i class="fas fa-folder-open"></i><p>لا توجد مشاريع/أسابيع مطابقة للفلاتر</p></div>';
 }
 function exportCSV(){
   let csv='\uFEFFالرقم,الاسم,النوع,المشروع,إجمالي الأجور\n';
