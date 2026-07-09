@@ -640,6 +640,30 @@ html,body{max-width:100%;overflow-x:hidden}
   #page-reports .flex.gap-2{grid-template-columns:1fr!important}
 }
 
+
+/* === WORKER QUICK CARD + TODAY + ASK PROGRAM === */
+.worker-quick-info{margin-top:7px;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:5px;max-width:520px}
+.worker-quick-chip{display:inline-flex;align-items:center;gap:5px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:4px 8px;font-size:11.5px;color:var(--text2);line-height:1.35}
+.worker-quick-chip b{color:var(--text);font-weight:800}
+.today-grid,.ask-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.today-card,.ask-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:var(--shadow)}
+.today-card h4,.ask-card h4{font-size:14px;font-weight:900;margin-bottom:8px;color:var(--text);display:flex;align-items:center;gap:7px}
+.today-worker-row{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px dashed var(--border);padding:9px 0;font-size:13px}
+.today-worker-row:first-of-type{border-top:none}
+.today-worker-row input{width:20px;height:20px;accent-color:var(--primary)}
+.ask-question-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
+.ask-question-btn{white-space:normal!important;min-height:42px;justify-content:flex-start!important;text-align:right;line-height:1.45}
+.ask-result{margin-top:14px;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:14px;min-height:80px}
+.ask-result h3{font-size:16px;margin-bottom:8px;color:var(--primary)}
+.ask-result table{background:var(--card)}
+@media(max-width:900px){
+  .worker-quick-info{grid-template-columns:1fr 1fr;max-width:100%}
+  .worker-quick-chip{font-size:11px;padding:4px 7px}
+  .today-grid,.ask-grid,.ask-question-list{grid-template-columns:1fr!important}
+  .today-card,.ask-card,.ask-result{padding:12px;border-radius:14px}
+  .ask-question-btn{width:100%;min-height:46px}
+}
+
 </style>
 </head>
 <body>
@@ -668,6 +692,8 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
   <ul class="sidebar-nav">
     <li><a href="#dashboard" class="active" data-page="dashboard"><i class="fas fa-chart-pie"></i> لوحة القيادة</a></li>
+    <li><a href="#today" data-page="today"><i class="fas fa-clipboard-check"></i> متابعة اليوم</a></li>
+    <li><a href="#ask" data-page="ask"><i class="fas fa-circle-question"></i> اسأل البرنامج</a></li>
     <li><a href="#workers" data-page="workers"><i class="fas fa-users"></i> العمال والموارد</a></li>
     <li><a href="#projects" data-page="projects"><i class="fas fa-folder-tree"></i> المشاريع</a></li>
     <li><a href="#week" data-page="week"><i class="fas fa-calendar-week"></i> الأسبوع الحالي</a></li>
@@ -710,6 +736,45 @@ html,body{max-width:100%;overflow-x:hidden}
       </div>
     </div>
   </div>
+
+  <!-- TODAY FOLLOW-UP -->
+  <div class="page" id="page-today">
+    <div class="card">
+      <div class="card-header"><h3><i class="fas fa-clipboard-check"></i> متابعة اليوم</h3></div>
+      <div id="todaySummary" class="summary-grid"></div>
+      <div class="report-help-note">هذه الصفحة للمتابعة اليومية فقط: لا تغيّر الأجور ولا تحفظ أسبوعاً ولا تضيف أثراً مالياً.</div>
+    </div>
+    <div class="today-grid">
+      <div class="today-card">
+        <h4><i class="fas fa-users"></i> مراجعة العمال اليوم</h4>
+        <div id="todayWorkersList"></div>
+      </div>
+      <div class="today-card">
+        <h4><i class="fas fa-triangle-exclamation"></i> تنبيهات سريعة</h4>
+        <div id="todayAlerts"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ASK PROGRAM -->
+  <div class="page" id="page-ask">
+    <div class="card">
+      <div class="card-header"><h3><i class="fas fa-circle-question"></i> اسأل البرنامج — أسئلة جاهزة</h3></div>
+      <div class="form-grid ask-grid">
+        <div class="form-group"><label>الفترة</label><select id="askPeriod" onchange="renderAskProgram()">
+          <option value="all">كل الفترة</option><option value="thisMonth">هذا الشهر</option><option value="lastMonth">الشهر الماضي</option><option value="last2Months">آخر شهرين</option><option value="thisYear">هذا العام</option><option value="lastYear">العام الماضي</option><option value="custom">من تاريخ إلى تاريخ</option>
+        </select></div>
+        <div class="form-group"><label>من تاريخ</label><input type="date" id="askFrom" onchange="document.getElementById('askPeriod').value='custom';renderAskProgram()"></div>
+        <div class="form-group"><label>إلى تاريخ</label><input type="date" id="askTo" onchange="document.getElementById('askPeriod').value='custom';renderAskProgram()"></div>
+        <div class="form-group"><label>المشروع</label><select id="askProject" onchange="renderAskProgram()"><option value="">كل المشاريع</option></select></div>
+        <div class="form-group"><label>العامل</label><select id="askWorker" onchange="renderAskProgram()"><option value="">كل العمال</option></select></div>
+      </div>
+      <div class="divider"></div>
+      <div id="askQuestionList" class="ask-question-list"></div>
+      <div id="askResult" class="ask-result"><span class="text-muted">اختر سؤالاً جاهزاً من الأعلى.</span></div>
+    </div>
+  </div>
+
 
   <!-- WORKERS -->
   <div class="page" id="page-workers">
@@ -1589,12 +1654,12 @@ let currentPage='dashboard';
 let navigationHistory=[];
 
 const pageTitles={
-  dashboard:'لوحة القيادة',workers:'العمال والموارد',projects:'المشاريع',week:'الأسبوع الحالي',
+  dashboard:'لوحة القيادة',today:'متابعة اليوم',ask:'اسأل البرنامج',workers:'العمال والموارد',projects:'المشاريع',week:'الأسبوع الحالي',
   'project-weeks':'أسابيع المشروع',archive:'أرشيف الأسابيع',debts:'الديون والأقساط',
   pendingwages:'أجور معلّقة',reports:'التقارير',settings:'الإعدادات',log:'سجل النشاطات',trash:'سلة المهملات'
 };
 const pageIcons={
-  dashboard:'fa-chart-pie',workers:'fa-users',projects:'fa-folder-tree',week:'fa-calendar-week',
+  dashboard:'fa-chart-pie',today:'fa-clipboard-check',ask:'fa-circle-question',workers:'fa-users',projects:'fa-folder-tree',week:'fa-calendar-week',
   'project-weeks':'fa-calendar-alt',archive:'fa-archive',debts:'fa-hand-holding-usd',
   pendingwages:'fa-clock',reports:'fa-file-alt',settings:'fa-cog',log:'fa-history',trash:'fa-trash-can'
 };
@@ -1675,6 +1740,8 @@ function navigateTo(p,options={}){
 
   switch(pageName){
     case'dashboard':loadDashboard();break;
+    case'today':renderTodayPage();break;
+    case'ask':renderAskProgram();break;
     case'workers':renderWorkers();break;
     case'projects':renderProjects();break;
     case'week':loadWeekEditor();break;
@@ -1966,16 +2033,69 @@ function renderWorkers(){
     let wd=w.type==='قطعة'
       ?((w.services||[]).length?(w.services||[]).map(x=>`<span class="badge badge-gold" style="margin:1px">${x.name}: ${money(x.price)}</span>`).join(' '):'<span class="text-muted">لا خدمات</span>')
       :(w.dailyWage?`<b>${money(w.dailyWage)} دج</b>/يوم`:'—');
+    const start=w.startDate||w.joinDate||w.entryDate||'';
+    const last=workerLastWeekInfo(w.id);
+    const wageLabel=w.type==='قطعة'?'خدمات/قطعة':(w.dailyWage?money(w.dailyWage)+' دج/يوم':'غير محدد');
+    const quick=`<div class="worker-quick-info">
+      <span class="worker-quick-chip"><i class="fas fa-calendar-plus"></i> دخول: <b>${start?formatDateAR(start):'غير محدد'}</b></span>
+      <span class="worker-quick-chip"><i class="fas fa-coins"></i> الأجر: <b>${escapeHTML(wageLabel)}</b></span>
+      <span class="worker-quick-chip"><i class="fas fa-folder-tree"></i> مشروع: <b>${escapeHTML(p?.name||'عام')}</b></span>
+      <span class="worker-quick-chip"><i class="fas fa-clock-rotate-left"></i> آخر أسبوع: <b>${escapeHTML(last||'لا يوجد')}</b></span>
+    </div>`;
     return `<tr class="${rem>0?'debt-row':''}">
       <td><b>${w.number}</b></td>
-      <td><b>${w.name}</b>${w.phone?`<br><span class="text-muted">${w.phone}</span>`:''}</td>
-      <td><span class="badge badge-info">${ti[w.type]||''} ${w.type}</span></td>
+      <td><b>${escapeHTML(w.name)}</b>${w.phone?`<br><span class="text-muted">${escapeHTML(w.phone)}</span>`:''}${quick}</td>
+      <td><span class="badge badge-info">${ti[w.type]||''} ${escapeHTML(w.type||'')}</span></td>
       <td>${wd}</td>
-      <td>${p?.name||'—'}</td>
+      <td>${escapeHTML(p?.name||'—')}</td>
       <td>${rem>0?`<span class="badge badge-debt">💰 ${money(rem)} دج</span>`:'<span class="badge badge-paid">✓ لا دين</span>'}</td>
       <td><button class="btn btn-outline btn-xs" onclick="openWorkerModal('${w.id}')"><i class="fas fa-edit"></i></button> <button class="btn btn-danger btn-xs" onclick="deleteWorker('${w.id}')"><i class="fas fa-trash"></i></button></td>
     </tr>`;
   }).join('');
+}
+
+function workerLastWeekInfo(workerId){
+  const weeks=(DB.weeks||[]).filter(w=>(w.entries||[]).some(e=>e.workerId===workerId)).sort((a,b)=>new Date(b.startDate||0)-new Date(a.startDate||0));
+  if(!weeks.length) return '';
+  const w=weeks[0];
+  return `${formatDateAR(w.startDate)} → ${formatDateAR(w.endDate)}`;
+}
+function todayKey(){ return formatDate(new Date()); }
+function getTodayReviewStore(){
+  if(!DB.settings) DB.settings={};
+  if(!DB.settings.todayReviewed) DB.settings.todayReviewed={};
+  const k=todayKey();
+  if(!DB.settings.todayReviewed[k]) DB.settings.todayReviewed[k]={};
+  return DB.settings.todayReviewed[k];
+}
+function setTodayWorkerReviewed(workerId,checked){
+  const st=getTodayReviewStore();
+  st[workerId]=!!checked;
+  saveDB();
+  renderTodayPage();
+}
+function renderTodayPage(){
+  const sum=document.getElementById('todaySummary'), list=document.getElementById('todayWorkersList'), alerts=document.getElementById('todayAlerts');
+  if(!sum||!list||!alerts) return;
+  const workers=[...(DB.workers||[])].sort((a,b)=>num(a.number)-num(b.number));
+  const st=getTodayReviewStore();
+  const reviewed=workers.filter(w=>st[w.id]).length;
+  const cw=DB.currentWeek||{};
+  const hasDraft=cw.status==='open' && (((cw.entries||[]).length)||((cw.expenses||[]).length));
+  const pending=(DB.pendingWages||[]).filter(p=>num(p.total)-num(p.paid)>0);
+  const debts=(DB.debts||[]).filter(d=>num(d.total)-num(d.paid)>0);
+  sum.innerHTML=`
+    <div class="summary-box primary"><div class="lbl">اليوم</div><div class="val" style="font-size:14px">${formatDateAR(todayKey())}</div></div>
+    <div class="summary-box"><div class="lbl">العمال</div><div class="val">${workers.length}</div></div>
+    <div class="summary-box success"><div class="lbl">تمت المراجعة</div><div class="val">${reviewed}</div></div>
+    <div class="summary-box warning"><div class="lbl">باقي</div><div class="val">${Math.max(0,workers.length-reviewed)}</div></div>`;
+  list.innerHTML=workers.length?workers.map(w=>`<div class="today-worker-row"><span><b>#${w.number||''} ${escapeHTML(w.name||'')}</b><br><small class="text-muted">${escapeHTML(w.type||'')} · ${escapeHTML(DB.projects.find(p=>p.id===w.projectId)?.name||'عام')}</small></span><label style="display:flex;align-items:center;gap:6px"><span class="text-muted">تمت</span><input type="checkbox" ${st[w.id]?'checked':''} onchange="setTodayWorkerReviewed('${w.id}',this.checked)"></label></div>`).join(''):'<div class="empty-state" style="padding:20px"><i class="fas fa-users-slash"></i><p>لا يوجد عمال</p></div>';
+  const a=[];
+  if(hasDraft) a.push(['أسبوع مفتوح',`يوجد أسبوع مفتوح أو مسودة غير محفوظة (${(cw.entries||[]).length} عمال، ${(cw.expenses||[]).length} مصاريف)`,'warning']);
+  if(pending.length) a.push(['أجور معلّقة',`${pending.length} سجل فيه مبلغ متبقي`,'danger']);
+  if(debts.length) a.push(['ديون',`${debts.length} عامل لديه دين متبقٍ`,'warning']);
+  const unreviewed=workers.length-reviewed; if(unreviewed) a.push(['مراجعة العمال',`${unreviewed} عامل لم تتم مراجعته اليوم`,'primary']);
+  alerts.innerHTML=a.length?a.map(x=>`<div class="today-worker-row"><span><b>${escapeHTML(x[0])}</b><br><small class="text-muted">${escapeHTML(x[1])}</small></span><span class="badge badge-${x[2]}">تنبيه</span></div>`).join(''):'<div class="empty-state" style="padding:20px"><i class="fas fa-check-circle"></i><p>لا توجد تنبيهات مهمة الآن</p></div>';
 }
 
 /* ====================================================
@@ -3807,6 +3927,30 @@ function printViaIframe(bodyHTML){
 
 
 
+
+/* === WORKER QUICK CARD + TODAY + ASK PROGRAM === */
+.worker-quick-info{margin-top:7px;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:5px;max-width:520px}
+.worker-quick-chip{display:inline-flex;align-items:center;gap:5px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:4px 8px;font-size:11.5px;color:var(--text2);line-height:1.35}
+.worker-quick-chip b{color:var(--text);font-weight:800}
+.today-grid,.ask-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.today-card,.ask-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:var(--shadow)}
+.today-card h4,.ask-card h4{font-size:14px;font-weight:900;margin-bottom:8px;color:var(--text);display:flex;align-items:center;gap:7px}
+.today-worker-row{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px dashed var(--border);padding:9px 0;font-size:13px}
+.today-worker-row:first-of-type{border-top:none}
+.today-worker-row input{width:20px;height:20px;accent-color:var(--primary)}
+.ask-question-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
+.ask-question-btn{white-space:normal!important;min-height:42px;justify-content:flex-start!important;text-align:right;line-height:1.45}
+.ask-result{margin-top:14px;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:14px;min-height:80px}
+.ask-result h3{font-size:16px;margin-bottom:8px;color:var(--primary)}
+.ask-result table{background:var(--card)}
+@media(max-width:900px){
+  .worker-quick-info{grid-template-columns:1fr 1fr;max-width:100%}
+  .worker-quick-chip{font-size:11px;padding:4px 7px}
+  .today-grid,.ask-grid,.ask-question-list{grid-template-columns:1fr!important}
+  .today-card,.ask-card,.ask-result{padding:12px;border-radius:14px}
+  .ask-question-btn{width:100%;min-height:46px}
+}
+
 </style></head><body>${bodyHTML}</body></html>`);
   doc.close();
   const go=()=>{ try{ f.contentWindow.focus(); f.contentWindow.print(); }catch(e){ window.print(); }
@@ -3985,6 +4129,30 @@ function showPdfOpeningWindow(fileName){
     w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(fileName)}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Tahoma,Arial,sans-serif;background:#eef7f7;color:#10233d;margin:0;padding:24px;text-align:center}.box{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #b7dedb;border-radius:18px;padding:22px;box-shadow:0 8px 26px rgba(10,40,60,.14)}.spinner{width:34px;height:34px;border:4px solid #d9eeee;border-top-color:#0e7a6e;border-radius:50%;margin:0 auto 14px;animation:s 1s linear infinite}@keyframes s{to{transform:rotate(360deg)}}a,button{display:inline-flex;margin-top:14px;background:#0e7a6e;color:#fff;text-decoration:none;border:0;border-radius:11px;padding:11px 16px;font:inherit;font-weight:800}
 
 
+
+/* === WORKER QUICK CARD + TODAY + ASK PROGRAM === */
+.worker-quick-info{margin-top:7px;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:5px;max-width:520px}
+.worker-quick-chip{display:inline-flex;align-items:center;gap:5px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:4px 8px;font-size:11.5px;color:var(--text2);line-height:1.35}
+.worker-quick-chip b{color:var(--text);font-weight:800}
+.today-grid,.ask-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.today-card,.ask-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:var(--shadow)}
+.today-card h4,.ask-card h4{font-size:14px;font-weight:900;margin-bottom:8px;color:var(--text);display:flex;align-items:center;gap:7px}
+.today-worker-row{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px dashed var(--border);padding:9px 0;font-size:13px}
+.today-worker-row:first-of-type{border-top:none}
+.today-worker-row input{width:20px;height:20px;accent-color:var(--primary)}
+.ask-question-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
+.ask-question-btn{white-space:normal!important;min-height:42px;justify-content:flex-start!important;text-align:right;line-height:1.45}
+.ask-result{margin-top:14px;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:14px;min-height:80px}
+.ask-result h3{font-size:16px;margin-bottom:8px;color:var(--primary)}
+.ask-result table{background:var(--card)}
+@media(max-width:900px){
+  .worker-quick-info{grid-template-columns:1fr 1fr;max-width:100%}
+  .worker-quick-chip{font-size:11px;padding:4px 7px}
+  .today-grid,.ask-grid,.ask-question-list{grid-template-columns:1fr!important}
+  .today-card,.ask-card,.ask-result{padding:12px;border-radius:14px}
+  .ask-question-btn{width:100%;min-height:46px}
+}
+
 </style></head><body><div class="box"><div class="spinner"></div><h3>جاري إنشاء ملف PDF الحقيقي...</h3><p>${escapeHTML(fileName)}</p><p style="font-size:13px;color:#476274">لا تضغط زر المشاركة في Safari قبل ظهور ملف PDF.</p></div></body></html>`);
     w.document.close();
   }catch(_){/* تجاهل */}
@@ -4086,6 +4254,30 @@ function buildNativePdfPreviewDocument(week,flow){
 <\/script>`;
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${safeFileName}</title><style>:root{color-scheme:light}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#edf6f7;color:#10233d;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Tahoma,Arial,sans-serif}.native-export-tools{position:sticky;top:0;z-index:10;padding:12px;background:#072036;color:#fff;border-bottom:3px solid #0e7a6e}.native-export-tools-inner{max-width:900px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.native-export-title{font-size:15px;font-weight:800;line-height:1.45}.native-export-title small{display:block;color:#b9d7e7;font-size:11px;font-weight:500;margin-top:2px;direction:ltr;text-align:right}.native-export-btn{border:0;border-radius:10px;padding:10px 13px;cursor:pointer;font:inherit;font-size:13px;font-weight:800;min-height:42px}.native-export-btn.primary{background:#f4a707;color:#10233d}.native-export-btn.secondary{background:#fff;color:#0e7a6e}.native-export-note,.native-export-status{max-width:900px;margin:10px auto;background:#fff7df;color:#654400;border:1px solid #e0b43c;border-radius:11px;padding:10px 12px;font-size:12px;line-height:1.8}.native-export-status{background:#e0f2fe;color:#075985;border-color:#7dd3fc;font-weight:800}.native-export-fallback{display:none;max-width:900px;margin:10px auto;text-align:center}#nativePrintDocument{width:min(794px,calc(100% - 20px));margin:16px auto 30px;background:#fff;padding:10px}@page{size:A4 portrait;margin:10mm}@media print{html,body{background:#fff!important}.native-export-tools,.native-export-note,.native-export-status,.native-export-fallback{display:none!important}#nativePrintDocument{width:100%!important;margin:0!important;padding:0!important}}
 
+
+
+/* === WORKER QUICK CARD + TODAY + ASK PROGRAM === */
+.worker-quick-info{margin-top:7px;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:5px;max-width:520px}
+.worker-quick-chip{display:inline-flex;align-items:center;gap:5px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:4px 8px;font-size:11.5px;color:var(--text2);line-height:1.35}
+.worker-quick-chip b{color:var(--text);font-weight:800}
+.today-grid,.ask-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.today-card,.ask-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:var(--shadow)}
+.today-card h4,.ask-card h4{font-size:14px;font-weight:900;margin-bottom:8px;color:var(--text);display:flex;align-items:center;gap:7px}
+.today-worker-row{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px dashed var(--border);padding:9px 0;font-size:13px}
+.today-worker-row:first-of-type{border-top:none}
+.today-worker-row input{width:20px;height:20px;accent-color:var(--primary)}
+.ask-question-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
+.ask-question-btn{white-space:normal!important;min-height:42px;justify-content:flex-start!important;text-align:right;line-height:1.45}
+.ask-result{margin-top:14px;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:14px;min-height:80px}
+.ask-result h3{font-size:16px;margin-bottom:8px;color:var(--primary)}
+.ask-result table{background:var(--card)}
+@media(max-width:900px){
+  .worker-quick-info{grid-template-columns:1fr 1fr;max-width:100%}
+  .worker-quick-chip{font-size:11px;padding:4px 7px}
+  .today-grid,.ask-grid,.ask-question-list{grid-template-columns:1fr!important}
+  .today-card,.ask-card,.ask-result{padding:12px;border-radius:14px}
+  .ask-question-btn{width:100%;min-height:46px}
+}
 
 </style></head><body><section class="native-export-tools"><div class="native-export-tools-inner"><div class="native-export-title">${safeActionTitle}<small>${safeFileName}</small></div><div><button type="button" class="native-export-btn primary" onclick="openNativePdfSheet(true)">فتح PDF الآن</button> <button type="button" class="native-export-btn secondary" onclick="window.close()">إغلاق</button></div></div></section><div class="native-export-note"><b>احتياطي فقط:</b> المسار الأساسي الآن ينشئ ملف PDF حقيقي. إذا فشل، استعمل هذه اللوحة واحفظ من معاينة الطباعة.</div><div id="nativePdfStatus" class="native-export-status">يتم تحضير كشف PDF...</div><div id="nativePdfFallback" class="native-export-fallback"><button type="button" class="native-export-btn primary" onclick="openNativePdfSheet(true)">فتح PDF الآن</button></div><main id="nativePrintDocument">${buildPrintHTML(week,true)}</main>${autoPrintScript}</body></html>`;
 }
@@ -4328,6 +4520,89 @@ function loadDashboard(){
 /* ====================================================
    التقارير
    ==================================================== */
+function askPeriodRange(){
+  const mode=document.getElementById('askPeriod')?.value||'all';
+  const today=new Date();
+  let from='',to='';
+  if(mode==='custom'){ from=document.getElementById('askFrom')?.value||''; to=document.getElementById('askTo')?.value||''; }
+  else if(mode==='thisMonth'){ const b=monthBounds(today.getFullYear(),today.getMonth()); from=b.from; to=b.to; }
+  else if(mode==='lastMonth'){ const d=new Date(today.getFullYear(),today.getMonth()-1,1); const b=monthBounds(d.getFullYear(),d.getMonth()); from=b.from; to=b.to; }
+  else if(mode==='last2Months'){ const first=new Date(today.getFullYear(),today.getMonth()-1,1); const last=new Date(today.getFullYear(),today.getMonth()+1,0); from=formatDate(first); to=formatDate(last); }
+  else if(mode==='thisYear'){ from=`${today.getFullYear()}-01-01`; to=`${today.getFullYear()}-12-31`; }
+  else if(mode==='lastYear'){ const y=today.getFullYear()-1; from=`${y}-01-01`; to=`${y}-12-31`; }
+  if(mode!=='custom'){ const fe=document.getElementById('askFrom'), te=document.getElementById('askTo'); if(fe)fe.value=from; if(te)te.value=to; }
+  return {from,to,fromDate:reportDateValue(from,false),toDate:reportDateValue(to,true)};
+}
+function getAskWeeks(){
+  const r=askPeriodRange();
+  const pid=document.getElementById('askProject')?.value||'';
+  const wid=document.getElementById('askWorker')?.value||'';
+  return (DB.weeks||[]).filter(w=>{
+    if(!reportWeekOverlapsRange(w,r.fromDate,r.toDate)) return false;
+    if(pid && (w.projectId||'')!==pid) return false;
+    if(wid && !(w.entries||[]).some(e=>e.workerId===wid)) return false;
+    return true;
+  });
+}
+function renderAskProgram(){
+  const ps=document.getElementById('askProject'), ws=document.getElementById('askWorker'), ql=document.getElementById('askQuestionList');
+  if(!ps||!ws||!ql) return;
+  const cp=ps.value, cw=ws.value;
+  ps.innerHTML='<option value="">كل المشاريع</option>'+(DB.projects||[]).map(p=>`<option value="${escapeHTML(p.id)}">${escapeHTML(p.name)}</option>`).join('');
+  ws.innerHTML='<option value="">كل العمال</option>'+(DB.workers||[]).sort((a,b)=>num(a.number)-num(b.number)).map(w=>`<option value="${escapeHTML(w.id)}">${escapeHTML((w.number?('#'+w.number+' — '):'')+w.name)} (${escapeHTML(w.type||'')})</option>`).join('');
+  if([...ps.options].some(o=>o.value===cp)) ps.value=cp;
+  if([...ws.options].some(o=>o.value===cw)) ws.value=cw;
+  const questions=[
+    ['projectCost','كم صرفت في المشروع؟','fa-folder-tree'],['projectWorkers','من خدم في المشروع؟','fa-users'],['pieceDone','ماذا أنجز عمال القطعة؟','fa-layer-group'],['workerPaid','كم دفعت للعامل؟','fa-money-bill-wave'],['pending','من لديه أجر معلّق؟','fa-clock'],['debts','من عليه دين؟','fa-hand-holding-usd'],['topCost','من أكثر عامل كلفة؟','fa-trophy'],['openDraft','هل يوجد أسبوع مفتوح؟','fa-calendar-week']
+  ];
+  ql.innerHTML=questions.map(q=>`<button class="btn btn-outline ask-question-btn" onclick="runAskQuestion('${q[0]}')"><i class="fas ${q[2]}"></i> ${q[1]}</button>`).join('');
+}
+function askSummaryTotals(weeks){
+  return weeks.reduce((a,w)=>{ const t=computeSavedWeekTotals(w.entries||[],w.expenses||[]); a.wages+=t.wagesTotal; a.expenses+=t.expensesTotal; a.cash+=t.cashOutTotal; a.pending+=t.pendingCreatedTotal; a.settled+=t.settledPendingTotal; a.debt+=t.deductionTotal; a.weeks++; return a; },{weeks:0,wages:0,expenses:0,cash:0,pending:0,settled:0,debt:0});
+}
+function runAskQuestion(type){
+  const out=document.getElementById('askResult'); if(!out) return;
+  const weeks=getAskWeeks(); const t=askSummaryTotals(weeks); const pid=document.getElementById('askProject')?.value||''; const wid=document.getElementById('askWorker')?.value||'';
+  const projectName=pid?(DB.projects.find(p=>p.id===pid)?.name||'مشروع'):'كل المشاريع';
+  const workerName=wid?(DB.workers.find(w=>w.id===wid)?.name||'عامل'):'كل العمال';
+  const title=(txt)=>`<h3>${txt}</h3><div class="text-muted mb-2">${escapeHTML(projectName)} · ${escapeHTML(workerName)} · ${weeks.length} أسبوع</div>`;
+  if(type==='projectCost'){
+    out.innerHTML=title('كم صرفت؟')+`<div class="summary-grid"><div class="summary-box success"><div class="lbl">الأجور</div><div class="val">${money(t.wages)} دج</div></div><div class="summary-box warning"><div class="lbl">المصاريف</div><div class="val">${money(t.expenses)} دج</div></div><div class="summary-box primary"><div class="lbl">النقد الخارج</div><div class="val">${money(t.cash)} دج</div></div><div class="summary-box danger"><div class="lbl">معلّق جديد</div><div class="val">${money(t.pending)} دج</div></div></div>`; return;
+  }
+  if(type==='projectWorkers'){
+    const m=new Map(); weeks.forEach(w=>(w.entries||[]).forEach(e=>{ const ww=DB.workers.find(x=>x.id===e.workerId); const k=e.workerId||e.workerName; if(!m.has(k))m.set(k,{name:e.workerName||ww?.name||'غير معروف',type:e.workerType||ww?.type||'',amount:0,weeks:new Set()}); const r=m.get(k); r.amount+=entryNetForReport(e); r.weeks.add(w.id); }));
+    const rows=[...m.values()].sort((a,b)=>b.amount-a.amount);
+    out.innerHTML=title('العمال الذين اشتغلوا')+(rows.length?`<table><thead><tr><th>العامل</th><th>النوع</th><th>أسابيع</th><th>المبلغ</th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${escapeHTML(r.name)}</b></td><td>${escapeHTML(r.type)}</td><td>${r.weeks.size}</td><td><b>${money(r.amount)} دج</b></td></tr>`).join('')}</tbody></table>`:'لا توجد بيانات'); return;
+  }
+  if(type==='pieceDone'){
+    const m=new Map(); weeks.forEach(w=>(w.entries||[]).forEach(e=>{ const ww=DB.workers.find(x=>x.id===e.workerId); if((e.workerType||ww?.type)!=='قطعة')return; (e.services||[]).forEach(s=>{ const name=String(s.name||'').trim(); if(!name)return; if(!m.has(name))m.set(name,{qty:0,amount:0}); const r=m.get(name); r.qty+=num(s.qty); r.amount+=num(s.qty)*num(s.price); }); }));
+    const rows=[...m.entries()].map(([service,r])=>({service,...r})).sort((a,b)=>b.amount-a.amount);
+    out.innerHTML=title('خدمات عمال القطعة')+(rows.length?`<table><thead><tr><th>الخدمة</th><th>العدد</th><th>المبلغ</th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${escapeHTML(r.service)}</b></td><td>${money(r.qty)}</td><td><b>${money(r.amount)} دج</b></td></tr>`).join('')}</tbody></table>`:'لا توجد خدمات قطعة'); return;
+  }
+  if(type==='workerPaid'){
+    const m=new Map(); weeks.forEach(w=>(w.entries||[]).forEach(e=>{ if(wid&&e.workerId!==wid)return; const ww=DB.workers.find(x=>x.id===e.workerId); const net=entryNetForReport(e), paid=entryPaidNowForReport(e,net)+num(e.settlePending); const k=e.workerId||e.workerName; if(!m.has(k))m.set(k,{name:e.workerName||ww?.name||'غير معروف',paid:0,due:0}); const r=m.get(k); r.paid+=paid; r.due+=net; }));
+    const rows=[...m.values()].sort((a,b)=>b.paid-a.paid);
+    out.innerHTML=title('تسديدات العمال')+(rows.length?`<table><thead><tr><th>العامل</th><th>المستحق</th><th>النقد المدفوع</th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${escapeHTML(r.name)}</b></td><td>${money(r.due)} دج</td><td><b>${money(r.paid)} دج</b></td></tr>`).join('')}</tbody></table>`:'لا توجد تسديدات'); return;
+  }
+  if(type==='pending'){
+    const rows=(DB.pendingWages||[]).filter(p=>num(p.total)-num(p.paid)>0 && (!wid||p.workerId===wid) && (!pid||(p.projectId||'')===pid));
+    out.innerHTML=title('الأجور المعلّقة')+(rows.length?rows.map(p=>`<div class="today-worker-row"><span><b>${escapeHTML(p.workerName||DB.workers.find(w=>w.id===p.workerId)?.name||'عامل')}</b></span><span class="badge badge-warning">${money(num(p.total)-num(p.paid))} دج</span></div>`).join(''):'لا يوجد معلّق مطابق'); return;
+  }
+  if(type==='debts'){
+    const rows=(DB.debts||[]).filter(d=>num(d.total)-num(d.paid)>0 && (!wid||d.workerId===wid));
+    out.innerHTML=title('الديون')+(rows.length?rows.map(d=>`<div class="today-worker-row"><span><b>${escapeHTML(DB.workers.find(w=>w.id===d.workerId)?.name||'عامل')}</b></span><span class="badge badge-debt">${money(num(d.total)-num(d.paid))} دج</span></div>`).join(''):'لا توجد ديون مطابقة'); return;
+  }
+  if(type==='topCost'){
+    const m=new Map(); weeks.forEach(w=>(w.entries||[]).forEach(e=>{ const ww=DB.workers.find(x=>x.id===e.workerId); const k=e.workerId||e.workerName; if(!m.has(k))m.set(k,{name:e.workerName||ww?.name||'غير معروف',amount:0}); m.get(k).amount+=entryNetForReport(e); }));
+    const rows=[...m.values()].sort((a,b)=>b.amount-a.amount).slice(0,10);
+    out.innerHTML=title('أكثر العمال كلفة')+(rows.length?rows.map((r,i)=>`<div class="today-worker-row"><span><b>${i+1}. ${escapeHTML(r.name)}</b></span><span class="badge badge-primary">${money(r.amount)} دج</span></div>`).join(''):'لا توجد بيانات'); return;
+  }
+  if(type==='openDraft'){
+    const cw=DB.currentWeek||{}; const has=cw.status==='open' && (((cw.entries||[]).length)||((cw.expenses||[]).length));
+    out.innerHTML=title('الأسبوع المفتوح')+(has?`<div class="summary-box warning"><div class="lbl">يوجد مسودة/أسبوع مفتوح</div><div class="val">${(cw.entries||[]).length} عمال · ${(cw.expenses||[]).length} مصاريف</div></div>`:'<div class="summary-box success"><div class="lbl">الحالة</div><div class="val">لا توجد مسودة مفتوحة</div></div>');
+  }
+}
+
 function renderReports(){
   renderBasicReports();
   renderAdvancedReportFilters();
