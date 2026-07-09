@@ -9472,7 +9472,7 @@ if (document.readyState === 'loading') {
         for(const mat of recMats){
           let e=entries.find(x=>x.recordId===recId&&x.date===date&&x.materialId===mat.id&&x.type==='truck');
           if(!e){e=makeDefaultTruckEntry(recId,newDate,mat.id);entries.push(e);}
-          e.cols={};for(const tr of trucks){const id='etd_'+mat.id.replace(/[^a-z0-9]/gi,'_')+'_'+tr.replace(/[^a-z0-9]/gi,'_');const raw=document.getElementById(id)?.value;const parsed=(window.EGTPHTripArithmetic&&window.EGTPHTripArithmetic.calc)?window.EGTPHTripArithmetic.calc(raw):{ok:true,value:n(raw),display:String(n(raw)||'')};if(!parsed.ok){T(tx('⚠️ أدخل عملية صحيحة في رحلات الشاحنات','⚠️ Saisie invalide dans les voyages camion'),'warning');return;}const v=n(parsed.value);if(v>0)e.cols[tr]=v;}
+          e.cols={};for(const tr of trucks){const id='etd_'+mat.id.replace(/[^a-z0-9]/gi,'_')+'_'+tr.replace(/[^a-z0-9]/gi,'_');const inputEl=document.getElementById(id);const raw=inputEl?.value;const parsed=(window.EGTPHTripArithmetic&&window.EGTPHTripArithmetic.calc)?window.EGTPHTripArithmetic.calc(raw):{ok:true,value:n(raw),display:String(n(raw)||'')};if(!parsed.ok){T(tx('⚠️ أدخل عملية صحيحة في رحلات الشاحنات','⚠️ Saisie invalide dans les voyages camion'),'warning');return;}if(inputEl)inputEl.value=parsed.display;const v=n(parsed.value);if(v>0)e.cols[tr]=v;}
           e.date=newDate;e.dest=newDest;setDayOverride(e,document.getElementById('etdp_'+mat.id.replace(/[^a-z0-9]/gi,'_'))?.value);
           const ok=await dbP('entries',e);if(!ok)return T(tx('فشل الحفظ','Échec de l’enregistrement'),'error');
         }
@@ -10726,8 +10726,8 @@ if (document.readyState === 'loading') {
 </script>
 
 
-<!-- EGTPH v13.8 — tolerant arithmetic entry for truck-trip cells -->
-<script id="egtph-truck-arithmetic-v138">
+<!-- EGTPH v13.9 — final tolerant arithmetic entry for truck-trip cells: display + save + totals -->
+<script id="egtph-truck-arithmetic-v139">
 (function(){
   'use strict';
 
@@ -10739,19 +10739,21 @@ if (document.readyState === 'loading') {
     text = text.replace(/\s+/g,'');
     if (text === '') return { ok:true, value:0, display:'' };
 
+    // Backslash is not accepted for trips because it is usually a typing error.
+    if (/[\\]/.test(text)) return { ok:false, reason:'chars' };
+
     // Strict character gate: digits, decimal point, parentheses, and basic operators only.
     if (!/^[0-9.+\-*/()]+$/.test(text)) return { ok:false, reason:'chars' };
 
-    // User-friendly rule requested: repeated plus signs are harmless.
-    // They are treated as one plus operator between the previous and next number.
-    // 14++ => 14+0 => 14 ; 14++++++++2 => 14+2 => 16 ; ++++2 => 2.
+    // Requested rule: repeated plus signs do not corrupt the formula.
+    // They collapse to one plus. Examples:
+    // 14++ => 14+0 => 14 ; 14++++10 => 14+10 => 24 ; ++++2 => 2.
     text = text.replace(/\+{2,}/g, '+');
     text = text.replace(/^\++/, '');
     text = text.replace(/\++$/g, '+0');
     if (text === '') return { ok:true, value:0, display:'' };
 
     // Reject confused operator mixes: +*14, *+14, 10*/2, 10-*2, etc.
-    // Unary minus is allowed only at the beginning, after '(' or after another operator.
     if (/^[*/]/.test(text)) return { ok:false, reason:'syntax' };
     if (/[+\-*/]{2,}/.test(text)) return { ok:false, reason:'syntax' };
     if (/\(\)/.test(text) || /[+\-*/]\)/.test(text) || /\([*/]/.test(text)) return { ok:false, reason:'syntax' };
@@ -10767,42 +10769,75 @@ if (document.readyState === 'loading') {
     return { ok:true, value:value, display:String(value) };
   }
 
-  function _egtphNormalizeActiveTruckInput(display){
-    var el = document.activeElement;
-    if (!el || !el.classList || !el.classList.contains('ti')) return;
-    // Limit visual rewrite to truck-trip inputs, not destination/payment fields.
+  function _egtphIsTruckTripInput(el){
+    if (!el || !el.classList || !el.classList.contains('ti')) return false;
     var attr = String(el.getAttribute('onchange') || '');
-    if (attr.indexOf('updateTruck(') === -1) return;
-    el.value = display;
-    el.classList.toggle('hv', !!display);
+    return attr.indexOf('updateTruck(') !== -1;
   }
 
+  function _egtphNormalizeTruckInputElement(el, showWarning){
+    if (!_egtphIsTruckTripInput(el)) return null;
+    var result = _egtphTripCalc(el.value);
+    if (!result.ok) {
+      if (showWarning) {
+        try { T('⚠️ أدخل رقماً أو عملية صحيحة: 14+10، 10-5، أو 14++ فقط. الخلط مثل +*14 غير مقبول.','warning'); } catch(_) {}
+      }
+      return result;
+    }
+    // Critical fix: rewrite the original cell itself before inline onchange/updateTruck runs.
+    // Therefore the visible cell, the saved record, and totals all receive the final number.
+    el.value = result.display;
+    el.classList.toggle('hv', !!result.display);
+    return result;
+  }
+
+  // Capture phase runs before inline onchange="updateTruck(..., this.value)".
+  // This guarantees that `this.value` is already the final number, not `2+2`.
+  document.addEventListener('change', function(ev){
+    _egtphNormalizeTruckInputElement(ev.target, true);
+  }, true);
+
+  document.addEventListener('blur', function(ev){
+    _egtphNormalizeTruckInputElement(ev.target, true);
+  }, true);
+
   var originalUpdateTruck = window.updateTruck;
-  if (typeof originalUpdateTruck === 'function' && !originalUpdateTruck.__egtphArithmeticV138) {
+  if (typeof originalUpdateTruck === 'function' && !originalUpdateTruck.__egtphArithmeticV139) {
     var wrapped = async function(recId, date, matId, truck, value, cid){
       var result = _egtphTripCalc(value);
       if (!result.ok) {
         try { T('⚠️ أدخل رقماً أو عملية صحيحة: 14+10، 10-5، أو 14++ فقط. الخلط مثل +*14 غير مقبول.','warning'); } catch(_) {}
         return;
       }
-      _egtphNormalizeActiveTruckInput(result.display);
       return originalUpdateTruck.call(this, recId, date, matId, truck, result.value, cid);
     };
-    wrapped.__egtphArithmeticV138 = true;
+    wrapped.__egtphArithmeticV139 = true;
     window.updateTruck = wrapped;
   }
 
-  // Enter validates the same field by forcing blur/change naturally. Mouse click outside already triggers onchange.
+  // Enter validates the same field by forcing blur/change naturally.
   document.addEventListener('keydown', function(ev){
     var el = ev.target;
-    if (ev.key !== 'Enter' || !el || !el.classList || !el.classList.contains('ti')) return;
-    var attr = String(el.getAttribute('onchange') || '');
-    if (attr.indexOf('updateTruck(') === -1) return;
+    if (ev.key !== 'Enter' || !_egtphIsTruckTripInput(el)) return;
     ev.preventDefault();
+    _egtphNormalizeTruckInputElement(el, true);
     el.blur();
   }, true);
 
-  window.EGTPHTripArithmetic = { calc:_egtphTripCalc };
+  // Edit-day modal truck cells do not call updateTruck immediately; normalize them visually on blur too.
+  document.addEventListener('blur', function(ev){
+    var el = ev.target;
+    if (!el || !el.id || el.id.indexOf('etd_') !== 0 || !el.classList || !el.classList.contains('ti')) return;
+    var result = _egtphTripCalc(el.value);
+    if (!result.ok) {
+      try { T('⚠️ أدخل رقماً أو عملية صحيحة: 14+10، 10-5، أو 14++ فقط. الخلط مثل +*14 غير مقبول.','warning'); } catch(_) {}
+      return;
+    }
+    el.value = result.display;
+    el.classList.toggle('hv', !!result.display);
+  }, true);
+
+  window.EGTPHTripArithmetic = { calc:_egtphTripCalc, normalizeTruckInput:_egtphNormalizeTruckInputElement };
 })();
 </script>
 </body></html>
