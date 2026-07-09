@@ -2800,20 +2800,7 @@ async function addTruckDay(recId, cid) {
 }
 
 // ── Update a truck cell value ──
-async function updateTruck(recId, date, matId, truck, value, cid) {
-  if (isDayLocked(recId, date, 'truck')) return;
-  let e = entries.find(x=>x.recordId===recId && x.date===date && x.materialId===matId && x.type==='truck');
-  if (!e) {
-    e = { id:uid(), recordId:recId, type:'truck', date, materialId:matId, cols:{}, dest:'', ..._truckEntryPriceSnapshot(recId,matId,date), createdAt:new Date().toISOString() };
-    entries.push(e);
-  }
-  if (!e.cols) e.cols = {};
-  const v = parseFloat(value)||0;
-  if (v === 0) delete e.cols[truck]; else e.cols[truck] = v;
-  await dbP('entries', e);
-  // Refresh totals without losing focus
-  refreshRecordTotals(recId, cid);
-}
+// حُذفت الدالة القديمة هنا لتفادي التكرار. التعريف النهائي الوحيد موجود لاحقاً ثم تُغلّفه طبقة حساب الرحلات في آخر الملف.
 
 // ── Update destination ──
 async function updateTruckDest(recId, date, value, callerMatId) {
@@ -3501,7 +3488,8 @@ function renderTR(rec, cid) {
           if (locked) {
             tbody += `<td style="text-align:center;font-family:'JetBrains Mono';font-size:12px;color:var(--tx2)">${v||''}</td>`;
           } else {
-            tbody += `<td><input class="ti ${v?'hv':''}" type="number" min="0" step="1" value="${v||''}"
+            tbody += `<td><input class="ti ${v?'hv':''}" type="text" inputmode="decimal" value="${v||''}"
+              title="يمكن إدخال رقم أو عملية بسيطة مثل 14+10 أو 10-5"
               oninput="this.classList.toggle('hv',!!this.value)"
               onchange="updateTruck('${rec.id}','${date}','${mat.id}','${tr.replace(/'/g,"\'")}',this.value,'${cid}')"></td>`;
           }
@@ -4297,7 +4285,7 @@ async function editTruckDay(recId, date, cid) {
       const tid = 'etd_' + mat.id.replace(/[^a-z0-9]/gi,'_') + '_' + tr.replace(/[^a-z0-9]/gi,'_');
       return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:54px">
         <div style="font-size:8px;color:var(--tx3);text-align:center;max-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(tr)}">${esc(tr.length>9?tr.slice(0,9)+'…':tr)}</div>
-        <input id="${tid}" type="number" min="0" step="1" value="${v}" class="ti" style="width:52px;text-align:center">
+        <input id="${tid}" type="text" inputmode="decimal" value="${v}" class="ti" style="width:52px;text-align:center">
       </div>`;
     }).join('');
     matRows += `<div style="margin-bottom:10px">
@@ -4334,7 +4322,10 @@ async function editTruckDay(recId, date, cid) {
       e.cols = {};
       trucks.forEach(tr => {
         const tid = 'etd_' + mat.id.replace(/[^a-z0-9]/gi,'_') + '_' + tr.replace(/[^a-z0-9]/gi,'_');
-        const v = parseFloat(document.getElementById(tid)?.value) || 0;
+        const raw = document.getElementById(tid)?.value;
+        const parsed = (window.EGTPHTripArithmetic && window.EGTPHTripArithmetic.calc) ? window.EGTPHTripArithmetic.calc(raw) : {ok:true,value:parseFloat(raw)||0};
+        if (!parsed.ok) { T('⚠️ أدخل عملية صحيحة في رحلات الشاحنات','warning'); return; }
+        const v = parseFloat(parsed.value) || 0;
         if (v > 0) e.cols[tr] = v;
       });
       e.date = newDate;
@@ -9468,7 +9459,7 @@ if (document.readyState === 'loading') {
       const e=dayEs.find(x=>x.materialId===mat.id)||{cols:{}};
       const defaultInfo=mat.priceStatus==='pending'?tx('غير متفق عليه','en attente'):fDA(n(mat.price));
       const priceValue=isDayOverride(e)?n(e.unitPrice):'';
-      const trucksHtml=trucks.map(tr=>{const v=e.cols?.[tr]||'';const id='etd_'+mat.id.replace(/[^a-z0-9]/gi,'_')+'_'+tr.replace(/[^a-z0-9]/gi,'_');return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:54px"><div style="font-size:8px;color:var(--tx3);text-align:center;max-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escAttr(tr)+'">'+esc(tr.length>9?tr.slice(0,9)+'…':tr)+'</div><input id="'+id+'" type="number" min="0" step="1" value="'+v+'" class="ti" style="width:52px;text-align:center"></div>';}).join('');
+      const trucksHtml=trucks.map(tr=>{const v=e.cols?.[tr]||'';const id='etd_'+mat.id.replace(/[^a-z0-9]/gi,'_')+'_'+tr.replace(/[^a-z0-9]/gi,'_');return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:54px"><div style="font-size:8px;color:var(--tx3);text-align:center;max-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escAttr(tr)+'">'+esc(tr.length>9?tr.slice(0,9)+'…':tr)+'</div><input id="'+id+'" type="text" inputmode="decimal" value="'+v+'" class="ti" style="width:52px;text-align:center"></div>';}).join('');
       const priceId='etdp_'+mat.id.replace(/[^a-z0-9]/gi,'_');
       return '<div style="margin-bottom:12px;border-bottom:1px solid var(--bdr);padding-bottom:10px"><div style="font-size:11px;font-weight:700;color:var(--gold2);margin-bottom:5px">📦 '+esc(mat.name)+'</div><div class="fg" style="margin-bottom:8px"><label>'+tx('سعر خاص لهذا اليوم فقط','Prix spécial pour ce jour uniquement')+'</label><input id="'+priceId+'" type="number" min="0" step="0.01" value="'+priceValue+'" placeholder="'+escAttr(tx('السعر العام: ','Prix général : ')+defaultInfo)+'"><div class="hint">'+tx('فارغ = استعمال سعر السجل العام في كل الأيام.','Vide = utilisation du prix général du dossier.')+'</div></div><div style="display:flex;flex-wrap:wrap;gap:6px">'+trucksHtml+'</div></div>';
     }).join('');
@@ -9481,7 +9472,7 @@ if (document.readyState === 'loading') {
         for(const mat of recMats){
           let e=entries.find(x=>x.recordId===recId&&x.date===date&&x.materialId===mat.id&&x.type==='truck');
           if(!e){e=makeDefaultTruckEntry(recId,newDate,mat.id);entries.push(e);}
-          e.cols={};for(const tr of trucks){const id='etd_'+mat.id.replace(/[^a-z0-9]/gi,'_')+'_'+tr.replace(/[^a-z0-9]/gi,'_');const v=n(document.getElementById(id)?.value);if(v>0)e.cols[tr]=v;}
+          e.cols={};for(const tr of trucks){const id='etd_'+mat.id.replace(/[^a-z0-9]/gi,'_')+'_'+tr.replace(/[^a-z0-9]/gi,'_');const raw=document.getElementById(id)?.value;const parsed=(window.EGTPHTripArithmetic&&window.EGTPHTripArithmetic.calc)?window.EGTPHTripArithmetic.calc(raw):{ok:true,value:n(raw),display:String(n(raw)||'')};if(!parsed.ok){T(tx('⚠️ أدخل عملية صحيحة في رحلات الشاحنات','⚠️ Saisie invalide dans les voyages camion'),'warning');return;}const v=n(parsed.value);if(v>0)e.cols[tr]=v;}
           e.date=newDate;e.dest=newDest;setDayOverride(e,document.getElementById('etdp_'+mat.id.replace(/[^a-z0-9]/gi,'_'))?.value);
           const ok=await dbP('entries',e);if(!ok)return T(tx('فشل الحفظ','Échec de l’enregistrement'),'error');
         }
@@ -10734,4 +10725,84 @@ if (document.readyState === 'loading') {
 })();
 </script>
 
+
+<!-- EGTPH v13.8 — tolerant arithmetic entry for truck-trip cells -->
+<script id="egtph-truck-arithmetic-v138">
+(function(){
+  'use strict';
+
+  function _egtphTripCalc(raw){
+    var text = String(raw == null ? '' : raw).trim()
+      .replace(/,/g,'.')
+      .replace(/[×x]/g,'*')
+      .replace(/[÷]/g,'/');
+    text = text.replace(/\s+/g,'');
+    if (text === '') return { ok:true, value:0, display:'' };
+
+    // Strict character gate: digits, decimal point, parentheses, and basic operators only.
+    if (!/^[0-9.+\-*/()]+$/.test(text)) return { ok:false, reason:'chars' };
+
+    // User-friendly rule requested: repeated plus signs are harmless.
+    // They are treated as one plus operator between the previous and next number.
+    // 14++ => 14+0 => 14 ; 14++++++++2 => 14+2 => 16 ; ++++2 => 2.
+    text = text.replace(/\+{2,}/g, '+');
+    text = text.replace(/^\++/, '');
+    text = text.replace(/\++$/g, '+0');
+    if (text === '') return { ok:true, value:0, display:'' };
+
+    // Reject confused operator mixes: +*14, *+14, 10*/2, 10-*2, etc.
+    // Unary minus is allowed only at the beginning, after '(' or after another operator.
+    if (/^[*/]/.test(text)) return { ok:false, reason:'syntax' };
+    if (/[+\-*/]{2,}/.test(text)) return { ok:false, reason:'syntax' };
+    if (/\(\)/.test(text) || /[+\-*/]\)/.test(text) || /\([*/]/.test(text)) return { ok:false, reason:'syntax' };
+
+    var value;
+    try {
+      value = Function('"use strict"; return (' + text + ');')();
+    } catch(e) {
+      return { ok:false, reason:'syntax' };
+    }
+    if (!Number.isFinite(value) || value < 0) return { ok:false, reason:'range' };
+    value = Math.round((value + Number.EPSILON) * 1000000) / 1000000;
+    return { ok:true, value:value, display:String(value) };
+  }
+
+  function _egtphNormalizeActiveTruckInput(display){
+    var el = document.activeElement;
+    if (!el || !el.classList || !el.classList.contains('ti')) return;
+    // Limit visual rewrite to truck-trip inputs, not destination/payment fields.
+    var attr = String(el.getAttribute('onchange') || '');
+    if (attr.indexOf('updateTruck(') === -1) return;
+    el.value = display;
+    el.classList.toggle('hv', !!display);
+  }
+
+  var originalUpdateTruck = window.updateTruck;
+  if (typeof originalUpdateTruck === 'function' && !originalUpdateTruck.__egtphArithmeticV138) {
+    var wrapped = async function(recId, date, matId, truck, value, cid){
+      var result = _egtphTripCalc(value);
+      if (!result.ok) {
+        try { T('⚠️ أدخل رقماً أو عملية صحيحة: 14+10، 10-5، أو 14++ فقط. الخلط مثل +*14 غير مقبول.','warning'); } catch(_) {}
+        return;
+      }
+      _egtphNormalizeActiveTruckInput(result.display);
+      return originalUpdateTruck.call(this, recId, date, matId, truck, result.value, cid);
+    };
+    wrapped.__egtphArithmeticV138 = true;
+    window.updateTruck = wrapped;
+  }
+
+  // Enter validates the same field by forcing blur/change naturally. Mouse click outside already triggers onchange.
+  document.addEventListener('keydown', function(ev){
+    var el = ev.target;
+    if (ev.key !== 'Enter' || !el || !el.classList || !el.classList.contains('ti')) return;
+    var attr = String(el.getAttribute('onchange') || '');
+    if (attr.indexOf('updateTruck(') === -1) return;
+    ev.preventDefault();
+    el.blur();
+  }, true);
+
+  window.EGTPHTripArithmetic = { calc:_egtphTripCalc };
+})();
+</script>
 </body></html>
