@@ -249,7 +249,7 @@ var renderAdmin = window.renderAdmin;
 </script>
 <meta charset="utf-8">
 <meta content="width=device-width,initial-scale=1.0" name="viewport">
-<title>EGTPH — سجل الأجور v120</title>
+<title>EGTPH — سجل الأجور v124</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet">
 <style>
 :root{
@@ -16385,8 +16385,122 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
   function wrapStatus(){var base=window.calcMonthStatus;if(typeof base!=='function'||base.__v123AllAbs)return;var wrapped=function(wid,m,yr){return overrideStatus(base.apply(this,arguments),wid,m,yr);};wrapped.__v123AllAbs=true;window.calcMonthStatus=wrapped;try{calcMonthStatus=wrapped;}catch(e){}}
   function wrapFinal(){var base=window.calcFinalSettlement;if(typeof base!=='function'||base.__v123AllAbs)return;var wrapped=function(w){return overrideFinal(base,w);};wrapped.__v123AllAbs=true;window.calcFinalSettlement=wrapped;try{calcFinalSettlement=wrapped;}catch(e){}}
   function wrapPrintBlock(){var base=window.v63CyclePrintBlock;if(typeof base!=='function'||base.__v123AllAbs)return;var wrapped=function(wid,m,yr){var html=base.apply(this,arguments);return typeof html==='string'?html.replace(/غيابات متبقية/g,'أجر غياب غير مستحق'):html;};wrapped.__v123AllAbs=true;window.v63CyclePrintBlock=wrapped;window.v61CyclePrintBlock=wrapped;}
-  function install(){var d=D();if(!d||!A(d.workers).length)return;wrapStatus();wrapFinal();wrapPrintBlock();wrapAbsSave();['delAbs','editAbs','closeOpenAbs'].forEach(wrapAbsAction);window.absenceFinancialStatus=statusForAbs;try{absenceFinancialStatus=statusForAbs;}catch(e){}var ps=window.EGTPHPrintStatus||{};ps.absence=statusForAbs;ps.pendingAbsences=noPending;window.EGTPHPrintStatus=ps;window.pendAbs=noPending;try{pendAbs=noPending;}catch(e){}window[API]={version:VERSION,validAbsence:valid,cycleContext:ctx,status:overrideStatus,final:overrideFinal,statusForAbsence:statusForAbs,writeWitness:putWitness,status:'all-valid-absence-entitlement'};try{var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v123';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v123');}catch(e){} }
+  function install(){var d=D();if(!d||!A(d.workers).length)return;wrapStatus();wrapFinal();wrapPrintBlock();wrapAbsSave();['delAbs','editAbs','closeOpenAbs'].forEach(wrapAbsAction);window.absenceFinancialStatus=statusForAbs;try{absenceFinancialStatus=statusForAbs;}catch(e){}var ps=window.EGTPHPrintStatus||{};ps.absence=statusForAbs;ps.pendingAbsences=noPending;window.EGTPHPrintStatus=ps;window.pendAbs=noPending;try{pendAbs=noPending;}catch(e){}window[API]={version:VERSION,validAbsence:valid,cycleContext:ctx,status:overrideStatus,final:overrideFinal,statusForAbsence:statusForAbs,writeWitness:putWitness,status:'all-valid-absence-entitlement'};try{var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v124';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v123');}catch(e){} }
   [500,1700,4200,8500,15000].forEach(function(ms){setTimeout(install,ms);});
+})();
+</script>
+<script id="egtph-v124-advance-cycle-reroute-once">
+/* v124 — تصحيح جذري لتوجيه التسبيقات بعد المزامنة.
+   الهدف: كل دينار من التسبيق يملك دورة واحدة فقط، مع حفظ تاريخ الدفع الحقيقي.
+   - ينتظر بيانات السحابة/الدمج ثم يشغل الإصلاح مرة واحدة على البيانات المدمجة.
+   - لا يغيّر تواريخ الدفع الفعلية؛ يغيّر فقط الملكية المحاسبية للدورات.
+   - يوزع الفائض بالتتابع: أقدم دورة ناقصة ← التالية ← الحالية ← القادمة.
+   - سجلات v124 تحمل operationId واحداً لتجنب الازدواجية. */
+(function(){
+'use strict';
+var VERSION='124.0.0', API='EGTPH_V124_ADVANCE_REROUTE';
+var INSTALL_FLAG='__v124AdvRerouteInstalled', RUNNING=false, PENDING=false;
+if(window[INSTALL_FLAG])return; window[INSTALL_FLAG]=true;
+function D(){try{return window.DB||DB||null;}catch(e){return window.DB||null;}}
+function A(v){return Array.isArray(v)?v:[];}
+function O(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}
+function S(v){return v==null?'':String(v);}
+function N(v){var x=Number(v);return isFinite(x)?Math.round(x):0;}
+function same(a,b){return S(a)===S(b);}
+function money(v){return Math.max(0,N(v));}
+function pad(n){return String(n).padStart(2,'0');}
+function iso(d){if(!(d instanceof Date)||isNaN(d))return '';return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function dmy(d){if(!(d instanceof Date)||isNaN(d))return '';return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear();}
+function dt(v){
+  if(v instanceof Date&&!isNaN(v))return new Date(v.getFullYear(),v.getMonth(),v.getDate());
+  var s=S(v).trim(),m;if(!s)return null;
+  if((m=s.match(/^(\d{4})-(\d{2})-(\d{2})/))){var a=new Date(+m[1],+m[2]-1,+m[3]);return isNaN(a)?null:a;}
+  if((m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/))){var b=new Date(+m[3],+m[2]-1,+m[1]);return isNaN(b)?null:b;}
+  var t=Date.parse(s);if(isNaN(t))return null;var c=new Date(t);return new Date(c.getFullYear(),c.getMonth(),c.getDate());
+}
+function addMonths(d,n){var y=d.getFullYear(),m=d.getMonth()+n,day=d.getDate(),last=new Date(y,m+1,0).getDate();return new Date(y,m,Math.min(day,last));}
+function dayOf(w){var x=N(w&&(w.payday||w.day));return Math.max(1,Math.min(28,x||1));}
+function anchorFor(w,d){var day=dayOf(w),lim=Math.min(day,new Date(d.getFullYear(),d.getMonth()+1,0).getDate());var a=(d.getDate()>=lim)?new Date(d.getFullYear(),d.getMonth(),lim):new Date(d.getFullYear(),d.getMonth()-1,Math.min(day,new Date(d.getFullYear(),d.getMonth(),0).getDate()));return {m:a.getMonth(),yr:a.getFullYear()};}
+function rangeFromAnchor(w,m,yr){
+  try{if(typeof window.cycleWindow==='function'){var cw=window.cycleWindow(w,m,yr);if(cw){var cs=dt(cw.start||cw.from||cw.cycleStart),ce=dt(cw.end||cw.to||cw.cycleEnd);if(cs&&ce)return {from:cs,to:ce,id:S(w.id)+'|'+iso(cs)+'_'+iso(ce),m:m,yr:yr};}}}catch(e){}
+  var day=dayOf(w),from=new Date(yr,m,Math.min(day,new Date(yr,m+1,0).getDate())),to=addMonths(from,1);return {from:from,to:to,id:S(w.id)+'|'+iso(from)+'_'+iso(to),m:m,yr:yr};
+}
+function nextAnchor(m,yr){m=+m||0;yr=+yr||new Date().getFullYear();return m===11?{m:0,yr:yr+1}:{m:m+1,yr:yr};}
+function prevAnchor(m,yr){return m===0?{m:11,yr:yr-1}:{m:m-1,yr:yr};}
+function startAnchor(w){var sd=dt(w&&w.startDate)||new Date();return anchorFor(w,sd);}
+function fmt(n){try{return typeof fmtN==='function'?fmtN(n):String(n).replace(/\B(?=(\d{3})+(?!\d))/g,' ');}catch(e){return String(n);}}
+function mn(m){try{return (window.MN&&MN[m])||['جانفي','فيفري','مارس','أفريل','ماي','جوان','جويلية','أوت','سبتمبر','أكتوبر','نوفمبر','ديسمبر'][m]||String(m+1);}catch(e){return String(m+1);}}
+function validAbs(a){return a&&a.settled!==true&&S(a.deductOpt)!=='cancel'&&S(a.status)!=='deleted';}
+function absInRange(wid,r){var d=D(),sum=0;A(d&&d.absences&&d.absences[wid]).forEach(function(a){if(!validAbs(a))return;var x=dt(a.from||a.date);if(x&&x>=r.from&&x<r.to)sum+=money(a.deduct);});return sum;}
+function capacity(w,r){var sal=money(w&&w.salary),sd=dt(w&&w.startDate),cap=sal;if(sd&&r.from<sd&&sd<r.to){var days=Math.ceil((r.to-sd)/86400000);var daily=Math.round(sal/30);cap=Math.min(sal,Math.max(0,days*daily));}return Math.max(0,cap-absInRange(w.id,r));}
+function advGross(a){try{if(typeof window.advGross==='function')return money(window.advGross(a));}catch(e){}return money(a&&a.amount);}
+function advNet(a){try{if(typeof window.advNetPaid==='function')return money(window.advNetPaid(a));}catch(e){}return money(a&&a.netPaid!=null?a.netPaid:a&&a.amount);}
+function isDeleted(a){return !a||S(a.status)==='deleted'||a._deletedAt;}
+function realDate(a){return dt((a&&a.realDate)|| (a&&a.actualPaymentDate) || (a&&a.date)) || dt(a&&a._createdAt) || new Date(0);}
+function opKey(a){return S(a&&a.operationId)||S(a&&a.transactionId)||('LEGACY_'+S(a&&a.id||Math.random()));}
+function collectOps(wid){
+  var d=D(),groups={},order=[];
+  Object.keys(O(d&&d.advances&&d.advances[wid])).forEach(function(mk){A(d.advances[wid][mk]).forEach(function(a){
+    if(isDeleted(a))return;var key=opKey(a);if(!groups[key]){groups[key]={key:key,parts:[],amount:0,net:0,first:a,ts:+realDate(a),entered:S(a.enteredAt||a._createdAt||''),by:S(a.by||''),note:S(a.note||''),deductions:[]};order.push(groups[key]);}
+    var g=groups[key];g.parts.push(a);g.amount+=advGross(a);g.net+=advNet(a);if(+realDate(a)<g.ts){g.ts=+realDate(a);g.first=a;}A(a.deductions).forEach(function(x){g.deductions.push(x);});
+  });});
+  order.forEach(function(g){
+    if(g.parts.some(function(p){return p&&p.__v124Alloc;})){var maxOrig=0,netOrig=0;g.parts.forEach(function(p){maxOrig=Math.max(maxOrig,money(p.originalAmount));netOrig=Math.max(netOrig,money(p.originalNetPaid));});if(maxOrig)g.amount=maxOrig;if(netOrig)g.net=netOrig;}
+    g.dateObj=realDate(g.first);g.date=dmy(g.dateObj);g.realDate=dmy(g.dateObj);g.createdAt=S(g.first&&g.first._createdAt)||S(g.first&&g.first.enteredAt)||new Date(g.ts||Date.now()).toISOString();g.enteredAt=S(g.first&&g.first.enteredAt)||S(g.first&&g.first._createdAt)||g.createdAt;g.by=S(g.first&&g.first.by)||g.by||'مستخدم';g.note=S(g.first&&g.first.note)||g.note;
+  });
+  order.sort(function(a,b){return (a.ts-b.ts)||S(a.enteredAt).localeCompare(S(b.enteredAt))||S(a.key).localeCompare(S(b.key));});
+  return order;
+}
+function ensureCycles(w,ops){
+  var a=startAnchor(w),cycles=[],last=dt(w.startDate)||new Date();ops.forEach(function(o){if(o.dateObj&&o.dateObj>last)last=o.dateObj;});last=addMonths(last,4);
+  var guard=0;while(guard++<80){var r=rangeFromAnchor(w,a.m,a.yr);r.capacity=capacity(w,r);r.used=0;cycles.push(r);if(r.from>last)break;a=nextAnchor(a.m,a.yr);}return cycles;
+}
+function makeNote(g,allocs,idx,oldNote){
+  var lines=allocs.map(function(x){return fmt(x.amount)+' دج → '+mn(x.m)+' '+x.yr+' ('+iso(x.from)+' حتى '+iso(x.to)+')'+(x.closed?' ✓ إغلاق':'');}).join('؛ ');
+  var p='[v124] تسبيق فعلي '+fmt(g.amount)+' دج بتاريخ '+g.realDate+' — توزيع محاسبي: '+lines+' — لا احتساب مزدوج.';
+  return oldNote&&oldNote.indexOf('[v124]')<0?oldNote+' — '+p:p;
+}
+function clonePart(g,a,idx,total){
+  var src=g.first||{},r={};Object.keys(src).forEach(function(k){if(k!=='deductions')r[k]=src[k];});
+  r.id=(total===1?S(src.id||g.key):(S(src.id||g.key)+'__v124p'+(idx+1)));
+  r.amount=a.amount;r.netPaid=(idx===0?Math.min(g.net,a.amount):Math.min(a.amount,Math.max(0,g.net-a.prevAmount)));
+  r.date=g.date;r.realDate=g.realDate;r.actualPaymentDate=g.realDate;r.enteredAt=g.enteredAt;r.by=g.by;r.month=a.m;r.cycleKey=a.yr+'-'+pad(a.m+1);r.cycleStart=iso(a.from);r.cycleEnd=iso(a.to);r.cycleLocked=!!a.closed;
+  r.operationId=g.key.indexOf('LEGACY_')===0?('V124OP_'+S(src.id||g.key).replace(/[^A-Za-z0-9_\-]/g,'_')):g.key;
+  r.transactionId=r.transactionId||('V124TX_'+r.operationId);r.originalAmount=g.amount;r.originalNetPaid=g.net;r.allocationAmount=a.amount;r.allocationIndex=idx;r.allocationCount=total;r.__v124Alloc=true;r.__v124Version=VERSION;r._updatedAt=new Date().toISOString();r.deductions=idx===0?A(g.deductions).slice():[];
+  r.note=makeNote(g,a.all,idx,g.note);return r;
+}
+function rebuildWorker(w){
+  var d=D(),wid=S(w.id),ops=collectOps(wid);if(!ops.length)return {changed:false,ops:0,parts:0};
+  var cycles=ensureCycles(w,ops),newAdv={},allocCount=0,prevHash=JSON.stringify(d.advances&&d.advances[wid]||{});
+  ops.forEach(function(g){
+    var remain=money(g.amount),allocs=[];for(var i=0;i<cycles.length&&remain>0;i++){var c=cycles[i],free=Math.max(0,c.capacity-c.used);if(free<=0)continue;var take=Math.min(remain,free);if(take<=0)continue;c.used+=take;remain-=take;allocs.push({m:c.m,yr:c.yr,from:c.from,to:c.to,amount:take,closed:c.used>=c.capacity,prevAmount:g.amount-remain-take});}
+    while(remain>0){var last=cycles[cycles.length-1],nx=nextAnchor(last.m,last.yr),c=rangeFromAnchor(w,nx.m,nx.yr);c.capacity=capacity(w,c);c.used=0;cycles.push(c);var free=Math.max(c.capacity||money(w.salary)||remain,0);var take=Math.min(remain,free||remain);c.used+=take;remain-=take;allocs.push({m:c.m,yr:c.yr,from:c.from,to:c.to,amount:take,closed:c.used>=c.capacity,prevAmount:g.amount-remain-take});}
+    allocs.forEach(function(a){a.all=allocs;});
+    allocs.forEach(function(a,idx){var rec=clonePart(g,a,idx,allocs.length);newAdv[S(a.m)]=newAdv[S(a.m)]||[];newAdv[S(a.m)].push(rec);allocCount++;});
+  });
+  Object.keys(newAdv).forEach(function(k){newAdv[k].sort(function(a,b){return (+realDate(a)-+realDate(b))||S(a.enteredAt).localeCompare(S(b.enteredAt));});});
+  var nextHash=JSON.stringify(newAdv);if(prevHash===nextHash)return {changed:false,ops:ops.length,parts:allocCount};
+  d.advances=d.advances||{};d.advances[wid]=newAdv;return {changed:true,ops:ops.length,parts:allocCount};
+}
+function signature(){var d=D();try{return JSON.stringify({w:A(d.workers).map(function(w){return [w.id,w.salary,w.startDate,w.day,w.payday];}),a:d.advances,abs:d.absences}).length+':'+A(d.workers).length+':'+new Date().toISOString().slice(0,10);}catch(e){return String(Date.now());}}
+function run(reason){
+  var d=D();if(!d||!A(d.workers).length||RUNNING){PENDING=true;return {ok:false,busy:RUNNING};}
+  RUNNING=true;PENDING=false;var report={version:VERSION,reason:reason||'manual',at:new Date().toISOString(),workers:0,changedWorkers:0,ops:0,parts:0,errors:[]};
+  try{
+    d.settings=d.settings||{};d.settings.v124AdvanceReroute=d.settings.v124AdvanceReroute||{};
+    if(!d.settings.v124AdvanceReroute.backup){try{d.settings.v124AdvanceReroute.backup=JSON.stringify({at:new Date().toISOString(),advances:d.advances}).slice(0,900000);}catch(e){}}
+    A(d.workers).forEach(function(w){try{var r=rebuildWorker(w);report.workers++;report.ops+=r.ops;report.parts+=r.parts;if(r.changed)report.changedWorkers++;}catch(e){report.errors.push({wid:w&&w.id,name:w&&w.name,error:S(e&&e.message||e)});}});
+    report.ok=!report.errors.length;report.changed=report.changedWorkers>0;report.signature=signature();d.settings.v124AdvanceReroute.lastRun=report;d.settings.v124AdvanceReroute.done=true;d.settings.v124AdvanceReroute.version=VERSION;
+    if(report.changed){try{if(typeof audit==='function')audit('v124 تصحيح توزيع التسبيقات بعد المزامنة: '+report.changedWorkers+' عامل');}catch(e){} try{if(typeof saveDB==='function')saveDB();}catch(e){try{localStorage.setItem('egtph_payroll_v120',JSON.stringify(d));}catch(_){}}}
+    try{if(typeof renderDash==='function')renderDash();if(typeof renderSalContent==='function')renderSalContent();if(typeof renderSummary==='function')renderSummary();}catch(e){}
+    try{if(report.changed&&typeof toast==='function')toast('✅ v124: رُتبت التسبيقات بلا ازدواجية بعد المزامنة');}catch(e){}
+    return report;
+  }finally{RUNNING=false;if(PENDING)setTimeout(function(){run('pending-after-cloud');},800);}
+}
+function wrapSaveAdv(){var base=window.saveAdv;if(typeof base!=='function'||base.__v124Reroute)return;var wrapped=function(){var out=base.apply(this,arguments);setTimeout(function(){run('after-new-advance');},120);return out;};wrapped.__v124Reroute=true;window.saveAdv=wrapped;try{saveAdv=wrapped;}catch(e){}}
+function wrapCloud(){var base=window.cloudSync;if(typeof base!=='function'||base.__v124Reroute)return;var wrapped=function(){var ret=base.apply(this,arguments);try{if(ret&&typeof ret.then==='function')ret.then(function(){setTimeout(function(){run('after-cloud-sync');},700);},function(){setTimeout(function(){run('after-cloud-sync-error-local');},1500);});else setTimeout(function(){run('after-cloud-sync');},1600);}catch(e){setTimeout(function(){run('after-cloud-sync-fallback');},2000);}return ret;};wrapped.__v124Reroute=true;window.cloudSync=wrapped;try{cloudSync=wrapped;}catch(e){}}
+function install(){wrapSaveAdv();wrapCloud();window[API]={version:VERSION,run:run,rebuildWorker:rebuildWorker,status:function(){var d=D();return d&&d.settings&&d.settings.v124AdvanceReroute;}};}
+[300,1200,3000,6500,11000,17000].forEach(function(ms){setTimeout(function(){install();if(ms>=6500)run('delayed-start-'+ms);},ms);});
 })();
 </script>
 </body></html>
