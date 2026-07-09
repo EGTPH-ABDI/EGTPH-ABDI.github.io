@@ -4487,7 +4487,7 @@ function renderSalContent(){
     (arr||[]).forEach(e=>{if(_belongsToSalaryCycle(e))entries.push({...e,_bucket:+mk});});
   });
   // ترتيب حسب التاريخ
-  entries.sort((a,b)=>{const da=_toDate(a.date),db=_toDate(b.date);return (da?da.getTime():0)-(db?db.getTime():0);});
+  entries.sort((a,b)=>{const da=_toDate(a.realDate||a.date),db=_toDate(b.realDate||b.date);return (da?da.getTime():0)-(db?db.getTime():0);});
 
   const ms=calcMonthStatus(w.id,m,yr);
   const calResult=ms.calRes;
@@ -4702,7 +4702,7 @@ function renderSalContent(){
         </tr></thead>
         <tbody>${entries.length?entries.map((e,i)=>`<tr>
           <td style="color:var(--gray)">تسبيق ${i+1}</td>
-          <td style="font-size:11px">${e.date}</td>
+          <td style="font-size:11px">${e.realDate||e.date}${(e.accountingDate&&e.accountingDate!==(e.realDate||e.date))?`<br><span style="color:var(--gray);font-size:9px">محاسبياً: ${e.accountingDate}</span>`:""}</td>
           <td style="font-size:10px;color:var(--teal);white-space:nowrap">${advEntryStamp(e)||'—'}</td>
           <td style="color:var(--green1);font-weight:700">${fmt(e.amount)}${advDedTotal(e)>0?`<br><span style="color:var(--red);font-size:10px">صافي ${fmt(advNetPaid(e))}</span>`:''}</td>
           <td style="color:var(--gray);font-size:11px">${e.note||(!advDedNote(e)?'—':'')}${advDedNote(e)?`<br><span style="color:var(--red)">${advDedNote(e)}</span>`:''}</td>
@@ -10214,7 +10214,7 @@ try{
   function advanceMap(workerId){ var d=ensure(); if(!d.advances[workerId] || typeof d.advances[workerId] !== 'object') d.advances[workerId]={}; return d.advances[workerId]; }
   function createAdvanceRecord(worker,alloc,operation){
     var months=advanceMap(worker.id), bucket=String(alloc.m); if(!Array.isArray(months[bucket])) months[bucket]=[];
-    var child={id:txId('ADV'),transactionId:operation.transactionId,operationId:operation.operationId,originalAmount:operation.originalAmount,allocationIndex:alloc.index,allocationCount:operation.allocations.length,allocationAmount:alloc.amount,amount:alloc.amount,date:alloc.accountingDate,realDate:operation.realDate,enteredAt:now(),month:alloc.m,cycleKey:cycleKey(worker,alloc.m,alloc.yr),cycleStart:toISO(cycleWin(worker,alloc.m,alloc.yr).from),cycleEnd:toISO(cycleWin(worker,alloc.m,alloc.yr).to),note:operation.note || '',by:(ensure().settings.userName || 'Youcef Abdi'),deductions:[],netPaid:alloc.amount};
+    var child={id:txId('ADV'),transactionId:operation.transactionId,operationId:operation.operationId,originalAmount:operation.originalAmount,allocationIndex:alloc.index,allocationCount:operation.allocations.length,allocationAmount:alloc.amount,amount:alloc.amount,date:alloc.accountingDate,accountingDate:alloc.accountingDate,realDate:operation.realDate,enteredAt:now(),month:alloc.m,cycleKey:cycleKey(worker,alloc.m,alloc.yr),cycleStart:toISO(cycleWin(worker,alloc.m,alloc.yr).from),cycleEnd:toISO(cycleWin(worker,alloc.m,alloc.yr).to),note:operation.note || '',by:(ensure().settings.userName || 'Youcef Abdi'),deductions:[],netPaid:alloc.amount};
     if(operation.allocations.length>1){ child.note=(child.note ? child.note+' — ' : '')+'عملية موزعة '+String(alloc.index+1)+'/'+String(operation.allocations.length); }
     stamp(child,'advances',true); months[bucket].push(child); return child;
   }
@@ -10225,30 +10225,52 @@ try{
     var d=ensure(); children.forEach(function(item){ var arr=((d.advances[workerId] || {})[item.bucket]) || []; var ix=arr.findIndex(function(r){ return r && String(r.id)===String(item.row.id); }); if(ix>=0){ try { if(typeof cleanupAdvanceLinkedReturns==='function') cleanupAdvanceLinkedReturns(workerId,arr[ix]); } catch(e) {} arr.splice(ix,1); markDeletedRecord(d,'advances',item.row.id,{deletedAt:now(),deviceId:deviceId(),transactionId:txId('DEL'),reason:'حذف عملية تسبيق'}); } });
   }
   function buildAllocations(worker,dateISO,amount){
-    var anchor=cycleAnchor(worker,dateISO), current={m:anchor.m,yr:anchor.yr}, amountLeft=Math.round(amount), allocations=[];
-    var startDate=dateObj(worker.startDate), paidDate=dateObj(dateISO), previous={m:(current.m+11)%12,yr:current.m===0?current.yr-1:current.yr};
-    // القاعدة: نفحص الدورة السابقة المباشرة فقط، ولا نمر فوق دورة مسددة ولا ننشئ دورة قبل تاريخ الدخول.
-    var prevWin=cycleWin(worker,previous.m,previous.yr), prevBal=cycleBasicBalance(worker,previous.m,previous.yr);
-    if(amountLeft>0 && prevWin && paidDate && prevWin.to<=paidDate && (!startDate || prevWin.to>startDate) && prevBal.remaining>0){
-      var prevTake=Math.min(amountLeft,prevBal.remaining);
-      allocations.push({m:previous.m,yr:previous.yr,amount:prevTake,accountingDate:cycleEndAccountingDate(worker,previous.m,previous.yr),reason:'إكمال الدورة السابقة المباشرة'});
-      amountLeft-=prevTake;
+    /* v125 — توزيع التسبيق حسب منطق المؤسسة:
+       الفائض أو التسبيق، حتى لو كان قبل/بعد وقت الدورة، يذهب دائماً إلى أقدم دورة غير مغلقة أولاً.
+       مثال: تسبيق ماي يغلق أفريل، وفائضه يذهب لماي؛ تسبيق جوان يغلق ماي ثم جوان.
+       لا يتم إحياء أي سجل محذوف هنا؛ هذه الدالة تحدد التوزيع فقط ولا تلمس سلة المهملات. */
+    var anchor=cycleAnchor(worker,dateISO), current={m:anchor.m,yr:anchor.yr}, amountLeft=Math.max(0,Math.round(+amount||0)), allocations=[];
+    if(!worker || !anchor || !(amountLeft>0)) return allocations;
+
+    function shift(a,delta){ var d=new Date(a.yr,a.m+delta,1); return {m:d.getMonth(),yr:d.getFullYear()}; }
+    function ord(a){ return (+a.yr*12)+(+a.m||0); }
+    function same(a,b){ return !!(a&&b&&+a.m===+b.m&&+a.yr===+b.yr); }
+    function safeDMYFromDate(d){ try{return toDMY(toISO(d));}catch(e){return toDMY(dateISO);} }
+    function add(a,amt,reason,accountingDate,remainingBefore){
+      amt=Math.max(0,Math.round(+amt||0));
+      if(!(amt>0)) return;
+      allocations.push({
+        m:a.m,yr:a.yr,amount:amt,
+        accountingDate:accountingDate || toDMY(dateISO),
+        reason:reason,
+        remainingBefore:Math.max(0,Math.round(+remainingBefore||0))
+      });
     }
-    if(amountLeft>0){
-      var curBal=cycleBasicBalance(worker,current.m,current.yr), next={m:(current.m+1)%12,yr:current.m===11?current.yr+1:current.yr};
-      if(curBal.remaining>0 && amountLeft>curBal.remaining){
-        allocations.push({m:current.m,yr:current.yr,amount:curBal.remaining,accountingDate:toDMY(dateISO),reason:'تغطية الدورة الحالية'});
-        amountLeft-=curBal.remaining;
-        allocations.push({m:next.m,yr:next.yr,amount:amountLeft,accountingDate:toDMY(toISO(cycleWin(worker,next.m,next.yr).from)),reason:'فائض موزع على الدورة التالية'});
-        amountLeft=0;
-      }else if(curBal.remaining<=0 && amountLeft>0){
-        allocations.push({m:next.m,yr:next.yr,amount:amountLeft,accountingDate:toDMY(toISO(cycleWin(worker,next.m,next.yr).from)),reason:'تسبيق مقدم للدورة التالية'});
-        amountLeft=0;
-      }else if(amountLeft>0){
-        allocations.push({m:current.m,yr:current.yr,amount:amountLeft,accountingDate:toDMY(dateISO),reason:'الدورة الحالية'});
-        amountLeft=0;
+
+    var startDate=dateObj(worker.startDate), startAnchor=startDate ? cycleAnchor(worker,toISO(startDate)) : current;
+    var pointer={m:startAnchor.m,yr:startAnchor.yr}, guard=0;
+
+    while(amountLeft>0 && pointer && ord(pointer)<=ord(current) && guard++<240){
+      var win=cycleWin(worker,pointer.m,pointer.yr);
+      if(win && win.from && win.to && (!startDate || win.to>startDate)){
+        var bal=cycleBasicBalance(worker,pointer.m,pointer.yr), remaining=Math.max(0,Math.round(+bal.remaining||0));
+        if(remaining>0){
+          var take=Math.min(amountLeft,remaining), isCurrent=same(pointer,current);
+          var acct=isCurrent ? toDMY(dateISO) : cycleEndAccountingDate(worker,pointer.m,pointer.yr);
+          var label=isCurrent ? 'تغطية الدورة الحالية بعد إغلاق الأقدم' : 'إغلاق دورة سابقة/قديمة غير مسددة';
+          add(pointer,take,label+(take>=remaining?'':' — تسديد جزئي'),acct,remaining);
+          amountLeft-=take;
+        }
       }
+      pointer=shift(pointer,1);
     }
+
+    if(amountLeft>0){
+      var next=shift(current,1), nextWin=cycleWin(worker,next.m,next.yr);
+      add(next,amountLeft,'فائض مقدم للدورة التالية بعد إغلاق كل الدورات المفتوحة',safeDMYFromDate(nextWin && nextWin.from ? nextWin.from : dateObj(dateISO)),0);
+      amountLeft=0;
+    }
+
     return allocations.filter(function(a){ return a.amount>0; });
   }
 
@@ -11935,15 +11957,92 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   }
   function preflightMessage(pf){return '⚠️ لا تسجل هذا التسبيق: يجب أن يبقى '+fmt(pf.plan.reserve)+' دج للحساب الأخير حتى تُطبق الخصومات مرة واحدة. الحد الأقصى الآن: '+fmt(pf.maxEarly)+' دج.';}
   function routeAdvance(wid,m,yr,dateISO,amount,note){
-    var w=worker(wid),d=db();if(!w||!d)return null;var real=dmy(dateISO),input=cycleFor(w,dateISO);m=input.m;yr=input.yr;var prevDate=new Date(yr,m-1,1),prev={m:prevDate.getMonth(),yr:prevDate.getFullYear()},prevWin=cycleWin(w,prev.m,prev.yr),entered=dateOf(dateISO),started=dateOf(w.startDate);if(!prevWin||!entered||prevWin.to>entered||(started&&prevWin.to<=started))return null;
-    var status=cycleStatus(wid,prev.m,prev.yr);if(!status||status.salaryPaid||!(status.netDue>0))return null;var rest=Math.max(0,money(status.netDue-status.totAdv));if(!rest)return null;
-    var take=Math.min(money(amount),rest),toCurrent=Math.max(0,money(amount)-take);if(toCurrent){var pf=preflight(wid,m,yr,toCurrent);if(pf.blocked){toastSafe(preflightMessage(pf),true);return {cancelled:true};}}
-    var label=(typeof MN!=='undefined'&&MN[prev.m]?MN[prev.m]:prev.m)+' '+prev.yr+' ('+(typeof cycleRangeStr==='function'?cycleRangeStr(w,prev.m,prev.yr):'')+')';
-    var lines=['• '+fmt(take)+' دج ← '+label+(take>=rest?' ✓ تُغلق':' (تبقى ناقصة)')];if(toCurrent)lines.push('• '+fmt(toCurrent)+' دج ← الدورة الحالية');
-    if(!confirm('📥 '+(w.name||'العامل')+': الدورة السابقة المباشرة غير مسددة.\n\nهل تريد توزيع التسبيق ('+fmt(amount)+' دج) تلقائياً؟\n'+lines.join('\n')+'\n\n✅ موافق = التوزيع أعلاه\n❌ إلغاء = تسجيله كاملاً في الدورة الحالية'))return null;
-    d.advances[wid]=d.advances[wid]||{};d.advances[wid][prev.m]=arr(d.advances[wid][prev.m]);var last=new Date(prevWin.to.getTime()-86400000),lastDMY=String(last.getDate()).padStart(2,'0')+'/'+String(last.getMonth()+1).padStart(2,'0')+'/'+last.getFullYear();var rec={id:generate('ADV'),amount:take,date:lastDMY,realDate:real,enteredAt:new Date().toISOString(),month:prev.m,note:(note?note+' — ':'')+'💵 دُفع فعلياً '+real+(take>=rest?' — ✓ إكمال وإغلاق الدورة':''),by:(d.settings&&d.settings.userName)||'مستخدم',deductions:[],netPaid:take};d.advances[wid][prev.m].push(rec);
-    var cur=null;if(toCurrent){d.advances[wid][m]=arr(d.advances[wid][m]);cur={id:generate('ADV'),amount:toCurrent,date:real,realDate:real,enteredAt:new Date().toISOString(),month:m,note:(note?note+' — ':'')+'فائض بعد إكمال الدورة السابقة المباشرة',by:(d.settings&&d.settings.userName)||'مستخدم',deductions:[],netPaid:toCurrent};d.advances[wid][m].push(cur);}
-    applyCycle(wid,prev.m,prev.yr,{allowAdvance:true,targetAdvance:rec});if(cur)applyCycle(wid,m,yr,{allowAdvance:true,targetAdvance:cur});auditSafe('📥 تسبيق '+fmt(amount)+' وُزِّع على الدورة السابقة/الحالية — '+(w.name||''));return {placed:'cascade',toCurrent:toCurrent};
+    /* v126 — توجيه محاسبي نظري بدون ازدواجية:
+       - تاريخ الدفع/الإدخال الفعلي يبقى realDate ويظهر للمستخدم.
+       - date يبقى تاريخاً محاسبياً داخلياً كي تُحسب الدورة الصحيحة ولا تنكسر التقارير القديمة.
+       - كل أجزاء نفس التسبيق تحمل operationId واحداً، ومجموع الأجزاء = originalAmount فقط.
+       - يوزّع المبلغ على أقدم دورة ناقصة، ثم الحالية، ثم الدورات التالية إذا وُجد فائض. */
+    var w=worker(wid),d=db();if(!w||!d)return null;
+    var real=dmy(dateISO),entered=dateOf(dateISO),started=dateOf(w.startDate),input=cycleFor(w,dateISO);
+    if(!entered||!input)return null;m=input.m;yr=input.yr;
+    var original=money(amount),left=Math.max(0,original);if(!(left>0))return null;
+    function ord(c){return (+c.yr*12)+(+c.m||0);}
+    function sameCycle(a,b){return !!(a&&b&&+a.m===+b.m&&+a.yr===+b.yr);}
+    function shift(c,delta){var z=new Date(c.yr,c.m+delta,1);return {m:z.getMonth(),yr:z.getFullYear()};}
+    function monthKey(c){return String(c.yr)+'-'+String(c.m+1).padStart(2,'0');}
+    function cycleLabelLocal(c){return ((typeof MN!=='undefined'&&MN[c.m])?MN[c.m]:String(c.m+1))+' '+c.yr+' ('+(typeof cycleRangeStr==='function'?cycleRangeStr(w,c.m,c.yr):'')+')';}
+    function accountingDate(c){
+      var win=cycleWin(w,c.m,c.yr);if(!win||!win.from||!win.to)return real;
+      if(ord(c)<ord(input)){var last=new Date(win.to.getTime()-86400000);return dmy(isoDate(last));}
+      if(ord(c)>ord(input))return dmy(isoDate(win.from));
+      return real;
+    }
+    function cycleRemaining(c){
+      var st=cycleStatus(wid,c.m,c.yr);if(!st)return 0;
+      return Math.max(0,money((st.netDue||st.baseSal||0)-(st.totAdv||0)));
+    }
+    function futureCapacity(c){
+      var st=cycleStatus(wid,c.m,c.yr),base=st?money(st.netDue||st.baseSal||0):0,adv=st?money(st.totAdv||0):0;
+      if(!(base>0))base=money(w.salary||0);
+      return Math.max(0,base-adv) || Math.max(1,base||left);
+    }
+    function canUseCycle(c){
+      var win=cycleWin(w,c.m,c.yr);if(!win||!win.from||!win.to)return false;
+      if(started&&win.to<=started)return false;
+      return true;
+    }
+    function addPart(c,take,rest,reason){
+      take=Math.max(0,money(take));if(!take)return;
+      var win=cycleWin(w,c.m,c.yr),acct=accountingDate(c);
+      plan.push({m:c.m,yr:c.yr,take:take,rest:Math.max(0,money(rest||0)),closes:rest>0&&take>=rest,reason:reason,accountingDate:acct,cycleKey:monthKey(c),cycleStart:win&&win.from?isoDate(win.from):'',cycleEnd:win&&win.to?isoDate(win.to):'',label:cycleLabelLocal(c)});
+      left=Math.max(0,money(left-take));
+    }
+    var plan=[],startAnchor=started?cycleFor(w,isoDate(started)):input,cur=startAnchor,guard=0;
+    // 1) من أقدم دورة مستحقة إلى دورة تاريخ الدفع الفعلي.
+    while(left>0&&cur&&ord(cur)<=ord(input)&&guard++<240){
+      if(canUseCycle(cur)){
+        var rest=cycleRemaining(cur);
+        if(rest>0){
+          var take=Math.min(left,rest),pf=preflight(wid,cur.m,cur.yr,take);
+          if(pf&&pf.blocked){toastSafe(preflightMessage(pf),true);return {cancelled:true};}
+          addPart(cur,take,rest,sameCycle(cur,input)?'تغطية الدورة الحالية بعد الأقدم':'إغلاق نظري لدورة قديمة غير مسددة');
+        }
+      }
+      cur=shift(cur,1);
+    }
+    // 2) أي فائض بعد غلق القديم والحالية يذهب إلى الدورات التالية بالترتيب.
+    var future=shift(input,1),fguard=0;
+    while(left>0&&fguard++<240){
+      if(canUseCycle(future)){
+        var cap=futureCapacity(future),takeF=Math.min(left,cap);
+        addPart(future,takeF,cap,'فائض مقدم للدورة التالية بعد اكتمال ما قبلها');
+      }else{
+        var salary=money(w.salary||left),takeFallback=Math.min(left,Math.max(1,salary));
+        addPart(future,takeFallback,takeFallback,'فائض مقدم لدورة لاحقة');
+      }
+      future=shift(future,1);
+    }
+    if(!plan.length)return null;
+    var routedNeeded=plan.length>1||!sameCycle(plan[0],input)||plan[0].take!==original;
+    if(!routedNeeded)return null;
+    var lines=plan.map(function(p,i){return '• '+fmt(p.take)+' دج ← '+p.label+(p.closes?' ✓ إغلاق نظري':'')+' — تاريخ فعلي: '+real+' — محاسبياً: '+p.accountingDate;});
+    var summary=plan.map(function(p){return fmt(p.take)+' دج ← '+p.label;}).join('، ');
+    if(!confirm('📥 '+(w.name||'العامل')+': سيتم تقسيم التسبيق بدون ازدواجية.\n\nالمبلغ الفعلي المدفوع: '+fmt(original)+' دج\nتاريخ الدفع/الإدخال الفعلي: '+real+'\n\nالتوزيع المحاسبي النظري:\n'+lines.join('\n')+'\n\nسيبقى لكل الأجزاء operationId واحد، ومجموعها فقط = '+fmt(original)+' دج.\n\n✅ موافق = تطبيق التوزيع\n❌ إلغاء = تسجيله كاملاً في دورة تاريخ الدفع'))return null;
+    var operationId=generate('ADVOP'),operationNote='تسبيق واحد '+fmt(original)+' دج قُسّم محاسبياً بدون ازدواجية: '+summary;
+    d.advances[wid]=d.advances[wid]||{};
+    var created=[];
+    plan.forEach(function(p,i){
+      d.advances[wid][p.m]=arr(d.advances[wid][p.m]);
+      var partNote=(note?note+' — ':'')+operationNote+' — هذا الجزء '+(i+1)+'/'+plan.length+': '+fmt(p.take)+' دج ← '+p.label+' — تاريخ الدفع الفعلي '+real+' — تاريخ محاسبي داخلي '+p.accountingDate+(p.closes?' — ✓ إغلاق نظري للدورة':'');
+      var rec={id:generate('ADV'),operationId:operationId,originalAmount:original,allocationIndex:i,allocationCount:plan.length,allocationAmount:p.take,amount:p.take,date:p.accountingDate,accountingDate:p.accountingDate,realDate:real,enteredAt:new Date().toISOString(),month:p.m,cycleKey:p.cycleKey,cycleStart:p.cycleStart,cycleEnd:p.cycleEnd,note:partNote,by:(d.settings&&d.settings.userName)||'مستخدم',deductions:[],netPaid:p.take};
+      d.advances[wid][p.m].push(rec);created.push({plan:p,record:rec});
+    });
+    created.forEach(function(x){
+      var win=cycleWin(w,x.plan.m,x.plan.yr),payDate=dateOf(real);
+      if(!win||!payDate||payDate>=win.from)applyCycle(wid,x.plan.m,x.plan.yr,{allowAdvance:true,targetAdvance:x.record});
+    });
+    auditSafe('📥 تسبيق '+fmt(original)+' دج قُسّم بدون ازدواجية — '+(w.name||'')+' — '+summary);
+    return {placed:'cascade',operationId:operationId,plan:plan.map(function(p){return {cm:p.m,cyr:p.yr,rest:p.rest,take:p.take,closes:p.closes,win:cycleWin(w,p.m,p.yr),accountingDate:p.accountingDate,realDate:real};}),toCurrent:plan.filter(function(p){return sameCycle(p,input);}).reduce(function(s,p){return s+p.take;},0),closedCount:plan.filter(function(p){return p.closes;}).length};
   }
   function saveAdvance(){
     var w=worker(typeof _wid!=='undefined'?_wid:null),d=db();if(!w||!d)return;var input=document.getElementById('adv_amt'),dateEl=document.getElementById('adv_date'),noteEl=document.getElementById('adv_note'),raw=n(input&&input.value),amount=raw!==Math.floor(raw)?Math.round(raw):raw,dateISO=(dateEl&&dateEl.value)||nowISO(),note=(noteEl&&noteEl.value||'').trim();if(!amount){toastSafe('❌ أدخل مبلغاً صحيحاً',true);return;}if(raw!==amount&&input){input.value=amount;toastSafe('🔄 تم تقريب الكسر: '+fmt(raw)+' → '+fmt(amount));}
@@ -16389,184 +16488,8 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
   [500,1700,4200,8500,15000].forEach(function(ms){setTimeout(install,ms);});
 })();
 </script>
-<script id="egtph-v124-advance-cascade-delete-guard">
-/* v124: توجيه التسبيقات حسب أقدم دورة غير مغلقة + حارس إضافي للمحذوفات.
-   لا يغيّر بيانات تاريخية عند الفتح؛ يطبّق عند حفظ تسبيق جديد فقط. */
-(function(){
-  'use strict';
-  var VERSION='v124.0-cycle-cascade-delete-guard';
 
-  function D(){try{return (typeof DB!=='undefined'&&DB)?DB:(window.DB||null);}catch(e){return null;}}
-  function A(v){return Array.isArray(v)?v:[];}
-  function O(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}
-  function S(v){return String(v==null?'':v);}
-  function N(v){var x=+v;return isFinite(x)?x:0;}
-  function money(v){return Math.round(N(v));}
-  function pad(n){return String(n).padStart(2,'0');}
-  function now(){return new Date().toISOString();}
-  function toastSafe(msg,err){try{if(typeof window.toast==='function')window.toast(msg,!!err);else console[err?'error':'log'](msg);}catch(e){}}
-  function fmt(v){try{return typeof window.fmtN==='function'?window.fmtN(money(v)):money(v).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2});}catch(e){return String(money(v));}}
-  function dateOf(v){
-    if(v instanceof Date&&!isNaN(v.getTime()))return new Date(v.getFullYear(),v.getMonth(),v.getDate());
-    try{if(typeof window._toDate==='function'){var x=window._toDate(v);if(x&&!isNaN(x.getTime()))return new Date(x.getFullYear(),x.getMonth(),x.getDate());}}catch(e){}
-    var s=S(v).trim(),m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);if(m)return new Date(+m[3],+m[2]-1,+m[1]);
-    m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);if(m)return new Date(+m[1],+m[2]-1,+m[3]);
-    var d=new Date(s);return isNaN(d.getTime())?null:new Date(d.getFullYear(),d.getMonth(),d.getDate());
-  }
-  function iso(v){var d=dateOf(v);return d?d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()):'';}
-  function dmy(v){var d=dateOf(v);return d?pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear():S(v||'');}
-  function addDays(d,n){var x=dateOf(d);if(!x)return null;x.setDate(x.getDate()+n);return x;}
-  function worker(wid){try{return typeof window.getW==='function'?window.getW(wid):A(D()&&D().workers).find(function(w){return w&&S(w.id)===S(wid);});}catch(e){return null;}}
-  function shift(c,delta){var m=(+c.m||0)+delta,yr=+c.yr||new Date().getFullYear();while(m<0){m+=12;yr--;}while(m>11){m-=12;yr++;}return {m:m,yr:yr};}
-  function sameCycle(a,b){return !!(a&&b&&+a.m===+b.m&&+a.yr===+b.yr);}
-  function cycleAnchor(w,when){
-    try{if(typeof window.cycleAnchorForDate==='function'){var a=window.cycleAnchorForDate(w,iso(when)||when);if(a&&isFinite(+a.m)&&isFinite(+a.yr))return {m:+a.m,yr:+a.yr};}}catch(e){}
-    var d=dateOf(when)||new Date(),day=Math.min(+(w&&w.day||w&&w.payday)||1,28);
-    if(d.getDate()>=day)return {m:d.getMonth(),yr:d.getFullYear()};
-    return {m:(d.getMonth()+11)%12,yr:d.getMonth()===0?d.getFullYear()-1:d.getFullYear()};
-  }
-  function cycleWindowSafe(w,m,yr){
-    try{if(typeof window.cycleWindow==='function'){var r=window.cycleWindow(w,m,yr);if(r&&r.from&&r.to)return {from:dateOf(r.from),to:dateOf(r.to)};}}catch(e){}
-    var day=Math.min(+(w&&w.day||w&&w.payday)||1,28),from=new Date(+yr,+m,day),to=new Date(+yr,+m+1,day);
-    return {from:from,to:to};
-  }
-  function cycleShortKey(c){return S(c.yr)+'-'+pad((+c.m||0)+1);}
-  function cycleId(w,win){return S(w&&w.id)+'|'+iso(win&&win.from)+'_'+iso(win&&win.to);}
-  function cycleLabel(w,c){var win=cycleWindowSafe(w,c.m,c.yr),mn=(window.MN&&window.MN[c.m])||cycleShortKey(c);return mn+' '+c.yr+' ('+dmy(win.from)+' → '+dmy(addDays(win.to,-1))+')';}
-  function accountingDateFor(w,c,current,paidISO){
-    var win=cycleWindowSafe(w,c.m,c.yr);
-    if(sameCycle(c,current))return dmy(paidISO);
-    if(c.yr<current.yr||(c.yr===current.yr&&c.m<current.m))return dmy(addDays(win.to,-1));
-    return dmy(win.from);
-  }
-  function statusBalance(w,c,planned){
-    var st=null;try{if(typeof window.calcMonthStatus==='function')st=window.calcMonthStatus(w.id,c.m,c.yr);}catch(e){}
-    st=st||{};
-    var base=money(st.netDue!=null?st.netDue:(st.baseSal!=null?st.baseSal:N(w&&w.salary)));
-    var paid=money(st.totAdv!=null?st.totAdv:0)+money(planned[cycleShortKey(c)]||0);
-    return {base:base,paid:paid,remaining:Math.max(0,base-paid),status:st};
-  }
-  function cycleListUntilPayment(w,current,paidAt){
-    var start=cycleAnchor(w,w.startDate||paidAt||new Date()),out=[],c={m:start.m,yr:start.yr},guard=0;
-    while(guard++<180){
-      var win=cycleWindowSafe(w,c.m,c.yr);
-      if(!paidAt||!win.from||win.from<=paidAt)out.push({m:c.m,yr:c.yr});
-      if(sameCycle(c,current))break;
-      c=shift(c,1);
-      if(c.yr>current.yr+1)break;
-    }
-    return out;
-  }
-  function buildCascadeAllocations(wid,dateISO,amount){
-    var w=worker(wid),paid=dateOf(dateISO),sum=money(amount);if(!w||!paid||sum<=0)return [];
-    var current=cycleAnchor(w,dateISO),left=sum,planned={},alloc=[];
-    cycleListUntilPayment(w,current,paid).forEach(function(c){
-      if(left<=0)return;
-      var b=statusBalance(w,c,planned);if(b.remaining<=0)return;
-      var take=Math.min(left,b.remaining),key=cycleShortKey(c);planned[key]=money(planned[key]||0)+take;left-=take;
-      alloc.push({m:c.m,yr:c.yr,amount:take,base:b.base,alreadyPaid:b.paid,remainingBefore:b.remaining,closes:take>=b.remaining,current:sameCycle(c,current),reason:sameCycle(c,current)?'الدورة الحالية':'إغلاق دورة قديمة غير مسددة',accountingDate:accountingDateFor(w,c,current,dateISO)});
-    });
-    if(left>0){
-      var next=shift(current,1),win=cycleWindowSafe(w,next.m,next.yr);
-      alloc.push({m:next.m,yr:next.yr,amount:left,base:0,alreadyPaid:0,remainingBefore:0,closes:false,current:false,future:true,reason:'فائض مقدم للدورة التالية بعد إغلاق الدورات السابقة',accountingDate:dmy(win.from)});
-    }
-    return alloc.filter(function(x){return x&&x.amount>0;});
-  }
-  function needsCascadeOverride(alloc,current){
-    if(!alloc.length)return false;
-    if(alloc.length!==1)return true;
-    return !sameCycle(alloc[0],current)||alloc[0].reason.indexOf('قديمة')>=0||alloc[0].future===true;
-  }
-  function confirmAllocations(w,amount,dateISO,alloc){
-    var rows=alloc.map(function(a){return '• '+fmt(a.amount)+' دج ← '+cycleLabel(w,a)+' — '+a.reason+(a.closes?' ✓ تغلق':'');}).join('\n');
-    var msg='📥 توزيع التسبيق حسب أقدم دورة غير مغلقة\n\nالعامل: '+(w.name||'—')+'\nالمبلغ المدخل: '+fmt(amount)+' دج\nتاريخ الدفع الفعلي: '+dmy(dateISO)+'\n\n'+rows+'\n\n✅ موافق = حفظ هذا التوزيع\n❌ إلغاء = ترك التسجيل للمحرك القديم كما هو.';
-    try{return confirm(msg);}catch(e){return true;}
-  }
-  function gen(prefix){try{return prefix+'_'+(typeof window.genId==='function'?window.genId():Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8));}catch(e){return prefix+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);}}
-  function prepareRecord(w,op,a,idx,count){
-    var win=cycleWindowSafe(w,a.m,a.yr),cid=cycleId(w,win),note=S(op.note||'').trim();
-    if(count>1||a.reason)note=(note?note+' — ':'')+'توزيع '+(idx+1)+'/'+count+' — '+a.reason;
-    var rec={id:gen('ADV124'),transactionId:op.transactionId,operationId:op.operationId,originalAmount:op.originalAmount,allocationIndex:idx,allocationCount:count,allocationAmount:a.amount,amount:a.amount,date:a.accountingDate,realDate:op.realDate,enteredAt:op.enteredAt,month:a.m,cycleKey:cycleShortKey(a),cycleStart:iso(win.from),cycleEnd:iso(win.to),cycleLocked:!!a.closes,accountingCycleId:cid,ownerCycleId:cid,paydayCycleId:cid,accountingCycleStart:iso(win.from),accountingCycleEnd:iso(win.to),accountingDate:a.accountingDate,actualPaymentDate:op.realDate,note:note,by:op.by,deductions:[],netPaid:a.amount,_cycleOwnership:'oldest-unpaid-cycle-cascade-v124',_v124Cascade:true};
-    var stamp=now();rec._createdAt=stamp;rec._updatedAt=stamp;try{if(typeof window.nextMod==='function')rec._mod=window.nextMod();else rec._mod=Date.now();}catch(e){rec._mod=Date.now();}
-    return rec;
-  }
-  function applyCycleForRecord(wid,a,rec,paidISO){
-    var win=cycleWindowSafe(worker(wid),a.m,a.yr),paid=dateOf(paidISO),changed=false;
-    if(win&&paid&&paid<win.from)return false;
-    try{if(window.EGTPH_V63&&typeof window.EGTPH_V63.applyCycle==='function'){var out=window.EGTPH_V63.applyCycle(wid,a.m,a.yr,{allowAdvance:true,targetAdvance:rec});changed=!!(out&&out.changed||out&&out.v122DebtApplied);}}
-    catch(e){console.warn('v124 applyCycle API',e);}
-    try{if(!changed&&typeof window.autoSettleOnAdvance==='function')changed=!!window.autoSettleOnAdvance(wid,a.m,a.yr,rec,dmy(paidISO));}catch(e){}
-    try{if(window.EGTPH_V120&&typeof window.EGTPH_V120.reconcile==='function')window.EGTPH_V120.reconcile(wid);}catch(e){}
-    return changed;
-  }
-  async function saveAdvanceCascade(base,args){
-    var d=D(),wid;try{wid=(typeof _wid!=='undefined')?_wid:null;}catch(e){wid=null;}
-    var w=worker(wid),input=document.getElementById('adv_amt'),dateEl=document.getElementById('adv_date'),noteEl=document.getElementById('adv_note');
-    if(!d||!w||!input)return base.apply(this,args||[]);
-    var raw=N(input.value),amount=raw!==Math.floor(raw)?Math.round(raw):raw,dateISO=(dateEl&&dateEl.value)||iso(new Date()),note=S(noteEl&&noteEl.value).trim();
-    if(!(amount>0))return base.apply(this,args||[]);
-    if(raw!==amount){input.value=amount;toastSafe('🔄 تم تقريب الكسر: '+fmt(raw)+' → '+fmt(amount));}
-    var paid=dateOf(dateISO),start=dateOf(w.startDate);if(start&&paid&&paid<start){toastSafe('❌ تاريخ التسبيق قبل تاريخ دخول العامل ('+dmy(w.startDate)+')',true);return;}
-    var current=cycleAnchor(w,dateISO),alloc=buildCascadeAllocations(w.id,dateISO,amount);
-    if(!needsCascadeOverride(alloc,current))return base.apply(this,args||[]);
-    if(!confirmAllocations(w,amount,dateISO,alloc))return base.apply(this,args||[]);
-    d.advances=d.advances||{};d.advances[w.id]=d.advances[w.id]||{};
-    var op={operationId:gen('ADVOP124'),transactionId:gen('TX124'),originalAmount:amount,realDate:dmy(dateISO),enteredAt:now(),note:note,by:(d.settings&&d.settings.userName)||'مستخدم'};
-    var changed=false,created=[];
-    alloc.forEach(function(a,i){
-      var bucket=S(a.m);d.advances[w.id][bucket]=A(d.advances[w.id][bucket]);
-      var rec=prepareRecord(w,op,a,i,alloc.length);d.advances[w.id][bucket].push(rec);created.push(rec);
-      if(applyCycleForRecord(w.id,a,rec,dateISO))changed=true;
-    });
-    try{if(typeof window.audit==='function')window.audit('📥 تسبيق '+fmt(amount)+' وُجّه حسب أقدم دورة غير مغلقة — '+(w.name||''));}catch(e){}
-    try{guardDeletedLive('قبل حفظ تسبيق v124');}catch(e){}
-    try{if(typeof window.saveDB==='function')window.saveDB();}catch(e){console.warn('v124 saveDB',e);}
-    try{if(typeof window.closeModal==='function')window.closeModal('mAdv');if(typeof window.renderDash==='function')window.renderDash();if(typeof window.updateBadges==='function')window.updateBadges();if(typeof S!=='undefined'&&S.sw===w.id&&typeof window.renderSalContent==='function')window.renderSalContent();if(typeof S!=='undefined'&&S.dw===w.id&&typeof window.renderDbtContent==='function')window.renderDbtContent();}catch(e){}
-    toastSafe('📥 تم توزيع التسبيق على '+alloc.length+' دورة'+(changed?' — مع تسوية الخصومات المرتبطة':''));
-    return {ok:true,allocations:alloc,records:created};
-  }
-
-  function activeDeletedSet(d){
-    d=d||D();var set={};A(d&&d.deletedIds).forEach(function(id){if(id!=null&&id!=='')set[S(id)]=true;});
-    Object.keys(O(d&&d.deletedRecords)).forEach(function(id){var t=d.deletedRecords[id]||{},del=dateOf(t.deletedAt),res=dateOf(t.restoredAt);if(del&&(!res||del>res))set[S(id)]=true;});
-    return set;
-  }
-  function rebuildDeletedIds(d){d=d||D();if(!d)return {};var set=activeDeletedSet(d);d.deletedIds=Object.keys(set);return set;}
-  function isDeletedRecord(rec,set){if(!rec)return false;return !!(set[S(rec.id)]||set[S(rec.transactionId)]||set[S(rec.operationId)]);}
-  function guardDeletedLive(source){
-    var d=D();if(!d)return {removed:0};var set=rebuildDeletedIds(d),removed=0;
-    ['advances','bonuses'].forEach(function(k){Object.keys(O(d[k])).forEach(function(wid){Object.keys(O(d[k][wid])).forEach(function(m){var before=A(d[k][wid][m]).length;d[k][wid][m]=A(d[k][wid][m]).filter(function(r){return !isDeletedRecord(r,set);});removed+=before-d[k][wid][m].length;});});});
-    ['hours','absences','debts'].forEach(function(k){Object.keys(O(d[k])).forEach(function(wid){var before=A(d[k][wid]).length;d[k][wid]=A(d[k][wid]).filter(function(r){return !isDeletedRecord(r,set);});removed+=before-d[k][wid].length;});});
-    if(Array.isArray(d.workers)){var bw=d.workers.length;d.workers=d.workers.filter(function(w){return !isDeletedRecord(w,set);});removed+=bw-d.workers.length;}
-    if(removed){d.settings=d.settings||{};d.settings.v124DeleteGuard={version:VERSION,lastRunAt:now(),lastSource:source||'guard',lastRemoved:removed,totalRemoved:money((d.settings.v124DeleteGuard&&d.settings.v124DeleteGuard.totalRemoved)||0)+removed};try{if(typeof window.audit==='function')window.audit('🛡️ منع عودة محذوف — '+removed+' سجل');}catch(e){}}
-    return {removed:removed,deletedIds:Object.keys(set)};
-  }
-  function wrapSave(){
-    var base=window.saveDB;if(typeof base!=='function'||base.__v124DeleteGuard)return false;
-    var wrapped=function(){try{guardDeletedLive('قبل saveDB');}catch(e){console.warn('v124 delete guard',e);}return base.apply(this,arguments);};
-    wrapped.__v124DeleteGuard=true;window.saveDB=wrapped;try{saveDB=wrapped;}catch(e){}return true;
-  }
-  function wrapMerge(){
-    var base=window.mergeImportData;if(typeof base!=='function'||base.__v124DeleteGuard)return false;
-    var wrapped=function(){var out=base.apply(this,arguments);try{guardDeletedLive('بعد mergeImportData');}catch(e){}return out;};
-    wrapped.__v124DeleteGuard=true;window.mergeImportData=wrapped;try{mergeImportData=wrapped;}catch(e){}return true;
-  }
-  function wrapAdvanceSave(){
-    var base=window.saveAdv;if(typeof base!=='function'||base.__v124Cascade)return false;
-    var wrapped=function(){return saveAdvanceCascade.call(this,base,arguments);};
-    wrapped.__v124Cascade=true;wrapped.__v124Base=base;window.saveAdv=wrapped;try{saveAdv=wrapped;}catch(e){}return true;
-  }
-  function addAdminButton(){
-    try{var panel=document.getElementById('v50AdminPanel'),tools=panel&&panel.querySelector('.v50-tools');if(!tools||document.getElementById('v124CascadeBtn'))return;var b=document.createElement('button');b.id='v124CascadeBtn';b.type='button';b.className='btn2';b.textContent='🧭 فحص توجيه التسبيقات';b.onclick=function(){var r=guardDeletedLive('فحص يدوي');toastSafe('🧭 v124 نشط — حارس المحذوفات أزال '+(r.removed||0)+' سجل راجع');};tools.appendChild(b);}catch(e){}
-  }
-  function install(){
-    if(!D())return false;
-    wrapSave();wrapMerge();wrapAdvanceSave();addAdminButton();
-    window.EGTPH_V124={version:VERSION,buildAllocations:buildCascadeAllocations,guardDeletedLive:guardDeletedLive,status:'oldest-unpaid-cycle-first; deleted-records-cannot-revive'};
-    return true;
-  }
-  [300,900,1800,3600,5200,7600,11000,16000].forEach(function(ms){setTimeout(install,ms);});
-  try{install();}catch(e){console.warn('v124 install',e);}
-})();
+<script id="egtph-v125-cycle-cascade-marker">
+(function(){try{window.EGTPH_V125={version:'v125.1-buttons-safe-cycle-cascade',fix:'buildAllocations patched in-place; no saveAdv wrapper'};}catch(e){}})();
 </script>
 </body></html>
