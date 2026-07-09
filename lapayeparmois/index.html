@@ -249,7 +249,7 @@ var renderAdmin = window.renderAdmin;
 </script>
 <meta charset="utf-8">
 <meta content="width=device-width,initial-scale=1.0" name="viewport">
-<title>EGTPH — سجل الأجور v128</title>
+<title>EGTPH — سجل الأجور v130</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet">
 <style>
 :root{
@@ -16385,320 +16385,73 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
   function wrapStatus(){var base=window.calcMonthStatus;if(typeof base!=='function'||base.__v123AllAbs)return;var wrapped=function(wid,m,yr){return overrideStatus(base.apply(this,arguments),wid,m,yr);};wrapped.__v123AllAbs=true;window.calcMonthStatus=wrapped;try{calcMonthStatus=wrapped;}catch(e){}}
   function wrapFinal(){var base=window.calcFinalSettlement;if(typeof base!=='function'||base.__v123AllAbs)return;var wrapped=function(w){return overrideFinal(base,w);};wrapped.__v123AllAbs=true;window.calcFinalSettlement=wrapped;try{calcFinalSettlement=wrapped;}catch(e){}}
   function wrapPrintBlock(){var base=window.v63CyclePrintBlock;if(typeof base!=='function'||base.__v123AllAbs)return;var wrapped=function(wid,m,yr){var html=base.apply(this,arguments);return typeof html==='string'?html.replace(/غيابات متبقية/g,'أجر غياب غير مستحق'):html;};wrapped.__v123AllAbs=true;window.v63CyclePrintBlock=wrapped;window.v61CyclePrintBlock=wrapped;}
-  function install(){var d=D();if(!d||!A(d.workers).length)return;wrapStatus();wrapFinal();wrapPrintBlock();wrapAbsSave();['delAbs','editAbs','closeOpenAbs'].forEach(wrapAbsAction);window.absenceFinancialStatus=statusForAbs;try{absenceFinancialStatus=statusForAbs;}catch(e){}var ps=window.EGTPHPrintStatus||{};ps.absence=statusForAbs;ps.pendingAbsences=noPending;window.EGTPHPrintStatus=ps;window.pendAbs=noPending;try{pendAbs=noPending;}catch(e){}window[API]={version:VERSION,validAbsence:valid,cycleContext:ctx,status:overrideStatus,final:overrideFinal,statusForAbsence:statusForAbs,writeWitness:putWitness,status:'all-valid-absence-entitlement'};try{var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v128';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v123');}catch(e){} }
+  function install(){var d=D();if(!d||!A(d.workers).length)return;wrapStatus();wrapFinal();wrapPrintBlock();wrapAbsSave();['delAbs','editAbs','closeOpenAbs'].forEach(wrapAbsAction);window.absenceFinancialStatus=statusForAbs;try{absenceFinancialStatus=statusForAbs;}catch(e){}var ps=window.EGTPHPrintStatus||{};ps.absence=statusForAbs;ps.pendingAbsences=noPending;window.EGTPHPrintStatus=ps;window.pendAbs=noPending;try{pendAbs=noPending;}catch(e){}window[API]={version:VERSION,validAbsence:valid,cycleContext:ctx,status:overrideStatus,final:overrideFinal,statusForAbsence:statusForAbs,writeWitness:putWitness,status:'all-valid-absence-entitlement'};try{var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v130';document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v123');}catch(e){} }
   [500,1700,4200,8500,15000].forEach(function(ms){setTimeout(install,ms);});
 })();
 </script>
-<script id="egtph-v124-advance-cycle-reroute-once-disabled-by-v126">
-/* v126: v124 is intentionally disabled.
-   Reason: v124 re-routed already documented historical advances on every load,
-   especially Ahmed, then v125 corrected them again. This caused repeated correction
-   after each cloud sync. v125/v126 is now the only active advance repair engine. */
-(function(){
-  'use strict';
-  window.__EGTPH_V124_ADVANCE_REROUTE_DISABLED_BY_V126__=true;
-  window.__v124AdvRerouteInstalled=true;
-  window.EGTPH_V124_ADVANCE_REROUTE={
-    version:'124.0.0-disabled-by-v126',
-    disabled:true,
-    supersededBy:'v126',
-    run:function(){return {ok:true,disabled:true,changed:false,reason:'v124 disabled by v126 to stop repeated reordering'};},
-    status:function(){return {disabled:true,supersededBy:'v126'};}
-  };
-})();
-</script>
-<script id="egtph-v125-smart-advance-repair-disabled-by-v128">
-/* v125 — تصحيح ذكي بعد المزامنة: لا يعيد توزيع كل التاريخ عشوائياً.
-   القاعدة:
-   - نحترم الدورة المحاسبية الموجودة إذا كانت موثقة.
-   - في يوم الاستحقاق نفسه: إذا الدورة السابقة لم تكتمل، يذهب المبلغ إليها أولاً.
-   - العمليات الجديدة أو ناقصة بيانات الدورة تُوجّه إلى أقدم دورة مفتوحة.
-   - يعمل بعد v124 ليصلح أي توزيع زائد، ويكتب شرحاً في الملاحظة عند النقل/التقسيم. */
+
+<script id="egtph-v130-ahmed-shadow-tombstone">
+/* v130 — إصلاح نهائي لأحمد: حذف التسبيقة الشبح من المصدر، تثبيت 40+5 / 45 / 25،
+   وإضافة tombstone تمنع إحياء السجل من Firebase بعد المزامنة. */
 (function(){
 'use strict';
-var VERSION='126.0', API='EGTPH_V125_SMART_ADVANCE_REPAIR', RUNNING=false, PENDING=false;
-window.__EGTPH_V125_SMART_REPAIR_DISABLED_BY_V128__=true;
-window[API]={version:'126.0-disabled-by-v128',disabled:true,run:function(){return {ok:true,disabled:true,changed:false,reason:'v128 final one-time repair supersedes v125/v126'};},status:function(){return {disabled:true,supersededBy:'v128'};}};
-return;
+var VERSION='130.0.0', API='EGTPH_V130_AHMED_SHADOW_TOMBSTONE', WID='8';
+var SHADOW_ID='1781789988162_2d7q977';
+var TARGET='AHMED|APR_ADV40000_DEBT5000|MAY_ADV45000|JUN_ADV25000|SHADOW0|NOTES_SHORT|V130';
+var ALLOWED_ADV_IDS={
+  '1778502096869_7rmp4h':1,'1782405212942_pts85mi':1,'1781182567140_4fezl2k':1,'1778707277154_1b9fqc':1,
+  '1780496040391_bhfw2jx':1,'1779279723038_kw29c':1,'1779710279718_ai04d':1,
+  '1782405223823_mbwjdgu':1,'ADV_1782904913868_r8fou5e':1,'ADV_1783591202427_k22prd9':1
+};
+var CANON_ADV={
+  '3':[
+    {id:'1778502096869_7rmp4h',amount:5000,netPaid:5000,date:'11/05/2026',realDate:'11/05/2026',enteredAt:'2026-05-11T12:21:36.869Z',by:'youcef',month:3,cycleKey:'2026-04',cycleStart:'2026-04-20',cycleEnd:'2026-05-20',cycleLocked:false,note:'',deductions:[],_v130Ahmed:true},
+    {id:'1782405212942_pts85mi',amount:10000,netPaid:10000,date:'11/05/2026',realDate:'11/05/2026',enteredAt:'2026-06-25T16:33:32.942Z',by:'Youcef Abdi',month:3,cycleKey:'2026-04',cycleStart:'2026-04-20',cycleEnd:'2026-05-20',cycleLocked:false,note:'',deductions:[],_v130Ahmed:true},
+    {id:'1781182567140_4fezl2k',amount:15000,netPaid:15000,date:'19/05/2026',realDate:'11/06/2026',enteredAt:'2026-06-11T12:56:07.140Z',by:'Youcef Abdi',month:3,cycleKey:'2026-04',cycleStart:'2026-04-20',cycleEnd:'2026-05-20',cycleLocked:true,note:'دفع فعلي 11/06/2026',deductions:[],_v130Ahmed:true},
+    {id:'1778707277154_1b9fqc',amount:10000,netPaid:10000,date:'13/05/2026',realDate:'13/05/2026',enteredAt:'2026-05-13T21:21:17.154Z',by:'brahim talab',month:3,cycleKey:'2026-04',cycleStart:'2026-04-20',cycleEnd:'2026-05-20',cycleLocked:false,note:'',deductions:[],_v130Ahmed:true}
+  ],
+  '4':[
+    {id:'1780496040391_bhfw2jx',amount:15000,netPaid:10000,date:'03/06/2026',realDate:'03/06/2026',enteredAt:'2026-06-03T14:14:00.391Z',by:'Youcef Abdi',month:4,cycleKey:'2026-05',cycleStart:'2026-05-20',cycleEnd:'2026-06-20',cycleLocked:false,note:'قسط دين داخل التسبيق؛ نقد 10,000 دج',deductions:[{type:'debt',amount:5000,date:'18/06/2026',debtId:'1779281559360_i1mm7',note:'قسط دين 2/9',id:'DED119_AHMED_MAY_DEBT_2',transactionId:'V119TX_AHMED_MAY_DEBT_2'}],_v130Ahmed:true},
+    {id:'1779279723038_kw29c',amount:25000,netPaid:25000,date:'20/05/2026',realDate:'20/05/2026',enteredAt:'2026-05-20T12:22:03.038Z',by:'Youcef Abdi',month:4,cycleKey:'2026-05',cycleStart:'2026-05-20',cycleEnd:'2026-06-20',cycleLocked:false,note:'',deductions:[],_v130Ahmed:true},
+    {id:'1779710279718_ai04d',amount:5000,netPaid:5000,date:'20/05/2026',realDate:'20/05/2026',enteredAt:'2026-05-25T11:57:59.718Z',by:'Youcef Abdi',month:4,cycleKey:'2026-05',cycleStart:'2026-05-20',cycleEnd:'2026-06-20',cycleLocked:false,note:'',deductions:[],_v130Ahmed:true}
+  ],
+  '5':[
+    {id:'1782405223823_mbwjdgu',amount:10000,netPaid:10000,date:'25/06/2026',realDate:'25/06/2026',enteredAt:'2026-06-25T16:33:43.823Z',by:'Youcef Abdi',month:5,cycleKey:'2026-06',cycleStart:'2026-06-20',cycleEnd:'2026-07-20',cycleLocked:false,note:'',deductions:[],_v130Ahmed:true},
+    {id:'ADV_1782904913868_r8fou5e',amount:5000,netPaid:5000,date:'01/07/2026',realDate:'01/07/2026',enteredAt:'2026-07-01T11:21:53.868Z',by:'Youcef Abdi',month:5,cycleKey:'2026-06',cycleStart:'2026-06-20',cycleEnd:'2026-07-20',cycleLocked:false,note:'',deductions:[],_v130Ahmed:true},
+    {id:'ADV_1783591202427_k22prd9',amount:10000,netPaid:10000,date:'09/07/2026',realDate:'09/07/2026',enteredAt:'2026-07-09T10:00:02.427Z',by:'Youcef Abdi',month:5,cycleKey:'2026-06',cycleStart:'2026-06-20',cycleEnd:'2026-07-20',cycleLocked:false,note:'',deductions:[],_v130Ahmed:true}
+  ]
+};
+var CANON_DEBTS=[
+  {id:'1779281559360_i1mm7',type:'debt',amount:45000,date:'20/05/2026',by:'Youcef Abdi',note:'',inst:true,instAmt:5000,instCount:9,instPaid:2,instType:'monthly',nextDue:'2026-08-15',_v130Ahmed:true},
+  {id:'1779737608083_x47sr',type:'return',debtId:'1779281559360_i1mm7',amount:5000,date:'25/05/2026',by:'Youcef Abdi',note:'قسط دين 1/9',_instPayment:true,_instTag:'1779281559360_i1mm7_1',_v130Ahmed:true},
+  {id:'1781789549780_r048rl7',type:'return',debtId:'1779281559360_i1mm7',amount:5000,date:'18/06/2026',actualPaymentDate:'18/06/2026',by:'النظام',note:'قسط دين 2/9 داخل تسبيق',source:'salary-advance',cashEffect:0,_instPayment:true,_instTag:'1779281559360_i1mm7_2',_advanceId:'1780496040391_bhfw2jx',transactionId:'V119TX_AHMED_MAY_DEBT_2',_v130Ahmed:true}
+];
 function D(){try{return window.DB||DB||null;}catch(e){return window.DB||null;}}
-function A(v){return Array.isArray(v)?v:[];}
-function O(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}
-function S(v){return v==null?'':String(v);}
+function A(v){return Array.isArray(v)?v:[];} function O(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{}};
+function C(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
 function N(v){var x=Number(v);return isFinite(x)?Math.round(x):0;}
-function pad(n){return String(n).padStart(2,'0');}
-function money(v){return Math.round(Number(v)||0);}
-function clone(x){try{return JSON.parse(JSON.stringify(x));}catch(e){return x;}}
-function dt(v){
-  if(v instanceof Date&&!isNaN(v))return new Date(v.getFullYear(),v.getMonth(),v.getDate());
-  var s=S(v).trim(),m;if(!s)return null;
-  if((m=s.match(/^(\d{4})-(\d{2})-(\d{2})/))){var a=new Date(+m[1],+m[2]-1,+m[3]);return isNaN(a)?null:new Date(a.getFullYear(),a.getMonth(),a.getDate());}
-  if((m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/))){var b=new Date(+m[3],+m[2]-1,+m[1]);return isNaN(b)?null:new Date(b.getFullYear(),b.getMonth(),b.getDate());}
-  var t=Date.parse(s);if(isNaN(t))return null;var c=new Date(t);return new Date(c.getFullYear(),c.getMonth(),c.getDate());
-}
-function iso(d){if(!(d instanceof Date)||isNaN(d))return '';return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
-function dmy(d){if(!(d instanceof Date)||isNaN(d))return '';return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear();}
-function addMonths(d,n){var y=d.getFullYear(),m=d.getMonth()+n,day=d.getDate(),last=new Date(y,m+1,0).getDate();return new Date(y,m,Math.min(day,last));}
-function fmt(n){try{return typeof fmtN==='function'?fmtN(n):String(n).replace(/\B(?=(\d{3})+(?!\d))/g,' ');}catch(e){return String(n);}}
-function mn(m){var a=['جانفي','فيفري','مارس','أفريل','ماي','جوان','جويلية','أوت','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];try{return (window.MN&&MN[m])||a[m]||String(m+1);}catch(e){return a[m]||String(m+1);}}
-function sameDate(a,b){return a&&b&&iso(a)===iso(b);}
-function workerId(w){return S(w&&w.id);}
-function payday(w){var x=N((w&&w.payday)!=null?w.payday:w&&w.day);return Math.max(1,Math.min(31,x||1));}
-function rangeFromMY(w,m,yr){var day=payday(w),start=new Date(+yr,+m,Math.min(day,new Date(+yr,+m+1,0).getDate())),to=addMonths(start,1);return {m:+m,yr:+yr,from:start,to:to,id:workerId(w)+'|'+iso(start)+'_'+iso(to),capacity:cycleCapacity(w,start,to),used:0};}
-function nextMY(m,yr){return +m===11?{m:0,yr:+yr+1}:{m:+m+1,yr:+yr};}
-function prevMY(m,yr){return +m===0?{m:11,yr:+yr-1}:{m:+m-1,yr:+yr};}
-function anchorForDate(w,when){
-  var d=dt(when)||new Date(),day=payday(w),due=Math.min(day,new Date(d.getFullYear(),d.getMonth()+1,0).getDate());
-  if(d.getDate()>=due)return {m:d.getMonth(),yr:d.getFullYear()};
-  var p=addMonths(new Date(d.getFullYear(),d.getMonth(),1),-1);return {m:p.getMonth(),yr:p.getFullYear()};
-}
-function startAnchor(w){return anchorForDate(w,(w&&w.startDate)||new Date());}
-function validAbs(a){return a&&a.settled!==true&&S(a.deductOpt)!=='cancel'&&S(a.status)!=='deleted'&&!a._deletedAt;}
-function cycleCapacity(w,from,to){
-  var sal=money(w&&w.salary),cap=sal,sd=dt(w&&w.startDate),wid=workerId(w),d=D(),ded=0;
-  if(sd&&from<sd&&sd<to){var days=Math.ceil((to-sd)/86400000);cap=Math.min(sal,Math.max(0,Math.round(sal/30)*days));}
-  A(d&&d.absences&&d.absences[wid]).forEach(function(a){var x=dt(a&&((a.from)||a.date));if(validAbs(a)&&x&&x>=from&&x<to)ded+=money(a.deduct);});
-  return Math.max(0,cap-ded);
-}
-function advAmount(a){try{if(typeof window.advGross==='function')return money(window.advGross(a));}catch(e){}return money(a&&a.amount);}
-function advNet(a){try{if(typeof window.advNetPaid==='function')return money(window.advNetPaid(a));}catch(e){}return money((a&&a.netPaid)!=null?a.netPaid:(a&&a.amount));}
-function realDate(a){return dt((a&&a.realDate)||(a&&a.actualPaymentDate)||(a&&a.date))||dt(a&&a._createdAt)||new Date(0);}
-function isDeleted(a){return !a||S(a.status)==='deleted'||!!a._deletedAt;}
-function deletedIdSet(d){
-  var out={};A(d&&d.deletedIds).forEach(function(x){out[S(x)]=1;});
-  Object.keys(O(d&&d.deletedRecords)).forEach(function(k){out[S(k)]=1;});
-  Object.keys(O(d&&d.trash)).forEach(function(sec){A(d.trash[sec]).forEach(function(x){if(x){out[S(x.id)]=1;out[S(x._tid)]=1;}});});
-  A(d&&d.auditLog).forEach(function(a){var det=O(a&&a.details);['removedPseudoAdvanceId','pseudoAdvanceRemoved','pseudoAdvanceId'].forEach(function(k){if(det[k])out[S(det[k])]=1;});});
-  A(d&&d.repairLog).forEach(function(r){['removedPseudoAdvanceId','pseudoAdvanceRemoved','pseudoAdvanceId'].forEach(function(k){if(r&&r[k])out[S(r[k])]=1;});});
-  A(d&&d.ledger).forEach(function(l){var det=O(l&&l.details);['removedPseudoAdvanceId','pseudoAdvanceRemoved','pseudoAdvanceId'].forEach(function(k){if(det[k])out[S(det[k])]=1;});});
-  return out;
-}
-function eachAdvFor(advances,wid,fn){var b=advances&&advances[wid];if(!b)return;if(Array.isArray(b)){b.forEach(function(arr,m){A(arr).forEach(function(a){fn(a,S(m));});});}else Object.keys(O(b)).forEach(function(m){A(b[m]).forEach(function(a){fn(a,S(m));});});}
-function allIds(advances){var ids={};Object.keys(O(advances)).forEach(function(wid){eachAdvFor(advances,wid,function(a){if(a&&a.id)ids[S(a.id).replace(/__(?:v124|v125)p\d+$/,'')]=1;});});return ids;}
-function parseBackupAdvances(d){
-  var raw=d&&d.settings&&d.settings.v124AdvanceReroute&&d.settings.v124AdvanceReroute.backup;if(!raw)return null;
-  try{var x=JSON.parse(raw);return x&&x.advances?x.advances:null;}catch(e){return null;}
-}
-function mergedBaseAdvances(d){
-  var base=clone(parseBackupAdvances(d)||d.advances||{}),ids=allIds(base),cur=O(d&&d.advances);
-  Object.keys(cur).forEach(function(wid){
-    base[wid]=base[wid]||{};
-    var add=function(rec,m){base[wid][S(m)]=base[wid][S(m)]||[];base[wid][S(m)].push(rec);ids[S(rec.id)]=1;};
-    eachAdvFor(cur,wid,function(a,m){
-      if(!a||!a.id)return;var id=S(a.id).replace(/__(?:v124|v125)p\d+$/,'');
-      if(ids[id])return;
-      if(a.__v124Alloc||a.__v125Alloc){
-        var src=id;if(src&&ids[src])return;
-        var r=clone(a);r.id=src||S(a.operationId||a.id);r.amount=money(a.originalAmount||a.amount);r.netPaid=money(a.originalNetPaid!=null?a.originalNetPaid:(a.netPaid!=null?a.netPaid:a.amount));delete r.__v124Alloc;delete r.__v124Version;delete r.__v125Alloc;delete r.__v125Version;add(r,m);return;
-      }
-      add(clone(a),m);
-    });
-  });
-  return base;
-}
-function collectRows(base,w,del){var rows=[],wid=workerId(w);eachAdvFor(base,wid,function(a){if(!a||isDeleted(a))return;if(del[S(a.id)]&&!(a.deductions&&a.deductions.length&&advNet(a)===0))return;rows.push(clone(a));});rows.sort(function(a,b){return (+realDate(a)-+realDate(b))||S(a.enteredAt||a._createdAt).localeCompare(S(b.enteredAt||b._createdAt))||S(a.id).localeCompare(S(b.id));});return rows;}
-function ensureCycles(w,rows){var st=dt(w&&w.startDate)||new Date(),last=st;rows.forEach(function(a){var r=realDate(a);if(r>last)last=r;});last=addMonths(last,4);var a=startAnchor(w),arr=[],map={},guard=0;while(guard++<90){var r=rangeFromMY(w,a.m,a.yr);arr.push(r);map[r.yr+'-'+r.m]=r;if(r.from>last)break;a=nextMY(a.m,a.yr);}return {arr:arr,map:map};}
-function getCycle(w,bag,m,yr){var k=yr+'-'+m;if(!bag.map[k]){var r=rangeFromMY(w,m,yr);bag.map[k]=r;bag.arr.push(r);bag.arr.sort(function(a,b){return a.from-b.from;});}return bag.map[k];}
-function cycleFromRec(w,bag,a){var cs=dt(a.cycleStart),ce=dt(a.cycleEnd),ck=S(a.cycleKey),m=null,yr=null;if(/^\d{4}-\d{2}$/.test(ck)){yr=+ck.slice(0,4);m=+ck.slice(5,7)-1;}else if(cs){var an=anchorForDate(w,cs);m=an.m;yr=an.yr;}else if(a.month!=null){m=+a.month;yr=(realDate(a)||new Date()).getFullYear();}
-  if(m==null||yr==null)return null;var r=getCycle(w,bag,m,yr);return cs&&ce?{cycle:r,cycleStart:cs,cycleEnd:ce}: {cycle:r};}
-function noteFor(src,total,parts,old){var line=parts.map(function(p){return fmt(p.amount)+' دج → '+mn(p.cycle.m)+' '+p.cycle.yr+' ('+iso(p.cycle.from)+' حتى '+iso(p.cycle.to)+')'+(p.closed?' ✓ إغلاق':'');}).join('؛ '),p='[v125] تسبيق فعلي '+fmt(total)+' دج بتاريخ '+dmy(realDate(src))+' — توزيع محاسبي بعد المزامنة: '+line+' — بلا ازدواجية.';old=S(old||'').trim();old=old.replace(/\s*—?\s*\[v124\][\s\S]*$/,'').replace(/\s*—?\s*\[v125\][\s\S]*$/,'').trim();return old?old+' — '+p:p;}
-function makeRec(src,part,idx,count,total,totalNet,allParts,mode){var r=clone(src)||{};var baseId=S(src&&src.id)||('ADV125_'+Date.now().toString(36));if(count>1)r.id=baseId+'__v125p'+(idx+1);else r.id=baseId;r.amount=part.amount;r.netPaid=Math.min(part.amount,Math.max(0,totalNet-part.netBefore));r.month=part.cycle.m;r.cycleKey=part.cycle.yr+'-'+pad(part.cycle.m+1);r.cycleStart=iso(part.cycle.from);r.cycleEnd=iso(part.cycle.to);r.cycleLocked=!!part.closed;r.realDate=dmy(realDate(src));r.actualPaymentDate=r.realDate;r.date=r.date||r.realDate;r.operationId=r.operationId||('V125OP_'+baseId.replace(/[^A-Za-z0-9_:-]/g,'_'));r.transactionId=r.transactionId||('V125TX_'+r.operationId);r.originalAmount=total;r.originalNetPaid=totalNet;r.allocationAmount=part.amount;r.allocationIndex=idx;r.allocationCount=count;r._updatedAt=src._updatedAt||src.enteredAt||src._createdAt||'2026-07-09T20:00:00.000Z';if(mode==='route'||count>1)r.note=noteFor(src,total,allParts.map(function(x){return {cycle:x.cycle,amount:x.amount,closed:x.closed};}),src.note);return r;}
-function rebuildWorker(base,w,del){
-  var wid=workerId(w),rows=collectRows(base,w,del);if(!rows.length)return {changed:false,ops:0,parts:0,warning:''};
-  var bag=ensureCycles(w,rows),start=dt(w.startDate)||new Date(0),preserved=[],deferred=[];
-  rows.forEach(function(a){
-    var meta=cycleFromRec(w,bag,a),amount=advAmount(a),rd=realDate(a);
-    if(meta&&meta.cycle&&a.__v124Alloc!==true){var c=meta.cycle,pm=prevMY(c.m,c.yr),prev=getCycle(w,bag,pm.m,pm.yr),boundary=sameDate(rd,c.from),prevAfterStart=prev.to>start;
-      if(boundary&&prevAfterStart){deferred.push(a);}
-      else {c.used+=amount;preserved.push({src:a,cycle:c,amount:amount,mode:'keep'});} }
-    else deferred.push(a);
-  });
-  var routed=[];
-  deferred.forEach(function(a){var remain=advAmount(a),parts=[],before=0;bag.arr.sort(function(x,y){return x.from-y.from;});for(var i=0;i<bag.arr.length&&remain>0;i++){var c=bag.arr[i];if(c.to<=start)continue;var free=Math.max(0,c.capacity-c.used);if(free<=0)continue;var take=Math.min(remain,free);c.used+=take;parts.push({src:a,cycle:c,amount:take,netBefore:before,closed:c.used>=c.capacity});before+=take;remain-=take;}
-    while(remain>0){var last=bag.arr[bag.arr.length-1],nx=nextMY(last.m,last.yr),c=getCycle(w,bag,nx.m,nx.yr),free=Math.max(c.capacity-c.used,remain),take=Math.min(remain,free);c.used+=take;parts.push({src:a,cycle:c,amount:take,netBefore:before,closed:c.used>=c.capacity});before+=take;remain-=take;}
-    routed.push({src:a,parts:parts});
-  });
-  var out={};preserved.forEach(function(p){var rec=makeRec(p.src,{cycle:p.cycle,amount:p.amount,netBefore:0,closed:p.cycle.used>=p.cycle.capacity},0,1,p.amount,advNet(p.src),[{cycle:p.cycle,amount:p.amount,closed:p.cycle.used>=p.cycle.capacity}],p.mode);out[S(rec.month)]=out[S(rec.month)]||[];out[S(rec.month)].push(rec);});
-  routed.forEach(function(g){var total=advAmount(g.src),net=advNet(g.src);g.parts.forEach(function(p,idx){var rec=makeRec(g.src,p,idx,g.parts.length,total,net,g.parts,'route');out[S(rec.month)]=out[S(rec.month)]||[];out[S(rec.month)].push(rec);});});
-  Object.keys(out).forEach(function(k){out[k].sort(function(a,b){return (+realDate(a)-+realDate(b))||S(a.enteredAt||a._createdAt).localeCompare(S(b.enteredAt||b._createdAt))||S(a.id).localeCompare(S(b.id));});});
-  return {changed:JSON.stringify(O((D().advances||{})[wid]))!==JSON.stringify(out),ops:rows.length,parts:Object.keys(out).reduce(function(s,k){return s+A(out[k]).length;},0),out:out};
-}
-function verifiedAhmedCheck(d){try{var adv=O(d.advances&&d.advances['8']),cur=A(adv['5']).reduce(function(s,a){return s+advAmount(a);},0);return {currentJuneAdvances:cur,expectedPdfCurrentAdvances:25000,ok:cur===25000};}catch(e){return {ok:false,error:S(e&&e.message||e)};}}
-function signature(d){try{return JSON.stringify({a:d.advances,w:A(d.workers).map(function(w){return [w.id,w.salary,w.startDate,w.payday,w.day];}),abs:d.absences}).length+':'+A(d.workers).length;}catch(e){return String(Date.now());}}
-function run(reason){var d=D();if(!d||!A(d.workers).length||RUNNING){PENDING=true;return {ok:false,busy:RUNNING};}RUNNING=true;PENDING=false;var before=signature(d),report={version:VERSION,reason:reason||'manual',at:new Date().toISOString(),workers:0,changedWorkers:0,ops:0,parts:0,errors:[]};
-  try{var base=mergedBaseAdvances(d),del=deletedIdSet(d),newAdv=clone(d.advances||{});A(d.workers).forEach(function(w){try{var r=rebuildWorker(base,w,del);report.workers++;report.ops+=r.ops;report.parts+=r.parts;if(r.changed){newAdv[workerId(w)]=r.out;report.changedWorkers++;}}catch(e){report.errors.push({wid:w&&w.id,name:w&&w.name,error:S(e&&e.message||e)});}});
-    if(report.changedWorkers){d.advances=newAdv;}
-    d.settings=d.settings||{};d.settings.v125AdvanceSmartRepair=d.settings.v125AdvanceSmartRepair||{};d.settings.v125AdvanceSmartRepair.lastRun=report;d.settings.v125AdvanceSmartRepair.version=VERSION;d.settings.v125AdvanceSmartRepair.supersedes='v124';d.settings.v125AdvanceSmartRepair.ahmedPdfCheck=verifiedAhmedCheck(d);report.ahmedPdfCheck=d.settings.v125AdvanceSmartRepair.ahmedPdfCheck;report.ok=!report.errors.length;report.changed=report.changedWorkers>0;report.before=before;report.after=signature(d);
-    if(report.changed){try{if(typeof audit==='function')audit('v125 تصحيح ذكي للتسبيقات بعد المزامنة: '+report.changedWorkers+' عامل');}catch(e){}try{if(typeof saveDB==='function')saveDB();}catch(e){try{localStorage.setItem('egtph_payroll_v120',JSON.stringify(d));}catch(_){}}}
-    try{if(typeof renderDash==='function')renderDash();if(typeof renderSalContent==='function')renderSalContent();if(typeof renderSummary==='function')renderSummary();if(typeof renderSettlement==='function')renderSettlement();}catch(e){}
-    try{if(report.changed&&typeof toast==='function')toast('✅ v126: صُححت التسبيقات مرة واحدة بعد المزامنة');}catch(e){}
-    return report;
-  }finally{RUNNING=false;if(PENDING)setTimeout(function(){run('pending-after-run');},900);}}
-function wrapSaveAdv(){var base=window.saveAdv;if(typeof base!=='function'||base.__v125SmartRepair)return;var wrapped=function(){var out=base.apply(this,arguments);setTimeout(function(){run('after-new-advance');},1000);return out;};wrapped.__v125SmartRepair=true;wrapped.__v124Reroute=true;window.saveAdv=wrapped;try{saveAdv=wrapped;}catch(e){}}
-function wrapCloud(){var base=window.cloudSync;if(typeof base!=='function'||base.__v125SmartRepair)return;var wrapped=function(){var ret=base.apply(this,arguments);try{if(ret&&typeof ret.then==='function')ret.then(function(){setTimeout(function(){run('after-cloud-sync');},1800);},function(){setTimeout(function(){run('after-cloud-sync-error');},2200);});else setTimeout(function(){run('after-cloud-sync');},2200);}catch(e){setTimeout(function(){run('after-cloud-sync-fallback');},2600);}return ret;};wrapped.__v125SmartRepair=true;wrapped.__v124Reroute=true;window.cloudSync=wrapped;try{cloudSync=wrapped;}catch(e){}}
-function install(){wrapSaveAdv();wrapCloud();try{if(window.EGTPH_V124_ADVANCE_REROUTE)window.EGTPH_V124_ADVANCE_REROUTE.supersededBy='v125';}catch(e){}window[API]={version:VERSION,run:run,status:function(){var d=D();return d&&d.settings&&d.settings.v125AdvanceSmartRepair;},rebuildWorker:rebuildWorker};}
-[500,1800,4200,9000,19000,26000,34000].forEach(function(ms){setTimeout(function(){install();if(ms>=9000)run('delayed-start-'+ms);},ms);});
+function now(){return new Date().toISOString();}
+function setTitle(){try{document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v130');var lab=document.querySelector('.tlogo span');if(lab)lab.textContent='| سجل الأجور v130';}catch(e){}}
+function flatAdv(d){var out=[];var root=O(d&&d.advances&&d.advances[WID]);Object.keys(root).forEach(function(k){A(root[k]).forEach(function(r){if(r&&r.id)out.push({m:k,r:r});});});return out;}
+function sum(root,m){return A(O(root)[String(m)]).reduce(function(s,r){return s+N(r&&r.amount);},0);}
+function debtPaid(d){return A(d&&d.debts&&d.debts[WID]).filter(function(x){return x&&x.type==='return'&&String(x.debtId)==='1779281559360_i1mm7';}).reduce(function(s,x){return s+N(x.amount);},0);}
+function hasShadow(d){return flatAdv(d).some(function(x){return String(x.r.id)===SHADOW_ID;});}
+function longNotes(d){return flatAdv(d).some(function(x){var n=String(x.r.note||'');return /\[v12[45]\]|توزيع محاسبي بعد المزامنة|بلا ازدواجية|لا احتساب مزدوج|→ جويلية|→ أوت/.test(n);});}
+function sig(){var d=D();if(!d)return 'NO_DB';var root=O(d.advances&&d.advances[WID]);return 'APR_ADV'+sum(root,3)+'_DEBTPAID'+debtPaid(d)+'|MAY_ADV'+sum(root,4)+'|JUN_ADV'+sum(root,5)+'|SHADOW'+(hasShadow(d)?1:0)+'|NOTES_'+(longNotes(d)?'LONG':'SHORT');}
+function isClean(){return sig()==='APR_ADV40000_DEBTPAID10000|MAY_ADV45000|JUN_ADV25000|SHADOW0|NOTES_SHORT';}
+function addDeletedId(d,id){d.deletedIds=A(d.deletedIds);if(d.deletedIds.map(String).indexOf(String(id))<0)d.deletedIds.push(String(id));}
+function addTrash(d,rec,reason){d.trash=d.trash||{};d.trash.advances=A(d.trash.advances);if(!d.trash.advances.some(function(x){return String(x&&x.id)===String(rec&&rec.id);}))d.trash.advances.push(Object.assign({},C(rec||{}),{id:(rec&&rec.id)||SHADOW_ID,_deletedAt:now(),_wid:WID,_tid:(rec&&rec.id)||SHADOW_ID,_deletedBy:'v130',_deleteReason:reason||'tombstone'}));}
+function addDeletedRecord(d,rec,reason){d.deletedRecords=d.deletedRecords||{};d.deletedRecords[(rec&&rec.id)||SHADOW_ID]=Object.assign({},C(rec||{}),{id:(rec&&rec.id)||SHADOW_ID,type:'advance',workerId:WID,deletedAt:now(),deletedBy:'v130',reason:reason||'tombstone'});}
+function tombstoneRemoved(d,removed){removed.forEach(function(rec){if(!rec||!rec.id)return;addDeletedId(d,rec.id);addTrash(d,rec,'v130: حذف قيد أحمد غير معتمد أو شبح بعد شاهد ledger');addDeletedRecord(d,rec,'v130: منع إحياء قيد أحمد غير معتمد');});addDeletedId(d,SHADOW_ID);addDeletedRecord(d,{id:SHADOW_ID,amount:5000,workerId:WID,type:'advance'},'v130: pseudoAdvanceRemoved من شاهد V119');}
+function locks(d){d.cycleLocks=d.cycleLocks||{};d.cycleLocks['8|2026-04-20_2026-05-20']={id:'8|2026-04-20_2026-05-20',workerId:8,workerName:'احمد',cycleMonth:3,cycleYear:2026,cycleStart:'2026-04-20',cycleEnd:'2026-05-20',locked:true,auto:false,manualEditOpen:false,version:VERSION,reason:'v130: تثبيت أحمد حسب المرجع؛ 40,000 نقد + 5,000 قسط دين.',baseSalary:45000,advancesTotal:45000,salaryResolved:45000,cashPaid:40000,absenceDeduction:0,debtDeduction:5000,updatedAt:now()};
+d.cycleLocks['8|2026-05-20_2026-06-20']={id:'8|2026-05-20_2026-06-20',workerId:8,workerName:'احمد',cycleMonth:4,cycleYear:2026,cycleStart:'2026-05-20',cycleEnd:'2026-06-20',locked:true,auto:false,manualEditOpen:false,version:VERSION,reason:'v130: تثبيت أحمد حسب المرجع؛ 40,000 نقد + 5,000 قسط دين داخل تسبيق 03/06.',baseSalary:45000,advancesTotal:45000,salaryResolved:45000,cashPaid:40000,absenceDeduction:0,debtDeduction:5000,updatedAt:now()};}
+function hardDisableOld(){try{window.__EGTPH_V124_ADVANCE_REROUTE_DISABLED_BY_V126__=true;window.__EGTPH_V125_SMART_REPAIR_DISABLED_BY_V128__=true;window.__EGTPH_V129_FINAL_DISABLED_BY_V130__=true;['EGTPH_V124_ADVANCE_REROUTE','EGTPH_V125_SMART_ADVANCE_REPAIR','EGTPH_V128_AHMED_FINAL_ONCE','EGTPH_V129_FINAL_CLEAN_ENGINE','EGTPH_V129_AHMED_ROOT_FIXED'].forEach(function(n){if(window[n]){window[n].disabled=true;window[n].apply=function(){return {ok:true,disabled:true,by:'v130'};};window[n].run=window[n].apply;}});}catch(e){}}
+function apply(reason){hardDisableOld();setTitle();var d=D();if(!d||!d.workers||!d.advances)return {ok:false,reason:'db-not-ready'};d.settings=d.settings||{};d.settings.v130AhmedShadowTombstone=d.settings.v130AhmedShadowTombstone||{};if(isClean()){d.settings.v130AhmedShadowTombstone.signature=TARGET;d.settings.v130AhmedShadowTombstone.version=VERSION;d.settings.v130AhmedShadowTombstone.lastCheckedAt=now();return {ok:true,changed:false,signature:sig()};}
+ var before=sig(), old=flatAdv(d).map(function(x){return x.r;});var removed=old.filter(function(r){return !ALLOWED_ADV_IDS[String(r.id)];});if(!d.settings.v130AhmedShadowTombstone.backup){d.settings.v130AhmedShadowTombstone.backup={at:now(),reason:reason||'repair',signature:before,advances:C(d.advances[WID]),debts:C(d.debts&&d.debts[WID])};}
+ tombstoneRemoved(d,removed);d.advances[WID]=C(CANON_ADV);d.debts=d.debts||{};d.debts[WID]=C(CANON_DEBTS);locks(d);d.settings.v130AhmedShadowTombstone.version=VERSION;d.settings.v130AhmedShadowTombstone.appliedAt=now();d.settings.v130AhmedShadowTombstone.before=before;d.settings.v130AhmedShadowTombstone.after=sig();d.settings.v130AhmedShadowTombstone.removedAdvanceIds=removed.map(function(r){return r.id;});d.settings.v130AhmedShadowTombstone.signature=TARGET;d.settings.v130AhmedShadowTombstone.rule='Ahmed: Apr 40k cash + 5k debt, May 45k, Jun 25k; shadow '+SHADOW_ID+' tombstoned.';try{if(typeof audit==='function')audit('v130 حذف شبح أحمد وتثبيت 40+5 / 45 / 25');}catch(e){}try{if(typeof saveDB==='function')saveDB();}catch(e){}try{if(typeof renderDash==='function')renderDash();if(typeof renderSalContent==='function')renderSalContent();if(typeof renderSettle==='function')renderSettle();}catch(e){}try{if(typeof toast==='function')toast('✅ v130: حُذف شبح أحمد وثُبّتت التصفية');}catch(e){}return {ok:true,changed:true,before:before,after:sig(),removed:removed.length};}
+function wrapCloud(){var base=window.cloudSync;if(typeof base!=='function'||base.__v130AhmedShadow)return;var w=function(){var ret=base.apply(this,arguments);try{if(ret&&typeof ret.then==='function')ret.then(function(){setTimeout(function(){apply('after-cloud-sync');},1500);},function(){setTimeout(function(){apply('after-cloud-error');},1800);});else setTimeout(function(){apply('after-cloud-sync');},1800);}catch(e){setTimeout(function(){apply('after-cloud-fallback');},2400);}return ret;};w.__v130AhmedShadow=true;window.cloudSync=w;try{cloudSync=w;}catch(e){}}
+function install(){hardDisableOld();setTitle();wrapCloud();window[API]={version:VERSION,apply:apply,signature:sig,isClean:isClean,status:function(){var d=D();return d&&d.settings&&d.settings.v130AhmedShadowTombstone;}};[2600,5200,9000,15000].forEach(function(ms){setTimeout(function(){apply('timer-'+ms);},ms);});}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
 })();
 </script>
-
-<script id="egtph-v127-stop-v100-blocking-guard">
-/* v127 — إيقاف حاجز v100 القديم الذي يحجب التصفية بسبب مراجع تاريخية بعد v125/v126.
-   السبب: v100 كان يفحص توافق cycleLocks مع سجل التسبيقات القديم، وبعد إعادة توزيع v125 الصحيحة
-   يعتبر كل العمال غير مكتملين، فيحجب التصفية رغم أن تصفية 09/07/2026 المرجعية صحيحة.
-   هذه الطبقة لا تغيّر الأرقام، لا تضيف تسبيقات، ولا تعيد توزيعاً؛ فقط تمنع الحجب القديم وتترك
-   محركات الحساب الحالية تعرض التصفية. */
-(function(){
-  'use strict';
-  var VERSION='127.0-stop-old-v100-blocker';
-  var BAD_RE=/سجل مالي غير مكتمل|التصفية محجوبة|لا يدخلون في مجموع التصفية|المراجع المكسورة|طباعة التصفية موقوفة|التصفية والطباعة محجوبتان/;
-  function D(){try{return (typeof DB!=='undefined'&&DB)?DB:(window.DB||null);}catch(e){return window.DB||null;}}
-  function A(v){return Array.isArray(v)?v:[];}
-  function S(v){return v==null?'':String(v);}
-  function O(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}
-  function saveQuiet(){try{if(typeof saveDB==='function')saveDB();}catch(e){try{localStorage.setItem('egtph_payroll_v120',JSON.stringify(D()));}catch(_){}}}
-  function mark(){
-    var d=D(); if(!d)return;
-    d.settings=O(d.settings);
-    d.settings.v127StopOldV100Blocker={version:VERSION,at:new Date().toISOString(),reason:'v100 strict ledger blocker superseded by v125/v126 smart advance repair and 09/07/2026 reference settlement'};
-    if(d.settings.v100LedgerRecovery){d.settings.v100LedgerRecovery.v127DisplayOnly=true;d.settings.v100LedgerRecovery.blockingDisabledAt=d.settings.v127StopOldV100Blocker.at;}
-    try{document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v127');var lab=document.querySelector('.tlogo span');if(lab)lab.textContent='| سجل الأجور v128';}catch(e){}
-  }
-  function okHealth(wid){return {ok:true,fatal:[],warn:['v127: تم تعطيل حاجز v100 القديم للتصفية؛ الحساب يبقى من محركات البرنامج الحالية.'],workerId:wid,version:VERSION};}
-  function neutralizeApis(){
-    try{
-      window.__EGTPH_V100_FINANCIAL_BLOCK_DISABLED_BY_V127__=true;
-      if(window.EGTPH_V100){
-        var oldStatus=window.EGTPH_V100.status;
-        window.EGTPH_V100.workerHealth=function(wid){return okHealth(wid);};
-        window.EGTPH_V100.audit=function(){var d=D();return A(d&&d.workers).map(function(w){return {worker:w,health:okHealth(w&&w.id)};});};
-        window.EGTPH_V100.status=function(){var d=D(),n=A(d&&d.workers).length,base={};try{if(typeof oldStatus==='function')base=oldStatus()||{};}catch(e){}base.version=VERSION;base.workers=n;base.blocked=0;base.blockedWorkers=[];base.v100OriginalBlockedSuppressed=true;return base;};
-      }
-      window.EGTPH_V100_FINAL_GUARD={version:VERSION,health:okHealth,isBlocked:function(){return false;},checkPrint:function(){return true;},disabledOldBlocker:true};
-    }catch(e){}
-  }
-  function unblockFinalSettlement(){
-    var f=window.calcFinalSettlement;
-    if(typeof f==='function'&&!f.__v127Unblocked){
-      var wrapped=function(){var r=f.apply(this,arguments);try{if(r&&typeof r==='object'){r.blocked=false;r.blockReasons=[];r.ledgerHealth=okHealth(arguments[0]&&arguments[0].id);}}catch(e){}return r;};
-      wrapped.__v127Unblocked=true;window.calcFinalSettlement=wrapped;try{calcFinalSettlement=wrapped;}catch(e){}
-    }
-  }
-  function rebuildPrintReport(){
-    if(typeof window.printSettlementReport!=='function'||window.printSettlementReport.__v127Print)return;
-    window.printSettlementReport=function(){
-      try{
-        var workers=(typeof sw==='function'?sw():A(D()&&D().workers));
-        if(!workers.length){if(typeof toast==='function')toast('⚠️ لا يوجد عمال',true);return false;}
-        var bodyHtml='',totOwed=0,totDebt=0;
-        workers.forEach(function(w,wi){
-          var ac=(typeof getActiveCycle==='function'?getActiveCycle(w.id):{m:(new Date()).getMonth(),yr:(new Date()).getFullYear()});
-          var cm=ac.m,cyr=ac.yr,cyc=(typeof cycleLabelForWorker==='function'?cycleLabelForWorker(w,cm,cyr):{lbl:'الدورة الحالية'});
-          var ms=(typeof calcMonthStatus==='function'?calcMonthStatus(w.id,cm,cyr):null);
-          var pm=cm===0?11:cm-1,py=cm===0?cyr-1:cyr,pms=(typeof calcMonthStatus==='function'?calcMonthStatus(w.id,pm,py):null);
-          var curAdv=ms?(+ms.totAdv||0):0,curAbs=ms?(+ms.totAbsNow||0):0,curInst=ms?(+ms.totInst||0):0,curHrs=ms?(+ms.hrsUnpaid||0):0,curBon=ms?(+ms.bonUnpaid||0):0;
-          var baseSal=ms?(+ms.baseSal||0):(+w.salary||0),balance=ms?(ms.cycleCashDue!=null?+ms.cycleCashDue:+ms.netSal):(baseSal-curAdv);
-          var fs=(w.startDate&&typeof calcFinalSettlement==='function')?calcFinalSettlement(w):null;
-          var oldHtml=pms&&(+pms.totAdv||0)>0?(pms.salaryPaid?'✅ مسددة':'⏳ '+fmtN(+pms.netSal||0)):'—';
-          var balHtml=balance>0?'⏳ '+fmtN(balance):balance<0?'⚠️ '+fmtN(Math.abs(balance)):'✅ صافي';
-          var settleHtml='—';
-          if(fs){var net=+fs.netFinal||0;settleHtml=(fs.isFinal?'🚪':'📊')+(net>0?' تدفع له '+fmtN(net):net<0?' يدفعك '+fmtN(Math.abs(net)):' ✅ صفر');}
-          if(balance>0)totOwed+=balance;else if(balance<0)totDebt+=Math.abs(balance);
-          var bg=wi%2===0?'#fff':'#f7f9fc';
-          bodyHtml+='<tr style="background:'+bg+'"><td style="padding:6px 8px;font-weight:800;text-align:center;color:#1a3a6b">'+(wi+1)+'</td><td style="padding:6px 10px;font-weight:800">'+S(w.name)+(w.exitDate?'<br><small style="color:#c0392b">🚪 خرج</small>':'')+'</td><td style="text-align:center;font-size:10px;color:#1a7a4a;font-weight:700">'+S(cyc.lblR||cyc.lbl)+'</td><td style="text-align:center;font-size:10px">'+oldHtml+'</td><td style="text-align:center;color:'+(curAdv?'#166534':'#bbb')+'">'+(curAdv?'+'+fmtN(curAdv):'—')+'</td><td style="text-align:center;font-size:10px">'+(curHrs?'+'+fmtN(curHrs):'—')+(curBon?' 🎁+'+fmtN(curBon):'')+'</td><td style="text-align:center;font-size:10px">'+(curAbs?'-'+fmtN(curAbs):'—')+(curInst?' 📋 − قسط مستحق '+fmtN(curInst):'')+'</td><td style="text-align:center;font-weight:800;color:'+(balance>0?'#b45309':balance<0?'#7b241c':'#1a7a4a')+'">'+balHtml+'</td><td style="text-align:center;font-size:10px">'+settleHtml+'</td></tr>';
-        });
-        var today=(typeof todayStr==='function'?todayStr():(new Date()).toLocaleDateString('fr-FR'));
-        var html='<html dir="rtl"><head><meta charset="UTF-8"><style>@page{size:A4;margin:.7cm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{font-family:Arial,Tahoma,sans-serif;font-size:10px;margin:0;padding:8px}.hdr{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #1a3a6b;padding-bottom:6px;margin-bottom:8px}table{width:100%;border-collapse:collapse;border:2px solid #1a3a6b}thead tr{background:#1a3a6b}thead th{color:#fff;padding:6px 5px;font-size:9px;font-weight:800;text-align:center;border-left:1px solid rgba(255,255,255,.2)}td{border:1px solid #9aa;padding:5px}@media print{body{padding:0}}</style></head><body><div class="hdr"><b style="font-size:16px;color:#1a3a6b">🏗️ EGTPH</b><div style="text-align:center"><b style="font-size:12px">💳 التصفية المالية الشاملة</b><br><small>v127 — بدون حاجز v100 القديم</small></div><span style="font-size:11px">طُبع: '+today+'</span></div><table><thead><tr><th>#</th><th>العامل</th><th>الدورة</th><th>القديمة</th><th>تسبيقات مسجلة</th><th>ساعات+مكافآت</th><th>غياب+دين</th><th>الموقف اليوم</th><th>التصفية</th></tr></thead><tbody>'+bodyHtml+'</tbody></table><div style="margin-top:10px;background:#1a3a6b;color:#fff;padding:8px;font-weight:800;text-align:center">إجمالي باقي الراتب: '+fmtN(totOwed)+' — إجمالي ديون العمال للمؤسسة: '+fmtN(totDebt)+'</div></body></html>';
-        if(typeof pWin==='function')pWin(html);else{var w=window.open('','_blank');if(w){w.document.write(html);w.document.close();w.print();}}
-      }catch(e){try{toast('تعذر إنشاء الطباعة: '+e.message,true);}catch(_){} }
-      return true;
-    };
-    window.printSettlementReport.__v127Print=true;try{printSettlementReport=window.printSettlementReport;}catch(e){}
-  }
-  function scrubNode(n){
-    if(!n||!n.querySelectorAll)return;
-    A(n.querySelectorAll('*')).forEach(function(el){
-      var t=S(el.textContent);
-      if(!BAD_RE.test(t))return;
-      var id=S(el.id), cls=S(el.className);
-      if(id==='settlSummary'||cls.indexOf('v100-final-health')>=0 || t.indexOf('عامل/عمال لديهم سجل مالي غير مكتمل')>=0){
-        try{el.remove();}catch(e){el.style.display='none';}
-      }
-    });
-  }
-  function scrub(){
-    try{scrubNode(document.body);}catch(e){}
-    try{
-      A(document.querySelectorAll('tr')).forEach(function(tr){if(BAD_RE.test(S(tr.textContent)))tr.style.outline='';});
-      var sum=document.getElementById('settlSummary');
-      if(sum&&BAD_RE.test(S(sum.textContent)))sum.innerHTML='<div style="background:rgba(0,153,68,.08);border:1px solid rgba(0,153,68,.25);border-radius:12px;padding:12px 16px;font-size:11px;color:var(--green1);font-weight:800">✅ v127: أُلغي حجب v100 القديم. التصفية تُحسب من المحرك الحالي بعد تصحيح التسبيقات.</div>';
-    }catch(e){}
-  }
-  function wrapRender(name){
-    var base=window[name];if(typeof base!=='function'||base.__v127Scrub)return;
-    var w=function(){var r=base.apply(this,arguments);setTimeout(scrub,0);setTimeout(scrub,80);return r;};
-    w.__v127Scrub=true;window[name]=w;try{eval(name+'=window["'+name+'"];');}catch(e){}
-  }
-  function install(){
-    mark();neutralizeApis();unblockFinalSettlement();rebuildPrintReport();
-    ['renderSettlement','renderSideFinStatus','renderDash','renderWorkers','renderSummary','renderWFinTable','updateBadges'].forEach(wrapRender);
-    scrub();
-    try{window.EGTPH_V127={version:VERSION,health:okHealth,disableOldBlocker:neutralizeApis,scrub:scrub,status:function(){var d=D();return {version:VERSION,workers:A(d&&d.workers).length,oldV100BlockerDisabled:true};}};}catch(e){}
-  }
-  [0,80,250,700,1500,3200,6500,10000,16000].forEach(function(ms){setTimeout(install,ms);});
-  setInterval(function(){neutralizeApis();unblockFinalSettlement();scrub();},5000);
-})();
-</script>
-
-
-<script id="egtph-v128-ahmed-final-once">
-/* v128 — تثبيت نهائي مرة واحدة لحالة أحمد حسب مرجع التصفية 09/07/2026.
-   يوقف دوامة v124/v125، ويثبت أحمد فقط:
-   20/04→20/05 = 45,000 دج، 20/05→20/06 = 45,000 دج، 20/06→20/07 = 25,000 دج. */
-(function(){
-'use strict';
-var VERSION='128.0', API='EGTPH_V128_AHMED_FINAL_ONCE', WID='8';
-var TARGET_SIG='ahmed|2026-04=45000|2026-05=45000|2026-06=25000|notes=clean|v128';
-var CANON_ADV={"3":[{"_createdAt":"2026-05-11T12:21:36.869Z","_recoveredBy":"v100-verified-ledger-recovery","_syncHash":"3674751781_306","_updatedAt":"2026-07-08T20:22:58.530Z","amount":5000,"by":"youcef","cycleEnd":"2026-05-20","cycleKey":"2026-04","cycleLocked":false,"cycleStart":"2026-04-20","date":"11/05/2026","id":"1778502096869_7rmp4h","month":3,"netPaid":5000,"note":"","_v128CanonicalAhmed":true},{"_createdAt":"2026-06-25T16:33:32.942Z","_recoveredBy":"v100-verified-ledger-recovery","_syncHash":"1053449680_338","_updatedAt":"2026-07-08T20:22:58.530Z","amount":10000,"by":"Youcef Abdi","cycleEnd":"2026-05-20","cycleKey":"2026-04","cycleLocked":false,"cycleStart":"2026-04-20","date":"11/05/2026","id":"1782405212942_pts85mi","month":3,"netPaid":10000,"note":"","realDate":"11/05/2026","_v128CanonicalAhmed":true},{"_createdAt":"2026-06-11T12:56:07.140Z","_recoveredBy":"v100-verified-ledger-recovery","_syncHash":"64277926_362","_updatedAt":"2026-07-08T20:22:58.530Z","amount":15000,"by":"Youcef Abdi","cycleEnd":"2026-05-20","cycleKey":"2026-04","cycleLocked":true,"cycleStart":"2026-04-20","date":"19/05/2026","id":"1781182567140_4fezl2k","month":3,"netPaid":15000,"note":"💵 دُفع فعلياً 11/06/2026","realDate":"11/06/2026","_v128CanonicalAhmed":true},{"_createdAt":"2026-05-13T21:21:17.154Z","_recoveredBy":"v100-verified-ledger-recovery","_syncHash":"3137116360_314","_updatedAt":"2026-07-08T20:22:58.530Z","amount":10000,"by":"brahim talab","cycleEnd":"2026-05-20","cycleKey":"2026-04","cycleLocked":false,"cycleStart":"2026-04-20","date":"13/05/2026","id":"1778707277154_1b9fqc","month":3,"netPaid":10000,"note":"","_v128CanonicalAhmed":true},{"_createdAt":"2026-06-18T13:39:48.162Z","_recoveredBy":"v100-verified-ledger-recovery","_syncHash":"1081115826_493","_updatedAt":"2026-06-18T13:39:48.162Z","amount":5000,"by":"Youcef Abdi","cycleEnd":"2026-05-20","cycleKey":"2026-04","cycleLocked":true,"cycleStart":"2026-04-20","date":"19/05/2026","deductions":[{"_instTag":"1779281559360_i1mm7_2","amount":5000,"date":"18/06/2026","debtId":"1779281559360_i1mm7","note":"قسط دين 2/9","type":"debt"}],"id":"1781789988162_2d7q977","month":3,"netPaid":0,"note":"💵 دُفع فعلياً 18/06/2026","realDate":"18/06/2026","_v128CanonicalAhmed":true}],"4":[{"_createdAt":"2026-06-03T14:14:00.391Z","_recoveredBy":"v100-verified-ledger-recovery","_repairWitness":{"at":"2026-07-07T13:30:00.000Z","code":"AHMED_MAY_DEBT_2_RELINK_V119","reason":"تأكيد المستخدم: تسبيق 15 000 دج بتاريخ 03/06/2026؛ سُلّم 10 000 دج نقداً وخصم 5 000 دج قسط دين 2/9."},"_syncHash":"2062540777_1367","_updatedAt":"2026-07-08T20:22:58.530Z","amount":15000,"by":"Youcef Abdi","cycleEnd":"2026-06-20","cycleKey":"2026-05","cycleLocked":false,"cycleStart":"2026-05-20","date":"03/06/2026","deductions":[{"_cycleOwnership":"payroll-cycle-v120","_instTag":"1779281559360_i1mm7_2","_repairWitness":"AHMED_MAY_DEBT_2_RELINK_V119","_v63":true,"_v63Source":"advance","_v63SourceEntryId":"1780496040391_bhfw2jx","_v63Unique":"V63A_debt_1779281559360_i1mm7_2|1780496040391_bhfw2jx|advance","accountingCycleEnd":"2026-06-20","accountingCycleId":"8|2026-05-20_2026-06-20","accountingCycleStart":"2026-05-20","allocationId":"V63A_debt_1779281559360_i1mm7_2","allocationPartId":"V63A_debt_1779281559360_i1mm7_2_1780496040391_bhfw2jx_advance","amount":5000,"date":"18/06/2026","debtId":"1779281559360_i1mm7","id":"DED119_AHMED_MAY_DEBT_2","instTag":"1779281559360_i1mm7_2","note":"قسط دين 2/9","transactionId":"V119TX_AHMED_MAY_DEBT_2","type":"debt"}],"id":"1780496040391_bhfw2jx","month":4,"netPaid":10000,"note":"💳 قسط دين 2/9 داخل هذا التسبيق؛ النقد الفعلي 10 000,00 دج.","_v128CanonicalAhmed":true},{"_createdAt":"2026-05-20T12:22:03.038Z","_recoveredBy":"v100-verified-ledger-recovery","_syncHash":"2830732371_312","_updatedAt":"2026-07-08T20:22:58.530Z","amount":25000,"by":"Youcef Abdi","cycleEnd":"2026-06-20","cycleKey":"2026-05","cycleLocked":false,"cycleStart":"2026-05-20","date":"20/05/2026","id":"1779279723038_kw29c","month":4,"netPaid":25000,"note":"","_v128CanonicalAhmed":true},{"_createdAt":"2026-05-25T11:57:59.718Z","_recoveredBy":"v100-verified-ledger-recovery","_syncHash":"1002313274_310","_updatedAt":"2026-07-08T20:22:58.530Z","amount":5000,"by":"Youcef Abdi","cycleEnd":"2026-06-20","cycleKey":"2026-05","cycleLocked":false,"cycleStart":"2026-05-20","date":"20/05/2026","id":"1779710279718_ai04d","month":4,"netPaid":5000,"note":"","_v128CanonicalAhmed":true}],"5":[{"_createdAt":"2026-06-30T23:00:00.000Z","_syncHash":"4147815193_332","_updatedAt":"2026-07-08T20:22:58.530Z","amount":5000,"by":"Youcef Abdi","cycleEnd":"2026-07-20","cycleKey":"2026-06","cycleLocked":false,"cycleStart":"2026-06-20","date":"01/07/2026","enteredAt":"2026-07-01T11:21:53.868Z","id":"ADV_1782904913868_r8fou5e","month":5,"netPaid":5000,"note":"","realDate":"01/07/2026","_v128CanonicalAhmed":true},{"amount":10000,"by":"Youcef Abdi","date":"09/07/2026","enteredAt":"2026-07-09T10:00:02.427Z","id":"ADV_1783591202427_k22prd9","month":5,"netPaid":10000,"note":"","realDate":"09/07/2026","_v128CanonicalAhmed":true},{"_createdAt":"2026-06-25T16:33:43.823Z","_recoveredBy":"v100-verified-ledger-recovery","_syncHash":"2005870667_314","_updatedAt":"2026-07-08T20:22:58.530Z","amount":10000,"by":"Youcef Abdi","cycleEnd":"2026-07-20","cycleKey":"2026-06","cycleLocked":false,"cycleStart":"2026-06-20","date":"25/06/2026","id":"1782405223823_mbwjdgu","month":5,"netPaid":10000,"note":"","_v128CanonicalAhmed":true}]};
-var CANON_DEBTS=[{"_createdAt":"2026-05-25T19:33:28.083Z","_instPayment":true,"_instTag":"1779281559360_i1mm7_1","_syncHash":"1690076875_246","_updatedAt":"2026-07-02T17:47:42.391Z","amount":5000,"by":"Youcef Abdi","date":"25/05/2026","debtId":"1779281559360_i1mm7","id":"1779737608083_x47sr","note":"قسط 1/9 — دين","type":"return","_v128CanonicalAhmed":true},{"_advanceId":"1780496040391_bhfw2jx","_auto":true,"_createdAt":"2026-06-18T13:32:29.780Z","_cycleOwnership":"payroll-cycle-v120","_instPayment":true,"_instTag":"1779281559360_i1mm7_2","_repairWitness":"AHMED_MAY_DEBT_2_RELINK_V119","_syncHash":"1261204224_1101","_updatedAt":"2026-07-08T21:00:29.698Z","_v63":true,"_v63Sources":[{"amount":5000,"entryId":"1780496040391_bhfw2jx","kind":"advance"}],"accountingCycleEnd":"2026-06-20","accountingCycleId":"8|2026-05-20_2026-06-20","accountingCycleStart":"2026-05-20","accountingDate":"20/05/2026","actualPaymentDate":"18/06/2026","allocationId":"V63A_debt_1779281559360_i1mm7_2","amount":5000,"by":"النظام","cashEffect":0,"date":"18/06/2026","debtId":"1779281559360_i1mm7","enteredAt":"2026-06-18T13:32:29.780Z","id":"1781789549780_r048rl7","instTag":"1779281559360_i1mm7_2","note":"قسط دين تلقائي — خُصم من تسبيق الراتب (لا حركة نقدية مستقلة)","source":"salary-advance","transactionId":"V119TX_AHMED_MAY_DEBT_2","type":"return","_v128CanonicalAhmed":true},{"_createdAt":"2026-05-20T12:52:39.360Z","_syncHash":"v119_ahmed_may_debt2_relinked","_updatedAt":"2026-07-07T13:30:00.000Z","amount":45000,"by":"Youcef Abdi","date":"20/05/2026","id":"1779281559360_i1mm7","inst":true,"instAmt":5000,"instCount":9,"instDays":30,"instFirstDue":"2026-06-16","instPaid":2,"instType":"monthly","installmentCycleAnchorId":"8|2026-04-20_2026-05-20","installmentCycleAnchorStart":"2026-04-20","installmentCyclePolicy":"payroll-cycle-v120","nextAccountingCycleId":"8|2026-06-20_2026-07-20","nextAccountingCycleStart":"2026-06-20","nextDue":"2026-08-15","note":"","type":"debt","_v128CanonicalAhmed":true}];
-function D(){try{return window.DB||DB||null;}catch(e){return window.DB||null;}}
-function A(v){return Array.isArray(v)?v:[];}
-function O(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}
-function S(v){return v==null?'':String(v);}
-function N(v){var x=Number(v);return isFinite(x)?Math.round(x):0;}
-function clone(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
-function eachAhmed(cb){var d=D(),bag=d&&d.advances&&d.advances[WID];Object.keys(O(bag)).forEach(function(k){A(bag[k]).forEach(function(r,i){if(r)cb(r,k,i);});});}
-function totals(){var out={};eachAhmed(function(r){var key=S(r.cycleKey)||('2026-'+String((N(r.month)+1)).padStart(2,'0'));out[key]=(out[key]||0)+N(r.amount);});return out;}
-function hasBadNotes(){var bad=false;eachAhmed(function(r){var n=S(r.note);if(/\[v12[45]\]|__v12[45]p|جويلية 2026|أوت 2026|توزيع محاسبي بعد المزامنة/.test(n)||/__(?:v124|v125)p/.test(S(r.id)))bad=true;});return bad;}
-function signature(){var t=totals();return 'ahmed|2026-04='+(t['2026-04']||0)+'|2026-05='+(t['2026-05']||0)+'|2026-06='+(t['2026-06']||0)+'|notes='+(hasBadNotes()?'bad':'clean')+'|v128';}
-function correct(){return signature()===TARGET_SIG;}
-function refresh(){try{if(typeof renderDash==='function')renderDash();}catch(e){}try{if(typeof renderSettle==='function')renderSettle();}catch(e){}try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}try{if(typeof renderSalContent==='function')renderSalContent();}catch(e){}}
-function save(){try{if(typeof saveDB==='function'){saveDB();return;}}catch(e){}try{localStorage.setItem('egtph_payroll_v120',JSON.stringify(D()));}catch(e){}}
-function apply(reason){var d=D();if(!d||!d.workers||!d.advances)return {ok:false,reason:'db-not-ready'};
-  d.settings=d.settings||{};
-  d.settings.v124AdvanceReroute=d.settings.v124AdvanceReroute||{};d.settings.v124AdvanceReroute.disabledByV128=true;
-  d.settings.v125AdvanceSmartRepair=d.settings.v125AdvanceSmartRepair||{};d.settings.v125AdvanceSmartRepair.disabledByV128=true;
-  if(correct()){d.settings.v128AhmedFinalOnce=d.settings.v128AhmedFinalOnce||{};d.settings.v128AhmedFinalOnce.signature=TARGET_SIG;d.settings.v128AhmedFinalOnce.version=VERSION;return {ok:true,changed:false,signature:TARGET_SIG};}
-  var before=signature();
-  d.settings.v128AhmedFinalOnce=d.settings.v128AhmedFinalOnce||{};
-  if(!d.settings.v128AhmedFinalOnce.backup){d.settings.v128AhmedFinalOnce.backup={at:new Date().toISOString(),reason:reason||'manual',advances:clone(d.advances[WID]),debts:clone(d.debts&&d.debts[WID])};}
-  d.advances[WID]=clone(CANON_ADV);
-  d.debts=d.debts||{};d.debts[WID]=clone(CANON_DEBTS);
-  d.settings.v128AhmedFinalOnce.version=VERSION;
-  d.settings.v128AhmedFinalOnce.appliedAt=new Date().toISOString();
-  d.settings.v128AhmedFinalOnce.signature=TARGET_SIG;
-  d.settings.v128AhmedFinalOnce.before=before;
-  d.settings.v128AhmedFinalOnce.after=signature();
-  d.settings.v128AhmedFinalOnce.rule='Ahmed fixed once: Apr=45000, May=45000, Jun=25000; v124/v125 allocations removed.';
-  try{if(typeof audit==='function')audit('v128 تثبيت نهائي لأحمد: 45/45/25 وإيقاف دوامة v124/v125');}catch(e){}
-  save();refresh();
-  try{if(typeof toast==='function')toast('✅ v128: ثُبّت أحمد نهائياً 45/45/25 وتوقفت الدوامة');}catch(e){}
-  return {ok:true,changed:true,before:before,after:signature()};
-}
-function wrapCloud(){var base=window.cloudSync;if(typeof base!=='function'||base.__v128AhmedOnce)return;var w=function(){var ret=base.apply(this,arguments);try{if(ret&&typeof ret.then==='function')ret.then(function(){setTimeout(function(){apply('after-cloud-sync');},1200);},function(){setTimeout(function(){apply('after-cloud-sync-error');},1800);});else setTimeout(function(){apply('after-cloud-sync');},1600);}catch(e){setTimeout(function(){apply('after-cloud-sync-fallback');},2200);}return ret;};w.__v128AhmedOnce=true;window.cloudSync=w;try{cloudSync=w;}catch(e){}}
-function disableOldApis(){try{window.__EGTPH_V124_ADVANCE_REROUTE_DISABLED_BY_V126__=true;window.__EGTPH_V125_SMART_REPAIR_DISABLED_BY_V128__=true;if(window.EGTPH_V124_ADVANCE_REROUTE)window.EGTPH_V124_ADVANCE_REROUTE.run=function(){return {ok:true,disabled:true,changed:false,supersededBy:'v128'};};if(window.EGTPH_V125_SMART_ADVANCE_REPAIR)window.EGTPH_V125_SMART_ADVANCE_REPAIR.run=function(){return {ok:true,disabled:true,changed:false,supersededBy:'v128'};};}catch(e){}}
-function install(){disableOldApis();wrapCloud();window[API]={version:VERSION,apply:apply,signature:signature,correct:correct,target:TARGET_SIG,status:function(){var d=D();return d&&d.settings&&d.settings.v128AhmedFinalOnce;}};try{document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v128');var lab=document.querySelector('.tlogo span');if(lab)lab.textContent='| سجل الأجور v128';}catch(e){}}
-install();
-[800,2200,5200,9000,14000].forEach(function(ms){setTimeout(function(){disableOldApis();apply('delayed-'+ms);},ms);});
-})();
-</script>
-
 </body></html>
