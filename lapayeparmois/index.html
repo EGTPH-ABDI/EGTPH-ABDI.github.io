@@ -15566,110 +15566,6 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
 })();
 
 </script>
-
-
-<script id="egtph-v119-debt-advance-link-integrity">
-/* ═══════════════════════════════════════════════════════════════
-   v119 — حارس ربط قسط الدين بالتسبيق الحقيقي
-   - لا ينشئ نقداً أو تسبيقاً جديداً.
-   - كل خصم دين داخل تسبيق يجب أن يملك return واحداً مرتبطاً به.
-   - كل return آلي مرتبط بتسبيق يجب أن يجد deduction مقابلاً.
-   - التصحيح التاريخي لأحمد محصور بشاهد ثابت ومرة واحدة فقط.
-═══════════════════════════════════════════════════════════════ */
-(function(){
-  'use strict';
-  var VERSION='119.0', INSTALLED=false, REPAIR='v119_ahmed_may_debt2_relink';
-  function D(){try{return (typeof DB!=='undefined'&&DB)?DB:(window.DB||null);}catch(e){return null;}}
-  function A(v){return Array.isArray(v)?v:[];}
-  function S(v){return String(v==null?'':v);}
-  function N(v){var x=Number(v);return isFinite(x)?Math.round(x):0;}
-  function now(){return new Date().toISOString();}
-  function money(v){try{return typeof fmtN==='function'?fmtN(N(v)):N(v).toLocaleString('fr-FR');}catch(e){return String(N(v));}}
-  function rows(wid){var d=D(),out=[];Object.keys((d&&d.advances&&d.advances[wid])||{}).forEach(function(b){A(d.advances[wid][b]).forEach(function(a){if(a)out.push({bucket:b,row:a});});});return out;}
-  function advance(wid,id){return rows(wid).map(function(x){return x.row;}).find(function(a){return S(a.id)===S(id);})||null;}
-  function deductions(a){return A(a&&a.deductions).filter(function(x){return x&&typeof x==='object';});}
-  function net(a){return Math.max(0,N(a&&a.amount)-deductions(a).reduce(function(s,x){return s+Math.max(0,N(x.amount));},0));}
-  function key(d){return S(d&&d.debtId)+'|'+S(d&&(d._instTag||d.instTag||d.allocationId));}
-  function returnMatches(r,d,a){
-    if(!r||r.type!=='return'||S(r.debtId)!==S(d.debtId))return false;
-    var dt=S(d._instTag||d.instTag),rt=S(r._instTag||r.instTag);
-    if(dt&&rt&&dt===rt)return true;
-    if(S(r.allocationId)&&S(d.allocationId)&&S(r.allocationId)===S(d.allocationId))return true;
-    return S(r._advanceId||r.advanceId)===S(a.id);
-  }
-  function verify(wid){
-    var d=D(),issues=[], seen={};if(!d)return {ok:false,issues:['قاعدة البيانات غير جاهزة']};
-    var debtRows=A(d.debts&&d.debts[wid]);
-    rows(wid).forEach(function(x){
-      var a=x.row, total=deductions(a).reduce(function(s,z){return s+Math.max(0,N(z.amount));},0);
-      if(N(a.netPaid)!==Math.max(0,N(a.amount)-total))issues.push({kind:'netPaid',advanceId:a.id,expected:Math.max(0,N(a.amount)-total),actual:N(a.netPaid)});
-      deductions(a).filter(function(z){return z.type==='debt';}).forEach(function(z){
-        var k=S(a.id)+'|'+key(z); if(seen[k])issues.push({kind:'duplicateDeduction',advanceId:a.id,tag:key(z)});seen[k]=true;
-        var matches=debtRows.filter(function(r){return returnMatches(r,z,a);});
-        if(matches.length!==1)issues.push({kind:matches.length?'duplicateReturn':'missingReturn',advanceId:a.id,debtId:z.debtId,tag:S(z._instTag||z.instTag),count:matches.length});
-        else if(N(matches[0].amount)!==N(z.amount))issues.push({kind:'amountMismatch',advanceId:a.id,debtId:z.debtId,tag:S(z._instTag||z.instTag),deduction:N(z.amount),returned:N(matches[0].amount)});
-      });
-    });
-    debtRows.filter(function(r){return r&&r.type==='return'&&(r._v63||r.source==='salary-advance'||r._advanceId);}).forEach(function(r){
-      if(!r._advanceId)return;
-      var a=advance(wid,r._advanceId);
-      if(!a){issues.push({kind:'missingAdvance',returnId:r.id,advanceId:r._advanceId});return;}
-      var ok=deductions(a).some(function(z){return z.type==='debt'&&returnMatches(r,z,a);});
-      if(!ok)issues.push({kind:'orphanReturn',returnId:r.id,advanceId:a.id,debtId:r.debtId,tag:S(r._instTag||r.instTag)});
-    });
-    return {ok:issues.length===0,issues:issues};
-  }
-  function canonicalNote(d){
-    var note=S(d&&d.note);return note||('قسط دين '+S(d&&d._instTag).split('_').pop());
-  }
-  function repairAhmed(){
-    var d=D();if(!d)return false;
-    d.settings=d.settings||{};d.settings.dataRepairWitnesses=d.settings.dataRepairWitnesses||{};
-    if(d.settings.dataRepairWitnesses[REPAIR])return false;
-    var wid='8', aid='1780496040391_bhfw2jx', old='1781789988162_2d7q977', did='1779281559360_i1mm7', tag=did+'_2', a=advance(wid,aid);
-    if(!a)return false;
-    var stamp=now(), allocation='V63A_debt_'+tag, tx='V119TX_AHMED_MAY_DEBT_2';
-    a.deductions=deductions(a).filter(function(x){return !(x.type==='debt'&&S(x.debtId)===did&&S(x._instTag||x.instTag)===tag);});
-    a.deductions.push({id:'DED119_AHMED_MAY_DEBT_2',transactionId:tx,allocationId:allocation,allocationPartId:allocation+'_'+aid+'_advance',type:'debt',amount:5000,date:'18/06/2026',debtId:did,_instTag:tag,instTag:tag,note:'قسط دين 2/9 — خُصم من هذا التسبيق؛ النقد المسلّم 10 000 دج فقط',_v63:true,_v63Unique:allocation+'|'+aid+'|advance',_v63Source:'advance',_v63SourceEntryId:aid,_repairWitness:'AHMED_MAY_DEBT_2_RELINK_V119'});
-    a.netPaid=net(a);a._updatedAt=stamp;a._repairWitness='AHMED_MAY_DEBT_2_RELINK_V119';
-    // Remove the legacy synthetic advance and leave a tombstone against cloud resurrection.
-    var removed=null;Object.keys((d.advances&&d.advances[wid])||{}).forEach(function(b){var before=A(d.advances[wid][b]);before.forEach(function(x){if(x&&S(x.id)===old)removed=x;});d.advances[wid][b]=before.filter(function(x){return !(x&&S(x.id)===old);});});
-    if(removed){d.trash=d.trash||{};d.trash.advances=A(d.trash.advances);if(!d.trash.advances.some(function(x){return x&&S(x.id)===old;})){removed._tid='TRASH_V119_AHMED_MAY_DEBT_2';removed._wid=8;removed._deletedAt=stamp;removed._archiveLabel='تصحيح v119: قسط 2/9 نُقل إلى تسبيق ماي الحقيقي؛ ليس نقداً مستقلاً.';d.trash.advances.push(removed);}d.deletedRecords=d.deletedRecords||{};var tomb={id:old,section:'advances',deletedAt:stamp,transactionId:tx,reason:'تصحيح v119: منع إحياء تسبيق صوري لقسط الدين 2/9'};d.deletedRecords['advances|'+old]=tomb;d.deletedRecords['*|'+old]=Object.assign({},tomb,{section:'*'});d.deletedRecords[old]=Object.assign({},tomb,{section:'*'});d.deletedIds=Array.from(new Set(A(d.deletedIds).map(S).concat([old])));}
-    var rs=A(d.debts&&d.debts[wid]), r=rs.find(function(x){return x&&x.type==='return'&&S(x.debtId)===did&&S(x._instTag||x.instTag)===tag;});
-    if(!r){r={id:'RET119_AHMED_MAY_DEBT_2',type:'return'};rs.push(r);}r.amount=5000;r.date='18/06/2026';r.debtId=did;r._instTag=tag;r.instTag=tag;r._instPayment=true;r._auto=true;r._advanceId=aid;r._v63=true;r.allocationId=allocation;r.transactionId=tx;r._v63Sources=[{kind:'advance',entryId:aid,amount:5000}];r.source='salary-advance';r.cashEffect=0;r.by='النظام';r.note='قسط تلقائي 2/9 — خُصم من تسبيق 15 000 دج بتاريخ 03/06/2026؛ النقد المسلّم 10 000 دج فقط (تصحيح ربط موثق)';r._updatedAt=stamp;
-    rs.filter(function(x){return x&&x.type==='debt'&&S(x.id)===did;}).forEach(function(x){x.instPaid=2;x.nextDue='2026-08-15';x._updatedAt=stamp;});
-    var lock=(d.cycleLocks||{})['8|2026-05-20_2026-06-20'];if(lock){lock.advancesTotal=45000;lock.salaryResolved=45000;lock.cashPaid=40000;lock.debtDeduction=5000;lock.debtDueRemaining=0;lock._repairWitness='AHMED_MAY_DEBT_2_RELINK_V119';lock.updatedAt=stamp;lock.reason='استرجاع v100 من قيود مالية موثقة؛ لا يعاد حساب الدورة من سجل ناقص. — تصحيح v119: قسط الدين 2/9 داخل تسبيق ماي 15 000 دج، نقد 10 000 دج.';}
-    d.repairLog=A(d.repairLog);d.repairLog.push({time:stamp,type:'v119-ahmed-may-debt-installment-link-repair',workerId:8,advanceId:aid,removedPseudoAdvanceId:old,accountingAdvance:15000,cashPaid:10000,debtInstallment:5000,reason:'تأكيد المستخدم'});
-    d.auditLog=A(d.auditLog);d.auditLog.unshift({id:'AUD_V119_AHMED_MAY_DEBT_2',transactionId:tx,user:(d.settings.userName||'Youcef Abdi'),action:'🛠️ تصحيح ربط قسط أحمد 2/9 داخل تسبيق ماي 15 000 دج؛ النقد 10 000 دج فقط',time:new Date().toLocaleString('fr-DZ'),at:stamp,details:{workerId:8,advanceId:aid,removedPseudoAdvanceId:old,amount:5000}});
-    d.ledger=A(d.ledger);d.ledger.push({id:'LED_V119_AHMED_MAY_DEBT_2',transactionId:tx,type:'historical_link_repair',action:'🛠️ شاهد تصحيح ربط قسط دين أحمد داخل تسبيق ماي',at:stamp,by:(d.settings.userName||'Youcef Abdi'),immutable:true,details:{workerId:8,debtId:did,advanceId:aid,pseudoAdvanceRemoved:old,accountingAdvance:15000,cashPaid:10000,debtDeduction:5000,cashEffect:0}});
-    d.settings.dataRepairWitnesses[REPAIR]={appliedAt:stamp,transactionId:tx,workerId:8,advanceId:aid,pseudoAdvanceId:old};return true;
-  }
-  function repairMissingV63Returns(wid){
-    var d=D(),changed=false;if(!d)return false;
-    rows(wid).forEach(function(x){var a=x.row;deductions(a).filter(function(z){return z.type==='debt'&&z._v63;}).forEach(function(z){
-      var rs=A(d.debts&&d.debts[wid]), found=rs.some(function(r){return returnMatches(r,z,a);});
-      if(!found && window.EGTPH_V63&&typeof window.EGTPH_V63.applyCycle==='function'){
-        try{var w=(d.workers||[]).find(function(q){return q&&S(q.id)===S(wid);}), dt=(typeof _toDate==='function'?_toDate(a.realDate||a.date):null), cy=(w&&typeof cycleAnchorForDate==='function'?cycleAnchorForDate(w,a.realDate||a.date):null);if(w&&dt){window.EGTPH_V63.applyCycle(wid,cy?cy.m:dt.getMonth(),cy?cy.yr:dt.getFullYear(),{allowAdvance:true,targetAdvance:a});changed=true;}}catch(e){}
-      }
-      a.netPaid=net(a);
-    });});return changed;
-  }
-  function enhanceNote(){
-    var base=window.advDedNote;if(typeof base!=='function'||base.__v119Linked)return;
-    var wrapped=function(a){var out=base.apply(this,arguments), ds=deductions(a).filter(function(x){return x.type==='debt';});if(!ds.length)return out;var details=ds.map(function(x){return canonicalNote(x);}).filter(Boolean);return out+(details.length?' ↳ '+details.join(' | '):'');};
-    wrapped.__v119Linked=true;window.advDedNote=wrapped;try{advDedNote=wrapped;}catch(e){}
-  }
-  function wrapSave(){
-    var base=window.saveAdv;if(typeof base!=='function'||base.__v119DebtLink)return;
-    var wrapped=function(){var wid=(typeof _wid!=='undefined'?_wid:null),r=base.apply(this,arguments);setTimeout(function(){try{var changed=repairMissingV63Returns(wid);var report=verify(wid);if(changed&&typeof saveDB==='function')saveDB();if(!report.ok)console.warn('EGTPH debt/advance integrity issues',report.issues);}catch(e){console.warn('v119 guard',e);}},0);return r;};
-    wrapped.__v119DebtLink=true;window.saveAdv=wrapped;try{saveAdv=wrapped;}catch(e){}
-  }
-  function refresh(){try{if(typeof renderSalContent==='function')renderSalContent();if(typeof renderDbtContent==='function'&&typeof S!=='undefined'&&S.dw===8)renderDbtContent();if(typeof renderDash==='function')renderDash();}catch(e){}}
-  function install(){if(INSTALLED)return;INSTALLED=true;enhanceNote();wrapSave();var changed=repairAhmed();var report=verify(8);if(changed){try{if(typeof saveDB==='function')saveDB();}catch(e){}refresh();}if(!report.ok)console.warn('v119 initial integrity',report.issues);window.EGTPHDebtAdvanceIntegrity={version:VERSION,verify:verify,repairAhmedMayInstallment:repairAhmed,repairMissingV63Returns:repairMissingV63Returns};}
-  [4500,7000,10000].forEach(function(ms){setTimeout(install,ms);});
-})();
-</script>
-
 <script id="egtph-v120-cycle-owned-debt-installments">
 /* v120 — فصل الدورة المحاسبية عن تاريخ الإدخال/الدفع لأقساط الدين.
    قاعدة: القسط الآلي يملك دورة راتب صريحة؛ enteredAt و actualPaymentDate معلومات زمنية فقط.
@@ -15829,19 +15725,7 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
     });
     return {ok:issues.length===0,issues:issues};
   }
-  function repairAhmed(){
-    var d=D(),w=worker(8);if(!d||!w)return false;d.settings=d.settings||{};d.settings.dataRepairWitnesses=d.settings.dataRepairWitnesses||{};
-    var rows=A(d.debts&&d.debts[8]),debt=rows.find(function(x){return x&&x.type==='debt'&&same(x.id,'1779281559360_i1mm7');});if(!debt)return false;
-    var changed=false;
-    // القسط 1 = دورة أفريل، القسط 2 = دورة ماي؛ تاريخ الإدخال/الدفع لا يغير ملكية الدورة.
-    var april=rangeFromStart(w,'2026-04-20'),may=rangeFromStart(w,'2026-05-20');
-    function put(r,cy,actual){if(!r)return;var before=JSON.stringify({id:r.accountingCycleId,s:r.accountingCycleStart,e:r.accountingCycleEnd,a:r.actualPaymentDate,entered:r.enteredAt});r.accountingCycleId=cy.id;r.accountingCycleStart=iso(cy.from);r.accountingCycleEnd=iso(cy.to);r.accountingDate=dmy(cy.from);if(actual)r.actualPaymentDate=actual;if(!r.enteredAt&&r._createdAt)r.enteredAt=r._createdAt;r._cycleOwnership='payroll-cycle-v120';if(before!==JSON.stringify({id:r.accountingCycleId,s:r.accountingCycleStart,e:r.accountingCycleEnd,a:r.actualPaymentDate,entered:r.enteredAt}))changed=true;}
-    put(rows.find(function(r){return r&&r.type==='return'&&S(_tag(r))===S(debt.id)+'_1';}),april,null);
-    put(rows.find(function(r){return r&&r.type==='return'&&S(_tag(r))===S(debt.id)+'_2';}),may,'18/06/2026');
-    debt.installmentCycleAnchorId=april.id;debt.installmentCycleAnchorStart=iso(april.from);debt.installmentCyclePolicy='payroll-cycle-v120';
-    if(!d.settings.dataRepairWitnesses[REPAIR]){d.settings.dataRepairWitnesses[REPAIR]={appliedAt:nowIso(),workerId:8,debtId:debt.id,rule:'الدورة المحاسبية مستقلة عن actualPaymentDate و enteredAt؛ القسط 3 يتبع دورة جوان.'};changed=true;}
-    return reconcileDebt(w,debt)||changed;
-  }
+  function repairAhmed(){ return false; }
   function saveIfChanged(changed){if(!changed)return;try{if(typeof window.saveDB==='function')window.saveDB();else if(typeof saveDB==='function')saveDB();}catch(e){console.warn('v120 save',e);}}
   function refresh(){try{if(typeof window.renderSalContent==='function')window.renderSalContent();if(typeof window.renderDbtContent==='function'&&typeof S!=='undefined'&&S.dw!=null)window.renderDbtContent();if(typeof window.renderDash==='function')window.renderDash();}catch(e){}}
   function wrap(name){var base=window[name];if(typeof base!=='function'||base.__v120CycleDebt)return;var wrapped=function(){var wid=(typeof _wid!=='undefined'?_wid:null);if(wid!=null)reconcileWorker(wid);var out=base.apply(this,arguments);setTimeout(function(){try{var changed=wid!=null?reconcileWorker(wid):reconcileAll();saveIfChanged(changed);refresh();}catch(e){console.warn('v120 '+name,e);}},0);return out;};wrapped.__v120CycleDebt=true;window[name]=wrapped;try{eval(name+'=window["'+name+'"];');}catch(e){}}
@@ -16113,81 +15997,36 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
 })();
 </script>
 
-
-<script id="egtph-v133-ahmed-final-once-one-notice">
-/* v133 — محرك نهائي واحد لأحمد بعد المزامنة.
-   القاعدة: أفريل 45,000؛ ماي 45,000؛ جوان 25,000 فقط.
-   لا يعرض إشعار الضبط إلا مرة واحدة، ثم يعمل بصمت إذا عادت بيانات قديمة من السحابة. */
+<script id="egtph-v135-clean-ahmed-migration">
 (function(){
 'use strict';
-var VERSION='133.0.0', API='EGTPH_V133_AHMED_FINAL_ONCE', WID='8', REMOVED_ID='1781789988162_2d7q977', NOTICE_KEY='EGTPH_v133_ahmed_notice_seen';
-var CANON_ADV={
-'3':[
-{id:'1778502096869_7rmp4h',amount:5000,netPaid:5000,date:'11/05/2026',realDate:'11/05/2026',enteredAt:'2026-05-11T12:21:36.869Z',by:'youcef',month:3,cycleKey:'2026-04',cycleStart:'2026-04-20',cycleEnd:'2026-05-20',cycleLocked:false,note:'',deductions:[],_ahmedFinalBase:true},
-{id:'1782405212942_pts85mi',amount:10000,netPaid:10000,date:'11/05/2026',realDate:'11/05/2026',enteredAt:'2026-06-25T16:33:32.942Z',by:'Youcef Abdi',month:3,cycleKey:'2026-04',cycleStart:'2026-04-20',cycleEnd:'2026-05-20',cycleLocked:false,note:'',deductions:[],_ahmedFinalBase:true},
-{id:'1781182567140_4fezl2k',amount:15000,netPaid:15000,date:'19/05/2026',realDate:'11/06/2026',enteredAt:'2026-06-11T12:56:07.140Z',by:'Youcef Abdi',month:3,cycleKey:'2026-04',cycleStart:'2026-04-20',cycleEnd:'2026-05-20',cycleLocked:true,note:'دفع فعلي 11/06/2026',deductions:[],_ahmedFinalBase:true},
-{id:'1778707277154_1b9fqc',amount:10000,netPaid:10000,date:'13/05/2026',realDate:'13/05/2026',enteredAt:'2026-05-13T21:21:17.154Z',by:'brahim talab',month:3,cycleKey:'2026-04',cycleStart:'2026-04-20',cycleEnd:'2026-05-20',cycleLocked:false,note:'',deductions:[],_ahmedFinalBase:true},
-{id:'RET131_AHMED_DEBT_1_IN_ADV',amount:5000,netPaid:0,date:'19/05/2026',realDate:'25/05/2026',enteredAt:'2026-07-09T22:30:00.000Z',by:'النظام',month:3,cycleKey:'2026-04',cycleStart:'2026-04-20',cycleEnd:'2026-05-20',cycleLocked:true,note:'قسط دين 1/9 داخل الدورة',deductions:[{type:'debt',amount:5000,date:'25/05/2026',debtId:'1779281559360_i1mm7',note:'قسط دين 1/9',_instTag:'1779281559360_i1mm7_1'}],_ahmedFinalBase:true}
-],
-'4':[
-{id:'1780496040391_bhfw2jx',amount:15000,netPaid:10000,date:'03/06/2026',realDate:'03/06/2026',enteredAt:'2026-06-03T14:14:00.391Z',by:'Youcef Abdi',month:4,cycleKey:'2026-05',cycleStart:'2026-05-20',cycleEnd:'2026-06-20',cycleLocked:false,note:'قسط دين 2/9 داخل التسبيق؛ نقد 10,000 دج',deductions:[{type:'debt',amount:5000,date:'18/06/2026',debtId:'1779281559360_i1mm7',note:'قسط دين 2/9',id:'DED119_AHMED_MAY_DEBT_2',transactionId:'V119TX_AHMED_MAY_DEBT_2',_instTag:'1779281559360_i1mm7_2'}],_ahmedFinalBase:true},
-{id:'1779279723038_kw29c',amount:25000,netPaid:25000,date:'20/05/2026',realDate:'20/05/2026',enteredAt:'2026-05-20T12:22:03.038Z',by:'Youcef Abdi',month:4,cycleKey:'2026-05',cycleStart:'2026-05-20',cycleEnd:'2026-06-20',cycleLocked:false,note:'',deductions:[],_ahmedFinalBase:true},
-{id:'1779710279718_ai04d',amount:5000,netPaid:5000,date:'20/05/2026',realDate:'20/05/2026',enteredAt:'2026-05-25T11:57:59.718Z',by:'Youcef Abdi',month:4,cycleKey:'2026-05',cycleStart:'2026-05-20',cycleEnd:'2026-06-20',cycleLocked:false,note:'',deductions:[],_ahmedFinalBase:true}
-],
-'5':[
-{id:'1782405223823_mbwjdgu',amount:10000,netPaid:10000,date:'25/06/2026',realDate:'25/06/2026',enteredAt:'2026-06-25T16:33:43.823Z',by:'Youcef Abdi',month:5,cycleKey:'2026-06',cycleStart:'2026-06-20',cycleEnd:'2026-07-20',cycleLocked:false,note:'',deductions:[],_ahmedFinalBase:true},
-{id:'ADV_1782904913868_r8fou5e',amount:5000,netPaid:5000,date:'01/07/2026',realDate:'01/07/2026',enteredAt:'2026-07-01T11:21:53.868Z',by:'Youcef Abdi',month:5,cycleKey:'2026-06',cycleStart:'2026-06-20',cycleEnd:'2026-07-20',cycleLocked:false,note:'',deductions:[],_ahmedFinalBase:true},
-{id:'ADV_1783591202427_k22prd9',amount:10000,netPaid:10000,date:'09/07/2026',realDate:'09/07/2026',enteredAt:'2026-07-09T10:00:02.427Z',by:'Youcef Abdi',month:5,cycleKey:'2026-06',cycleStart:'2026-06-20',cycleEnd:'2026-07-20',cycleLocked:false,note:'',deductions:[],_ahmedFinalBase:true}
-]};
-var CANON_DEBTS=[
-{id:'1779281559360_i1mm7',type:'debt',amount:45000,date:'20/05/2026',by:'Youcef Abdi',note:'',inst:true,instAmt:5000,instCount:9,instPaid:2,instType:'monthly',nextDue:'2026-08-15',_ahmedFinalBase:true},
-{id:'1779737608083_x47sr',type:'return',debtId:'1779281559360_i1mm7',amount:5000,date:'25/05/2026',by:'Youcef Abdi',note:'قسط دين 1/9',_instPayment:true,_instTag:'1779281559360_i1mm7_1',_advanceId:'RET131_AHMED_DEBT_1_IN_ADV',cashEffect:0,_ahmedFinalBase:true},
-{id:'1781789549780_r048rl7',type:'return',debtId:'1779281559360_i1mm7',amount:5000,date:'18/06/2026',actualPaymentDate:'18/06/2026',by:'النظام',note:'قسط دين 2/9 داخل تسبيق',source:'salary-advance',cashEffect:0,_instPayment:true,_instTag:'1779281559360_i1mm7_2',_advanceId:'1780496040391_bhfw2jx',transactionId:'V119TX_AHMED_MAY_DEBT_2',_ahmedFinalBase:true}
-];
-function D(){try{return window.DB||DB||null;}catch(e){return window.DB||null;}}
-function A(v){return Array.isArray(v)?v:[];} function O(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{}};
-function C(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
-function N(v){var x=Number(v);return isFinite(x)?Math.round(x):0;} function now(){return new Date().toISOString();}
-function root(d){return O(d&&d.advances&&d.advances[WID]);}
-function flat(d){var out=[];var r=root(d);Object.keys(r).forEach(function(k){A(r[k]).forEach(function(x){if(x&&x.id)out.push(x);});});return out;}
-function sum(d,m){return A(root(d)[String(m)]).reduce(function(s,x){return s+Math.max(0,N(x&&x.amount));},0);}
-function shadow(d){return flat(d).some(function(x){return String(x.id)===REMOVED_ID;});}
-function badNotes(d){return flat(d).some(function(x){return /\[v12[45]\]|توزيع محاسبي بعد المزامنة|بلا ازدواجية|لا احتساب مزدوج|→ جويلية|→ أوت/.test(String(x.note||''));});}
-function debtRemaining(d){var rows=A(d&&d.debts&&d.debts[WID]), debt=rows.filter(function(x){return x&&x.type==='debt';}).reduce(function(s,x){return s+N(x.amount);},0), ret=rows.filter(function(x){return x&&x.type==='return';}).reduce(function(s,x){return s+N(x.amount);},0);return debt-ret;}
-function clean(d){return !!d&&sum(d,3)===45000&&sum(d,4)===45000&&sum(d,5)===25000&&!shadow(d)&&!badNotes(d)&&debtRemaining(d)===35000;}
-function tomb(d,id,reason){d.deletedIds=A(d.deletedIds);if(d.deletedIds.map(String).indexOf(String(id))<0)d.deletedIds.push(String(id));d.deletedRecords=d.deletedRecords||{};['advances|'+id,'*|'+id,id].forEach(function(k){d.deletedRecords[k]={id:id,section:k.indexOf('advances|')===0?'advances':'*',deletedAt:now(),transactionId:'V133_AHMED_FINAL_ONCE',reason:reason||'قيد ملغى موثق'};});}
-function locks(d){d.cycleLocks=d.cycleLocks||{};d.cycleLocks['8|2026-04-20_2026-05-20']={id:'8|2026-04-20_2026-05-20',workerId:8,workerName:'احمد',cycleMonth:3,cycleYear:2026,cycleStart:'2026-04-20',cycleEnd:'2026-05-20',locked:true,auto:false,manualEditOpen:false,version:VERSION,reason:'ضبط مرجعي: 45,000 مسددة.',baseSalary:45000,advancesTotal:45000,salaryResolved:45000,cashPaid:40000,debtDeduction:5000,updatedAt:now()};d.cycleLocks['8|2026-05-20_2026-06-20']={id:'8|2026-05-20_2026-06-20',workerId:8,workerName:'احمد',cycleMonth:4,cycleYear:2026,cycleStart:'2026-05-20',cycleEnd:'2026-06-20',locked:true,auto:false,manualEditOpen:false,version:VERSION,reason:'ضبط مرجعي: 45,000 مسددة.',baseSalary:45000,advancesTotal:45000,salaryResolved:45000,cashPaid:40000,debtDeduction:5000,updatedAt:now()};}
-function title(){try{document.title='EGTPH — سجل الأجور';var lab=document.querySelector('.tlogo span');if(lab)lab.textContent='| سجل الأجور';}catch(e){}}
-function neutralizeOld(){try{delete window.EGTPH_V88;delete window.EGTPH_V100;delete window.EGTPH_V129_FINAL_CLEAN_ENGINE;delete window.EGTPH_V130_AHMED_SHADOW_TOMBSTONE;}catch(e){}}
-function noticeOnce(d,msg){
-  d.settings=d.settings||{};d.settings.v133AhmedFinalOnce=d.settings.v133AhmedFinalOnce||{};
-  var seen=!!d.settings.v133AhmedFinalOnce.noticeShown;
-  try{seen=seen||localStorage.getItem(NOTICE_KEY)==='1';}catch(e){}
-  if(seen)return;
-  d.settings.v133AhmedFinalOnce.noticeShown=true;
-  try{localStorage.setItem(NOTICE_KEY,'1');}catch(e){}
-  try{if(typeof toast==='function')toast(msg||'✅ تم ضبط سجل أحمد المالي.');}catch(e){}
-}
-function apply(reason){
-  neutralizeOld();title();var d=D();if(!d||!d.advances||!d.workers)return {ok:false,reason:'db-not-ready'};
-  d.settings=d.settings||{};d.settings.v133AhmedFinalOnce=d.settings.v133AhmedFinalOnce||{};
-  tomb(d,REMOVED_ID,'تثبيت حذف القيد الملغى لأحمد');
-  if(clean(d)){
-    d.settings.v133AhmedFinalOnce.lastCheckedAt=now();d.settings.v133AhmedFinalOnce.clean=true;d.settings.v133AhmedFinalOnce.version=VERSION;
-    return {ok:true,changed:false,clean:true};
+var VERSION='135.1.0',API='EGTPH_V135_CLEAN_AHMED_MIGRATION',WID='8',REMOVED_ID='1781789988162_2d7q977',APRIL_DEBT_ADV_ID='V135_AHMED_APRIL_DEBT_1',DEBT_ID='1779281559360_i1mm7',MIGRATION_KEY='v135_clean_ahmed_migration_done',NOTICE_KEY='EGTPH_v135_clean_ahmed_notice_seen';
+function D(){try{return (typeof DB!=='undefined'&&DB)?DB:(window.DB||null);}catch(e){return window.DB||null;}}
+function A(x){return Array.isArray(x)?x:[];}function O(x){return x&&typeof x==='object'&&!Array.isArray(x)?x:{};}function S(x){return x==null?'':String(x);}function N(x){var n=Number(x);return isFinite(n)?Math.round(n):0;}function now(){return new Date().toISOString();}function same(a,b){return S(a)===S(b);}function hasWorkers(d){return !!(d&&A(d.workers).length);}
+function eachAdv(d,cb){var adv=O(d&&d.advances);Object.keys(adv).forEach(function(wid){var box=adv[wid];if(Array.isArray(box)){box.forEach(function(arr,m){A(arr).forEach(function(r,i){if(r)cb(r,String(wid),String(m),arr,i);});});}else if(box&&typeof box==='object'){Object.keys(box).forEach(function(m){A(box[m]).forEach(function(r,i){if(r)cb(r,String(wid),String(m),box[m],i);});});}});}
+function listFor(d,wid,m){d.advances=O(d.advances);var box=d.advances[wid];if(!box){box={};d.advances[wid]=box;}if(Array.isArray(box)){box[m]=A(box[m]);return box[m];}box[m]=A(box[m]);return box[m];}
+function monthSum(d,wid,m){var total=0;eachAdv(d,function(r,x,mm){if(same(x,wid)&&same(mm,m))total+=N(r.amount);});return total;}
+function removeAdvanceById(d,id){var removed=[],adv=O(d&&d.advances);Object.keys(adv).forEach(function(wid){var box=adv[wid];if(Array.isArray(box)){box.forEach(function(arr,m){if(!Array.isArray(arr))return;for(var i=arr.length-1;i>=0;i--){if(arr[i]&&same(arr[i].id,id)){var rec=arr.splice(i,1)[0];rec._wid=wid;rec._monthKey=String(m);removed.push(rec);}}});}else if(box&&typeof box==='object'){Object.keys(box).forEach(function(m){var arr=box[m];if(!Array.isArray(arr))return;for(var i=arr.length-1;i>=0;i--){if(arr[i]&&same(arr[i].id,id)){var rec=arr.splice(i,1)[0];rec._wid=wid;rec._monthKey=String(m);removed.push(rec);}}});}});return removed;}
+function ensureTombstone(d,removed){if(!d)return false;var changed=false,stamp=now();d.deletedIds=A(d.deletedIds);if(!d.deletedIds.some(function(x){return same(x,REMOVED_ID);})){d.deletedIds.push(REMOVED_ID);changed=true;}d.deletedRecords=O(d.deletedRecords);if(!d.deletedRecords[REMOVED_ID]){d.deletedRecords[REMOVED_ID]={id:REMOVED_ID,section:'advances',type:'advance',workerId:WID,deletedAt:stamp,reason:'قيد ملغى موثق؛ لا يعود من المزامنة',repairVersion:VERSION};changed=true;}d.trash=O(d.trash);d.trash.advances=A(d.trash.advances);if(!d.trash.advances.some(function(x){return x&&same(x.id,REMOVED_ID);})){var rec=(removed&&removed[0])?JSON.parse(JSON.stringify(removed[0])):{id:REMOVED_ID,workerId:WID};rec._tid=rec._tid||('TRASH_'+REMOVED_ID);rec._deletedAt=rec._deletedAt||stamp;rec._archiveLabel=rec._archiveLabel||'قيد ملغى موثق؛ محفوظ في السلة لمنع الرجوع.';d.trash.advances.push(rec);changed=true;}return changed;}
+function stripLongNotes(d){var changed=false;eachAdv(d,function(r,wid){if(!same(wid,WID))return;var old=S(r.note);if(!old)return;if(/\[v12[4-9]\]|\[v13\d\]|توزيع محاسبي بعد المزامنة|بلا ازدواجية|لا احتساب مزدوج/.test(old)){r.note=A(r.deductions).some(function(x){return x&&x.type==='debt';})?'يشمل قسط دين داخل التسبيق؛ لا توجد حركة نقدية ثانية.':'';changed=true;}});return changed;}
+function ensureAprilAccounting(d){
+  var changed=false, arr=listFor(d,WID,'3');
+  for(var i=arr.length-1;i>=0;i--){if(arr[i]&&same(arr[i].id,APRIL_DEBT_ADV_ID)){arr.splice(i,1);changed=true;}}
+  var total=monthSum(d,WID,'3');
+  if(total===40000){
+    arr.push({id:APRIL_DEBT_ADV_ID,amount:5000,netPaid:0,date:'19/05/2026',realDate:'18/06/2026',enteredAt:'2026-06-18T13:39:48.162Z',by:'النظام',month:3,cycleKey:'2026-04',cycleStart:'2026-04-20',cycleEnd:'2026-05-20',cycleLocked:true,note:'قسط دين 1/9 داخل دورة أفريل؛ لا توجد حركة نقدية ثانية.',deductions:[{id:'DED_V135_AHMED_DEBT_1',type:'debt',amount:5000,date:'18/06/2026',debtId:DEBT_ID,instTag:DEBT_ID+'_1',_instTag:DEBT_ID+'_1',note:'قسط دين 1/9'}],_v135Clean:true});
+    changed=true;
   }
-  if(!d.settings.v133AhmedFinalOnce.backup){d.settings.v133AhmedFinalOnce.backup={at:now(),reason:reason||'one-time-adjustment',advances:C(d.advances[WID]),debts:C(d.debts&&d.debts[WID])};}
-  d.advances[WID]=C(CANON_ADV);d.debts=d.debts||{};d.debts[WID]=C(CANON_DEBTS);locks(d);
-  d.settings.v133AhmedFinalOnce.appliedAt=now();d.settings.v133AhmedFinalOnce.clean=true;d.settings.v133AhmedFinalOnce.version=VERSION;
-  d.settings.v133AhmedFinalOnce.rule='أحمد: أفريل 45,000؛ ماي 45,000؛ جوان 25,000 فقط؛ الدين المتبقي 35,000.';
-  try{if(typeof audit==='function'&&!d.settings.v133AhmedFinalOnce.auditWritten){audit('ضبط سجل أحمد المالي وفق المرجع');d.settings.v133AhmedFinalOnce.auditWritten=true;}}catch(e){}
-  try{if(typeof saveDB==='function')saveDB();}catch(e){}
-  refresh();noticeOnce(d,'✅ تم ضبط سجل أحمد المالي.');
-  return {ok:true,changed:true,clean:clean(d)};
+  return changed;
 }
-function wrapCloud(){var base=window.cloudSync;if(typeof base!=='function'||base.__ahmedFinalBaseFinal)return;var w=function(){var ret=base.apply(this,arguments);try{if(ret&&typeof ret.then==='function')ret.then(function(){setTimeout(function(){apply('after-cloud-sync');},1200);},function(){setTimeout(function(){apply('after-cloud-error');},1400);});else setTimeout(function(){apply('after-cloud-sync');},1600);}catch(e){setTimeout(function(){apply('after-cloud-fallback');},2000);}return ret;};w.__ahmedFinalBaseFinal=true;window.cloudSync=w;try{cloudSync=w;}catch(e){}}
-function wrapToastOnce(){var base=window.toast;if(typeof base!=='function'||base.__v133OneNotice)return;var w=function(msg,bad){var m=String(msg||'');if(/v13\d|مانيفست|ثبت أحمد|القيد الملغى/.test(m)){var seen=false;try{seen=localStorage.getItem(NOTICE_KEY)==='1';}catch(e){}if(seen)return;try{localStorage.setItem(NOTICE_KEY,'1');}catch(e){}return base.call(this,'✅ تم ضبط سجل أحمد المالي.',bad);}return base.apply(this,arguments);};w.__v133OneNotice=true;window.toast=w;try{toast=w;}catch(e){}}
-function install(){neutralizeOld();title();wrapCloud();wrapToastOnce();window[API]={version:VERSION,apply:apply,clean:function(){return clean(D());},status:function(){var d=D();return d&&d.settings&&d.settings.v133AhmedFinalOnce;}};[700,2200,5200,11000].forEach(function(ms){setTimeout(function(){apply('timer-'+ms);},ms);});}
+function ensureAhmedDebtOnce(d){var changed=false,rows=A(d&&d.debts&&d.debts[WID]);rows.forEach(function(r){if(!r||r.type!=='debt'||!same(r.id,DEBT_ID))return;var before=JSON.stringify({amount:r.amount,inst:r.inst,instPaid:r.instPaid,status:r.status,remaining:r.remaining});if(r.amount==null)r.amount=45000;if(r.inst==null)r.inst=5000;if(r.instPaid==null||N(r.instPaid)<2)r.instPaid=2;if(r.status==null)r.status='open';r.remaining=Math.max(0,N(r.amount||45000)-N(r.inst||5000)*N(r.instPaid||2));if(before!==JSON.stringify({amount:r.amount,inst:r.inst,instPaid:r.instPaid,status:r.status,remaining:r.remaining}))changed=true;});return changed;}
+function status(d){var sums={3:0,4:0,5:0};eachAdv(d,function(r,wid,m){if(same(wid,WID)&&sums.hasOwnProperty(m))sums[m]+=N(r.amount);});return {april:sums[3],may:sums[4],june:sums[5],removedBlocked:A(d&&d.deletedIds).some(function(x){return same(x,REMOVED_ID);})};}
+function refreshSafe(){try{if(typeof window.renderSalContent==='function')window.renderSalContent();}catch(e){}try{if(typeof window.renderSetContent==='function')window.renderSetContent();}catch(e){}try{if(typeof window.renderSettlement==='function')window.renderSettlement();}catch(e){}try{if(typeof window.renderDash==='function')window.renderDash();}catch(e){}}
+function saveSafe(){try{if(typeof window.saveDB==='function'){window.saveDB();return true;}if(typeof saveDB==='function'){saveDB();return true;}}catch(e){console.warn('v135 save',e);}return false;}
+function notifyOnce(){var seen=false;try{seen=localStorage.getItem(NOTICE_KEY)==='1';}catch(e){}if(seen)return;try{localStorage.setItem(NOTICE_KEY,'1');}catch(e){}try{if(typeof window.toast==='function')window.toast('✅ تم ضبط سجل أحمد المالي.');}catch(e){}}
+function run(source){var d=D();if(!hasWorkers(d))return {changed:false,reason:'no-data'};d.settings=O(d.settings);var first=!d.settings[MIGRATION_KEY];var removed=removeAdvanceById(d,REMOVED_ID);var changed=!!removed.length;if(ensureTombstone(d,removed))changed=true;if(first){if(stripLongNotes(d))changed=true;if(ensureAprilAccounting(d))changed=true;if(ensureAhmedDebtOnce(d))changed=true;d.settings[MIGRATION_KEY]={appliedAt:now(),version:VERSION,source:source||'install'};changed=true;}if(changed){saveSafe();refreshSafe();if(first)notifyOnce();}return {changed:changed,first:first,status:status(d)};}
+function wrapCloud(){var base=window.cloudSync;if(typeof base!=='function'||base.__v135CleanAhmed)return;var w=function(){var out=base.apply(this,arguments);setTimeout(function(){try{run('after-cloudSync');}catch(e){console.warn('v135 after cloud',e);}},600);return out;};w.__v135CleanAhmed=true;window.cloudSync=w;try{cloudSync=w;}catch(e){}}
+function install(){wrapCloud();window[API]={version:VERSION,run:run,status:function(){return status(D());}};[900,2500,6500,12000].forEach(function(ms){setTimeout(function(){try{run('timer-'+ms);}catch(e){console.warn('v135 timer',e);}},ms);});}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
 })();
 </script>
