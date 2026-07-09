@@ -10130,4 +10130,608 @@ if (document.readyState === 'loading') {
 <!-- EGTPH v13.4.2 — stage panel de-duplication patch -->
 <!-- EGTPH v13.4 — print integrity patch -->
 
+
+<!-- EGTPH v13.6 — invoice/payment document metadata patch: no accounting-side effects -->
+<style id="egtph-docmeta-style">
+  .docmeta-line{font-size:9.5px;color:var(--tx3);margin-top:2px;line-height:1.55}
+  .docmeta-chip{display:inline-flex;align-items:center;gap:3px;border:1px solid var(--bdr);background:rgba(255,255,255,.035);border-radius:999px;padding:1px 7px;margin:1px 0 1px 4px;white-space:nowrap}
+  .docmeta-safe{padding:7px 9px;border:1px dashed rgba(40,217,110,.35);background:rgba(40,217,110,.07);border-radius:var(--rs);color:var(--green);font-size:10px;font-weight:800;line-height:1.6;margin:0 0 10px}
+</style>
+<script id="egtph-docmeta-engine-v136">
+(function(){
+  'use strict';
+
+  const n = v => parseFloat(v) || 0;
+  const isoNow = () => new Date().toISOString();
+  const safe = v => (typeof esc === 'function' ? esc(v == null ? '' : String(v)) : String(v == null ? '' : v)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'));
+  const fmtDA = v => (typeof fDA === 'function' ? fDA(n(v)) : String(n(v)));
+  const fmtD  = v => (typeof fD  === 'function' ? fD(v) : (v || '—'));
+  const fmtN  = v => (typeof fN  === 'function' ? fN(n(v)) : String(n(v)));
+  const PENDING = (window.EGTPHPricing && window.EGTPHPricing.PENDING) || 'pending';
+  const CONFIRMED = (window.EGTPHPricing && window.EGTPHPricing.CONFIRMED) || 'confirmed';
+  const isPending = o => !!(window.EGTPHPricing && window.EGTPHPricing.pending && window.EGTPHPricing.pending(o)) || (o && o.priceStatus === PENDING);
+  const priceStateFromInput = v => String(v == null ? '' : v).trim() === '' ? PENDING : CONFIRMED;
+  const ptag = () => '<span class="pending-price-tag">⚠ لم يُتفق عليه</span>';
+
+  function readVal(id){ return (document.getElementById(id)?.value || '').trim(); }
+  function persist(store, obj){ return dbP(store, obj); }
+  function autosave(){ try { scheduleAutoSaveFile(); } catch(_) {} }
+
+  function invoiceNoOf(o){ return o?.invoiceNo || o?.invNo || o?.factureNo || o?.invoiceRef || o?.ref || ''; }
+  function blNoOf(o){ return o?.blNo || o?.deliveryNoteNo || o?.bonLivraisonNo || o?.bonNo || ''; }
+  function payRefOf(o){ return o?.paymentRef || o?.receiptNo || o?.transferRef || o?.ref || ''; }
+  function chequeNoOf(o){ return o?.chequeNo || o?.checkNo || ''; }
+  function bankOf(o){ return o?.bankName || o?.bank || ''; }
+
+  function invMetaLine(o){
+    const chips = [];
+    const invNo = invoiceNoOf(o), blNo = blNoOf(o);
+    if (invNo) chips.push('<span class="docmeta-chip">🧾 فاتورة: '+safe(invNo)+'</span>');
+    if (blNo) chips.push('<span class="docmeta-chip">📦 BL: '+safe(blNo)+'</span>');
+    return chips.length ? '<div class="docmeta-line">'+chips.join(' ')+'</div>' : '';
+  }
+
+  function payMetaLine(o){
+    const chips = [];
+    const chq = chequeNoOf(o), bank = bankOf(o), pref = payRefOf(o);
+    if (chq) chips.push('<span class="docmeta-chip">🧾 شيك: '+safe(chq)+'</span>');
+    if (bank) chips.push('<span class="docmeta-chip">🏦 بنك: '+safe(bank)+'</span>');
+    if (pref) chips.push('<span class="docmeta-chip">🔖 مرجع: '+safe(pref)+'</span>');
+    return chips.length ? '<div class="docmeta-line" data-docmeta="1">'+chips.join(' ')+'</div>' : '';
+  }
+
+  function paymentMetaFields(prefix, item){
+    item = item || {};
+    return '<div class="docmeta-safe">هذه الحقول توثيقية فقط: لا تغيّر المبلغ، الرصيد، التخصيص، ولا الأثر المحاسبي.</div>'
+      + '<div class="fgr">'
+      +   '<div class="fg"><label>رقم الشيك / التحويل</label><input type="text" id="'+prefix+'-cheque" value="'+safe(chequeNoOf(item))+'" placeholder="مثال: CHQ 4587"></div>'
+      +   '<div class="fg"><label>البنك</label><input type="text" id="'+prefix+'-bank" value="'+safe(bankOf(item))+'" placeholder="CPA / BNA / BADR..."></div>'
+      + '</div>'
+      + '<div class="fg"><label>رقم الوصل / مرجع العملية</label><input type="text" id="'+prefix+'-pref" value="'+safe(payRefOf(item))+'" placeholder="اختياري"></div>';
+  }
+
+  function readPaymentMeta(prefix){
+    return {
+      chequeNo: readVal(prefix+'-cheque'),
+      bankName: readVal(prefix+'-bank'),
+      paymentRef: readVal(prefix+'-pref')
+    };
+  }
+
+  function methodOptions(selected, allowed){
+    allowed = allowed || ['نقداً','شيك'];
+    const cur = allowed.includes(selected) ? selected : '';
+    return '<option value="" '+(cur?'':'selected')+' disabled>— اختر —</option>'
+      + allowed.map(m => '<option value="'+safe(m)+'" '+(m===cur?'selected':'')+'>'+safe((m==='نقداً'?'💵 ':m==='شيك'?'🧾 ':m.includes('تحويل')?'🏦 ':'')+m)+'</option>').join('');
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Client payments and advances: create with metadata; edit metadata only.
+  // ─────────────────────────────────────────────────────────────────────
+  const MONEY_EPS = 0.009;
+  function activeAdvance(a){ return a && a.status !== 'X'; }
+  function recList(cid){ return records.filter(r => r.clientId === cid); }
+  function normalizeAlloc(item, cid){
+    if (!item || !cid) return [];
+    const raw = Array.isArray(item.allocations) ? item.allocations : (item.recordId ? [{recordId:item.recordId, amount:item.amount}] : []);
+    const seen = new Set(), out = [];
+    raw.forEach(a => {
+      const rid = String(a?.recordId || '');
+      const amount = n(a?.amount);
+      if (amount <= 0 || seen.has(rid) || !records.some(r => r.id === rid && r.clientId === cid)) return;
+      seen.add(rid); out.push({recordId:rid, amount});
+    });
+    return out;
+  }
+  function allocScope(item, cid){
+    const all = normalizeAlloc(item, cid);
+    if (!all.length) return 'general';
+    if (all.length === 1 && Math.abs(all[0].amount - n(item?.amount)) <= MONEY_EPS) return 'record';
+    return 'split';
+  }
+  function allocLabel(item, cid){
+    const all = normalizeAlloc(item, cid);
+    if (!all.length) return 'دفعة عامة للعميل';
+    if (all.length === 1) {
+      const r = records.find(x => x.id === all[0].recordId);
+      return r ? 'سجل: '+r.name : 'سجل غير موجود';
+    }
+    return 'موزعة على '+all.length+' سجلات';
+  }
+  function methodLabelLocal(item){
+    const m = item?.method || '';
+    return m ? (m === 'نقداً' ? '💵 نقداً' : m === 'شيك' ? '🧾 شيك' : '⚪ '+m) : '⚪ غير محدد';
+  }
+  window.financePaymentDocMetaLabel = payMetaLine;
+
+  function allocationCard(prefix, cid, existing, preset){
+    const scope = preset?.scope || allocScope(existing, cid);
+    const recs = recList(cid);
+    return '<div class="fg"><label>تخصيص العملية *</label><select id="'+prefix+'-scope">'
+      + '<option value="general" '+(scope==='general'?'selected':'')+'>دفعة عامة للعميل</option>'
+      + '<option value="record" '+(scope==='record'?'selected':'')+' '+(recs.length?'':'disabled')+'>دفعة تخص سجلًا واحدًا</option>'
+      + '<option value="split" '+(scope==='split'?'selected':'')+' '+(recs.length?'':'disabled')+'>دفعة موزعة على عدة سجلات</option>'
+      + '</select></div><div id="'+prefix+'-alloc-wrap"></div>';
+  }
+  function bindAllocation(prefix, cid, existing, preset){
+    const scopeEl = document.getElementById(prefix+'-scope'), wrap = document.getElementById(prefix+'-alloc-wrap');
+    if (!scopeEl || !wrap) return;
+    const map = new Map(normalizeAlloc(existing, cid).map(a => [a.recordId, a.amount]));
+    let selectedRid = preset?.recordId || normalizeAlloc(existing, cid)[0]?.recordId || '';
+    function remember(){
+      wrap.querySelectorAll('[data-alloc-record]').forEach(input => map.set(input.getAttribute('data-alloc-record'), n(input.value)));
+      const s = wrap.querySelector('[data-alloc-select]'); if (s) selectedRid = s.value || '';
+    }
+    function render(){
+      const recs = recList(cid);
+      let scope = scopeEl.value;
+      if (!recs.length && scope !== 'general') { scopeEl.value = 'general'; scope = 'general'; }
+      if (scope === 'general') {
+        wrap.innerHTML = '<div class="hint" style="background:var(--bg3);padding:8px 10px;border:1px solid var(--bdr);border-radius:var(--rs)">هذه دفعة عامة للعميل. تُحسب في رصيده العام ولا تخصم من رصيد أي سجل.</div>';
+        return;
+      }
+      if (scope === 'record') {
+        wrap.innerHTML = '<div class="fg"><label>السجل التابع للعميل *</label><select data-alloc-select id="'+prefix+'-record">'
+          + recs.map(r => {
+              const s = window.getRecordSettlement ? window.getRecordSettlement(r.id) : {remain:0};
+              const sel = selectedRid === r.id || (!selectedRid && recs[0]?.id === r.id);
+              return '<option value="'+safe(r.id)+'" '+(sel?'selected':'')+'>'+safe(r.name)+' — المتبقي الحالي: '+fmtDA(s.remain)+'</option>';
+            }).join('')
+          + '</select></div><div class="hint">سيُخصص كامل مبلغ العملية لهذا السجل.</div>';
+        return;
+      }
+      wrap.innerHTML = '<div class="hint" style="margin-bottom:6px">اكتب مبلغ الحصة أمام كل سجل. مجموع الحصص يجب أن يساوي مبلغ العملية تمامًا.</div>'
+        + '<div style="display:flex;flex-direction:column;gap:6px">'
+        + recs.map(r => {
+            const s = window.getRecordSettlement ? window.getRecordSettlement(r.id) : {remain:0};
+            return '<div style="display:grid;grid-template-columns:1fr 118px;gap:7px;align-items:center;background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--rs);padding:7px 9px">'
+              + '<div><strong style="font-size:12px">'+safe(r.name)+'</strong><div style="font-size:9px;color:var(--tx3)">المتبقي الحالي: '+fmtDA(s.remain)+'</div></div>'
+              + '<input class="ti" type="number" min="0" step="0.01" data-alloc-record="'+safe(r.id)+'" value="'+(map.get(r.id)||'')+'" placeholder="0">'
+              + '</div>';
+          }).join('')
+        + '</div>';
+    }
+    scopeEl.addEventListener('change', () => { remember(); render(); });
+    render();
+  }
+  function readAllocation(prefix, cid, amount){
+    const scope = document.getElementById(prefix+'-scope')?.value || 'general';
+    const recs = recList(cid);
+    if (scope === 'general') return {allocationScope:'general', allocations:[]};
+    if (!recs.length) throw new Error('لا توجد سجلات لهذا العميل لتخصيص الدفعة');
+    if (scope === 'record') {
+      const rid = document.getElementById(prefix+'-record')?.value || '';
+      if (!recs.some(r => r.id === rid)) throw new Error('اختر سجلاً صحيحاً تابعاً للعميل');
+      return {allocationScope:'record', allocations:[{recordId:rid, amount}]};
+    }
+    const amounts = [];
+    document.querySelectorAll('#'+prefix+'-alloc-wrap [data-alloc-record]').forEach(el => {
+      const amount = n(el.value), recordId = el.getAttribute('data-alloc-record') || '';
+      if (amount > 0) amounts.push({recordId, amount});
+    });
+    if (!amounts.length) throw new Error('أدخل حصة واحدة على الأقل لتوزيع الدفعة');
+    if (amounts.some(x => !recs.some(r => r.id === x.recordId))) throw new Error('يوجد سجل غير صالح في التوزيع');
+    const sum = amounts.reduce((s,x) => s + x.amount, 0);
+    if (Math.abs(sum - amount) > MONEY_EPS) throw new Error('مجموع الحصص ('+fmtDA(sum)+') يجب أن يساوي مبلغ العملية ('+fmtDA(amount)+')');
+    return {allocationScope:'split', allocations:amounts};
+  }
+  function applyAllocation(target, next){
+    target.allocationScope = next.allocationScope;
+    target.allocations = (next.allocations || []).map(a => ({recordId:a.recordId, amount:n(a.amount)}));
+    if (target.allocations.length === 1) target.recordId = target.allocations[0].recordId;
+    else delete target.recordId;
+  }
+  function financeAddForm(prefix, cid, item, opts){
+    item = item || {}; opts = opts || {};
+    const c = clients.find(x => x.id === cid);
+    return (opts.typeSelect ? '<div class="fg"><label>النوع *</label><select id="'+prefix+'-type"><option value="تسبيق" '+((item.type||'تسبيق')==='تسبيق'?'selected':'')+'>💳 تسبيق</option><option value="دفعة" '+(item.type==='دفعة'?'selected':'')+'>💵 دفعة</option></select></div>' : '')
+      + '<div style="background:var(--gndim);border:1px solid rgba(40,217,110,.22);border-radius:var(--rs);padding:9px 12px;margin-bottom:11px;font-size:12px;color:var(--green)">العميل: <strong>'+safe(c?.name||'')+'</strong></div>'
+      + '<div class="fg"><label>المبلغ (DA) *</label><input type="number" id="'+prefix+'-a" min="0.01" step="0.01" value="'+(item.amount != null ? safe(item.amount) : '')+'" placeholder="0"></div>'
+      + '<div class="fgr"><div class="fg"><label>التاريخ *</label><input type="date" id="'+prefix+'-d" value="'+safe(item.date || today())+'"></div>'
+      + '<div class="fg"><label>طريقة التحصيل *</label><select id="'+prefix+'-m">'+methodOptions(item.method, ['نقداً','شيك'])+'</select></div></div>'
+      + allocationCard(prefix, cid, item, opts.preset)
+      + paymentMetaFields(prefix, item)
+      + '<div class="fg" style="margin-top:12px"><label>ملاحظة</label><input type="text" id="'+prefix+'-n" value="'+safe(item.note||'')+'" placeholder="..." ></div>';
+  }
+  function readFinanceAddForm(prefix, cid){
+    const amount = n(document.getElementById(prefix+'-a')?.value);
+    const date = readVal(prefix+'-d');
+    const method = readVal(prefix+'-m');
+    if (amount <= 0) throw new Error('أدخل مبلغاً صحيحاً');
+    if (!date) throw new Error('اختر تاريخ العملية');
+    if (!['نقداً','شيك'].includes(method)) throw new Error('اختر نقداً أو شيكاً');
+    return {amount, date, method, note:readVal(prefix+'-n'), ...readAllocation(prefix, cid, amount), ...readPaymentMeta(prefix)};
+  }
+  function financeMetaOnlyForm(prefix, title, item){
+    return '<div class="docmeta-safe">تعديل توثيقي فقط. المبلغ والتخصيص لا يتغيران حتى لا يتغير الرصيد أو الأثر المحاسبي.</div>'
+      + '<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--rs);padding:9px 11px;margin-bottom:10px;font-size:12px">'
+      + '<strong>'+safe(title)+'</strong><br><span class="num" style="color:var(--gold2)">'+fmtDA(item.amount)+'</span> · '+safe(allocLabel(item, item.clientId||''))+'</div>'
+      + '<div class="fgr"><div class="fg"><label>التاريخ *</label><input type="date" id="'+prefix+'-d" value="'+safe(item.date||today())+'"></div>'
+      + '<div class="fg"><label>طريقة التحصيل *</label><select id="'+prefix+'-m">'+methodOptions(item.method, ['نقداً','شيك'])+'</select></div></div>'
+      + paymentMetaFields(prefix, item)
+      + '<div class="fg"><label>ملاحظة</label><input type="text" id="'+prefix+'-n" value="'+safe(item.note||'')+'" placeholder="..."></div>';
+  }
+  function readFinanceMetaOnly(prefix){
+    const date = readVal(prefix+'-d'), method = readVal(prefix+'-m');
+    if (!date) throw new Error('اختر تاريخ العملية');
+    if (!['نقداً','شيك'].includes(method)) throw new Error('اختر نقداً أو شيكاً');
+    return {date, method, note:readVal(prefix+'-n'), ...readPaymentMeta(prefix), updatedAt:isoNow()};
+  }
+
+  window.addPay = async function(cid, preset={}){
+    if (secGuard('pay:'+cid,'المدفوعات')) return;
+    const c = clients.find(x => x.id === cid); if (!c) return T('العميل غير موجود','error');
+    OM('＋ دفعة جديدة', financeAddForm('py', cid, {}, {preset}), async () => {
+      try {
+        const next = readFinanceAddForm('py', cid);
+        const p = {id:uid(), clientId:cid, createdAt:isoNow(), ...next};
+        applyAllocation(p, next);
+        payments.push(p);
+        const ok = await persist('payments', p);
+        if (!ok) { payments = payments.filter(x => x.id !== p.id); return T('فشل تسجيل الدفعة — لم يتم الحفظ','error'); }
+        autosave(); CM(); renderCD(cid); T('✅ تم تسجيل الدفعة','success');
+        await logA('دفعة '+methodLabelLocal(p)+': '+fmtDA(p.amount), c.name+' · '+allocLabel(p,cid));
+      } catch(err) { T(err.message || 'تحقق من البيانات','error'); }
+    }, 'تسجيل');
+    setTimeout(() => { bindAllocation('py', cid, {}, preset); document.getElementById('py-a')?.focus(); }, 60);
+  };
+
+  window.editPay = async function(pid, cid){
+    if (secGuard('pay:'+cid,'المدفوعات')) return;
+    const p = payments.find(x => x.id === pid && x.clientId === cid);
+    const c = clients.find(x => x.id === cid);
+    if (!p || !c) return T('الدفعة أو العميل غير موجود','error');
+    OM('✏ تعديل بيانات الدفعة', financeMetaOnlyForm('ep','دفعة عميل',p), async () => {
+      try {
+        Object.assign(p, readFinanceMetaOnly('ep'));
+        const ok = await persist('payments', p);
+        if (!ok) return T('فشل الحفظ — لم يتم تغيير البيانات','error');
+        autosave(); CM(); renderCD(cid); T('✅ تم تعديل بيانات الدفعة','success');
+        await logA('تعديل بيانات دفعة: '+fmtDA(p.amount), c.name);
+      } catch(err) { T(err.message || 'تحقق من البيانات','error'); }
+    }, 'حفظ البيانات');
+  };
+
+  window.addAdv = async function(cid, preset={}){
+    if (secGuard('adv:'+cid,'التسبيقات')) return;
+    const c = clients.find(x => x.id === cid); if (!c) return T('العميل غير موجود','error');
+    OM('＋ دفعة / تسبيق', financeAddForm('av', cid, {type:'تسبيق'}, {typeSelect:true, preset}), async () => {
+      try {
+        const next = readFinanceAddForm('av', cid);
+        next.type = readVal('av-type') || 'تسبيق';
+        const a = {id:uid(), clientId:cid, status:'active', createdAt:isoNow(), ...next};
+        applyAllocation(a, next);
+        advances.push(a);
+        const ok = await persist('advances', a);
+        if (!ok) { advances = advances.filter(x => x.id !== a.id); return T('فشل التسجيل — لم يتم الحفظ','error'); }
+        autosave(); CM(); renderCD(cid); T('✅ تم تسجيل '+a.type,'success');
+        await logA(a.type+' '+methodLabelLocal(a)+': '+fmtDA(a.amount), c.name+' · '+allocLabel(a,cid));
+      } catch(err) { T(err.message || 'تحقق من البيانات','error'); }
+    }, 'تسجيل');
+    setTimeout(() => { bindAllocation('av', cid, {type:'تسبيق'}, preset); document.getElementById('av-a')?.focus(); }, 60);
+  };
+
+  window.editAdv = async function(aid, cid, fromGlobal){
+    const a = advances.find(x => x.id === aid); if (!a) return T('التسبيق غير موجود','error');
+    const actualCid = a.clientId || cid;
+    if (fromGlobal === true && secGuard('advG','التسبيقات')) return;
+    if (secGuard('adv:'+actualCid,'التسبيقات')) return;
+    OM('✏ تعديل بيانات '+(a.type||'التسبيق'), financeMetaOnlyForm('ea', a.type || 'تسبيق عميل', a), async () => {
+      try {
+        Object.assign(a, readFinanceMetaOnly('ea'));
+        const ok = await persist('advances', a);
+        if (!ok) return T('فشل الحفظ — لم يتم تغيير البيانات','error');
+        autosave(); CM(); (fromGlobal === true ? renderAdvances() : renderCD(actualCid)); T('✅ تم تعديل البيانات','success');
+        await logA('تعديل بيانات '+(a.type||'تسبيق')+': '+fmtDA(a.amount), clients.find(c=>c.id===actualCid)?.name||'');
+      } catch(err) { T(err.message || 'تحقق من البيانات','error'); }
+    }, 'حفظ البيانات');
+  };
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Supplier invoices: invoice number + delivery note number.
+  // ─────────────────────────────────────────────────────────────────────
+  window.openSupInvoice = function(spId){
+    if (secGuard('sup:'+spId,'حساب المورد')) return;
+    const s = suppliers.find(x => x.id === spId); if (!s) return;
+    window._inv = {spId, rows:[{name:'', unit:'وحدة', qty:1, unitPrice:0, priceStatus:PENDING}], date:today(), invoiceNo:'', blNo:'', ref:'', note:''};
+    renderInvModal();
+  };
+
+  window.editSupInvoice = function(invId, spId){
+    if (secGuard('sup:'+spId,'حساب المورد')) return;
+    const s = suppliers.find(x => x.id === spId);
+    const v = (window._supInvs || []).find(x => x.id === invId);
+    if (!s || !v) return T('الفاتورة غير موجودة','error');
+    window._inv = {
+      spId, editId:invId,
+      rows:(v.items||[]).map(it => ({name:it.name||'', unit:it.unit||'وحدة', qty:n(it.qty), unitPrice:n(it.unitPrice), priceStatus:isPending(it)?PENDING:CONFIRMED})),
+      date:v.date || today(),
+      invoiceNo: invoiceNoOf(v),
+      blNo: blNoOf(v),
+      ref: v.ref || '',
+      note: v.note || ''
+    };
+    if (!window._inv.rows.length) window._inv.rows = [{name:'', unit:'وحدة', qty:1, unitPrice:0, priceStatus:PENDING}];
+    renderInvModal();
+  };
+
+  window.renderInvModal = function(){
+    const inv = window._inv; if (!inv) return;
+    const s = suppliers.find(x => x.id === inv.spId); if (!s) return;
+    const UNITS = ['وحدة','متر','م2','م3','كجم','طن','لتر','رحلة','يوم','ساعة','قطعة'];
+    const catalog = s.catalog || [];
+    const dlOpts = catalog.map(c => '<option value="'+safe(c.name)+'" data-unit="'+safe(c.unit)+'">').join('');
+    const total = inv.rows.reduce((sum, r) => sum + (isPending(r) ? 0 : n(r.qty) * n(r.unitPrice)), 0);
+    let rowsHtml = '';
+    inv.rows.forEach((row, i) => {
+      const unitSel = UNITS.map(u => '<option value="'+safe(u)+'" '+(u===row.unit?'selected':'')+'>'+safe(u)+'</option>').join('');
+      const rowTotal = isPending(row) ? ptag() : fmtDA(n(row.qty) * n(row.unitPrice));
+      rowsHtml += '<tr id="inv-tr-'+i+'">'
+        + '<td><input class="ti" type="text" id="inv-n-'+i+'" list="inv-dl" value="'+safe(row.name)+'" placeholder="اسم الصنف" style="min-width:130px" onchange="invCellChange('+i+',\'name\',this.value)"></td>'
+        + '<td><select class="ts" id="inv-u-'+i+'" style="min-width:68px" onchange="invCellChange('+i+',\'unit\',this.value)">'+unitSel+'</select></td>'
+        + '<td><input class="ti" type="number" id="inv-q-'+i+'" value="'+safe(row.qty)+'" min="0" step="0.01" style="min-width:56px" oninput="invCellChange('+i+',\'qty\',this.value)"></td>'
+        + '<td><input class="ti '+(isPending(row)?'price-unset':'')+'" type="number" id="inv-p-'+i+'" value="'+(isPending(row)?'':safe(row.unitPrice))+'" min="0" style="min-width:76px" placeholder="'+(isPending(row)?'لم يتفق عليه':'0')+'" oninput="invCellChange('+i+',\'unitPrice\',this.value)"></td>'
+        + '<td class="num '+(isPending(row)?'pending-inline':'')+'" id="inv-t-'+i+'" style="color:var(--green);font-weight:800;font-family:JetBrains Mono">'+rowTotal+'</td>'
+        + '<td><button class="del-btn" onclick="invRemRow('+i+')">✕</button></td>'
+        + '</tr>';
+    });
+    const html = '<datalist id="inv-dl">'+dlOpts+'</datalist>'
+      + '<div class="docmeta-safe">رقم الفاتورة و Bon de livraison بيانات توثيقية فقط ولا تدخل في حساب دين المورد.</div>'
+      + '<div class="fgr" style="margin-bottom:10px">'
+      +   '<div class="fg"><label>التاريخ *</label><input type="date" id="inv-date" value="'+safe(inv.date || today())+'" onchange="window._inv.date=this.value"></div>'
+      +   '<div class="fg"><label>رقم الفاتورة</label><input type="text" id="inv-invoiceNo" value="'+safe(inv.invoiceNo || '')+'" placeholder="N° Facture" oninput="window._inv.invoiceNo=this.value"></div>'
+      + '</div>'
+      + '<div class="fgr" style="margin-bottom:10px">'
+      +   '<div class="fg"><label>رقم Bon de livraison</label><input type="text" id="inv-blNo" value="'+safe(inv.blNo || '')+'" placeholder="N° BL" oninput="window._inv.blNo=this.value"></div>'
+      +   '<div class="fg"><label>مرجع داخلي</label><input type="text" id="inv-ref" value="'+safe(inv.ref || '')+'" placeholder="اختياري" oninput="window._inv.ref=this.value"></div>'
+      + '</div>'
+      + '<div style="overflow-x:auto;border:1px solid var(--bdr);border-radius:var(--rs);margin-bottom:8px">'
+      +   '<table class="tbl" style="min-width:500px"><thead><tr>'
+      +     '<th class="tl" style="min-width:130px">الصنف / الخدمة</th><th style="min-width:68px">الوحدة</th><th style="min-width:56px">الكمية</th><th style="min-width:76px">السعر DA</th><th style="min-width:90px">المجموع</th><th style="width:26px"></th>'
+      +   '</tr></thead><tbody id="inv-body">'+rowsHtml+'</tbody></table>'
+      + '</div>'
+      + '<div style="display:flex;gap:6px;margin-bottom:8px">'
+      +   '<button class="add-row" style="flex:1;border-radius:var(--rs);border-left:none" onclick="invAddRow()">＋ صنف من الكتالوج</button>'
+      +   '<button class="btn btn-sec btn-sm" style="flex-shrink:0;white-space:nowrap" onclick="invAddNewCatItem()">＋ صنف جديد</button>'
+      + '</div>'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 11px;background:var(--bg3);border-radius:var(--rs);border:1px solid var(--bdr);margin-bottom:8px">'
+      +   '<span style="font-size:12px;font-weight:700;color:var(--tx2)">إجمالي الفاتورة</span>'
+      +   '<span class="num" id="inv-grand" style="font-size:16px;font-weight:900;color:var(--gold2)">'+fmtDA(total)+'</span>'
+      + '</div>'
+      + '<div class="fg"><label>ملاحظة</label><input type="text" id="inv-note" value="'+safe(inv.note || '')+'" placeholder="..." oninput="window._inv.note=this.value"></div>';
+    OM((inv.editId ? '✎ تعديل فاتورة — ' : '🧾 فاتورة شراء — ') + safe(s.name), html, window.invSave, inv.editId ? 'حفظ التعديل' : 'حفظ الفاتورة');
+  };
+
+  window.invCellChange = function(i, field, val){
+    if (!window._inv || !window._inv.rows[i]) return;
+    const r = window._inv.rows[i];
+    if (field === 'qty') r.qty = n(val);
+    else if (field === 'unitPrice') { r.unitPrice = String(val == null ? '' : val).trim() === '' ? 0 : n(val); r.priceStatus = priceStateFromInput(val); }
+    else r[field] = val;
+    if (field === 'name') {
+      const s = suppliers.find(x => x.id === window._inv.spId);
+      const cat = s && s.catalog ? s.catalog.find(c => c.name === val) : null;
+      if (cat) { r.unit = cat.unit; const u = document.getElementById('inv-u-'+i); if (u) u.value = cat.unit; }
+    }
+    const totalRow = isPending(r) ? 0 : n(r.qty) * n(r.unitPrice);
+    const rowEl = document.getElementById('inv-t-'+i);
+    if (rowEl) { rowEl.innerHTML = isPending(r) ? ptag() : fmtDA(totalRow); rowEl.classList.toggle('pending-inline', isPending(r)); }
+    const grand = window._inv.rows.reduce((s,x) => s + (isPending(x) ? 0 : n(x.qty) * n(x.unitPrice)), 0);
+    const g = document.getElementById('inv-grand'); if (g) g.textContent = fmtDA(grand);
+  };
+
+  window.invAddRow = function(){ if (!window._inv) return; window._inv.rows.push({name:'', unit:'وحدة', qty:1, unitPrice:0, priceStatus:PENDING}); renderInvModal(); };
+  window.invSave = async function(){
+    const inv = window._inv; if (!inv) return;
+    if (secGuard('sup:'+inv.spId,'حساب المورد')) return;
+    const validRows = inv.rows.filter(r => (r.name||'').trim() && n(r.qty) > 0).map(r => ({
+      name:(r.name||'').trim(), unit:r.unit||'وحدة', qty:n(r.qty), unitPrice:n(r.unitPrice), priceStatus:isPending(r)?PENDING:CONFIRMED
+    }));
+    if (!validRows.length) return T('أضف صنفاً واحداً على الأقل','error');
+    const total = validRows.reduce((s,r) => s + (isPending(r) ? 0 : n(r.qty) * n(r.unitPrice)), 0);
+    const meta = {
+      date: inv.date || today(),
+      invoiceNo: (inv.invoiceNo || '').trim(),
+      blNo: (inv.blNo || '').trim(),
+      ref: (inv.ref || '').trim() || (inv.invoiceNo || '').trim() || (inv.blNo || '').trim(),
+      note: (inv.note || '').trim()
+    };
+    if (!window._supInvs) window._supInvs = [];
+    const sp = suppliers.find(x => x.id === inv.spId);
+    if (inv.editId) {
+      const ex = window._supInvs.find(x => x.id === inv.editId);
+      if (!ex) { window._inv = null; CM(); return T('الفاتورة غير موجودة','error'); }
+      Object.assign(ex, meta, {items:validRows, total, updatedAt:isoNow()});
+      const ok = await persist('sup_invoices', ex);
+      if (!ok) return T('فشل حفظ الفاتورة','error');
+      window._inv = null; autosave(); CM(); renderSupDetail(inv.spId);
+      T('✅ تم تعديل الفاتورة — '+fmtDA(total),'success');
+      await logA('تعديل فاتورة: '+(sp?.name||''), fmtDA(total));
+      return;
+    }
+    const rec = {id:uid(), supplierId:inv.spId, ...meta, items:validRows, total, createdAt:isoNow()};
+    window._supInvs.push(rec);
+    const ok = await persist('sup_invoices', rec);
+    if (!ok) { window._supInvs = window._supInvs.filter(x => x.id !== rec.id); return T('فشل حفظ الفاتورة','error'); }
+    window._inv = null; autosave(); CM(); renderSupDetail(inv.spId);
+    T('✅ فاتورة '+fmtDA(total)+' مسجّلة','success');
+    await logA('فاتورة شراء: '+(sp?.name||''), fmtDA(total));
+  };
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Supplier payments: create metadata + metadata-only edit.
+  // ─────────────────────────────────────────────────────────────────────
+  function supplierPayForm(prefix, item, opts){
+    item = item || {}; opts = opts || {};
+    const readOnly = !!opts.readOnlyAmount;
+    return (readOnly ? '<div class="docmeta-safe">تعديل توثيقي فقط. مبلغ العملية ونوعها لا يتغيران حتى لا يتغير حساب المورد.</div>' : '')
+      + '<div class="fg"><label>المبلغ (DA) *</label><input type="number" id="'+prefix+'-a" placeholder="0" min="1" value="'+(item.amount != null ? safe(item.amount) : '')+'" '+(readOnly?'disabled':'')+'></div>'
+      + '<div class="fgr">'
+      +   '<div class="fg"><label>التاريخ</label><input type="date" id="'+prefix+'-d" value="'+safe(item.date || today())+'"></div>'
+      +   '<div class="fg"><label>طريقة الدفع</label><select id="'+prefix+'-m">'+methodOptions(item.method || (item.kind==='advance'?'تسبيق':''), (item.kind==='advance'?['تسبيق','نقداً','تحويل','شيك']:['نقداً','تحويل','شيك']))+'</select></div>'
+      + '</div>'
+      + paymentMetaFields(prefix, item)
+      + '<div class="fg"><label>ملاحظة</label><input type="text" id="'+prefix+'-n" value="'+safe(item.note||'')+'" placeholder="..."></div>';
+  }
+  function readSupplierPay(prefix, keepAmount){
+    const amount = keepAmount == null ? n(document.getElementById(prefix+'-a')?.value) : n(keepAmount);
+    if (amount <= 0) throw new Error('أدخل مبلغاً صحيحاً');
+    return {amount, date:readVal(prefix+'-d') || today(), method:readVal(prefix+'-m'), note:readVal(prefix+'-n'), ...readPaymentMeta(prefix)};
+  }
+  window.addSupPay = async function(spId){
+    if (secGuard('sup:'+spId,'حساب المورد')) return;
+    OM('＋ دفعة للمورد', supplierPayForm('spp', {method:'نقداً'}), async () => {
+      try {
+        const next = readSupplierPay('spp');
+        const p = {id:uid(), supplierId:spId, kind:'payment', createdAt:isoNow(), ...next};
+        supPays.push(p);
+        const ok = await persist('sup_pays', p);
+        if (!ok) { supPays = supPays.filter(x => x.id !== p.id); return T('فشل تسجيل الدفعة','error'); }
+        autosave(); CM(); renderSupDetail(spId); T('✅ تم تسجيل الدفعة','success');
+        try { runReminders(); } catch(_) {}
+        await logA('دفعة لمورد: '+(suppliers.find(x=>x.id===spId)?.name||''), fmtDA(p.amount));
+      } catch(err) { T(err.message || 'تحقق من البيانات','error'); }
+    }, 'تسجيل');
+    setTimeout(() => document.getElementById('spp-a')?.focus(), 80);
+  };
+  window.addSupAdvance = async function(spId){
+    if (secGuard('sup:'+spId,'حساب المورد')) return;
+    OM('＋ تسبيق للمورد', supplierPayForm('sadv', {method:'تسبيق', kind:'advance'}), async () => {
+      try {
+        const next = readSupplierPay('sadv');
+        const p = {id:uid(), supplierId:spId, kind:'advance', createdAt:isoNow(), ...next};
+        supPays.push(p);
+        const ok = await persist('sup_pays', p);
+        if (!ok) { supPays = supPays.filter(x => x.id !== p.id); return T('فشل تسجيل التسبيق','error'); }
+        autosave(); CM(); renderSupDetail(spId); T('✅ تم تسجيل التسبيق','success');
+        await logA('تسبيق لمورد: '+(suppliers.find(x=>x.id===spId)?.name||''), fmtDA(p.amount));
+      } catch(err) { T(err.message || 'تحقق من البيانات','error'); }
+    }, 'تسجيل');
+    setTimeout(() => document.getElementById('sadv-a')?.focus(), 80);
+  };
+  window.editSupPay = async function(pid, spId){
+    if (secGuard('sup:'+spId,'حساب المورد')) return;
+    const p = supPays.find(x => x.id === pid && x.supplierId === spId);
+    if (!p) return T('الدفعة غير موجودة','error');
+    OM('✏ تعديل بيانات '+(p.kind==='advance'?'التسبيق':'الدفعة'), supplierPayForm('espp', p, {readOnlyAmount:true}), async () => {
+      try {
+        Object.assign(p, readSupplierPay('espp', p.amount), {updatedAt:isoNow()});
+        const ok = await persist('sup_pays', p);
+        if (!ok) return T('فشل الحفظ — لم يتم تغيير البيانات','error');
+        autosave(); CM(); renderSupDetail(spId); T('✅ تم تعديل بيانات العملية','success');
+        await logA('تعديل بيانات '+(p.kind==='advance'?'تسبيق مورد':'دفعة مورد')+': '+fmtDA(p.amount), suppliers.find(x=>x.id===spId)?.name||'');
+      } catch(err) { T(err.message || 'تحقق من البيانات','error'); }
+    }, 'حفظ البيانات');
+  };
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Client invoice record metadata: invoice number + BL number in clients.
+  // ─────────────────────────────────────────────────────────────────────
+  const baseRenderRecSec = window.renderRecSec;
+  window.renderRecSec = function(rec, cid){
+    if (!rec || rec.type !== 'invoice') return baseRenderRecSec ? baseRenderRecSec.apply(this, arguments) : '';
+    const es = entries.filter(e => e.recordId === rec.id && e.type === 'invoice').sort((a,b) => (a.order||0) - (b.order||0));
+    const info = rec.invoiceInfo || {};
+    const total = es.reduce((s,e) => s + (window.calcE ? n(calcE(e).amount) : n(e.qty) * n(e.unitPrice)), 0);
+    const tvaRate = n(info.tvaRate), tva = total * tvaRate / 100;
+    const acomptes = payments.filter(p=>p.clientId===cid).reduce((s,p)=>s+n(p.amount),0)
+                   + advances.filter(a=>a.clientId===cid && activeAdvance(a)).reduce((s,a)=>s+n(a.amount),0);
+    const net = Math.max(0, total + tva - acomptes);
+    const unitOpts = ['ML','M2','M3','U','Kg','T','L','Voyage','Jour','Heure','Forfait'];
+    const pOpts = ['ESPECES','VIREMENT','CHEQUE','A TERME'];
+    const rows = es.map((e,i) => {
+      const cv = window.calcE ? calcE(e) : {amount:n(e.qty)*n(e.unitPrice), pending:false};
+      return '<tr>'
+        + '<td style="text-align:center;color:var(--tx3);font-size:11px">'+(i+1)+'</td>'
+        + '<td><input class="ti" style="text-align:right;width:100%;min-width:150px" type="text" value="'+safe(e.designation||'')+'" placeholder="Designation..." onchange="updateInvE(\''+e.id+'\',\'designation\',this.value,\''+cid+'\')"></td>'
+        + '<td><input class="ti" type="number" min="0" step="0.01" value="'+safe(e.qty||'')+'" onchange="updateInvE(\''+e.id+'\',\'qty\',this.value,\''+cid+'\')"></td>'
+        + '<td><select class="ts" style="min-width:56px" onchange="updateInvE(\''+e.id+'\',\'unit\',this.value,\''+cid+'\')">'+unitOpts.map(u=>'<option value="'+safe(u)+'" '+((e.unit||'U')===u?'selected':'')+'>'+safe(u)+'</option>').join('')+'</select></td>'
+        + '<td><input class="ti '+(cv.pending?'price-unset':'')+'" type="number" min="0" value="'+(cv.pending?'':safe(e.unitPrice||''))+'" placeholder="'+(cv.pending?'لم يتفق عليه':'0')+'" onchange="updateInvE(\''+e.id+'\',\'unitPrice\',this.value,\''+cid+'\')"></td>'
+        + '<td class="num '+(cv.pending?'pending-inline':'')+'" style="color:var(--green)">'+(cv.pending?ptag():(cv.amount?fmtDA(cv.amount):''))+'</td>'
+        + '<td><button class="del-btn" onclick="delInvE(\''+e.id+'\',\''+cid+'\')">&#x2715;</button></td>'
+        + '</tr>';
+    }).join('');
+    const infoGrid = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:7px">'
+      + '<div class="fg" style="margin:0"><label>Type</label><input type="text" value="'+safe(info.type||'SITUATION ACTUELLE')+'" onchange="updateInvInfo(\''+rec.id+'\',\'type\',this.value,\''+cid+'\')"></div>'
+      + '<div class="fg" style="margin:0"><label>رقم الفاتورة / N° Facture</label><input type="text" value="'+safe(info.invoiceNo || info.num || '')+'" onchange="updateInvInfo(\''+rec.id+'\',\'invoiceNo\',this.value,\''+cid+'\');updateInvInfo(\''+rec.id+'\',\'num\',this.value,\''+cid+'\')"></div>'
+      + '<div class="fg" style="margin:0"><label>رقم Bon de livraison</label><input type="text" value="'+safe(info.blNo || '')+'" onchange="updateInvInfo(\''+rec.id+'\',\'blNo\',this.value,\''+cid+'\')"></div>'
+      + '<div class="fg" style="margin:0"><label>Date</label><input type="date" value="'+safe(info.date||'')+'" onchange="updateInvInfo(\''+rec.id+'\',\'date\',this.value,\''+cid+'\')"></div>'
+      + '<div class="fg" style="margin:0"><label>Paiement</label><select onchange="updateInvInfo(\''+rec.id+'\',\'paiement\',this.value,\''+cid+'\')">'+pOpts.map(m=>'<option value="'+safe(m)+'" '+((info.paiement||'ESPECES')===m?'selected':'')+'>'+safe(m)+'</option>').join('')+'</select></div>'
+      + '<div class="fg" style="margin:0"><label>TVA %</label><input type="number" value="'+safe(info.tvaRate||0)+'" min="0" max="100" onchange="updateInvInfo(\''+rec.id+'\',\'tvaRate\',this.value,\''+cid+'\')"></div>'
+      + '<div class="fg" style="margin:0"><label>Ref.</label><input type="text" value="'+safe(info.ref||'')+'" onchange="updateInvInfo(\''+rec.id+'\',\'ref\',this.value,\''+cid+'\')"></div>'
+      + '</div>';
+    const totBox = es.length ? '<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--rs);padding:12px;max-width:340px;margin-right:auto;margin-top:10px">'
+      + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+      + '<tr><td style="padding:5px 8px;color:var(--tx2)">TOTAL H.T.:</td><td style="padding:5px 8px;font-weight:900;color:var(--gold2);text-align:left;font-family:monospace">'+fmtDA(total)+'</td></tr>'
+      + '<tr><td style="padding:5px 8px;color:var(--tx2)">TVA ('+tvaRate+'%):</td><td style="padding:5px 8px;text-align:left;font-family:monospace">'+fmtDA(tva)+'</td></tr>'
+      + (acomptes>0?'<tr><td style="padding:5px 8px;color:var(--tx2)">ACOMPTES:</td><td style="padding:5px 8px;color:var(--green);text-align:left;font-family:monospace">- '+fmtDA(acomptes)+'</td></tr>':'')
+      + '<tr style="border-top:2px solid var(--bdr2)"><td style="padding:7px 8px;font-weight:900;color:var(--tx)">NET A PAYER:</td><td style="padding:7px 8px;font-size:15px;font-weight:900;color:var(--red);text-align:left;font-family:monospace">'+fmtDA(net)+'</td></tr>'
+      + '</table><div style="margin-top:7px;padding:7px;background:var(--bg4);border-radius:var(--rs);font-size:10px;color:var(--tx3);font-style:italic">'+(typeof amountToWords==='function'?amountToWords(Math.round(total+tva)):'')+'</div></div>' : '';
+    return '<div style="padding:12px 13px">'
+      + '<div class="docmeta-safe">رقم الفاتورة ورقم Bon de livraison في العملاء بيانات تعريفية فقط ولا تغير TOTAL أو NET.</div>'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:7px">'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-gold btn-sm" onclick="addInvE(\''+rec.id+'\',\''+cid+'\')">+ سطر</button><button class="btn btn-blu btn-sm" onclick="importInvPDF(\''+rec.id+'\',\''+cid+'\')">PDF استيراد</button><button class="btn btn-sec btn-sm" onclick="delRecord(\''+rec.id+'\',\''+cid+'\')">حذف السجل</button></div>'
+      + '<div style="font-size:11px;color:var(--tx3)">TOTAL HT: <span data-inlinetot="'+safe(rec.id)+'" style="color:var(--gold2);font-weight:800">'+fmtDA(total)+'</span></div></div>'
+      + '<div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--rs);padding:10px 12px;margin-bottom:10px"><div style="font-size:11px;font-weight:800;color:var(--tx2);margin-bottom:7px">معلومات الفاتورة</div>'+infoGrid+'</div>'
+      + '<div class="tw" style="margin-bottom:10px"><table class="tbl"><thead><tr><th style="width:28px">N</th><th class="tl">Designation</th><th style="width:65px">Qte</th><th style="width:65px">Unite</th><th style="width:85px">P.U HT</th><th style="width:100px">Montant HT</th><th style="width:24px"></th></tr></thead><tbody>'+(rows||'<tr><td colspan="7" style="padding:18px;text-align:center;color:var(--tx3)">اضغط + سطر او استيراد PDF</td></tr>')+'</tbody></table></div>'
+      + totBox + '</div>';
+  };
+
+  const baseRenderCD = window.renderCD;
+  window.renderCD = function(cid){
+    const ret = baseRenderCD.apply(this, arguments);
+    setTimeout(() => decoratePaymentLists('client', cid), 0);
+    return ret;
+  };
+  const baseRenderSupDetail = window.renderSupDetail;
+  window.renderSupDetail = function(spId){
+    const ret = baseRenderSupDetail.apply(this, arguments);
+    setTimeout(() => decoratePaymentLists('supplier', spId), 0);
+    return ret;
+  };
+
+  function decoratePaymentLists(kind, ownerId){
+    try {
+      const root = document.getElementById('content'); if (!root) return;
+      if (kind === 'client') {
+        [...root.querySelectorAll('button[onclick^="editPay("],button[onclick^="editAdv("]')].forEach(btn => {
+          const m = btn.getAttribute('onclick').match(/edit(Pay|Adv)\('([^']+)'/); if (!m) return;
+          const item = m[1] === 'Pay' ? payments.find(p => p.id === m[2]) : advances.find(a => a.id === m[2]);
+          const box = btn.closest('.pay-it')?.querySelector('div[style*="flex:1"]');
+          if (item && box && !box.querySelector('[data-docmeta]')) box.insertAdjacentHTML('beforeend', payMetaLine(item));
+        });
+      } else {
+        [...root.querySelectorAll('button[onclick^="delSupPay("]')].forEach(del => {
+          const m = del.getAttribute('onclick').match(/delSupPay\('([^']+)'/); if (!m) return;
+          const p = supPays.find(x => x.id === m[1]); if (!p) return;
+          const box = del.closest('.pay-it')?.querySelector('div[style*="flex:1"]');
+          if (box && !box.querySelector('[data-docmeta]')) box.insertAdjacentHTML('beforeend', payMetaLine(p));
+          if (!del.parentElement?.querySelector('button[data-edit-suppay="'+safe(p.id)+'"]')) {
+            del.insertAdjacentHTML('beforebegin', '<button class="btn btn-sec btn-xs" data-edit-suppay="'+safe(p.id)+'" onclick="editSupPay(\''+safe(p.id)+'\',\''+safe(ownerId)+'\')" title="تعديل بيانات العملية">✏</button>');
+          }
+        });
+        (window._supInvs||[]).filter(v => v.supplierId === ownerId).forEach(v => {
+          const details = document.getElementById('iv_'+v.id);
+          const head = details?.previousElementSibling?.querySelector('div[style*="cursor:pointer"]');
+          if (head && !head.querySelector('[data-invmeta="'+safe(v.id)+'"]')) head.insertAdjacentHTML('beforeend','<div data-invmeta="'+safe(v.id)+'">'+invMetaLine(v)+'</div>');
+        });
+      }
+    } catch(e) { console.warn('docmeta decorate failed', e); }
+  }
+
+  // Keep printouts informative without touching totals.
+  const basePrintSupplierDoc = window.printSupplierDoc;
+  if (typeof basePrintSupplierDoc === 'function') {
+    window.printSupplierDoc = function(spId){
+      try {
+        const invs = (window._supInvs || []).filter(v => v.supplierId === spId);
+        invs.forEach(v => { if (!v.ref) v.ref = invoiceNoOf(v) || blNoOf(v) || ''; });
+      } catch(_) {}
+      return basePrintSupplierDoc.apply(this, arguments);
+    };
+  }
+})();
+</script>
+
 </body></html>
