@@ -16503,4 +16503,134 @@ function install(){wrapSaveAdv();wrapCloud();window[API]={version:VERSION,run:ru
 [300,1200,3000,6500,11000,17000].forEach(function(ms){setTimeout(function(){install();if(ms>=6500)run('delayed-start-'+ms);},ms);});
 })();
 </script>
+<script id="egtph-v125-smart-advance-repair">
+/* v125 — تصحيح ذكي بعد المزامنة: لا يعيد توزيع كل التاريخ عشوائياً.
+   القاعدة:
+   - نحترم الدورة المحاسبية الموجودة إذا كانت موثقة.
+   - في يوم الاستحقاق نفسه: إذا الدورة السابقة لم تكتمل، يذهب المبلغ إليها أولاً.
+   - العمليات الجديدة أو ناقصة بيانات الدورة تُوجّه إلى أقدم دورة مفتوحة.
+   - يعمل بعد v124 ليصلح أي توزيع زائد، ويكتب شرحاً في الملاحظة عند النقل/التقسيم. */
+(function(){
+'use strict';
+var VERSION='125.0', API='EGTPH_V125_SMART_ADVANCE_REPAIR', RUNNING=false, PENDING=false;
+function D(){try{return window.DB||DB||null;}catch(e){return window.DB||null;}}
+function A(v){return Array.isArray(v)?v:[];}
+function O(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}
+function S(v){return v==null?'':String(v);}
+function N(v){var x=Number(v);return isFinite(x)?Math.round(x):0;}
+function pad(n){return String(n).padStart(2,'0');}
+function money(v){return Math.round(Number(v)||0);}
+function clone(x){try{return JSON.parse(JSON.stringify(x));}catch(e){return x;}}
+function dt(v){
+  if(v instanceof Date&&!isNaN(v))return new Date(v.getFullYear(),v.getMonth(),v.getDate());
+  var s=S(v).trim(),m;if(!s)return null;
+  if((m=s.match(/^(\d{4})-(\d{2})-(\d{2})/))){var a=new Date(+m[1],+m[2]-1,+m[3]);return isNaN(a)?null:new Date(a.getFullYear(),a.getMonth(),a.getDate());}
+  if((m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/))){var b=new Date(+m[3],+m[2]-1,+m[1]);return isNaN(b)?null:new Date(b.getFullYear(),b.getMonth(),b.getDate());}
+  var t=Date.parse(s);if(isNaN(t))return null;var c=new Date(t);return new Date(c.getFullYear(),c.getMonth(),c.getDate());
+}
+function iso(d){if(!(d instanceof Date)||isNaN(d))return '';return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function dmy(d){if(!(d instanceof Date)||isNaN(d))return '';return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear();}
+function addMonths(d,n){var y=d.getFullYear(),m=d.getMonth()+n,day=d.getDate(),last=new Date(y,m+1,0).getDate();return new Date(y,m,Math.min(day,last));}
+function fmt(n){try{return typeof fmtN==='function'?fmtN(n):String(n).replace(/\B(?=(\d{3})+(?!\d))/g,' ');}catch(e){return String(n);}}
+function mn(m){var a=['جانفي','فيفري','مارس','أفريل','ماي','جوان','جويلية','أوت','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];try{return (window.MN&&MN[m])||a[m]||String(m+1);}catch(e){return a[m]||String(m+1);}}
+function sameDate(a,b){return a&&b&&iso(a)===iso(b);}
+function workerId(w){return S(w&&w.id);}
+function payday(w){var x=N((w&&w.payday)!=null?w.payday:w&&w.day);return Math.max(1,Math.min(31,x||1));}
+function rangeFromMY(w,m,yr){var day=payday(w),start=new Date(+yr,+m,Math.min(day,new Date(+yr,+m+1,0).getDate())),to=addMonths(start,1);return {m:+m,yr:+yr,from:start,to:to,id:workerId(w)+'|'+iso(start)+'_'+iso(to),capacity:cycleCapacity(w,start,to),used:0};}
+function nextMY(m,yr){return +m===11?{m:0,yr:+yr+1}:{m:+m+1,yr:+yr};}
+function prevMY(m,yr){return +m===0?{m:11,yr:+yr-1}:{m:+m-1,yr:+yr};}
+function anchorForDate(w,when){
+  var d=dt(when)||new Date(),day=payday(w),due=Math.min(day,new Date(d.getFullYear(),d.getMonth()+1,0).getDate());
+  if(d.getDate()>=due)return {m:d.getMonth(),yr:d.getFullYear()};
+  var p=addMonths(new Date(d.getFullYear(),d.getMonth(),1),-1);return {m:p.getMonth(),yr:p.getFullYear()};
+}
+function startAnchor(w){return anchorForDate(w,(w&&w.startDate)||new Date());}
+function validAbs(a){return a&&a.settled!==true&&S(a.deductOpt)!=='cancel'&&S(a.status)!=='deleted'&&!a._deletedAt;}
+function cycleCapacity(w,from,to){
+  var sal=money(w&&w.salary),cap=sal,sd=dt(w&&w.startDate),wid=workerId(w),d=D(),ded=0;
+  if(sd&&from<sd&&sd<to){var days=Math.ceil((to-sd)/86400000);cap=Math.min(sal,Math.max(0,Math.round(sal/30)*days));}
+  A(d&&d.absences&&d.absences[wid]).forEach(function(a){var x=dt(a&&((a.from)||a.date));if(validAbs(a)&&x&&x>=from&&x<to)ded+=money(a.deduct);});
+  return Math.max(0,cap-ded);
+}
+function advAmount(a){try{if(typeof window.advGross==='function')return money(window.advGross(a));}catch(e){}return money(a&&a.amount);}
+function advNet(a){try{if(typeof window.advNetPaid==='function')return money(window.advNetPaid(a));}catch(e){}return money((a&&a.netPaid)!=null?a.netPaid:(a&&a.amount));}
+function realDate(a){return dt((a&&a.realDate)||(a&&a.actualPaymentDate)||(a&&a.date))||dt(a&&a._createdAt)||new Date(0);}
+function isDeleted(a){return !a||S(a.status)==='deleted'||!!a._deletedAt;}
+function deletedIdSet(d){
+  var out={};A(d&&d.deletedIds).forEach(function(x){out[S(x)]=1;});
+  Object.keys(O(d&&d.deletedRecords)).forEach(function(k){out[S(k)]=1;});
+  Object.keys(O(d&&d.trash)).forEach(function(sec){A(d.trash[sec]).forEach(function(x){if(x){out[S(x.id)]=1;out[S(x._tid)]=1;}});});
+  A(d&&d.auditLog).forEach(function(a){var det=O(a&&a.details);['removedPseudoAdvanceId','pseudoAdvanceRemoved','pseudoAdvanceId'].forEach(function(k){if(det[k])out[S(det[k])]=1;});});
+  A(d&&d.repairLog).forEach(function(r){['removedPseudoAdvanceId','pseudoAdvanceRemoved','pseudoAdvanceId'].forEach(function(k){if(r&&r[k])out[S(r[k])]=1;});});
+  A(d&&d.ledger).forEach(function(l){var det=O(l&&l.details);['removedPseudoAdvanceId','pseudoAdvanceRemoved','pseudoAdvanceId'].forEach(function(k){if(det[k])out[S(det[k])]=1;});});
+  return out;
+}
+function eachAdvFor(advances,wid,fn){var b=advances&&advances[wid];if(!b)return;if(Array.isArray(b)){b.forEach(function(arr,m){A(arr).forEach(function(a){fn(a,S(m));});});}else Object.keys(O(b)).forEach(function(m){A(b[m]).forEach(function(a){fn(a,S(m));});});}
+function allIds(advances){var ids={};Object.keys(O(advances)).forEach(function(wid){eachAdvFor(advances,wid,function(a){if(a&&a.id)ids[S(a.id).replace(/__(?:v124|v125)p\d+$/,'')]=1;});});return ids;}
+function parseBackupAdvances(d){
+  var raw=d&&d.settings&&d.settings.v124AdvanceReroute&&d.settings.v124AdvanceReroute.backup;if(!raw)return null;
+  try{var x=JSON.parse(raw);return x&&x.advances?x.advances:null;}catch(e){return null;}
+}
+function mergedBaseAdvances(d){
+  var base=clone(parseBackupAdvances(d)||d.advances||{}),ids=allIds(base),cur=O(d&&d.advances);
+  Object.keys(cur).forEach(function(wid){
+    base[wid]=base[wid]||{};
+    var add=function(rec,m){base[wid][S(m)]=base[wid][S(m)]||[];base[wid][S(m)].push(rec);ids[S(rec.id)]=1;};
+    eachAdvFor(cur,wid,function(a,m){
+      if(!a||!a.id)return;var id=S(a.id).replace(/__(?:v124|v125)p\d+$/,'');
+      if(ids[id])return;
+      if(a.__v124Alloc||a.__v125Alloc){
+        var src=id;if(src&&ids[src])return;
+        var r=clone(a);r.id=src||S(a.operationId||a.id);r.amount=money(a.originalAmount||a.amount);r.netPaid=money(a.originalNetPaid!=null?a.originalNetPaid:(a.netPaid!=null?a.netPaid:a.amount));delete r.__v124Alloc;delete r.__v124Version;delete r.__v125Alloc;delete r.__v125Version;add(r,m);return;
+      }
+      add(clone(a),m);
+    });
+  });
+  return base;
+}
+function collectRows(base,w,del){var rows=[],wid=workerId(w);eachAdvFor(base,wid,function(a){if(!a||isDeleted(a))return;if(del[S(a.id)]&&!(a.deductions&&a.deductions.length&&advNet(a)===0))return;rows.push(clone(a));});rows.sort(function(a,b){return (+realDate(a)-+realDate(b))||S(a.enteredAt||a._createdAt).localeCompare(S(b.enteredAt||b._createdAt))||S(a.id).localeCompare(S(b.id));});return rows;}
+function ensureCycles(w,rows){var st=dt(w&&w.startDate)||new Date(),last=st;rows.forEach(function(a){var r=realDate(a);if(r>last)last=r;});last=addMonths(last,4);var a=startAnchor(w),arr=[],map={},guard=0;while(guard++<90){var r=rangeFromMY(w,a.m,a.yr);arr.push(r);map[r.yr+'-'+r.m]=r;if(r.from>last)break;a=nextMY(a.m,a.yr);}return {arr:arr,map:map};}
+function getCycle(w,bag,m,yr){var k=yr+'-'+m;if(!bag.map[k]){var r=rangeFromMY(w,m,yr);bag.map[k]=r;bag.arr.push(r);bag.arr.sort(function(a,b){return a.from-b.from;});}return bag.map[k];}
+function cycleFromRec(w,bag,a){var cs=dt(a.cycleStart),ce=dt(a.cycleEnd),ck=S(a.cycleKey),m=null,yr=null;if(/^\d{4}-\d{2}$/.test(ck)){yr=+ck.slice(0,4);m=+ck.slice(5,7)-1;}else if(cs){var an=anchorForDate(w,cs);m=an.m;yr=an.yr;}else if(a.month!=null){m=+a.month;yr=(realDate(a)||new Date()).getFullYear();}
+  if(m==null||yr==null)return null;var r=getCycle(w,bag,m,yr);return cs&&ce?{cycle:r,cycleStart:cs,cycleEnd:ce}: {cycle:r};}
+function noteFor(src,total,parts,old){var line=parts.map(function(p){return fmt(p.amount)+' دج → '+mn(p.cycle.m)+' '+p.cycle.yr+' ('+iso(p.cycle.from)+' حتى '+iso(p.cycle.to)+')'+(p.closed?' ✓ إغلاق':'');}).join('؛ '),p='[v125] تسبيق فعلي '+fmt(total)+' دج بتاريخ '+dmy(realDate(src))+' — توزيع محاسبي بعد المزامنة: '+line+' — بلا ازدواجية.';old=S(old||'').trim();old=old.replace(/\s*—?\s*\[v124\][\s\S]*$/,'').replace(/\s*—?\s*\[v125\][\s\S]*$/,'').trim();return old?old+' — '+p:p;}
+function makeRec(src,part,idx,count,total,totalNet,allParts,mode){var r=clone(src)||{};var baseId=S(src&&src.id)||('ADV125_'+Date.now().toString(36));if(count>1)r.id=baseId+'__v125p'+(idx+1);else r.id=baseId;r.amount=part.amount;r.netPaid=Math.min(part.amount,Math.max(0,totalNet-part.netBefore));r.month=part.cycle.m;r.cycleKey=part.cycle.yr+'-'+pad(part.cycle.m+1);r.cycleStart=iso(part.cycle.from);r.cycleEnd=iso(part.cycle.to);r.cycleLocked=!!part.closed;r.realDate=dmy(realDate(src));r.actualPaymentDate=r.realDate;r.date=r.date||r.realDate;r.operationId=r.operationId||('V125OP_'+baseId.replace(/[^A-Za-z0-9_:-]/g,'_'));r.transactionId=r.transactionId||('V125TX_'+r.operationId);r.originalAmount=total;r.originalNetPaid=totalNet;r.allocationAmount=part.amount;r.allocationIndex=idx;r.allocationCount=count;r._updatedAt=src._updatedAt||src.enteredAt||src._createdAt||'2026-07-09T20:00:00.000Z';if(mode==='route'||count>1)r.note=noteFor(src,total,allParts.map(function(x){return {cycle:x.cycle,amount:x.amount,closed:x.closed};}),src.note);return r;}
+function rebuildWorker(base,w,del){
+  var wid=workerId(w),rows=collectRows(base,w,del);if(!rows.length)return {changed:false,ops:0,parts:0,warning:''};
+  var bag=ensureCycles(w,rows),start=dt(w.startDate)||new Date(0),preserved=[],deferred=[];
+  rows.forEach(function(a){
+    var meta=cycleFromRec(w,bag,a),amount=advAmount(a),rd=realDate(a);
+    if(meta&&meta.cycle&&a.__v124Alloc!==true){var c=meta.cycle,pm=prevMY(c.m,c.yr),prev=getCycle(w,bag,pm.m,pm.yr),boundary=sameDate(rd,c.from),prevAfterStart=prev.to>start;
+      if(boundary&&prevAfterStart){deferred.push(a);}
+      else {c.used+=amount;preserved.push({src:a,cycle:c,amount:amount,mode:'keep'});} }
+    else deferred.push(a);
+  });
+  var routed=[];
+  deferred.forEach(function(a){var remain=advAmount(a),parts=[],before=0;bag.arr.sort(function(x,y){return x.from-y.from;});for(var i=0;i<bag.arr.length&&remain>0;i++){var c=bag.arr[i];if(c.to<=start)continue;var free=Math.max(0,c.capacity-c.used);if(free<=0)continue;var take=Math.min(remain,free);c.used+=take;parts.push({src:a,cycle:c,amount:take,netBefore:before,closed:c.used>=c.capacity});before+=take;remain-=take;}
+    while(remain>0){var last=bag.arr[bag.arr.length-1],nx=nextMY(last.m,last.yr),c=getCycle(w,bag,nx.m,nx.yr),free=Math.max(c.capacity-c.used,remain),take=Math.min(remain,free);c.used+=take;parts.push({src:a,cycle:c,amount:take,netBefore:before,closed:c.used>=c.capacity});before+=take;remain-=take;}
+    routed.push({src:a,parts:parts});
+  });
+  var out={};preserved.forEach(function(p){var rec=makeRec(p.src,{cycle:p.cycle,amount:p.amount,netBefore:0,closed:p.cycle.used>=p.cycle.capacity},0,1,p.amount,advNet(p.src),[{cycle:p.cycle,amount:p.amount,closed:p.cycle.used>=p.cycle.capacity}],p.mode);out[S(rec.month)]=out[S(rec.month)]||[];out[S(rec.month)].push(rec);});
+  routed.forEach(function(g){var total=advAmount(g.src),net=advNet(g.src);g.parts.forEach(function(p,idx){var rec=makeRec(g.src,p,idx,g.parts.length,total,net,g.parts,'route');out[S(rec.month)]=out[S(rec.month)]||[];out[S(rec.month)].push(rec);});});
+  Object.keys(out).forEach(function(k){out[k].sort(function(a,b){return (+realDate(a)-+realDate(b))||S(a.enteredAt||a._createdAt).localeCompare(S(b.enteredAt||b._createdAt))||S(a.id).localeCompare(S(b.id));});});
+  return {changed:JSON.stringify(O((D().advances||{})[wid]))!==JSON.stringify(out),ops:rows.length,parts:Object.keys(out).reduce(function(s,k){return s+A(out[k]).length;},0),out:out};
+}
+function verifiedAhmedCheck(d){try{var adv=O(d.advances&&d.advances['8']),cur=A(adv['5']).reduce(function(s,a){return s+advAmount(a);},0);return {currentJuneAdvances:cur,expectedPdfCurrentAdvances:25000,ok:cur===25000};}catch(e){return {ok:false,error:S(e&&e.message||e)};}}
+function signature(d){try{return JSON.stringify({a:d.advances,w:A(d.workers).map(function(w){return [w.id,w.salary,w.startDate,w.payday,w.day];}),abs:d.absences}).length+':'+A(d.workers).length;}catch(e){return String(Date.now());}}
+function run(reason){var d=D();if(!d||!A(d.workers).length||RUNNING){PENDING=true;return {ok:false,busy:RUNNING};}RUNNING=true;PENDING=false;var before=signature(d),report={version:VERSION,reason:reason||'manual',at:new Date().toISOString(),workers:0,changedWorkers:0,ops:0,parts:0,errors:[]};
+  try{var base=mergedBaseAdvances(d),del=deletedIdSet(d),newAdv=clone(d.advances||{});A(d.workers).forEach(function(w){try{var r=rebuildWorker(base,w,del);report.workers++;report.ops+=r.ops;report.parts+=r.parts;if(r.changed){newAdv[workerId(w)]=r.out;report.changedWorkers++;}}catch(e){report.errors.push({wid:w&&w.id,name:w&&w.name,error:S(e&&e.message||e)});}});
+    if(report.changedWorkers){d.advances=newAdv;}
+    d.settings=d.settings||{};d.settings.v125AdvanceSmartRepair=d.settings.v125AdvanceSmartRepair||{};d.settings.v125AdvanceSmartRepair.lastRun=report;d.settings.v125AdvanceSmartRepair.version=VERSION;d.settings.v125AdvanceSmartRepair.supersedes='v124';d.settings.v125AdvanceSmartRepair.ahmedPdfCheck=verifiedAhmedCheck(d);report.ahmedPdfCheck=d.settings.v125AdvanceSmartRepair.ahmedPdfCheck;report.ok=!report.errors.length;report.changed=report.changedWorkers>0;report.before=before;report.after=signature(d);
+    if(report.changed){try{if(typeof audit==='function')audit('v125 تصحيح ذكي للتسبيقات بعد المزامنة: '+report.changedWorkers+' عامل');}catch(e){}try{if(typeof saveDB==='function')saveDB();}catch(e){try{localStorage.setItem('egtph_payroll_v120',JSON.stringify(d));}catch(_){}}}
+    try{if(typeof renderDash==='function')renderDash();if(typeof renderSalContent==='function')renderSalContent();if(typeof renderSummary==='function')renderSummary();if(typeof renderSettlement==='function')renderSettlement();}catch(e){}
+    try{if(report.changed&&typeof toast==='function')toast('✅ v125: صُححت التسبيقات الذكية حسب التصفية المرجعية');}catch(e){}
+    return report;
+  }finally{RUNNING=false;if(PENDING)setTimeout(function(){run('pending-after-run');},900);}}
+function wrapSaveAdv(){var base=window.saveAdv;if(typeof base!=='function'||base.__v125SmartRepair)return;var wrapped=function(){var out=base.apply(this,arguments);setTimeout(function(){run('after-new-advance');},1000);return out;};wrapped.__v125SmartRepair=true;wrapped.__v124Reroute=true;window.saveAdv=wrapped;try{saveAdv=wrapped;}catch(e){}}
+function wrapCloud(){var base=window.cloudSync;if(typeof base!=='function'||base.__v125SmartRepair)return;var wrapped=function(){var ret=base.apply(this,arguments);try{if(ret&&typeof ret.then==='function')ret.then(function(){setTimeout(function(){run('after-cloud-sync');},1800);},function(){setTimeout(function(){run('after-cloud-sync-error');},2200);});else setTimeout(function(){run('after-cloud-sync');},2200);}catch(e){setTimeout(function(){run('after-cloud-sync-fallback');},2600);}return ret;};wrapped.__v125SmartRepair=true;wrapped.__v124Reroute=true;window.cloudSync=wrapped;try{cloudSync=wrapped;}catch(e){}}
+function install(){wrapSaveAdv();wrapCloud();try{if(window.EGTPH_V124_ADVANCE_REROUTE)window.EGTPH_V124_ADVANCE_REROUTE.supersededBy='v125';}catch(e){}window[API]={version:VERSION,run:run,status:function(){var d=D();return d&&d.settings&&d.settings.v125AdvanceSmartRepair;},rebuildWorker:rebuildWorker};}
+[500,1800,4200,9000,19000,26000,34000].forEach(function(ms){setTimeout(function(){install();if(ms>=9000)run('delayed-start-'+ms);},ms);});
+})();
+</script>
+
 </body></html>
