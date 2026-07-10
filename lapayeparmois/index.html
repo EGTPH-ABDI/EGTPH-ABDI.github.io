@@ -10398,10 +10398,10 @@ try{
     // transactionId is new on every save/edit and must never be reused.
     var operation={operationId:existingOperationId || txId('ADVOP'),transactionId:txId('TX'),originalAmount:Math.round(amount),realDate:toDMY(dateISO),note:note || '',allocations:allocations}; operation.allocations.forEach(function(a,i){a.index=i;});
     if(!(await allocationConfirmation(worker,operation))) return false;
-    var before=businessSnapshot(); currentOperation=operation.transactionId;
+    var before=businessSnapshot(), beforeDebts=JSON.parse(JSON.stringify((d.debts&&d.debts[worker.id])||[])), created=[]; currentOperation=operation.transactionId;
     try {
       operation.allocations.forEach(function(a){
-        var child=createAdvanceRecord(worker,a,operation);
+        var child=createAdvanceRecord(worker,a,operation);created.push(child);
         // A future allocation is only an accounting allocation; never deduct a future
         // absence/debt before its cycle begins in real time.
         try {
@@ -10413,11 +10413,18 @@ try{
       // the automatic lock is present in the same save that closes the basic salary.
       operation.allocations.forEach(function(a){reconcileLockForCycle(worker,a.m,a.yr,options.isEdit ? 'تعديل تسبيق' : 'تسبيق',false);});
       reconcileLocks(options.isEdit ? 'تعديل تسبيق' : 'تسبيق',false);
-      var auditAction=options.isEdit ? '✏️ تعديل عملية تسبيق — '+worker.name : 'تسبيق '+fmtMoney(operation.originalAmount)+' — '+worker.name;
+      if(!window.EGTPH_V165||typeof window.EGTPH_V165.persistAdvanceTransaction!=='function')throw new Error('محرك حفظ Firebase v165 غير جاهز');
+      await window.EGTPH_V165.persistAdvanceTransaction(worker.id,created,beforeDebts,(d.debts&&d.debts[worker.id])||[]);
+      var auditAction=options.isEdit ? '✏️ تعديل عملية تسبيق محفوظ في Firebase — '+worker.name : 'تسبيق محفوظ ومتحقق في Firebase '+fmtMoney(operation.originalAmount)+' — '+worker.name;
       pushAudit(auditAction,{workerId:worker.id,operationId:operation.operationId,transactionId:operation.transactionId,realDate:operation.realDate,originalAmount:operation.originalAmount,before:options.before || null,allocations:operation.allocations.map(function(a){ return {cycle:cycleLabel(worker,a.m,a.yr),amount:a.amount,reason:a.reason}; })},operation.transactionId);
-      saveDB();
-      toastSafe('✅ تم تسجيل التسبيق'+(operation.allocations.length>1?' وتوزيعه على '+operation.allocations.length+' دورات':''));
+      saveDB();try{if(typeof _cloudDirty!=='undefined')_cloudDirty=false;}catch(e){}
+      toastSafe('✅ حُفظ التسبيق فعلياً وتَمّ التحقق منه داخل Firebase'+(operation.allocations.length>1?' — موزع على '+operation.allocations.length+' دورات':''));
       return true;
+    } catch(err) {
+      try{clearStateAndApply(before);}catch(rollbackErr){console.error('[v165] rollback failed',rollbackErr);}
+      console.error('[v165] verified advance save failed',err);
+      toastSafe('❌ لم يُحفظ التسبيق في Firebase، لذلك أُلغي محلياً ولم تُسجّل العملية: '+(err&&err.message||err),true);
+      return false;
     } finally { currentOperation=null; }
   }
 
@@ -10428,6 +10435,7 @@ try{
       if(!(amount>0)){ toastSafe('❌ أدخل مبلغاً صحيحاً',true); return; }
       var ok=await commitAdvance(worker,amount,dateISO,note,null); if(!ok) return;
       try { if(typeof closeModal==='function') closeModal('mAdv'); if(typeof renderDash==='function') renderDash(); if(typeof S!=='undefined' && String(S.sw)===String(worker.id) && typeof renderSalContent==='function') renderSalContent(); } catch(e) {}
+      return true;
     };
     try{window.saveAdv=override;saveAdv=override;}catch(e){window.saveAdv=override;}
   }
@@ -10724,6 +10732,7 @@ try{
   }
   function applyMerged(merged){var d=ensure();normalizeTombstones(merged);purgeDeleted(merged);Object.keys(d).forEach(function(k){if(k!=='settings')delete d[k];});Object.keys(merged).forEach(function(k){d[k]=clone(merged[k]);});ensure();normalizeTombstones(d);}
   function scheduleV50Sync(){
+    if(window.__EGTPH_V50_CLEAN__)return; // v165: لا رفع جذري تلقائي؛ التسبيقات تُكتب ذرياً في مسارها.
     try{
       var d=ensure();
       if(!d || !d.settings.cloudAuto || !getCloudCfg()) return;
@@ -11044,7 +11053,7 @@ try{
   }
 
   function init(){
-    var boot=ensure(); normalizeTombstones(boot); purgeDeleted(boot); installAuditWrapper(); installSaveWrapper(); installDeletionGuards(); installSafeCloudTools(); installSync(); installAdvanceSave(); installAdvanceModalActions(); installSalaryRenderLock(); enhancePrint(); installFunctionAliases(); installImport(); adminPanel(); reconcileLocks('تهيئة v54',true); queueTombstoneMigration(); lastSnapshot=businessSnapshot();
+    var boot=ensure(); normalizeTombstones(boot); purgeDeleted(boot); installAuditWrapper(); installSaveWrapper(); installDeletionGuards(); installSafeCloudTools(); installAdvanceSave(); installAdvanceModalActions(); installSalaryRenderLock(); enhancePrint(); installFunctionAliases(); installImport(); adminPanel(); reconcileLocks('تهيئة v54',true); queueTombstoneMigration(); lastSnapshot=businessSnapshot();
     try { document.title=(document.title || 'EGTPH').replace(/v\d+(?:\.\d+)?/,'v52'); var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v77'; } catch(e) {}
     setTimeout(function(){
       initializing=false;lastSnapshot=businessSnapshot();
@@ -11052,7 +11061,7 @@ try{
       updateLogicBadge();
       // The legacy auth callback is deliberately suppressed at build time so no old
       // v40/v41 synchronization can run before this v50 layer is ready.
-      try{ if(!window.__EGTPH_V68_SUPPRESS_LEGACY__){ v50AutoSetup(); if(ensure().settings.cloudAuto && getCloudCfg() && navigator.onLine) v50CloudSync(false); } }catch(e){}
+      try{ if(!window.__EGTPH_V50_CLEAN__&&!window.__EGTPH_V68_SUPPRESS_LEGACY__){ v50AutoSetup(); if(ensure().settings.cloudAuto && getCloudCfg() && navigator.onLine) v50CloudSync(false); } }catch(e){}
     },700);
     setInterval(updateLogicBadge,10*60*1000);
   }
@@ -12636,7 +12645,7 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   function rawPersist(d){
     try{if(typeof _cloudDirty!=='undefined')_cloudDirty=true;}catch(e){}
     try{if(typeof markSaved==='function')markSaved();}catch(e){}
-    if(syncTimer)clearTimeout(syncTimer);syncTimer=setTimeout(function(){try{if(navigator.onLine&&typeof window.cloudSync==='function')window.cloudSync(false);}catch(e){}},800);
+    if(syncTimer)clearTimeout(syncTimer);syncTimer=null; // v165: حُذف الرفع الكامل التلقائي القديم؛ لا كتابة جذرية موازية.
   }
   function audit(d,action){d.auditLog.unshift({id:'AUD67_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),user:(d.settings||{}).userName||'Youcef Abdi',action:action,time:iso(),at:iso(),version:VERSION});if(d.auditLog.length>500)d.auditLog=d.auditLog.slice(0,500);}
   function refresh(){['renderTrash','renderWorkers','renderDash','updateBadges'].forEach(function(n){try{if(typeof window[n]==='function')window[n]();}catch(e){}});}
@@ -13563,7 +13572,7 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
   function wrapDue(){var base=window.installmentDueInCycle;window.installmentDueInCycle=function(debt,w,m,yr){if(w&&debt&&debt.inst){var target;try{target=rangeForDate(w,new Date(yr,m,Math.min(dayOf(w),new Date(yr,m+1,0).getDate())));}catch(e){}var x=target&&dueForRange(w,debt,target);return !!(x&&x.remaining);}return typeof base==='function'?base.apply(this,arguments):false;};window.installmentDueInCycle.__v120CycleDebt=true;}
   function wrapNote(){var base=window.advDedNote;if(typeof base!=='function'||base.__v120CycleDebt)return;var wrapped=function(a){var txt=base.apply(this,arguments),extra=deds(a).filter(function(z){return z&&z.type==='debt'&&z.accountingCycleStart;}).map(function(z){return '💳 '+(z.note||'قسط دين')+' — دورة '+dmy(date(z.accountingCycleStart))+' → '+dmy(date(z.accountingCycleEnd));});return txt+(extra.length?' ↳ '+extra.join(' | '):'');};wrapped.__v120CycleDebt=true;window.advDedNote=wrapped;try{advDedNote=wrapped;}catch(e){}}
   function wrapV63(){var api=window.EGTPH_V63;if(!api||typeof api.applyCycle!=='function'||api.applyCycle.__v120CycleDebt)return;var base=api.applyCycle;api.applyCycle=function(wid,m,yr,opt){reconcileWorker(wid);var out=base.apply(this,arguments);setTimeout(function(){saveIfChanged(reconcileWorker(wid));},0);return out;};api.applyCycle.__v120CycleDebt=true;}
-  function install(){var d=D();if(INSTALLED||!d||!A(d.workers).length)return;INSTALLED=true;var changed=reconcileAll(); /* v140: no hardcoded Ahmed repair on boot */wrapDue();wrapStatus();wrapNote();wrap('saveAdv');wrap('saveDbt');wrap('autoSettleOnAdvance');wrapV63();saveIfChanged(changed);refresh();window.EGTPH_V120={version:VERSION,reconcile:function(wid){var c=wid!=null?reconcileWorker(wid):reconcileAll();saveIfChanged(c);return c;},dueForCycle:function(wid,debtId,when){var w=worker(wid),debt=A(D()&&D().debts&&D().debts[wid]).find(function(x){return x&&x.type==='debt'&&same(x.id,debtId);});return w&&debt?dueForRange(w,debt,rangeForDate(w,when||new Date())):null;},verify:verify,rangeForDate:rangeForDate,status:'cycle-owned-debt-installments'};}
+  function install(){var d=D();if(INSTALLED||!d||!A(d.workers).length)return;INSTALLED=true;var changed=reconcileAll(); /* v140: no hardcoded Ahmed repair on boot */wrapDue();wrapStatus();wrapNote();wrap('saveDbt');wrap('autoSettleOnAdvance');wrapV63();saveIfChanged(changed);refresh();window.EGTPH_V120={version:VERSION,reconcile:function(wid){var c=wid!=null?reconcileWorker(wid):reconcileAll();saveIfChanged(c);return c;},dueForCycle:function(wid,debtId,when){var w=worker(wid),debt=A(D()&&D().debts&&D().debts[wid]).find(function(x){return x&&x.type==='debt'&&same(x.id,debtId);});return w&&debt?dueForRange(w,debt,rangeForDate(w,when||new Date())):null;},verify:verify,rangeForDate:rangeForDate,status:'cycle-owned-debt-installments'};}
   [0,800,2500,5500,9000,13000].forEach(function(ms){setTimeout(install,ms);});
 })();
 
@@ -14196,8 +14205,7 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
     if(!allocs.length)allocs.push({kind:'current',c:chosen,amount:amount});
     return allocs;
   }
-  function saveAdvV148(){
-    protectJournal();
+  async function saveAdvV148(){
     var wid;try{wid=typeof _wid!=='undefined'?_wid:window._wid;}catch(e){wid=window._wid;}
     var w=worker(wid),d=D();if(!w||!d){toast2('❌ العامل أو قاعدة البيانات غير جاهزة',true);return;}
     var amtEl=document.getElementById('adv_amt'),dateEl=document.getElementById('adv_date'),noteEl=document.getElementById('adv_note'),sel=document.getElementById('adv_cycle_owner'),modeEl=document.getElementById('adv_alloc_mode');
@@ -14208,15 +14216,32 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
     var chosen=sel&&sel.value?parseCycle(sel.value):normalizeCurrent(w),mode=(modeEl&&modeEl.value)||'auto';
     if(isBeforeStart(w,chosen)){toast2('❌ الدورة المختارة قبل تاريخ دخول العامل',true);return;}
     var allocs=planAllocations(wid,chosen,amount,mode);if(!allocs)return;
+    var beforeAdv=JSON.parse(JSON.stringify((d.advances&&d.advances[wid])||{}));
+    var beforeDebts=JSON.parse(JSON.stringify((d.debts&&d.debts[wid])||[]));
+    var beforeAudit=JSON.parse(JSON.stringify(d.auditLog||[]));
     var by=(d.settings&&d.settings.userName)||'Youcef Abdi',opId='ADVOP_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),created=[];
     allocs.forEach(function(a,i){var rec=recFor(wid,w,opId,i,allocs.length,a,realISO,realDmy,userNote,by,allocs);bucket(wid,a.c.m).push(rec);created.push(rec);try{if(typeof autoSettleOnAdvance==='function')autoSettleOnAdvance(wid,a.c.m,a.c.yr,rec,realDmy);}catch(e){console.warn('auto installment failed',e);}});
-    journalAdd(created);
-    try{if(typeof audit==='function')audit('تسبيق محمي v148 '+fmt(amount)+' — '+w.name+' — '+(allocs.length>1?'توزيع تلقائي':'دورة واحدة'));}catch(e){}
+    try{
+      if(!window.EGTPH_V165||typeof window.EGTPH_V165.persistAdvanceTransaction!=='function')throw new Error('محرك حفظ Firebase v165 غير جاهز');
+      await window.EGTPH_V165.persistAdvanceTransaction(wid,created,beforeDebts,(d.debts&&d.debts[wid])||[]);
+    }catch(err){
+      d.advances[wid]=beforeAdv;
+      d.debts[wid]=beforeDebts;
+      d.auditLog=beforeAudit;
+      try{if(typeof renderDash==='function')renderDash();}catch(e){}
+      try{if(typeof renderSalContent==='function')renderSalContent();}catch(e){}
+      try{if(typeof updateBadges==='function')updateBadges();}catch(e){}
+      console.error('[v165] advance Firebase save failed',err);
+      toast2('❌ لم يُحفظ التسبيق في Firebase، لذلك أُلغي محلياً ولم تُسجّل العملية: '+(err&&err.message||err),true);
+      return false;
+    }
+    try{if(typeof audit==='function')audit('تسبيق محفوظ ومتحقق في Firebase '+fmt(amount)+' — '+w.name+' — '+(allocs.length>1?'توزيع تلقائي':'دورة واحدة'));}catch(e){}
     try{if(window.EGTPH_V144&&typeof window.EGTPH_V144.reconcileWorker==='function')window.EGTPH_V144.reconcileWorker(wid,{includeCurrent:true});}catch(e){}
-    try{if(typeof saveDB==='function')saveDB();}catch(e){console.error(e);toast2('❌ تعذر الحفظ',true);return;}
+    try{if(typeof saveDB==='function')saveDB();if(typeof _cloudDirty!=='undefined')_cloudDirty=false;}catch(e){}
     try{if(typeof closeModal==='function')closeModal('mAdv');}catch(e){}
     try{if(typeof renderDash==='function')renderDash();}catch(e){}try{if(typeof renderSalContent==='function')renderSalContent();}catch(e){}try{if(typeof updateBadges==='function')updateBadges();}catch(e){}
-    toast2('✅ تم تسجيل التسبيق وحمايته من الضياع: '+allocs.map(function(a){return fmt(a.amount)+' دج → '+monthName(a.c.m);}).join('، '));
+    toast2('✅ حُفظ التسبيق فعلياً وتَمّ التحقق منه داخل Firebase: '+allocs.map(function(a){return fmt(a.amount)+' دج → '+monthName(a.c.m);}).join('، '));
+    return true;
   }
   function deleteAdvV148(wid,m,id){
     var d=D(),src=d&&d.advances&&d.advances[wid],arr=src&&src[m];var rec=A(arr).find(function(x){return S(x&&x.id)===S(id);});
@@ -14276,7 +14301,7 @@ try{if(typeof saveDB==='function')saveDB();}catch(e){}try{if(typeof renderSalCon
   function lockOnce(){var d=D();if(!d)return;d.settings=O(d.settings);if(d.settings.v141CycleLockOnceDone)return;var n=0;A(d.workers).forEach(function(w){if(w&&!w.exitDate)n+=reconcileWorker(w.id,{includeCurrent:false});});d.settings.v141CycleLockOnceDone={at:new Date().toISOString(),locksWritten:n,version:VERSION};try{if(n&&typeof saveDB==='function')saveDB();}catch(e){} }
   function removeDateControl(){try{var el=document.getElementById('settlTempDate');if(el&&el.parentNode)el.parentNode.remove();}catch(e){}}
   function clearFixedSettlementDate(){try{var d=D();if(!d)return;d.settings=O(d.settings);var changed=false;['tempSettlementDate','provisionalSettlementAsOfDate','settlementAsOfDate'].forEach(function(k){if(Object.prototype.hasOwnProperty.call(d.settings,k)){delete d.settings[k];changed=true;}});d.settings.settlementPreviewMode='live_today_dynamic';d.settings.provisionalSettlementDayCounting='inclusive_through_today';d.settings.provisionalSettlementDebtRule='full_remaining_unpaid_debt_once';if(changed&&typeof saveDB==='function')saveDB();}catch(e){}}
-  var oldSave=window.saveAdv;if(typeof oldSave==='function'&&!oldSave.__v141Lock){var sfn=function(){var wid;try{wid=typeof _wid!=='undefined'?_wid:window._wid;}catch(e){wid=window._wid;}var r=oldSave.apply(this,arguments);try{if(wid){var n=reconcileWorker(wid,{includeCurrent:true});if(n&&typeof saveDB==='function')saveDB();}}catch(e){}return r;};sfn.__v141Lock=true;window.saveAdv=sfn;try{saveAdv=sfn;}catch(e){}}
+  // v165: حُذف غلاف saveAdv القديم؛ الحفظ المؤكد في Firebase داخل saveAdvV148 وحده.
   window.EGTPH_V144={version:VERSION,rule:'live-today-inclusive-temp-settlement-minus-full-debt-balance',reconcileWorker:reconcileWorker,clearFixedSettlementDate:clearFixedSettlementDate};
   setTimeout(function(){clearFixedSettlementDate();removeDateControl();lockOnce();try{if(typeof renderSettlement==='function')renderSettlement();}catch(e){}},900);
 })();
@@ -14530,4 +14555,286 @@ body,table,th,td,button,input,select,textarea{font-family:-apple-system,BlinkMac
 })();
 
 </script>
+<script id="egtph-v166-unified-atomic-firebase-persistence">
+(function(){
+  'use strict';
+  var URL='https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app';
+  var KEY='EGTPH-pay-clean-v144-live';
+  var SOURCE='firebase:/egtph/'+KEY;
+  var MAX_RETRY=7;
+  var RETRY_DELAY=2500;
+  var BASE_FETCH=window.fetch.bind(window);
+  var baseline=null;
+  var running=false;
+  var queued=false;
+  var retryTimer=null;
+  var lastError=null;
+  var lastSavedAt=null;
+  var writeLog=[];
+
+  function clone(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
+  function isObj(v){return !!v&&typeof v==='object'&&!Array.isArray(v);}
+  function arr(v){
+    if(Array.isArray(v))return v.filter(function(x){return x!==undefined&&x!==null;});
+    if(isObj(v))return Object.keys(v).sort(function(a,b){return (+a||0)-(+b||0);}).map(function(k){return v[k];}).filter(function(x){return x!==undefined&&x!==null;});
+    return [];
+  }
+  function stable(v){
+    if(Array.isArray(v))return '['+v.map(stable).join(',')+']';
+    if(isObj(v))return '{'+Object.keys(v).sort().map(function(k){return JSON.stringify(k)+':'+stable(v[k]);}).join(',')+'}';
+    return JSON.stringify(v);
+  }
+  function same(a,b){return stable(a)===stable(b);}
+  function hash(s){var h=2166136261;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0).toString(36);}
+  function recordKey(x,i){
+    if(x&&typeof x==='object'){
+      if(x.id!==undefined&&x.id!==null)return 'id:'+String(x.id);
+      if(x.transactionId)return 'tx:'+String(x.transactionId)+(x.allocationIndex!=null?':'+x.allocationIndex:'');
+      if(x.eventId)return 'ev:'+String(x.eventId);
+      if(x.operationId)return 'op:'+String(x.operationId)+(x.allocationIndex!=null?':'+x.allocationIndex:'');
+      if(x._syncKey)return 'sk:'+String(x._syncKey);
+    }
+    return 'h:'+hash(stable(x));
+  }
+  function arrayMap(v){var out={};arr(v).forEach(function(x,i){out[recordKey(x,i)]=x;});return out;}
+  function changedRecords(before,after){
+    var bm=arrayMap(before),out=[];
+    arr(after).forEach(function(x,i){var k=recordKey(x,i);if(!Object.prototype.hasOwnProperty.call(bm,k)||!same(bm[k],x))out.push(clone(x));});
+    return out;
+  }
+  function mergeArray(remote,updates){
+    var out=arr(remote).map(clone),idx={};
+    out.forEach(function(x,i){idx[recordKey(x,i)]=i;});
+    arr(updates).forEach(function(x,i){var k=recordKey(x,i);if(idx[k]===undefined){idx[k]=out.length;out.push(clone(x));}else out[idx[k]]=(isObj(out[idx[k]])&&isObj(x))?Object.assign({},out[idx[k]],clone(x)):clone(x);});
+    return out;
+  }
+  function deepMergeNoDelete(remote,local){
+    if(Array.isArray(local))return mergeArray(remote,local);
+    if(isObj(local)){
+      var out=isObj(remote)?clone(remote):{};
+      Object.keys(local).forEach(function(k){out[k]=deepMergeNoDelete(out[k],local[k]);});
+      return out;
+    }
+    return clone(local);
+  }
+  function changedTopKeys(a,b){
+    var keys={};Object.keys(a||{}).forEach(function(k){keys[k]=1;});Object.keys(b||{}).forEach(function(k){keys[k]=1;});
+    return Object.keys(keys).filter(function(k){return !same(a&&a[k],b&&b[k]);});
+  }
+  function endpoint(path,token){
+    var suffix=String(path||'').split('/').filter(Boolean).map(encodeURIComponent).join('/');
+    return URL+'/egtph/'+encodeURIComponent(KEY)+(suffix?'/'+suffix:'')+'.json?auth='+encodeURIComponent(token);
+  }
+  function exactRootUrl(u){try{return new window.URL(String(u),location.href).pathname==='/egtph/'+KEY+'.json';}catch(e){return false;}}
+
+  // منع أي محرك قديم من الكتابة على جذر النسخة الكاملة. الكتابة مسموحة فقط على الفروع المحددة.
+  window.fetch=function(input,init){
+    var method=String(init&&init.method||'GET').toUpperCase();
+    if(exactRootUrl(input)&&(method==='PUT'||method==='PATCH'||method==='DELETE')){
+      console.error('[v166] blocked legacy full-root write',method,String(input));
+      return Promise.resolve(new Response(JSON.stringify({blocked:true,reason:'v166-branch-only'}),{status:409,headers:{'Content-Type':'application/json'}}));
+    }
+    return BASE_FETCH(input,init);
+  };
+
+  async function authToken(){
+    if(typeof window.egtphEnsureAuthenticated==='function')await window.egtphEnsureAuthenticated();
+    var h=window.EGTPHAuth,t=h&&typeof h.getToken==='function'?h.getToken('lapayeparmois'):null;
+    if(!t)throw new Error('لا يوجد رمز دخول صالح إلى Firebase');
+    return t;
+  }
+  async function req(url,opt,ms){
+    var c=typeof AbortController!=='undefined'?new AbortController():null;
+    var timer=c?setTimeout(function(){try{c.abort();}catch(e){}},ms||16000):null;
+    try{var o=Object.assign({cache:'no-store'},opt||{});if(c)o.signal=c.signal;return await BASE_FETCH(url,o);}finally{if(timer)clearTimeout(timer);}
+  }
+  function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
+  function noteWrite(path,count){writeLog.push({path:'/egtph/'+KEY+'/'+path,count:count||1,at:new Date().toISOString()});if(writeLog.length>200)writeLog=writeLog.slice(-200);}
+
+  async function atomicArrayUpsert(path,updates,token){
+    updates=arr(updates);if(!updates.length)return;
+    var url=endpoint(path,token),why='';
+    for(var n=0;n<MAX_RETRY;n++){
+      var g=await req(url,{method:'GET',headers:{'X-Firebase-ETag':'true','Cache-Control':'no-cache'}},18000);
+      if(!g.ok)throw new Error('فشل قراءة '+path+' — HTTP '+g.status);
+      var etag=g.headers.get('etag');if(!etag)throw new Error('Firebase لم يرجع ETag للمسار '+path);
+      var merged=mergeArray(await g.json(),updates);
+      var p=await req(url,{method:'PUT',headers:{'Content-Type':'application/json','If-Match':etag,'Cache-Control':'no-cache'},body:JSON.stringify(merged)},18000);
+      if(p.status===412){why='تعارض كتابة';await sleep(80*(n+1));continue;}
+      if(!p.ok)throw new Error('فشل كتابة '+path+' — HTTP '+p.status);
+      var v=await req(url,{method:'GET',headers:{'Cache-Control':'no-cache'}},18000);
+      if(!v.ok)throw new Error('فشل التحقق من '+path+' — HTTP '+v.status);
+      var vm=arrayMap(await v.json());
+      updates.forEach(function(x,i){var k=recordKey(x,i);if(!Object.prototype.hasOwnProperty.call(vm,k))throw new Error('القيد '+k+' لم يظهر بعد الحفظ في '+path);});
+      noteWrite(path,updates.length);return;
+    }
+    throw new Error(why||('تعذر تثبيت الكتابة في '+path));
+  }
+
+  async function atomicObjectMerge(path,local,token){
+    var url=endpoint(path,token),why='';
+    for(var n=0;n<MAX_RETRY;n++){
+      var g=await req(url,{method:'GET',headers:{'X-Firebase-ETag':'true','Cache-Control':'no-cache'}},18000);
+      if(!g.ok)throw new Error('فشل قراءة '+path+' — HTTP '+g.status);
+      var etag=g.headers.get('etag');if(!etag)throw new Error('Firebase لم يرجع ETag للمسار '+path);
+      var merged=deepMergeNoDelete(await g.json(),local);
+      var p=await req(url,{method:'PUT',headers:{'Content-Type':'application/json','If-Match':etag,'Cache-Control':'no-cache'},body:JSON.stringify(merged)},18000);
+      if(p.status===412){why='تعارض كتابة';await sleep(80*(n+1));continue;}
+      if(!p.ok)throw new Error('فشل كتابة '+path+' — HTTP '+p.status);
+      var v=await req(url,{method:'GET',headers:{'Cache-Control':'no-cache'}},18000);
+      if(!v.ok)throw new Error('فشل التحقق من '+path+' — HTTP '+v.status);
+      var saved=await v.json();
+      if(isObj(local)){Object.keys(local).forEach(function(k){if(saved==null||saved[k]===undefined)throw new Error('الحقل '+k+' لم يظهر بعد الحفظ في '+path);});}
+      noteWrite(path,1);return;
+    }
+    throw new Error(why||('تعذر تثبيت الكتابة في '+path));
+  }
+
+  async function atomicScalarPut(path,value,token){
+    var url=endpoint(path,token),why='';
+    for(var n=0;n<MAX_RETRY;n++){
+      var g=await req(url,{method:'GET',headers:{'X-Firebase-ETag':'true','Cache-Control':'no-cache'}},18000);
+      if(!g.ok)throw new Error('فشل قراءة '+path+' — HTTP '+g.status);
+      var etag=g.headers.get('etag');if(!etag)throw new Error('Firebase لم يرجع ETag للمسار '+path);
+      var p=await req(url,{method:'PUT',headers:{'Content-Type':'application/json','If-Match':etag,'Cache-Control':'no-cache'},body:JSON.stringify(value)},18000);
+      if(p.status===412){why='تعارض كتابة';await sleep(80*(n+1));continue;}
+      if(!p.ok)throw new Error('فشل كتابة '+path+' — HTTP '+p.status);
+      noteWrite(path,1);return;
+    }
+    throw new Error(why||('تعذر تثبيت الكتابة في '+path));
+  }
+
+  function unionKeys(a,b){var o={};Object.keys(a||{}).forEach(function(k){o[k]=1;});Object.keys(b||{}).forEach(function(k){o[k]=1;});return Object.keys(o);}
+  async function persistNestedMonths(section,before,after,token){
+    for(var wi of unionKeys(before,after)){
+      var bw=(before&&before[wi])||{},aw=(after&&after[wi])||{};
+      for(var m of unionKeys(bw,aw)){
+        var changed=changedRecords(bw[m],aw[m]);
+        if(changed.length)await atomicArrayUpsert(section+'/'+wi+'/'+m,changed,token);
+      }
+    }
+  }
+  async function persistWorkerArrays(section,before,after,token){
+    for(var wi of unionKeys(before,after)){
+      var changed=changedRecords(before&&before[wi],after&&after[wi]);
+      if(changed.length)await atomicArrayUpsert(section+'/'+wi,changed,token);
+    }
+  }
+
+  function sanitizedSettings(s){
+    var x=clone(s||{});x.cloudUrl=URL;x.cloudKey=KEY;x.cloudAuto=true;x.v91CloudAuto=false;x.v164FirebaseOnly=true;x.v164AuthoritativePath='/egtph/'+KEY;
+    delete x.v148AdvanceJournal;delete x.v148AdvanceJournalUpdatedAt;return x;
+  }
+
+  async function persistSnapshot(base,target){
+    if(!window.__EGTPH_DB_READY__||window.__EGTPH_DB_READY_SOURCE__!==SOURCE)throw new Error('المصدر المرجعي Firebase غير جاهز');
+    var token=await authToken();
+
+    var workers=changedRecords(base.workers,target.workers);if(workers.length)await atomicArrayUpsert('workers',workers,token);
+    await persistNestedMonths('advances',base.advances,target.advances,token);
+    await persistWorkerArrays('hours',base.hours,target.hours,token);
+    await persistWorkerArrays('absences',base.absences,target.absences,token);
+    await persistNestedMonths('bonuses',base.bonuses,target.bonuses,token);
+    await persistWorkerArrays('debts',base.debts,target.debts,token);
+
+    for(var sec of ['auditLog','ledger','txJournal','repairLog']){
+      var ch=changedRecords(base[sec],target[sec]);if(ch.length)await atomicArrayUpsert(sec,ch,token);
+    }
+    for(var objSec of ['cycleLocks','deletedRecords','trash','_pendingSyncPatches']){
+      if(!same(base[objSec],target[objSec]))await atomicObjectMerge(objSec,target[objSec]||{},token);
+    }
+    if(!same(base.deletedIds,target.deletedIds)){
+      var ids=Array.from(new Set(arr(base.deletedIds).concat(arr(target.deletedIds)).map(String)));
+      await atomicArrayUpsert('deletedIds',ids,token);
+    }
+    if(!same(base.settings,target.settings))await atomicObjectMerge('settings',sanitizedSettings(target.settings),token);
+
+    var handled={workers:1,advances:1,hours:1,absences:1,bonuses:1,debts:1,auditLog:1,ledger:1,txJournal:1,repairLog:1,cycleLocks:1,deletedRecords:1,trash:1,_pendingSyncPatches:1,deletedIds:1,settings:1};
+    for(var k of changedTopKeys(base,target)){
+      if(handled[k])continue;
+      var v=target[k];
+      if(Array.isArray(v)){var cx=changedRecords(base[k],v);if(cx.length)await atomicArrayUpsert(k,cx,token);}
+      else if(isObj(v))await atomicObjectMerge(k,v,token);
+      else if(v!==undefined)await atomicScalarPut(k,v,token);
+    }
+    return true;
+  }
+
+  function setCloudMessage(msg,color){try{if(typeof window._cloudStatus==='function')window._cloudStatus(msg,color);}catch(e){}try{var el=document.getElementById('cloudStatus');if(el){el.textContent=msg;if(color)el.style.color=color;}}catch(e){}}
+  function markCoreSaved(){try{if(typeof window.markSaved==='function')window.markSaved();}catch(e){}try{if(typeof markSaved==='function')markSaved();}catch(e){}}
+
+  function schedule(){queued=true;if(running)return;Promise.resolve().then(flush);}
+  async function flush(){
+    if(running)return false;
+    if(!queued)return true;
+    if(!window.__EGTPH_DB_READY__||window.__EGTPH_DB_READY_SOURCE__!==SOURCE){setCloudMessage('⏳ انتظار جلب Firebase المرجعي...','var(--amber)');return false;}
+    running=true;queued=false;
+    var base=baseline?clone(baseline):clone(window.DB||DB||{}),target=clone(window.DB||DB||{});
+    setCloudMessage('⏳ حفظ وتحقق كل التغييرات في Firebase...','var(--teal)');
+    try{
+      await persistSnapshot(base,target);
+      baseline=clone(target);lastSavedAt=new Date().toISOString();lastError=null;
+      setCloudMessage('🟢 محفوظ ومتحقق في Firebase: '+KEY,'var(--green1)');
+      try{if(typeof _cloudDirty!=='undefined')_cloudDirty=false;}catch(e){}
+      if(!same(target,window.DB||DB||{})){queued=true;}
+      return true;
+    }catch(err){
+      lastError=String(err&&err.message||err);queued=true;
+      console.error('[v166] unified Firebase persistence failed',err);
+      setCloudMessage('🔴 فشل الحفظ في Firebase — التغيير ما زال معلقاً: '+lastError,'var(--red)');
+      try{if(typeof window.toast==='function')window.toast('❌ لم يثبت التغيير في Firebase: '+lastError,true);else if(typeof toast==='function')toast('❌ لم يثبت التغيير في Firebase: '+lastError,true);}catch(e){}
+      clearTimeout(retryTimer);retryTimer=setTimeout(flush,RETRY_DELAY);
+      return false;
+    }finally{
+      running=false;
+      if(queued&&!lastError)setTimeout(flush,0);
+    }
+  }
+
+  function unifiedSaveDB(){
+    markCoreSaved();
+    try{var d=window.DB||DB;if(d&&d.settings){d.settings=sanitizedSettings(d.settings);}}catch(e){}
+    schedule();
+    return true;
+  }
+  window.saveDB=unifiedSaveDB;try{saveDB=unifiedSaveDB;}catch(e){}
+
+  // التوافق مع محرك توزيع التسبيق v148: نفس المسار الجديد ونفس التحقق، دون محرك حفظ ثانٍ.
+  async function persistAdvanceTransaction(wid,created,beforeDebts,afterDebts){
+    var token=await authToken(),groups={};
+    arr(created).forEach(function(r){if(!r||r.id==null)throw new Error('تسبيق بلا معرّف ثابت');var m=Number(r.month);if(!Number.isInteger(m)||m<0||m>11)throw new Error('شهر التسبيق غير صالح');(groups[String(m)]||(groups[String(m)]=[])).push(r);});
+    var paths=[];
+    for(var m of Object.keys(groups)){await atomicArrayUpsert('advances/'+String(wid)+'/'+m,groups[m],token);paths.push('/egtph/'+KEY+'/advances/'+String(wid)+'/'+m);}
+    var debts=changedRecords(beforeDebts,afterDebts);if(debts.length){await atomicArrayUpsert('debts/'+String(wid),debts,token);paths.push('/egtph/'+KEY+'/debts/'+String(wid));}
+    return {ok:true,paths:paths,ids:arr(created).map(function(x){return x.id;})};
+  }
+  window.EGTPH_V165={version:'compat-v166',source:SOURCE,persistAdvanceTransaction:persistAdvanceTransaction,atomicMerge:atomicArrayUpsert,noAutomaticDelete:true};
+
+  // زر المزامنة اليدوية: تثبيت الفروع أولاً، ثم إعادة قراءة المصدر المرجعي نفسه.
+  window.cloudSync=async function(manual){
+    queued=true;var ok=await flush();if(!ok)throw new Error(lastError||'تعذر حفظ التغييرات');
+    if(typeof window._v164PullAuthoritativeCloud==='function')await window._v164PullAuthoritativeCloud();
+    return {ok:true,source:SOURCE,branchOnly:true};
+  };try{cloudSync=window.cloudSync;}catch(e){}
+
+  function ready(){
+    baseline=clone(window.DB||DB||{});queued=false;lastError=null;
+    setCloudMessage('🟢 المصدر والحفظ: Firebase فقط — '+KEY,'var(--green1)');
+  }
+  window.addEventListener('egtph-db-ready',ready);
+  if(window.__EGTPH_DB_READY__&&window.__EGTPH_DB_READY_SOURCE__===SOURCE)ready();
+  window.addEventListener('online',function(){if(queued)flush();});
+  window.addEventListener('beforeunload',function(e){if(running||queued||lastError){e.preventDefault();e.returnValue='توجد تغييرات لم يكتمل تثبيتها في Firebase بعد.';return e.returnValue;}});
+
+  window.EGTPH_V166={
+    version:'166.0-unified-branch-persistence',source:SOURCE,root:'/egtph/'+KEY,
+    flush:function(){queued=true;return flush();},
+    status:function(){return {ready:!!baseline,running:running,queued:queued,lastError:lastError,lastSavedAt:lastSavedAt,writes:clone(writeLog)};},
+    persistSnapshot:persistSnapshot,atomicArrayUpsert:atomicArrayUpsert,atomicObjectMerge:atomicObjectMerge,
+    sections:['workers','advances','hours','absences','bonuses','debts','auditLog','ledger','txJournal','repairLog','cycleLocks','deletedIds','deletedRecords','trash','settings'],
+    noRootWrite:true,noAutomaticDelete:true
+  };
+})();
+</script>
+
 </body></html>
