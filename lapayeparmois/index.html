@@ -15864,4 +15864,209 @@ td[style*="monospace"],.mono{overflow-wrap:anywhere!important;word-break:break-w
 })();
 </script>
 
+<style id="egtph-v155-persistent-zoom-css">
+/* v155: keep table pinch zoom after fingers are lifted; no accounting logic here. */
+.v155-pinch-wrap{touch-action:pan-x pan-y!important;overflow:auto!important;-webkit-overflow-scrolling:touch!important;overscroll-behavior:contain!important;}
+.v155-pinch-wrap table{transform-origin:top right!important;transition:transform .03s linear!important;}
+.v155-pinch-wrap.v155-transform table{width:auto!important;}
+.v155-zoom-toolbar{display:flex;gap:6px;align-items:center;justify-content:flex-end;margin:6px 2px 8px;direction:ltr;position:relative;z-index:7;pointer-events:auto!important;}
+.v155-zoom-toolbar button{border:1px solid #b8d1c8;background:#fff;color:#0b5948;border-radius:11px;padding:5px 9px;font-weight:900;font-size:12px;line-height:1;box-shadow:0 3px 10px rgba(9,52,39,.08);pointer-events:auto!important;touch-action:manipulation!important;}
+.v155-zoom-toolbar .v155-zoom-label{font-size:11px;font-weight:900;color:#577568;background:#eef8f3;border:1px solid #cfe4dc;border-radius:10px;padding:4px 8px;min-width:46px;text-align:center;}
+.v155-zoom-toolbar .v155-zoom-hint{font-size:10.5px;color:#668177;text-align:left;direction:rtl;margin-inline-start:4px;}
+@media screen and (max-width:900px){.v155-pinch-wrap table{min-width:max-content!important;}}
+</style>
+
+<script id="egtph-v155-unified-settlement-status-zoom">
+/*
+ EGTPH v155
+ - One official temporary settlement formula for active workers:
+   earned salary in the current cycle up to settlement date inclusive
+   + unpaid hours + unpaid bonuses
+   - advances allocated to the current cycle up to settlement date
+   - absences
+   - full remaining unpaid debt.
+ - Future debt installment is not subtracted from cycle remaining salary on app open.
+ - Table zoom remains after the two-finger pinch ends.
+*/
+(function(){
+  'use strict';
+  var VERSION='155.0-unified-settlement-persistent-zoom';
+  var MIN_Z=0.48, MAX_Z=1.45, STEP=0.10;
+  var baseFinal=null;
+  function S(v){return v==null?'':String(v);}
+  function A(v){return Array.isArray(v)?v:[];}
+  function O(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}
+  function N(v){var n=Number(v);return isFinite(n)?Math.round(n):0;}
+  function money(v){return Math.round(Number(v)||0);}
+  function D(){try{return (typeof DB!=='undefined'&&DB)?DB:(window.DB||null);}catch(e){return window.DB||null;}}
+  function pad(n){return String(n).padStart(2,'0');}
+  function iso(d){return d&&d instanceof Date&&!isNaN(d)?d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()):'';}
+  function date(v){
+    try{if(typeof window._toDate==='function'){var z=window._toDate(v);if(z)return new Date(z.getFullYear(),z.getMonth(),z.getDate());}}catch(e){}
+    if(v instanceof Date&&!isNaN(v))return new Date(v.getFullYear(),v.getMonth(),v.getDate());
+    var s=S(v).trim(),m;if(!s)return null;
+    if((m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))){var a=new Date(+m[1],+m[2]-1,+m[3]);return isNaN(a)?null:new Date(a.getFullYear(),a.getMonth(),a.getDate());}
+    if((m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/))){var b=new Date(+m[3],+m[2]-1,+m[1]);return isNaN(b)?null:new Date(b.getFullYear(),b.getMonth(),b.getDate());}
+    var t=Date.parse(s);if(isNaN(t))return null;var c=new Date(t);return new Date(c.getFullYear(),c.getMonth(),c.getDate());
+  }
+  function today(){try{return typeof window.todayISO==='function'?window.todayISO():iso(new Date());}catch(e){return iso(new Date());}}
+  function sameDay(a,b){a=date(a);b=date(b);return !!(a&&b&&a.getTime()===b.getTime());}
+  function onOrBefore(v,ref){var x=date(v),r=date(ref);return !!(x&&r&&x<=r);}
+  function inRange(v,r){var x=date(v);return !!(x&&r&&x>=r.from&&x<r.to);}
+  function inRangeInclusive(v,r,ref){var x=date(v),rr=date(ref);return !!(x&&r&&rr&&x>=r.from&&x<=rr&&x<r.to);}
+  function worker(wid){try{if(typeof window.getW==='function')return window.getW(wid);}catch(e){}var d=D();return A(d&&d.workers).find(function(w){return w&&S(w.id)===S(wid);})||null;}
+  function deletedSet(){var d=D(),set={};A(d&&d.deletedIds).forEach(function(x){set[S(x)]=1;});Object.keys(O(d&&d.deletedRecords)).forEach(function(k){var r=d.deletedRecords[k];set[S(k).split('|').pop()]=1;if(r&&r.id)set[S(r.id)]=1;});return set;}
+  function isDeleted(x,set){if(!x)return false;set=set||deletedSet();return !!(set[S(x.id)]||set[S(x.transactionId)]||set[S(x.operationId)]);}
+  function rows(obj,wid){var src=(obj||{})[wid];if(src===undefined)src=(obj||{})[S(wid)];var out=[];function add(v){if(!v)return;if(Array.isArray(v)){v.forEach(add);return;}out.push(v);}if(Array.isArray(src)){src.forEach(add);return out;}Object.keys(O(src)).forEach(function(k){add(src[k]);});return out;}
+  function advGross(e){try{if(typeof window.advGross==='function')return window.advGross(e);}catch(err){}return e&&e._isInstDeduction?0:Math.max(0,N(e&&e.amount));}
+  function advDate(e){return (e&&(e.realDate||e.paymentDate||e.effectiveDate||e.date))||'';}
+  function cycleForRef(w,ref){
+    var r=null,refD=date(ref)||new Date();
+    try{if(typeof window.cycleAnchorForDate==='function'&&typeof window.cycleWindow==='function'){var a=window.cycleAnchorForDate(w,ref);r=window.cycleWindow(w,a.m,a.yr);}}
+    catch(e){}
+    if(r&&date(r.from)&&date(r.to))return {from:date(r.from),to:date(r.to)};
+    var day=Math.max(1,Math.min(28,N(w&&((w.payday!=null?w.payday:w.day)))||1));
+    var from=new Date(refD.getFullYear(),refD.getMonth(),day);
+    if(refD<from)from=new Date(refD.getFullYear(),refD.getMonth()-1,day);
+    return {from:from,to:new Date(from.getFullYear(),from.getMonth()+1,day)};
+  }
+  function rowBelongsToCycle(e,r){
+    if(!e||!r)return false;
+    var cs=date(e.accountingCycleStart||e.cycleStart);
+    if(cs)return sameDay(cs,r.from);
+    var ce=date(e.accountingCycleEnd||e.cycleEnd);
+    if(ce&&date(e.date))return inRange(e.date,r);
+    return inRange(e.date||e.realDate,r);
+  }
+  function hoursInCycle(wid,r,ref){var d=D(),set=deletedSet();return A(d&&d.hours&&d.hours[wid]).filter(function(h){return h&&!isDeleted(h,set)&&!h.paid&&inRangeInclusive(h.date,r,ref);});}
+  function bonusesInCycle(wid,r,ref){var d=D(),set=deletedSet(),out=[];Object.keys(O(d&&d.bonuses&&d.bonuses[wid])).forEach(function(k){A(d.bonuses[wid][k]).forEach(function(b){if(b&&!isDeleted(b,set)&&!b.paid&&inRangeInclusive(b.date,r,ref))out.push(b);});});return out;}
+  function absInCycle(wid,r,ref){var d=D(),set=deletedSet();return A(d&&d.absences&&d.absences[wid]).filter(function(a){var ad=(a&&(a.from||a.date));return a&&!isDeleted(a,set)&&a.deductOpt!=='cancel'&&inRangeInclusive(ad,r,ref);});}
+  function actualDebtPaidUpTo(wid,ref){
+    var d=D(),set=deletedSet(),seen={},sum=0;
+    function add(key,amount){amount=Math.max(0,N(amount));if(!amount)return;key=S(key)||('k_'+Object.keys(seen).length);if(seen[key])return;seen[key]=1;sum+=amount;}
+    A(d&&d.debts&&d.debts[wid]).forEach(function(x){
+      if(!x||isDeleted(x,set)||x.type!=='return'||!onOrBefore(x.date||x.realDate||x.enteredAt,ref))return;
+      add(x._instTag||x.instTag||x.allocationId||x.id,N(x.amount));
+    });
+    rows(d&&d.advances,wid).forEach(function(a){
+      if(!a||isDeleted(a,set)||!onOrBefore(advDate(a),ref))return;
+      if(a._isInstDeduction){add(a._instTag||a.instTag||a.id,N(a.amount));return;}
+      A(a.deductions).forEach(function(x){
+        if(!x||x.type!=='debt')return;
+        add(x._instTag||x.instTag||x.allocationId||x.id||('adv_'+S(a.id)+'_'+S(x.debtId)),N(x.amount));
+      });
+    });
+    return Math.max(0,money(sum));
+  }
+  function debtOriginalUpTo(wid,ref){var d=D(),set=deletedSet();return money(A(d&&d.debts&&d.debts[wid]).filter(function(x){return x&&!isDeleted(x,set)&&x.type==='debt'&&(!date(x.date)||onOrBefore(x.date,ref));}).reduce(function(s,x){return s+Math.max(0,N(x.amount));},0));}
+  function officialTempSettlement(w){
+    if(!w||!w.startDate)return null;
+    var ref=w.exitDate||today(),refD=date(ref),startD=date(w.startDate);if(!refD||!startD||refD<startD)return null;
+    if(w.exitDate&&typeof baseFinal==='function'){try{return baseFinal(w);}catch(e){}}
+    var wid=w.id,d=D(),set=deletedSet(),range=cycleForRef(w,ref);if(startD>range.from)range.from=startD;
+    var DAY=86400000,days=Math.max(0,Math.floor((refD-range.from)/DAY)+1);
+    var salary=N(w.salary),daily=salary/30,earned=money(daily*days);
+    var adv=rows(d&&d.advances,wid).filter(function(a){return a&&!isDeleted(a,set)&&!a._isInstDeduction&&rowBelongsToCycle(a,range)&&onOrBefore(advDate(a),ref);}).reduce(function(s,a){return s+advGross(a);},0);
+    adv=money(adv);
+    var hrs=money(hoursInCycle(wid,range,ref).reduce(function(s,h){return s+N(h.total);},0));
+    var bon=money(bonusesInCycle(wid,range,ref).reduce(function(s,b){return s+N(b.net!=null?b.net:b.amount);},0));
+    var abs=money(absInCycle(wid,range,ref).reduce(function(s,a){return s+Math.max(0,N(a.deduct));},0));
+    var debtOrig=debtOriginalUpTo(wid,ref),debtPaid=actualDebtPaidUpTo(wid,ref),debtBal=Math.max(0,money(debtOrig-debtPaid));
+    var net=money(earned+hrs+bon-adv-abs-debtBal);
+    return {isFinal:false,refDate:iso(refD),actualDays:days,earnedSal:earned,daily:daily,unpaidHrs:hrs,unpaidBon:bon,totalAdv:adv,cashAdvances:adv,totalAbs:abs,debtOriginal:debtOrig,debtPaid:debtPaid,debtBalance:debtBal,netFinal:net,rule:'v155-official-current-cycle-inclusive-full-remaining-debt',inclusive:true,currentCycleStart:iso(range.from),currentCycleEnd:iso(range.to),currentCycleDays:days};
+  }
+  function actualDebtPaidInRange(wid,r){
+    var d=D(),set=deletedSet(),seen={},sum=0;
+    function add(key,amount){amount=Math.max(0,N(amount));if(!amount)return;key=S(key)||('r_'+Object.keys(seen).length);if(seen[key])return;seen[key]=1;sum+=amount;}
+    A(d&&d.debts&&d.debts[wid]).forEach(function(x){if(x&&!isDeleted(x,set)&&x.type==='return'&&inRange(x.date||x.realDate||x.enteredAt,r))add(x._instTag||x.instTag||x.allocationId||x.id,N(x.amount));});
+    rows(d&&d.advances,wid).forEach(function(a){if(!a||isDeleted(a,set)||!inRange(advDate(a),r))return;if(a._isInstDeduction){add(a._instTag||a.instTag||a.id,N(a.amount));return;}A(a.deductions).forEach(function(x){if(x&&x.type==='debt')add(x._instTag||x.instTag||x.allocationId||x.id||('adv_'+S(a.id)+'_'+S(x.debtId)),N(x.amount));});});
+    return Math.max(0,money(sum));
+  }
+  function normalizeMonthStatus(res,wid,m,yr){
+    try{
+      if(!res||typeof res!=='object')return res;var w=worker(wid);if(!w)return res;var r=null;
+      try{if(typeof window.cycleWindow==='function')r=window.cycleWindow(w,m,yr||new Date().getFullYear());}catch(e){}
+      if(!(r&&date(r.from)&&date(r.to)))r={from:new Date((yr||new Date().getFullYear()),m,Math.min(28,N(w.payday||w.day)||1)),to:new Date((yr||new Date().getFullYear()),m+1,Math.min(28,N(w.payday||w.day)||1))};
+      r={from:date(r.from),to:date(r.to)};
+      var base=Math.max(0,N(res.baseSal));
+      var adv=Math.max(0,N(res.totAdv));
+      var abs=Math.max(0,N(res.totAbsNow));
+      var actualInst=actualDebtPaidInRange(wid,r);
+      var salaryRemaining=Math.max(0,money(base-abs-adv));
+      res.totInst=actualInst;
+      res.debtPaidActual=actualInst;
+      res.debtFutureOnly=0;
+      res.totalDeductions=abs+actualInst;
+      res.netDue=Math.max(0,base-abs);
+      res.netSal=salaryRemaining;
+      res.finalPayout=salaryRemaining+Math.max(0,N(res.hrsUnpaid))+Math.max(0,N(res.bonUnpaid));
+      res.cycleCashDue=salaryRemaining;
+      res.salaryPaid=adv>=res.netDue&&res.netDue>0;
+      res.salaryPaidWithInst=res.salaryPaid;
+      res._v155NoFutureInstallmentInRemaining=true;
+    }catch(e){try{console.warn('v155 status normalize',e);}catch(_){} }
+    return res;
+  }
+  function wrapFinal(){
+    if(typeof window.calcFinalSettlement==='function'&&!window.calcFinalSettlement.__v155Official){
+      if(!baseFinal)baseFinal=window.calcFinalSettlement;
+      var fn=function(w){return officialTempSettlement(w);};
+      fn.__v155Official=true;window.calcFinalSettlement=fn;try{calcFinalSettlement=fn;}catch(e){}
+    }
+  }
+  function wrapStatus(){
+    var base=window.calcMonthStatus;
+    if(typeof base!=='function'||base.__v155NoFutureInstallment)return false;
+    var fn=function(wid,m,yr){return normalizeMonthStatus(base.apply(this,arguments),wid,m,yr);};
+    fn.__v155NoFutureInstallment=true;window.calcMonthStatus=fn;try{calcMonthStatus=fn;}catch(e){}return true;
+  }
+  function refreshViews(){
+    ['renderSettlement','renderSideFinStatus','renderWorkers','renderDash','renderSalContent','renderSummary','updateBadges'].forEach(function(n){try{if(typeof window[n]==='function')window[n]();}catch(e){}});
+  }
+  function installAccounting(){wrapFinal();wrapStatus();try{window.processDueInstallments=function(){return false;};processDueInstallments=window.processDueInstallments;}catch(e){}refreshViews();}
+
+  function tableOf(w){return w&&w.querySelector?w.querySelector('table'):null;}
+  function clamp(n){n=Number(n)||1;return Math.max(MIN_Z,Math.min(MAX_Z,n));}
+  function keyFor(w){var p=w.closest&&w.closest('.page');var id=(p&&p.id)||'page';var i=0,cur=w;while(cur&&cur.previousElementSibling){cur=cur.previousElementSibling;if(cur.classList&&cur.classList.contains('twrap'))i++;}return 'EGTPH_V155_TABLE_ZOOM_'+id+'_'+i;}
+  function label(z){return Math.round(z*100)+'%';}
+  function applyZoom(w,z,save){
+    var t=tableOf(w);if(!t)return;z=clamp(z);w.dataset.v155Zoom=String(z);w.dataset.v153Zoom=String(z);w.classList.add('v155-pinch-wrap','v155-transform');
+    try{t.style.removeProperty('zoom');}catch(e){}
+    t.style.transform='scale('+z+')';
+    t.style.width='calc(100% / '+z+')';
+    t.style.minWidth='calc(max-content / '+z+')';
+    var lab=w._v155Label;if(lab)lab.textContent=label(z);
+    if(save!==false){try{localStorage.setItem(keyFor(w),String(z));}catch(e){}}
+  }
+  function dist(a,b){var dx=a.clientX-b.clientX,dy=a.clientY-b.clientY;return Math.sqrt(dx*dx+dy*dy);}
+  function toolbar(w){
+    var prev=w.previousElementSibling;if(prev&&prev.classList&&prev.classList.contains('v153-zoom-toolbar')){prev.remove();}
+    if(w._v155Toolbar)return;
+    var bar=document.createElement('div');bar.className='v155-zoom-toolbar';
+    bar.innerHTML='<button type="button" data-z="out">−</button><span class="v155-zoom-label">100%</span><button type="button" data-z="in">+</button><button type="button" data-z="fit">عرض كامل</button><button type="button" data-z="reset">100%</button><span class="v155-zoom-hint">التكبير يبقى بعد رفع الأصابع</span>';
+    if(w.parentNode)w.parentNode.insertBefore(bar,w);
+    w._v155Toolbar=bar;w._v155Label=bar.querySelector('.v155-zoom-label');
+    bar.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest?ev.target.closest('button[data-z]'):null;if(!b)return;ev.preventDefault();ev.stopPropagation();var z=clamp(parseFloat(w.dataset.v155Zoom||w.dataset.v153Zoom||'1'));var act=b.getAttribute('data-z');if(act==='in')z+=STEP;else if(act==='out')z-=STEP;else if(act==='reset')z=1;else if(act==='fit'){var t=tableOf(w),rw=Math.max(1,w.clientWidth-10),sw=t?Math.max(t.scrollWidth,t.getBoundingClientRect().width):rw;z=Math.max(MIN_Z,Math.min(1,rw/sw));}applyZoom(w,z,true);},true);
+  }
+  function enhance(w){
+    if(!w||!tableOf(w))return;w.classList.add('v155-pinch-wrap');toolbar(w);
+    if(w.dataset.v155Enhanced!=='1'){
+      w.dataset.v155Enhanced='1';var saved=1;try{saved=parseFloat(localStorage.getItem(keyFor(w))||'1')||1;}catch(e){}
+      applyZoom(w,saved,false);var startD=0,startZ=1,lastFinal=1;
+      w.addEventListener('touchstart',function(ev){if(ev.touches&&ev.touches.length===2){startD=dist(ev.touches[0],ev.touches[1]);startZ=clamp(parseFloat(w.dataset.v155Zoom||w.dataset.v153Zoom||'1'));lastFinal=startZ;}},{passive:true});
+      w.addEventListener('touchmove',function(ev){if(ev.touches&&ev.touches.length===2&&startD>0){ev.preventDefault();lastFinal=clamp(startZ*(dist(ev.touches[0],ev.touches[1])/startD));applyZoom(w,lastFinal,true);}},{passive:false});
+      w.addEventListener('touchend',function(ev){if(ev.touches&&ev.touches.length<2){startD=0;setTimeout(function(){applyZoom(w,lastFinal,true);},0);setTimeout(function(){applyZoom(w,lastFinal,true);},160);setTimeout(function(){applyZoom(w,lastFinal,true);},520);}}, {passive:true});
+    }
+  }
+  function scanTables(){
+    var list=[];try{document.querySelectorAll('.twrap').forEach(function(w){list.push(w);});}catch(e){}
+    try{document.querySelectorAll('div[style*="overflow-x"]').forEach(function(w){if(w.querySelector&&w.querySelector('table'))list.push(w);});}catch(e){}
+    list.forEach(enhance);
+  }
+  function installAll(){installAccounting();scanTables();}
+  [0,120,350,900,1800,3200,6500].forEach(function(ms){setTimeout(installAll,ms);});
+  document.addEventListener('DOMContentLoaded',installAll);window.addEventListener('load',installAll);window.addEventListener('pageshow',installAll);document.addEventListener('click',function(){setTimeout(installAll,60);},true);
+  window.EGTPH_V155={version:VERSION,install:installAll,settlement:officialTempSettlement,normalizeMonthStatus:normalizeMonthStatus,applyZoom:applyZoom,scanTables:scanTables};
+})();
+</script>
 </body></html>
