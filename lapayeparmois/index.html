@@ -3471,6 +3471,156 @@ function printHrsReport(){
   </tr></tbody></table>
   
 
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
+
 </body></html>`);
 }
 
@@ -3551,6 +3701,156 @@ function printDebtsReport(){
     <td style="text-align:center;font-weight:800">${fmtN(gRem)} متبقي</td>
   </tr></tbody></table>
   
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
+
 </body></html>`);
 }
 
@@ -3998,6 +4298,156 @@ function printSettlementReport(){
     </tbody>
   </table>
   
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
+
 </body></html>`);
 }
 
@@ -5715,6 +6165,156 @@ function printAbsReport(){
     </tbody>
   </table>
   
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
+
 </body></html>`);
 }
 function renderAbsContent(){
@@ -7638,6 +8238,156 @@ function printWorkerDetail(wid,fM,tM){
   </div>
 
 
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
+
 </body></html>`);
 }
 
@@ -7794,6 +8544,156 @@ function printTodayAdvances(){
   </div>
 
 
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
+
 </body></html>`);}
 
 // ══════════════════════════════════════════════════════
@@ -7898,6 +8798,156 @@ function printTodayOnly(){
       <div>الختم<br><br><br>____________</div>
     </div>
   
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
+
 </body></html>`);
 }
 function printDailyReport(){printTodayAdvances();}
@@ -7992,6 +9042,156 @@ function printMonthReport(){
     <div>الختم والتوقيع الرسمي<br><br><br>_______________</div>
   </div>
 
+
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
 
 </body></html>`);
 }
@@ -8106,6 +9306,156 @@ function _printBulkMonths(workers,months,fM,tM,yr,multiMonth){
     <div>توقيع المحاسب<br><br><br>__________</div>
   </div>`;
   pWin(PB.replace('@media print{@page{size:A4;margin:1cm}}','@media print{@page{size:A4;margin:.6cm}}')+bodyHtml+'
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
+
 </body></html>');
 }
 
@@ -8142,6 +9492,156 @@ function printSummary(){
     </tbody></table>
     <div class="sig"><div>توقيع المدير<br>Youcef Abdi<br><br>__________</div><div>توقيع المحاسب<br><br><br>__________</div></div>
 
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
+
 </body></html>`);
 }
 function printAnnual(){
@@ -8169,6 +9669,156 @@ function printAnnual(){
     <tr class="total"><td>المجموع</td><td>${fmtN(tSal)}</td><td>+${fmtN(tA)}</td><td>-${fmtN(tAb)}</td><td>−${fmtN(tInst)}</td><td>${fmtN(tN)}</td><td>+${fmtN(tH)}</td><td>+${fmtN(tB)}</td></tr>
     </tbody></table>
 
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
+
 </body></html>`);
 }
 function printAuditReport(){
@@ -8178,6 +9828,156 @@ function printAuditReport(){
     <table><thead><tr><th>#</th><th>التاريخ</th><th>المستخدم</th><th>العملية</th></tr></thead>
     <tbody>${DB.auditLog.map((l,i)=>`<tr><td>${i+1}</td><td>${l.time}</td><td><b>${l.user}</b></td><td>${l.action}</td></tr>`).join('')}</tbody>
     </table>
+
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
 
 </body></html>`);
 }
@@ -8272,6 +10072,156 @@ function printTodayByType(type){
     body{font-family:Arial,Tahoma,sans-serif;font-size:11px;padding:10px}
     table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:6px 8px}
   </style></head><body>${bodyHtml}
+
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
 
 </body></html>`);
 }
@@ -11184,6 +13134,156 @@ try{
       var title=(String(html||'').match(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i)||[])[1]||'تقرير EGTPH';title=title.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
       var safeTitle=esc(title), toolbar='<style>#egtphV50Toolbar{position:sticky;top:0;z-index:9999;background:#071726;color:#fff;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:10px;font-family:Arial,Tahoma,sans-serif;direction:rtl}#egtphV50Toolbar button{border:0;border-radius:9px;padding:10px 14px;font-weight:800;cursor:pointer}#egtphV50Print{background:#d59a19}#egtphV50Mail{background:#fff;color:#b3261e}@media print{#egtphV50Toolbar{display:none!important}}</style><div id="egtphV50Toolbar"><button id="egtphV50Print" onclick="window.print()">🖨️ طباعة</button><button id="egtphV50Mail" onclick="window.opener&&window.opener.sendPrintViaGmail(document.documentElement.outerHTML,document.title)">📧 إرسال نسخة عبر Gmail</button></div>';
       var out=String(html||''); if(/<body[^>]*>/i.test(out))out=out.replace(/<body([^>]*)>/i,'<body$1>'+toolbar);else out='<html dir="rtl"><head><meta charset="UTF-8"><title>EGTPH — '+safeTitle+'</title></head><body>'+toolbar+out+'
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
+
 </body></html>';
       var win=window.open('','_blank','width=1050,height=780'); if(!win){toastSafe('⚠️ المتصفح منع المعاينة',true);return null;}win.document.open();win.document.write(out);win.document.close();return win;
     };
@@ -13244,7 +15344,307 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   function reportTitle(html){var m=S(html).match(/<h[12][^>]*>([\s\S]*?)<\/h[12]>/i),t=m?m[1].replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim():'تقرير EGTPH';return t||'تقرير EGTPH';}
   function previewScript(title){var safe=JSON.stringify(title);return "(function(){'use strict';var title="+safe+";var busy=false;function status(x,bad){var e=document.getElementById('egtphExportStatus');if(e){e.textContent=x;e.style.color=bad?'#b42318':'#0b6b3a';}}function load(url,test){return new Promise(function(ok,no){if(window[test])return ok();var s=document.createElement('script');s.src=url;s.onload=function(){window[test]?ok():no(new Error('تعذر تحميل المكتبة'));};s.onerror=function(){no(new Error('لا يوجد اتصال لتحميل أداة PDF'));};document.head.appendChild(s);});}async function libs(){await load('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js','html2canvas');await load('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js','jspdf');}function name(){return 'EGTPH_'+new Date().toISOString().slice(0,10)+'.pdf';}async function pdfBlob(){if(busy)throw new Error('جارٍ تجهيز PDF');busy=true;var bar=document.getElementById('egtphV69Toolbar'),old=bar&&bar.style.display;try{status('⏳ جارٍ تجهيز PDF...');if(bar)bar.style.display='none';await libs();var node=document.getElementById('egtphReportBody'),canvas=await window.html2canvas(node,{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false,windowWidth:node.scrollWidth,windowHeight:node.scrollHeight}),img=canvas.toDataURL('image/png'),landscape=canvas.width>canvas.height*1.17,pdf=new window.jspdf.jsPDF({orientation:landscape?'landscape':'portrait',unit:'mm',format:'a4',compress:true}),pw=pdf.internal.pageSize.getWidth(),ph=pdf.internal.pageSize.getHeight(),ih=canvas.height*pw/canvas.width,left=ih,pos=0;pdf.addImage(img,'PNG',0,pos,pw,ih,undefined,'FAST');left-=ph;while(left>0){pos=left-ih;pdf.addPage();pdf.addImage(img,'PNG',0,pos,pw,ih,undefined,'FAST');left-=ph;}status('✅ PDF جاهز');return pdf.output('blob');}finally{if(bar)bar.style.display=old||'flex';busy=false;}}window.egtphExportPdf=async function(){try{var b=await pdfBlob(),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name();document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href);},2000);status('✅ تم تنزيل PDF');}catch(e){status('⚠️ تعذر إنشاء PDF: '+(e.message||e),true);}};window.egtphSharePdf=async function(){try{var b=await pdfBlob(),f=new File([b],name(),{type:'application/pdf'});if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:title,text:'تقرير EGTPH بصيغة PDF'});status('✅ افتُتحت المشاركة — اختر WhatsApp');return;}var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name();document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href);},2000);window.open('https://wa.me/?text='+encodeURIComponent('تقرير EGTPH جاهز. أرفق ملف PDF الذي تم تنزيله.'),'_blank');status('📎 تم تنزيل PDF؛ أرفقه في WhatsApp');}catch(e){status('⚠️ تعذر فتح المشاركة: '+(e.message||e),true);}};})();";}
   function wrapPreview(html){var title=reportTitle(html),toolbar='<style>@media print{#egtphV69Toolbar{display:none!important}}</style><div id="egtphV69Toolbar" style="position:sticky;top:0;z-index:99999;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;padding:10px;background:#082234;color:#fff;font-family:Arial,Tahoma,sans-serif;direction:rtl;box-shadow:0 2px 12px rgba(0,0,0,.25)"><button onclick="window.print()" style="border:0;border-radius:9px;padding:10px 13px;font-weight:800;cursor:pointer;background:#f0aa18;color:#17210a">🖨️ طباعة / حفظ PDF</button><button onclick="egtphExportPdf()" style="border:0;border-radius:9px;padding:10px 13px;font-weight:800;cursor:pointer;background:#fff;color:#153b61">📄 تصدير PDF</button><button onclick="egtphSharePdf()" style="border:0;border-radius:9px;padding:10px 13px;font-weight:800;cursor:pointer;background:#25D366;color:#063c1d">🟢 مشاركة PDF / WhatsApp</button><span id="egtphExportStatus" style="font-size:12px;min-width:170px;text-align:center">معاينة التقرير قبل الطباعة</span></div>',js='<script>'+previewScript(title)+'<'+'/script>',out=S(html).replace(/<body([^>]*)>/i,'<body$1><main id="egtphReportBody">');out=out.replace(/<\/body>/i,'</main>'+toolbar+js+'
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
+
 </body>');if(out===html)out='<html dir="rtl"><head><meta charset="UTF-8"></head><body><main id="egtphReportBody">'+html+'</main>'+toolbar+js+'
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
+
 </body></html>';return out;}
   function previewPrint(html){try{var win=window.open('','_blank','width=1100,height=800');if(!win)throw new Error('نافذة المعاينة محجوبة');win.document.open();win.document.write(wrapPreview(html));win.document.close();return win;}catch(e){toast('❌ تعذر فتح معاينة الطباعة: '+(e.message||e),true);return null;}}
   function addPrintNote(){var page=document.getElementById('page-print');if(!page||document.getElementById('v69PrintHint'))return;var box=document.createElement('div');box.id='v69PrintHint';box.className='abox ok';box.style.marginBottom='12px';box.innerHTML='<b>📄 PDF وWhatsApp فعّالان</b><br><span style="font-size:12px">كل زر طباعة يفتح معاينة تضم تصدير PDF ومشاركة PDF / WhatsApp.</span>';page.insertBefore(box,page.firstChild);}
@@ -15729,4 +18129,154 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
   [200,700,1500,3000,5500].forEach(function(ms){setTimeout(apply,ms);});
 })();
 </script>
+
+
+<style id="egtph-v150-buttons-touch-fix-css">
+/* v150 — إصلاح التفاعل على iPhone بعد طبقة تنسيق الجداول. لا يغير الحسابات أو Firebase. */
+@media screen{
+  /* العناصر التفاعلية يجب أن تبقى فوق طبقات التسطير واللمعان */
+  button,
+  .bsm,
+  .qb,
+  .db,
+  .bb,
+  .nv,
+  [onclick],
+  select,
+  input,
+  textarea,
+  a,
+  label,
+  .modal,
+  .modal *,
+  .topbar,
+  .tright,
+  .sidebar,
+  .bnav,
+  .bnav *,
+  .qbtns,
+  .qbtns *{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+
+  /* الطبقات التجميلية لا تلتقط اللمس أبداً */
+  .glass-card::before,
+  .qcard::before,
+  .scard::after,
+  .modal::before,
+  .slbl::after,
+  .nv.active::before,
+  .tlogo::before,
+  .tlogo::after,
+  .topbar::before,
+  .topbar::after,
+  .layout::before,
+  .layout::after,
+  .main::before,
+  .main::after,
+  .sec::before,
+  .sec::after,
+  .twrap::before,
+  .twrap::after{
+    pointer-events:none!important;
+  }
+
+  /* لا تجعل Toast أو تنبيهات عائمة تمنع الضغط على الصفحة */
+  #toast,
+  #_saveInd,
+  .auto-save-dot,
+  #saveLabel{
+    pointer-events:none!important;
+  }
+
+  /* رفع أولوية أشرطة التنقل فقط، بدون تغطية محتوى الصفحة */
+  .topbar{z-index:1200!important;}
+  .sidebar{z-index:900!important;}
+  .bnav{z-index:1300!important;}
+
+  /* داخل الجداول: الأزرار فوق حدود الصفوف */
+  .twrap button,
+  .sec table button,
+  .twrap a,
+  .sec table a,
+  .twrap select,
+  .sec table select,
+  .twrap input,
+  .sec table input{
+    position:relative!important;
+    z-index:5!important;
+  }
+}
+</style>
+
+<script id="egtph-v150-buttons-touch-fix">
+(function(){
+  'use strict';
+  var VERSION='150.0-buttons-touch-fix';
+  function S(v){return String(v==null?'':v);}
+  function css(el){try{return window.getComputedStyle(el);}catch(e){return null;}}
+  function isVisible(el){var c=css(el);if(!c)return false;return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity||1)!==0;}
+  function neutralizeHiddenOverlays(){
+    try{
+      var q='[id*="Modal"],[id*="modal"],.modal,#toast,#egtphAuthOverlay,#v91ConflictModal,#v83LogicModal';
+      Array.prototype.forEach.call(document.querySelectorAll(q),function(el){
+        var c=css(el);if(!c)return;
+        if(el.id==='toast'){el.style.pointerEvents='none';return;}
+        var fixed=(c.position==='fixed'||c.position==='absolute');
+        var open=el.classList&&el.classList.contains('open');
+        var displayed=isVisible(el);
+        if(!displayed){el.style.pointerEvents='none';return;}
+        /* مودالات معروفة يجب أن تبقى قابلة للضغط فقط عندما تكون مفتوحة فعلياً */
+        if(fixed && /Modal|modal|Overlay/.test(el.id||el.className) && !open){
+          var rect=el.getBoundingClientRect();
+          var huge=rect.width>window.innerWidth*.8 && rect.height>window.innerHeight*.5;
+          if(huge){el.style.pointerEvents='none';}
+        }
+      });
+    }catch(e){}
+  }
+  function navPageFromId(id){
+    id=S(id);
+    if(id.indexOf('nav-')===0)return id.slice(4);
+    return '';
+  }
+  function bindNavigation(){
+    try{
+      Array.prototype.forEach.call(document.querySelectorAll('.nv[id^="nav-"]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(ev){
+          var p=navPageFromId(el.id);
+          if(p && typeof window.showPage==='function'){
+            try{window.showPage(p);}catch(e){}
+          }
+        },false);
+        el.style.pointerEvents='auto';
+        el.style.cursor='pointer';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.bb[data-page],.bb[data-target]'),function(el){
+        if(el.__v150Bound)return;el.__v150Bound=true;
+        el.addEventListener('click',function(){
+          var p=el.getAttribute('data-page')||el.getAttribute('data-target');
+          if(p && typeof window.showPage==='function')try{window.showPage(p);}catch(e){}
+        },false);
+        el.style.pointerEvents='auto';
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('button,[onclick],select,input,textarea,a'),function(el){
+        el.style.pointerEvents='auto';
+        if(el.tagName==='BUTTON'||el.hasAttribute('onclick'))el.style.cursor='pointer';
+      });
+    }catch(e){}
+  }
+  function repair(){neutralizeHiddenOverlays();bindNavigation();}
+  document.addEventListener('DOMContentLoaded',repair);
+  window.addEventListener('load',repair);
+  window.addEventListener('pageshow',repair);
+  document.addEventListener('touchstart',neutralizeHiddenOverlays,{passive:true,capture:true});
+  document.addEventListener('click',neutralizeHiddenOverlays,true);
+  [50,250,800,1600,3200,6000].forEach(function(ms){setTimeout(repair,ms);});
+  window.EGTPH_V150={version:VERSION,repair:repair,neutralizeHiddenOverlays:neutralizeHiddenOverlays};
+})();
+</script>
+
 </body></html>
