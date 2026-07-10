@@ -2485,6 +2485,14 @@ function _inCycle(dateStr,win){
   if(!d)return false;
   return d>=win.from && d<win.to;
 }
+// v140 — نفس قاعدة v80: accountingCycleStart/cycleStart هما المرجع الرسمي لتحديد
+// انتماء التسبيق لدورته المحاسبية. date/realDate هو فقط تاريخ الدفع الفعلي وقد
+// يقع فعلياً داخل دورة لاحقة (مثال: تسوية أفريل تُدفع فعلياً 20/05). الاعتماد على
+// date وحده لتحديد الدورة كان يُدخل المبلغ في الدورة التالية خطأً.
+function _advCycleRef(e){
+  if(!e)return null;
+  return e.accountingCycleStart || e.cycleStart || e.date || e.realDate;
+}
 function cycleAnchorForDate(w,dateValue){
   const d=_toDate(dateValue)||new Date();
   const entryDay=Math.min(+((w||{}).day)||1,28);
@@ -2560,7 +2568,7 @@ function advanceEntriesInCycle(wid,m,yr){
   var w=getW(wid);if(!w)return[];
   var win=cycleWindow(w,m,yr),out=[];
   Object.entries(DB.advances[wid]||{}).forEach(function(pair){
-    (pair[1]||[]).forEach(function(e){if(!_isInstAdv(e)&&_inCycle(e.date,win))out.push(e);});
+    (pair[1]||[]).forEach(function(e){if(!_isInstAdv(e)&&_inCycle(_advCycleRef(e),win))out.push(e);});
   });
   return out;
 }
@@ -2810,7 +2818,7 @@ function calcMonthStatus(wid,m,yr){
   // ── التسبيقات: كل القيود التي يقع تاريخها داخل نافذة الدورة ──
   let totAdv=0;
   Object.values(DB.advances[wid]||{}).forEach(arr=>{
-    (arr||[]).forEach(e=>{if(_inCycle(e.date,win))totAdv+=advGross(e);});
+    (arr||[]).forEach(e=>{if(_inCycle(_advCycleRef(e),win))totAdv+=advGross(e);});
   });
 
   // ── خصم الغيابات الفورية: حسب نافذة الدورة بالتاريخ ──
@@ -2964,7 +2972,7 @@ function autoSettleOnAdvance(wid, m, yr, targetAdvance, paidDate){
   if(!w||!targetAdvance||_isInstAdv(targetAdvance))return false;
   const effectiveDate=_advancePaymentDate(targetAdvance,paidDate);
   const win=cycleWindow(w,m,yr);
-  if(!_inCycle(targetAdvance.date,win))return false;
+  if(!_inCycle(typeof _advCycleRef==='function' ? _advCycleRef(targetAdvance) : targetAdvance.date,win))return false;
   let changed=false;
 
   // v114: الغياب الفوري خصم خارجي من راتب الدورة (absenceExternal).
@@ -9977,7 +9985,8 @@ try{
         if(!row) return;
         try{
           if(typeof _isInstAdv==='function' && _isInstAdv(row)) return;
-          var inRange=typeof _inCycle==='function' ? _inCycle(row.date,win) : (function(){var rd=dateObj(row.date);return !!(rd&&rd>=win.from&&rd<win.to);})();
+          var refDate=(typeof _advCycleRef==='function' ? _advCycleRef(row) : (row.accountingCycleStart||row.cycleStart||row.date));
+          var inRange=typeof _inCycle==='function' ? _inCycle(refDate,win) : (function(){var rd=dateObj(refDate);return !!(rd&&rd>=win.from&&rd<win.to);})();
           if(inRange) total+=(typeof advGross==='function' ? (+advGross(row)||0) : (+row.amount||0));
         }catch(e){}
       });
@@ -10013,7 +10022,7 @@ try{
     });
     var allAdv=(d.advances[w.id] || d.advances[String(w.id)] || {}), cashPaid=0, debtOnAdvance=0;
     Object.keys(allAdv).forEach(function(bucket){ asArray(allAdv[bucket]).forEach(function(row){
-      if(!row || row._isInstDeduction || !inside(row.date)) return;
+      if(!row || row._isInstDeduction || !inside(typeof _advCycleRef==='function' ? _advCycleRef(row) : (row.accountingCycleStart||row.cycleStart||row.date))) return;
       var gross=Math.max(0,Math.round(typeof advGross==='function' ? (+advGross(row)||0) : (+row.amount||0)));
       var deductions=Array.isArray(row.deductions) ? row.deductions : [];
       var totalDed=deductions.reduce(function(sum,x){return sum+Math.max(0,Math.round(+((x||{}).amount)||0));},0);
@@ -13156,7 +13165,8 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
       cleanList((d.advances[wid]||{})[k],emptyStats(),'advances').forEach(function(a){
         if(!a)return;
         var isInst=typeof window._isInstAdv==='function'?window._isInstAdv(a):!!a._isInstDeduction;
-        if(!isInst&&(!win||(typeof window._inCycle==='function'&&window._inCycle(a.date,win))))out.push(a);
+        var refDate=typeof window._advCycleRef==='function'?window._advCycleRef(a):(a.accountingCycleStart||a.cycleStart||a.date);
+        if(!isInst&&(!win||(typeof window._inCycle==='function'&&window._inCycle(refDate,win))))out.push(a);
       });
     });
     return out;
