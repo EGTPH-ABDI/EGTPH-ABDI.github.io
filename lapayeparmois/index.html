@@ -3063,56 +3063,107 @@ function calcMonthStatus(wid,m,yr){
 //  الصافي موجب = أنت تدفع له | سالب = هو يدفعك
 // ══════════════════════════════════════════════════════
 function calcFinalSettlement(w){
-  /* EGTPH v141 — التصفية المؤقتة الرسمية: حذف المنطق القديم.
-     الحساب حتى refDate شاملاً، مع خصم كامل الدين المتبقي غير المسدد.
-     الصافي موجب = المؤسسة تدفع للعامل، سالب = العامل يدفع للمؤسسة. */
+  /* EGTPH v160 — المحرك الوحيد للتصفية.
+     المؤقتة: كامل الاستحقاق المحاسبي منذ الدخول إلى تاريخ التصفية شاملاً.
+     النهائية: نفس القاعدة تماماً، مع تعديل واحد فقط على أجر دورة الخروج:
+       الأيام الفعلية في دورة الخروج إذا كانت 15 يوماً أو أقل، وإلا 15 يوماً فقط.
+     جميع الدورات السابقة تبقى محسوبة وفق استحقاقها الكامل/الجزئي الصحيح.
+     لا خصم مزدوج لقسط الدين: التسبيق المركب يدخل بكامل قيمته المحاسبية،
+     والقسط المدفوع ينقص من أصل الدين لتحديد الرصيد المتبقي فقط. */
   if(!w||!w.startDate)return null;
-  const startYear=parseInt((w.startDate||'').slice(0,4),10);
-  if(!startYear||startYear<2000||startYear>2100)return null;
-  const DAY=864e5;
-  const _d=(v)=>{try{if(typeof _toDate==='function'){const z=_toDate(v);if(z)return new Date(z.getFullYear(),z.getMonth(),z.getDate());}}catch(e){};
+  const DAY=86400000;
+  const db=(typeof DB!=='undefined'&&DB)?DB:(window.DB||{});
+  const num=v=>{const n=Number(v);return isFinite(n)?Math.round(n):0;};
+  const money=v=>Math.round(Number(v)||0);
+  const arr=v=>Array.isArray(v)?v:[];
+  const obj=v=>v&&typeof v==='object'&&!Array.isArray(v)?v:{};
+  const str=v=>String(v==null?'':v);
+  const date=v=>{
+    try{if(typeof _toDate==='function'){const z=_toDate(v);if(z)return new Date(z.getFullYear(),z.getMonth(),z.getDate());}}catch(e){}
     if(v instanceof Date&&!isNaN(v))return new Date(v.getFullYear(),v.getMonth(),v.getDate());
-    const s=String(v||'').trim();let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);if(m)return new Date(+m[1],+m[2]-1,+m[3]);
-    m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);if(m)return new Date(+m[3],+m[2]-1,+m[1]);return null;};
-  const _iso=(d)=>d&&d instanceof Date&&!isNaN(d)?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'):'';
-  const _num=(v)=>{const n=Number(v);return isFinite(n)?Math.round(n):0;};
-  const _arr=(v)=>Array.isArray(v)?v:[];
-  const _flatObj=(obj)=>Object.values(obj||{}).reduce((a,v)=>a.concat(Array.isArray(v)?v:Object.values(v||{}).flat()),[]);
-  const _money=(v)=>Math.round(Number(v)||0);
-  const d=typeof DB!=='undefined'?DB:(window.DB||{});
-  const start=_d(w.startDate);if(!start)return null;
-  // EGTPH v144: التصفية المؤقتة ديناميكية دائماً حسب تاريخ اليوم؛ لا تاريخ تصفية ثابت محفوظ.
-  const refDate=w.exitDate||(typeof todayISO==='function'?todayISO():_iso(new Date()));
-  const ref=_d(refDate);if(!ref||ref<start)return null;
-  const isFinal=!!w.exitDate;
-  const salary=_num(w.salary),daily=salary/30;
-  const cycleStart=(i)=>{const y=start.getFullYear(),mo=start.getMonth()+i,dy=start.getDate(),last=new Date(y,mo+1,0).getDate();return new Date(y,mo,Math.min(dy,last));};
-  let fullCycles=0;while(cycleStart(fullCycles+1)<=ref)fullCycles++;
-  const curStart=cycleStart(fullCycles);
-  const inclusiveDays=Math.max(0,Math.floor((ref-curStart)/DAY)+1);
-  const actualDays=fullCycles*30+inclusiveDays;
-  const earnedSal=_money(fullCycles*salary + daily*inclusiveDays);
-  const within=(v)=>{const x=_d(v);return !!(x&&x>=start&&x<=ref);};
-  const advRows=_flatObj((d.advances||{})[w.id]||(d.advances||{})[String(w.id)]||{}).filter(Boolean);
-  const grossAdv=(a)=>{try{if(typeof advGross==='function')return advGross(a);}catch(e){}return a&&a._isInstDeduction?0:Math.max(0,_num(a&&a.amount));};
-  const totalAdv=_money(advRows.filter(a=>within((a&&a.realDate)||(a&&a.date))).reduce((s,a)=>s+grossAdv(a),0));
-  const cashAdvances=_money(advRows.filter(a=>within((a&&a.realDate)||(a&&a.date))&&!a._isInstDeduction).reduce((s,a)=>s+_num(a.netPaid!=null?a.netPaid:a.amount),0));
-  const hrs=_arr((d.hours||{})[w.id]||(d.hours||{})[String(w.id)]).filter(h=>h&&!h.paid&&within(h.date));
-  const unpaidHrs=_money(hrs.reduce((s,h)=>s+_num(h.total),0));
-  const bonRows=_flatObj((d.bonuses||{})[w.id]||(d.bonuses||{})[String(w.id)]||{}).filter(b=>b&&!b.paid&&within(b.date));
-  const unpaidBon=_money(bonRows.reduce((s,b)=>s+_num(b.net!=null?b.net:b.amount),0));
-  const absRows=_arr((d.absences||{})[w.id]||(d.absences||{})[String(w.id)]).filter(a=>a&&a.deductOpt!=='cancel'&&within((typeof absenceDate==='function'?absenceDate(a):(a.from||a.date))));
-  const totalAbs=_money(absRows.reduce((s,a)=>s+Math.max(0,_num(a.deduct)),0));
-  const debtRows=_arr((d.debts||{})[w.id]||(d.debts||{})[String(w.id)]).filter(Boolean);
-  const debtTotal=_money(debtRows.filter(x=>x.type==='debt'&&(!x.date||within(x.date)||!_d(x.date))).reduce((s,x)=>s+Math.max(0,_num(x.amount)),0));
-  const returnsTotal=_money(debtRows.filter(x=>x.type==='return'&&(!x.date||within(x.date)||!_d(x.date))).reduce((s,x)=>s+Math.max(0,_num(x.amount)),0));
-  const retTags=new Set(debtRows.filter(x=>x.type==='return'&&x._instTag&&(!x.date||within(x.date)||!_d(x.date))).map(x=>String(x._instTag)));
-  const legacyInst=_money(advRows.filter(a=>a&&a._isInstDeduction&&(!(a._instTag)||!retTags.has(String(a._instTag)))&&within(a.realDate||a.date)).reduce((s,a)=>s+Math.max(0,_num(a.amount)),0));
-  const debtBalance=Math.max(0,_money(debtTotal-returnsTotal-legacyInst));
-  const netFinal=_money(earnedSal+unpaidHrs+unpaidBon-totalAdv-totalAbs-debtBalance);
-  return {isFinal,refDate:_iso(ref),actualDays,earnedSal,daily,unpaidHrs,unpaidBon,totalAdv,cashAdvances,totalAbs,debtBalance,netFinal,
-    debtOriginal:debtTotal,debtPaid:returnsTotal+legacyInst,rule:'v141-temp-inclusive-remaining-debt',inclusive:true,
-    currentCycleStart:_iso(curStart),currentCycleDays:inclusiveDays};
+    const x=str(v).trim(); let m;
+    if((m=x.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)))return new Date(+m[1],+m[2]-1,+m[3]);
+    if((m=x.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)))return new Date(+m[3],+m[2]-1,+m[1]);
+    return null;
+  };
+  const iso=d=>d&&!isNaN(d)?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'):'';
+  const flatten=(map,wid)=>{
+    const src=(map||{})[wid]!==undefined?(map||{})[wid]:(map||{})[str(wid)];
+    const out=[]; const add=v=>{if(!v)return;if(Array.isArray(v)){v.forEach(add);return;}if(typeof v==='object'&&!(v.date||v.amount!=null||v.total!=null||v.type)){Object.values(v).forEach(add);return;}out.push(v);};
+    add(src); return out;
+  };
+  const deleted={};
+  arr(db.deletedIds).forEach(x=>deleted[str(x)]=1);
+  Object.entries(obj(db.deletedRecords)).forEach(([k,r])=>{deleted[str(k).split('|').pop()]=1;if(r&&r.id)deleted[str(r.id)]=1;});
+  const isDeleted=x=>!!(x&&(deleted[str(x.id)]||deleted[str(x.transactionId)]||deleted[str(x.operationId)]));
+
+  const start=date(w.startDate); if(!start)return null;
+  const ref=date(w.exitDate||(typeof todayISO==='function'?todayISO():iso(new Date()))); if(!ref||ref<start)return null;
+  const isFinal=!!w.exitDate, wid=w.id, salary=num(w.salary), daily=salary/30;
+
+  function cycleRangeFor(d){
+    try{
+      if(typeof cycleAnchorForDate==='function'&&typeof cycleWindow==='function'){
+        const a=cycleAnchorForDate(w,iso(d)),r=cycleWindow(w,a.m,a.yr);
+        const f=date(r&&r.from),t=date(r&&r.to); if(f&&t)return {from:f,to:t};
+      }
+    }catch(e){}
+    const pd=Math.max(1,Math.min(28,num(w.payday!=null?w.payday:w.day)||start.getDate()));
+    let f=new Date(d.getFullYear(),d.getMonth(),pd); if(d<f)f=new Date(d.getFullYear(),d.getMonth()-1,pd);
+    return {from:f,to:new Date(f.getFullYear(),f.getMonth()+1,pd)};
+  }
+
+  // حساب الأجر دورة بدورة: أول دورة جزئية، الدورات الوسطى كاملة، ودورة الخروج فقط عليها سقف 15 يوماً.
+  let earnedSal=0, cursor=new Date(start), guard=0, fullCycles=0, exitEligibleDays=null, exitCycleStart='', exitCycleEnd='';
+  while(cursor<=ref && guard++<600){
+    const r=cycleRangeFor(cursor);
+    const segStart=new Date(Math.max(start.getTime(),r.from.getTime(),cursor.getTime()));
+    const segEnd=new Date(Math.min(ref.getTime(),r.to.getTime()-DAY));
+    if(segEnd<segStart){cursor=new Date(r.to);continue;}
+    const days=Math.floor((segEnd-segStart)/DAY)+1;
+    const isWhole=segStart.getTime()===r.from.getTime() && segEnd.getTime()===r.to.getTime()-DAY;
+    const isExitCycle=isFinal && ref>=r.from && ref<r.to;
+    if(isExitCycle){
+      exitEligibleDays=Math.min(days,15);
+      exitCycleStart=iso(r.from); exitCycleEnd=iso(r.to);
+      earnedSal+=daily*exitEligibleDays;
+    }else if(isWhole){earnedSal+=salary;fullCycles++;}
+    else{earnedSal+=daily*days;}
+    cursor=new Date(r.to);
+  }
+  earnedSal=money(earnedSal);
+
+  const within=v=>{const d=date(v);return !!(d&&d>=start&&d<=ref);};
+  const advRows=flatten(db.advances,wid).filter(a=>a&&!isDeleted(a));
+  const advDate=a=>a&&(a.realDate||a.paymentDate||a.effectiveDate||a.date||a.enteredAt);
+  const gross=a=>{try{if(typeof advGross==='function')return advGross(a);}catch(e){}return a&&a._isInstDeduction?0:Math.max(0,num(a&&a.amount));};
+  // القيد الاصطناعي للقسط لا يعد تسبيقاً ثانياً. العملية المركبة الأصلية تدخل بكامل مبلغها المحاسبي.
+  const totalAdv=money(advRows.filter(a=>!a._isInstDeduction&&within(advDate(a))).reduce((s,a)=>s+gross(a),0));
+  const unpaidHrs=money(flatten(db.hours,wid).filter(h=>h&&!isDeleted(h)&&!h.paid&&within(h.date||h.realDate||h.enteredAt)).reduce((s,h)=>s+num(h.total),0));
+  const unpaidBon=money(flatten(db.bonuses,wid).filter(b=>b&&!isDeleted(b)&&!b.paid&&within(b.date||b.realDate||b.enteredAt)).reduce((s,b)=>s+num(b.net!=null?b.net:b.amount),0));
+  const totalAbs=money(flatten(db.absences,wid).filter(a=>a&&!isDeleted(a)&&a.deductOpt!=='cancel'&&within(a.from||a.date||a.realDate||a.enteredAt)).reduce((s,a)=>s+Math.max(0,num(a.deduct)),0));
+
+  const debtRows=flatten(db.debts,wid).filter(x=>x&&!isDeleted(x));
+  const debtOriginal=money(debtRows.filter(x=>x.type==='debt'&&(!date(x.date)||within(x.date))).reduce((s,x)=>s+Math.max(0,num(x.amount)),0));
+  const paidSeen={}; let debtPaid=0;
+  const addPaid=(key,amt)=>{amt=Math.max(0,num(amt));key=str(key)||('p'+Object.keys(paidSeen).length);if(!amt||paidSeen[key])return;paidSeen[key]=1;debtPaid+=amt;};
+  debtRows.filter(x=>x.type==='return'&&(!date(x.date)||within(x.date||x.realDate||x.enteredAt))).forEach(x=>addPaid(x._instTag||x.instTag||x.allocationId||x.id,x.amount));
+  advRows.filter(a=>within(advDate(a))).forEach(a=>{
+    if(a._isInstDeduction)addPaid(a._instTag||a.instTag||a.id,a.amount);
+    arr(a.deductions).filter(x=>x&&x.type==='debt').forEach(x=>addPaid(x._instTag||x.instTag||x.allocationId||x.id||('adv_'+str(a.id)+'_'+str(x.debtId)),x.amount));
+  });
+  debtPaid=money(debtPaid);
+  const debtBalance=Math.max(0,money(debtOriginal-debtPaid));
+  const netFinal=money(earnedSal+unpaidHrs+unpaidBon-totalAdv-totalAbs-debtBalance);
+  const current=cycleRangeFor(ref);
+  const actualDays=Math.floor((ref-start)/DAY)+1;
+  return {
+    isFinal,refDate:iso(ref),actualDays,earnedSal,daily,unpaidHrs,unpaidBon,totalAdv,cashAdvances:totalAdv,totalAbs,
+    debtOriginal,debtPaid,debtBalance,netFinal,inclusive:true,fullCycles,currentCycleStart:iso(current.from),currentCycleEnd:iso(current.to),
+    currentCycleDays:Math.floor((ref-new Date(Math.max(start.getTime(),current.from.getTime())))/DAY)+1,
+    exitEligibleDays,exitCycleStart,exitCycleEnd,
+    rule:isFinal?'v160-final-full-history-plus-exit-cycle-15-cap':'v160-temporary-full-history-inclusive'
+  };
 }
 
 // ═══ PENDING ABSENCES ═══
@@ -4165,16 +4216,8 @@ function renderWorkers(){
       '</td>'+
     '</tr>';
   }).join('')||'<tr><td colspan="10" style="text-align:center;color:var(--gray);padding:22px">لا يوجد عمال</td></tr>';
-  // v156: لا نعرض جدول التصفية داخل صفحة العمال.
 }
 
-// ══════════════════════════════════════════════════════
-//  renderWFinTable — جدول التصفية المالية في صفحة العمال
-// ══════════════════════════════════════════════════════
-function renderWFinTable(workers){
-  // v156: صفحة العمال = جدول العمال فقط. التصفية المالية موجودة حصراً في صفحة التصفية.
-  return;
-}
 function syncStartDate(){
   const d=document.getElementById('wm_startDate').value;
   if(d){const el=document.getElementById('wm_day');if(el)el.value=new Date(d+'T00:00:00').getDate();}
@@ -13387,8 +13430,6 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
 })();
 </script>
 
-
-
 <script id="egtph-v85-non-destructive-sync">
 /* ═══════════════════════════════════════════════════════════════════════
    EGTPH v85 — مزامنة غير حذفية + حماية السجلات الجديدة
@@ -15184,8 +15225,6 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
 })();
 </script>
 
-
-
 <script id="egtph-v148-cycle-dropdown-overflow-sync-protected">
 /*
  EGTPH v148
@@ -15412,8 +15451,6 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
 })();
 </script>
 
-
-
 <script id="egtph-v146-clean-source-cache-guard">
 (function(){
   const KEY='EGTPH-pay-clean-v144-live';
@@ -15505,92 +15542,6 @@ window.__EGTPH_V79_DISABLED_BY_V80__=true;
   window.EGTPH_V151={version:VERSION,showPage:safeShowPage,repair:bind};
 })();
 </script>
-
-
-<style id="egtph-v153-readable-table-zoom-css">
-/* v153 — readable Arabic table text + safe pinch/table zoom.  Shape only; no accounting/Firebase logic. */
-:root{--v153-line:#89b7a8;--v153-line2:#d5e7df;--v153-head:#0f6d58;--v153-soft:#f7fbf9;}
-html,body{-webkit-text-size-adjust:100%!important;text-size-adjust:100%!important;}
-body,table,th,td,button,input,select,textarea{font-family:-apple-system,BlinkMacSystemFont,"SF Arabic","Geeza Pro","Noto Naskh Arabic","Segoe UI",Tahoma,Arial,sans-serif!important;font-kerning:normal!important;text-rendering:optimizeLegibility!important;-webkit-font-smoothing:antialiased!important;}
-/* Do not split Arabic words letter-by-letter.  Older v151 used overflow-wrap:anywhere; override it here. */
-.twrap th,.twrap td,.sec table th,.sec table td,
-#page-workers table th,#page-workers table td,
-#page-settlement table th,#page-settlement table td,
-#page-advances table th,#page-advances table td,
-#page-hours table th,#page-hours table td,
-#page-absences table th,#page-absences table td,
-#page-bonuses table th,#page-bonuses table td,
-#page-debts table th,#page-debts table td,
-#page-salaries table th,#page-salaries table td,
-#page-summary table th,#page-summary table td,
-#page-trash table th,#page-trash table td{
-  word-break:normal!important;
-  overflow-wrap:normal!important;
-  hyphens:none!important;
-  line-break:auto!important;
-  letter-spacing:0!important;
-  white-space:normal!important;
-  vertical-align:middle!important;
-}
-.twrap th,.sec table th{font-size:13px!important;line-height:1.55!important;font-weight:900!important;padding:12px 10px!important;}
-.twrap td,.sec table td{font-size:12.5px!important;line-height:1.75!important;font-weight:750!important;padding:12px 10px!important;}
-/* Give important columns real width so names/labels such as تسبيق do not become vertical. */
-.twrap th,.twrap td,.sec table th,.sec table td{min-width:78px!important;}
-.twrap th:first-child,.twrap td:first-child,.sec table th:first-child,.sec table td:first-child{min-width:54px!important;}
-#page-workers table th:nth-child(2),#page-workers table td:nth-child(2),
-#page-settlement table th:nth-child(2),#page-settlement table td:nth-child(2){min-width:145px!important;max-width:220px!important;}
-#page-advances table th:nth-child(2),#page-advances table td:nth-child(2),
-#page-hours table th:nth-child(2),#page-hours table td:nth-child(2),
-#page-absences table th:nth-child(2),#page-absences table td:nth-child(2),
-#page-bonuses table th:nth-child(2),#page-bonuses table td:nth-child(2),
-#page-debts table th:nth-child(2),#page-debts table td:nth-child(2){min-width:140px!important;max-width:230px!important;}
-#page-advances table th:nth-child(3),#page-advances table td:nth-child(3),
-#page-advances table th:nth-child(4),#page-advances table td:nth-child(4),
-#page-advances table th:nth-child(5),#page-advances table td:nth-child(5){min-width:105px!important;}
-#page-advances table th:last-child,#page-advances table td:last-child,
-.twrap th:last-child,.twrap td:last-child{min-width:92px!important;}
-.twrap b,.sec table b,.badge,.bb2,.wn,button.pb,button.eb,button.db{
-  word-break:normal!important;overflow-wrap:normal!important;hyphens:none!important;letter-spacing:0!important;
-}
-.badge,.bb2{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:auto!important;min-width:38px!important;max-width:160px!important;white-space:normal!important;padding:3px 7px!important;line-height:1.35!important;}
-.twrap b,.sec table b{display:inline-block!important;min-width:max-content!important;max-width:180px!important;white-space:normal!important;line-height:1.6!important;}
-/* Dense machine/number fields may wrap, but not Arabic names. */
-td[style*="monospace"],.mono{overflow-wrap:anywhere!important;word-break:break-word!important;}
-/* Safer horizontal scrolling + native browser pinch zoom. */
-.twrap,.v153-zoom-wrap{overflow:auto!important;-webkit-overflow-scrolling:touch!important;overscroll-behavior:contain!important;touch-action:pan-x pan-y pinch-zoom!important;}
-.twrap table,.v153-zoom-wrap table{transform-origin:top right!important;will-change:auto!important;}
-.v153-zoom-toolbar{display:flex;gap:6px;align-items:center;justify-content:flex-end;margin:6px 2px 8px;direction:ltr;pointer-events:auto!important;position:relative;z-index:5;}
-.v153-zoom-toolbar button{border:1px solid #b8d1c8;background:#fff;color:#0b5948;border-radius:11px;padding:5px 9px;font-weight:900;font-size:12px;line-height:1;box-shadow:0 3px 10px rgba(9,52,39,.08);pointer-events:auto!important;touch-action:manipulation!important;}
-.v153-zoom-toolbar .v153-zoom-label{font-size:11px;font-weight:900;color:#577568;background:#eef8f3;border:1px solid #cfe4dc;border-radius:10px;padding:4px 8px;min-width:46px;text-align:center;}
-.v153-zoom-hint{font-size:10.5px;color:#668177;text-align:left;direction:rtl;margin-inline-start:4px;}
-@media screen and (max-width:900px){
-  .twrap th,.sec table th{font-size:12.2px!important;padding:10px 8px!important;line-height:1.55!important;}
-  .twrap td,.sec table td{font-size:11.8px!important;padding:10px 8px!important;line-height:1.72!important;}
-  #page-workers table th:nth-child(2),#page-workers table td:nth-child(2){min-width:132px!important;}
-  #page-settlement table th:nth-child(2),#page-settlement table td:nth-child(2){min-width:150px!important;}
-  #page-advances table th:nth-child(2),#page-advances table td:nth-child(2){min-width:132px!important;}
-}
-</style>
-
-<script id="egtph-v153-table-pinch-zoom-disabled-v156">
-// v156: تم تعطيل محرك تكبير v153 لأنه كان يتعارض مع تثبيت حجم الجدول بعد رفع الأصابع.
-window.EGTPH_V153={disabledBy:'v156'};
-</script>
-
-
-<style id="egtph-v153b-salary-advance-readability">
-/* Extra protection for the salary/advance table: first column must never become vertical. */
-#page-salaries table th:first-child,#page-salaries table td:first-child{min-width:92px!important;}
-#page-salaries table th:nth-child(2),#page-salaries table td:nth-child(2){min-width:96px!important;}
-#page-salaries table th:nth-child(3),#page-salaries table td:nth-child(3){min-width:122px!important;}
-#page-salaries table th:nth-child(4),#page-salaries table td:nth-child(4){min-width:104px!important;}
-#page-salaries table th:nth-child(5),#page-salaries table td:nth-child(5){min-width:110px!important;}
-#page-salaries table th:last-child,#page-salaries table td:last-child{min-width:96px!important;}
-#page-salaries table td:first-child,#page-salaries table th:first-child{white-space:normal!important;word-break:normal!important;overflow-wrap:normal!important;}
-#page-salaries table{min-width:720px!important;}
-@media screen and (max-width:900px){#page-salaries table{min-width:760px!important;}}
-</style>
-
 
 <script id="egtph-v154-installment-display-guard">
 /* v154 — يمنع ظهور القسط المستقبلي كخصم فعلي في الجداول.
@@ -15690,310 +15641,66 @@ window.EGTPH_V153={disabledBy:'v156'};
 })();
 </script>
 
-<style id="egtph-v155-persistent-zoom-css">
-/* v155: keep table pinch zoom after fingers are lifted; no accounting logic here. */
-.v155-pinch-wrap{touch-action:pan-x pan-y!important;overflow:auto!important;-webkit-overflow-scrolling:touch!important;overscroll-behavior:contain!important;}
-.v155-pinch-wrap table{transform-origin:top right!important;transition:transform .03s linear!important;}
-.v155-pinch-wrap.v155-transform table{width:auto!important;}
-.v155-zoom-toolbar{display:flex;gap:6px;align-items:center;justify-content:flex-end;margin:6px 2px 8px;direction:ltr;position:relative;z-index:7;pointer-events:auto!important;}
-.v155-zoom-toolbar button{border:1px solid #b8d1c8;background:#fff;color:#0b5948;border-radius:11px;padding:5px 9px;font-weight:900;font-size:12px;line-height:1;box-shadow:0 3px 10px rgba(9,52,39,.08);pointer-events:auto!important;touch-action:manipulation!important;}
-.v155-zoom-toolbar .v155-zoom-label{font-size:11px;font-weight:900;color:#577568;background:#eef8f3;border:1px solid #cfe4dc;border-radius:10px;padding:4px 8px;min-width:46px;text-align:center;}
-.v155-zoom-toolbar .v155-zoom-hint{font-size:10.5px;color:#668177;text-align:left;direction:rtl;margin-inline-start:4px;}
-@media screen and (max-width:900px){.v155-pinch-wrap table{min-width:max-content!important;}}
+
+<style id="egtph-v160-readable-tables">
+/* v160 — جداول واضحة، مع مقياس داخلي اختياري دون لمس الصفحة. */
+:root{--v158-line:#8bb7aa;--v158-soft:#f5fbf8;--v158-alt:#eaf6f1;--v158-head:#0d5d4d;}
+html,body{-webkit-text-size-adjust:100%!important;text-size-adjust:100%!important;}
+body,table,th,td,button,input,select,textarea{font-family:-apple-system,BlinkMacSystemFont,"SF Arabic","Geeza Pro","Noto Naskh Arabic","Segoe UI",Tahoma,Arial,sans-serif!important;text-rendering:optimizeLegibility!important;-webkit-font-smoothing:antialiased!important;}
+.twrap,div[style*="overflow-x"]{overflow-x:auto!important;overflow-y:visible!important;-webkit-overflow-scrolling:touch!important;touch-action:pan-x pan-y!important;max-width:100%!important;}
+.twrap table,.sec table{transform:none!important;zoom:1!important;margin-bottom:0!important;border-collapse:separate!important;border-spacing:0!important;background:#fff!important;}
+.twrap th,.twrap td,.sec table th,.sec table td,
+#page-workers table th,#page-workers table td,#page-settlement table th,#page-settlement table td,#page-advances table th,#page-advances table td,#page-hours table th,#page-hours table td,#page-absences table th,#page-absences table td,#page-bonuses table th,#page-bonuses table td,#page-debts table th,#page-debts table td,#page-salaries table th,#page-salaries table td,#page-summary table th,#page-summary table td,#page-trash table th,#page-trash table td{
+  word-break:normal!important;overflow-wrap:normal!important;hyphens:none!important;line-break:auto!important;letter-spacing:0!important;white-space:normal!important;vertical-align:middle!important;border-inline-start:1px solid #d5e7df!important;border-bottom:1px solid #d5e7df!important;
+}
+.twrap th,.sec table th{font-size:13px!important;line-height:1.6!important;font-weight:900!important;padding:12px 10px!important;color:#06493d!important;background:linear-gradient(180deg,#f9fffc,#e8f5ef)!important;border-bottom:2px solid var(--v158-line)!important;}
+.twrap td,.sec table td{font-size:12.5px!important;line-height:1.75!important;font-weight:750!important;padding:12px 10px!important;color:#102820!important;}
+.twrap tbody tr:nth-child(even),.sec table tbody tr:nth-child(even){background:var(--v158-alt)!important;}
+.twrap tbody tr,.sec table tbody tr{border-bottom:2px solid var(--v158-line)!important;}
+.twrap th:first-child,.twrap td:first-child,.sec table th:first-child,.sec table td:first-child{min-width:48px!important;white-space:nowrap!important;}
+#page-workers table{min-width:900px!important;}#page-workers table th:nth-child(2),#page-workers table td:nth-child(2){min-width:150px!important;}
+#page-settlement table{min-width:980px!important;}#page-settlement table th:nth-child(2),#page-settlement table td:nth-child(2){min-width:160px!important;}
+#page-advances table{min-width:860px!important;}#page-advances table th:nth-child(2),#page-advances table td:nth-child(2){min-width:145px!important;}
+#page-salaries table{min-width:760px!important;}
+.v157-zoom-toolbar,.v156-zoom-toolbar,.v155-zoom-toolbar,.v153-zoom-toolbar{display:none!important;}
 </style>
 
-<script id="egtph-v155-unified-settlement-status-zoom">
-/*
- EGTPH v155
- - One official temporary settlement formula for active workers:
-   earned salary in the current cycle up to settlement date inclusive
-   + unpaid hours + unpaid bonuses
-   - advances allocated to the current cycle up to settlement date
-   - absences
-   - full remaining unpaid debt.
- - Future debt installment is not subtracted from cycle remaining salary on app open.
- - Table zoom remains after the two-finger pinch ends.
-*/
-(function(){
-  'use strict';
-  var VERSION='155.0-unified-settlement-persistent-zoom';
-  var MIN_Z=0.48, MAX_Z=1.45, STEP=0.10;
-  var baseFinal=null;
-  function S(v){return v==null?'':String(v);}
-  function A(v){return Array.isArray(v)?v:[];}
-  function O(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}
-  function N(v){var n=Number(v);return isFinite(n)?Math.round(n):0;}
-  function money(v){return Math.round(Number(v)||0);}
-  function D(){try{return (typeof DB!=='undefined'&&DB)?DB:(window.DB||null);}catch(e){return window.DB||null;}}
-  function pad(n){return String(n).padStart(2,'0');}
-  function iso(d){return d&&d instanceof Date&&!isNaN(d)?d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()):'';}
-  function date(v){
-    try{if(typeof window._toDate==='function'){var z=window._toDate(v);if(z)return new Date(z.getFullYear(),z.getMonth(),z.getDate());}}catch(e){}
-    if(v instanceof Date&&!isNaN(v))return new Date(v.getFullYear(),v.getMonth(),v.getDate());
-    var s=S(v).trim(),m;if(!s)return null;
-    if((m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))){var a=new Date(+m[1],+m[2]-1,+m[3]);return isNaN(a)?null:new Date(a.getFullYear(),a.getMonth(),a.getDate());}
-    if((m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/))){var b=new Date(+m[3],+m[2]-1,+m[1]);return isNaN(b)?null:new Date(b.getFullYear(),b.getMonth(),b.getDate());}
-    var t=Date.parse(s);if(isNaN(t))return null;var c=new Date(t);return new Date(c.getFullYear(),c.getMonth(),c.getDate());
-  }
-  function today(){try{return typeof window.todayISO==='function'?window.todayISO():iso(new Date());}catch(e){return iso(new Date());}}
-  function sameDay(a,b){a=date(a);b=date(b);return !!(a&&b&&a.getTime()===b.getTime());}
-  function onOrBefore(v,ref){var x=date(v),r=date(ref);return !!(x&&r&&x<=r);}
-  function inRange(v,r){var x=date(v);return !!(x&&r&&x>=r.from&&x<r.to);}
-  function inRangeInclusive(v,r,ref){var x=date(v),rr=date(ref);return !!(x&&r&&rr&&x>=r.from&&x<=rr&&x<r.to);}
-  function worker(wid){try{if(typeof window.getW==='function')return window.getW(wid);}catch(e){}var d=D();return A(d&&d.workers).find(function(w){return w&&S(w.id)===S(wid);})||null;}
-  function deletedSet(){var d=D(),set={};A(d&&d.deletedIds).forEach(function(x){set[S(x)]=1;});Object.keys(O(d&&d.deletedRecords)).forEach(function(k){var r=d.deletedRecords[k];set[S(k).split('|').pop()]=1;if(r&&r.id)set[S(r.id)]=1;});return set;}
-  function isDeleted(x,set){if(!x)return false;set=set||deletedSet();return !!(set[S(x.id)]||set[S(x.transactionId)]||set[S(x.operationId)]);}
-  function rows(obj,wid){var src=(obj||{})[wid];if(src===undefined)src=(obj||{})[S(wid)];var out=[];function add(v){if(!v)return;if(Array.isArray(v)){v.forEach(add);return;}out.push(v);}if(Array.isArray(src)){src.forEach(add);return out;}Object.keys(O(src)).forEach(function(k){add(src[k]);});return out;}
-  function advGross(e){try{if(typeof window.advGross==='function')return window.advGross(e);}catch(err){}return e&&e._isInstDeduction?0:Math.max(0,N(e&&e.amount));}
-  function advDate(e){return (e&&(e.realDate||e.paymentDate||e.effectiveDate||e.date))||'';}
-  function cycleForRef(w,ref){
-    var r=null,refD=date(ref)||new Date();
-    try{if(typeof window.cycleAnchorForDate==='function'&&typeof window.cycleWindow==='function'){var a=window.cycleAnchorForDate(w,ref);r=window.cycleWindow(w,a.m,a.yr);}}
-    catch(e){}
-    if(r&&date(r.from)&&date(r.to))return {from:date(r.from),to:date(r.to)};
-    var day=Math.max(1,Math.min(28,N(w&&((w.payday!=null?w.payday:w.day)))||1));
-    var from=new Date(refD.getFullYear(),refD.getMonth(),day);
-    if(refD<from)from=new Date(refD.getFullYear(),refD.getMonth()-1,day);
-    return {from:from,to:new Date(from.getFullYear(),from.getMonth()+1,day)};
-  }
-  function rowBelongsToCycle(e,r){
-    if(!e||!r)return false;
-    var cs=date(e.accountingCycleStart||e.cycleStart);
-    if(cs)return sameDay(cs,r.from);
-    var ce=date(e.accountingCycleEnd||e.cycleEnd);
-    if(ce&&date(e.date))return inRange(e.date,r);
-    return inRange(e.date||e.realDate,r);
-  }
-  function hoursInCycle(wid,r,ref){var d=D(),set=deletedSet();return A(d&&d.hours&&d.hours[wid]).filter(function(h){return h&&!isDeleted(h,set)&&!h.paid&&inRangeInclusive(h.date,r,ref);});}
-  function bonusesInCycle(wid,r,ref){var d=D(),set=deletedSet(),out=[];Object.keys(O(d&&d.bonuses&&d.bonuses[wid])).forEach(function(k){A(d.bonuses[wid][k]).forEach(function(b){if(b&&!isDeleted(b,set)&&!b.paid&&inRangeInclusive(b.date,r,ref))out.push(b);});});return out;}
-  function absInCycle(wid,r,ref){var d=D(),set=deletedSet();return A(d&&d.absences&&d.absences[wid]).filter(function(a){var ad=(a&&(a.from||a.date));return a&&!isDeleted(a,set)&&a.deductOpt!=='cancel'&&inRangeInclusive(ad,r,ref);});}
-  function actualDebtPaidUpTo(wid,ref){
-    var d=D(),set=deletedSet(),seen={},sum=0;
-    function add(key,amount){amount=Math.max(0,N(amount));if(!amount)return;key=S(key)||('k_'+Object.keys(seen).length);if(seen[key])return;seen[key]=1;sum+=amount;}
-    A(d&&d.debts&&d.debts[wid]).forEach(function(x){
-      if(!x||isDeleted(x,set)||x.type!=='return'||!onOrBefore(x.date||x.realDate||x.enteredAt,ref))return;
-      add(x._instTag||x.instTag||x.allocationId||x.id,N(x.amount));
-    });
-    rows(d&&d.advances,wid).forEach(function(a){
-      if(!a||isDeleted(a,set)||!onOrBefore(advDate(a),ref))return;
-      if(a._isInstDeduction){add(a._instTag||a.instTag||a.id,N(a.amount));return;}
-      A(a.deductions).forEach(function(x){
-        if(!x||x.type!=='debt')return;
-        add(x._instTag||x.instTag||x.allocationId||x.id||('adv_'+S(a.id)+'_'+S(x.debtId)),N(x.amount));
-      });
-    });
-    return Math.max(0,money(sum));
-  }
-  function debtOriginalUpTo(wid,ref){var d=D(),set=deletedSet();return money(A(d&&d.debts&&d.debts[wid]).filter(function(x){return x&&!isDeleted(x,set)&&x.type==='debt'&&(!date(x.date)||onOrBefore(x.date,ref));}).reduce(function(s,x){return s+Math.max(0,N(x.amount));},0));}
-  function officialTempSettlement(w){
-    if(!w||!w.startDate)return null;
-    var ref=w.exitDate||today(),refD=date(ref),startD=date(w.startDate);if(!refD||!startD||refD<startD)return null;
-    if(w.exitDate&&typeof baseFinal==='function'){try{return baseFinal(w);}catch(e){}}
-    var wid=w.id,d=D(),set=deletedSet(),range=cycleForRef(w,ref);if(startD>range.from)range.from=startD;
-    var DAY=86400000,days=Math.max(0,Math.floor((refD-range.from)/DAY)+1);
-    var salary=N(w.salary),daily=salary/30,earned=money(daily*days);
-    var adv=rows(d&&d.advances,wid).filter(function(a){return a&&!isDeleted(a,set)&&!a._isInstDeduction&&rowBelongsToCycle(a,range)&&onOrBefore(advDate(a),ref);}).reduce(function(s,a){return s+advGross(a);},0);
-    adv=money(adv);
-    var hrs=money(hoursInCycle(wid,range,ref).reduce(function(s,h){return s+N(h.total);},0));
-    var bon=money(bonusesInCycle(wid,range,ref).reduce(function(s,b){return s+N(b.net!=null?b.net:b.amount);},0));
-    var abs=money(absInCycle(wid,range,ref).reduce(function(s,a){return s+Math.max(0,N(a.deduct));},0));
-    var debtOrig=debtOriginalUpTo(wid,ref),debtPaid=actualDebtPaidUpTo(wid,ref),debtBal=Math.max(0,money(debtOrig-debtPaid));
-    var net=money(earned+hrs+bon-adv-abs-debtBal);
-    return {isFinal:false,refDate:iso(refD),actualDays:days,earnedSal:earned,daily:daily,unpaidHrs:hrs,unpaidBon:bon,totalAdv:adv,cashAdvances:adv,totalAbs:abs,debtOriginal:debtOrig,debtPaid:debtPaid,debtBalance:debtBal,netFinal:net,rule:'v155-official-current-cycle-inclusive-full-remaining-debt',inclusive:true,currentCycleStart:iso(range.from),currentCycleEnd:iso(range.to),currentCycleDays:days};
-  }
-  function actualDebtPaidInRange(wid,r){
-    var d=D(),set=deletedSet(),seen={},sum=0;
-    function add(key,amount){amount=Math.max(0,N(amount));if(!amount)return;key=S(key)||('r_'+Object.keys(seen).length);if(seen[key])return;seen[key]=1;sum+=amount;}
-    A(d&&d.debts&&d.debts[wid]).forEach(function(x){if(x&&!isDeleted(x,set)&&x.type==='return'&&inRange(x.date||x.realDate||x.enteredAt,r))add(x._instTag||x.instTag||x.allocationId||x.id,N(x.amount));});
-    rows(d&&d.advances,wid).forEach(function(a){if(!a||isDeleted(a,set)||!inRange(advDate(a),r))return;if(a._isInstDeduction){add(a._instTag||a.instTag||a.id,N(a.amount));return;}A(a.deductions).forEach(function(x){if(x&&x.type==='debt')add(x._instTag||x.instTag||x.allocationId||x.id||('adv_'+S(a.id)+'_'+S(x.debtId)),N(x.amount));});});
-    return Math.max(0,money(sum));
-  }
-  function normalizeMonthStatus(res,wid,m,yr){
-    try{
-      if(!res||typeof res!=='object')return res;var w=worker(wid);if(!w)return res;var r=null;
-      try{if(typeof window.cycleWindow==='function')r=window.cycleWindow(w,m,yr||new Date().getFullYear());}catch(e){}
-      if(!(r&&date(r.from)&&date(r.to)))r={from:new Date((yr||new Date().getFullYear()),m,Math.min(28,N(w.payday||w.day)||1)),to:new Date((yr||new Date().getFullYear()),m+1,Math.min(28,N(w.payday||w.day)||1))};
-      r={from:date(r.from),to:date(r.to)};
-      var base=Math.max(0,N(res.baseSal));
-      var adv=Math.max(0,N(res.totAdv));
-      var abs=Math.max(0,N(res.totAbsNow));
-      var actualInst=actualDebtPaidInRange(wid,r);
-      var salaryRemaining=Math.max(0,money(base-abs-adv));
-      res.totInst=actualInst;
-      res.debtPaidActual=actualInst;
-      res.debtFutureOnly=0;
-      res.totalDeductions=abs+actualInst;
-      res.netDue=Math.max(0,base-abs);
-      res.netSal=salaryRemaining;
-      res.finalPayout=salaryRemaining+Math.max(0,N(res.hrsUnpaid))+Math.max(0,N(res.bonUnpaid));
-      res.cycleCashDue=salaryRemaining;
-      res.salaryPaid=adv>=res.netDue&&res.netDue>0;
-      res.salaryPaidWithInst=res.salaryPaid;
-      res._v155NoFutureInstallmentInRemaining=true;
-    }catch(e){try{console.warn('v155 status normalize',e);}catch(_){} }
-    return res;
-  }
-  function wrapFinal(){
-    if(typeof window.calcFinalSettlement==='function'&&!window.calcFinalSettlement.__v155Official){
-      if(!baseFinal)baseFinal=window.calcFinalSettlement;
-      var fn=function(w){return officialTempSettlement(w);};
-      fn.__v155Official=true;window.calcFinalSettlement=fn;try{calcFinalSettlement=fn;}catch(e){}
-    }
-  }
-  function wrapStatus(){
-    var base=window.calcMonthStatus;
-    if(typeof base!=='function'||base.__v155NoFutureInstallment)return false;
-    var fn=function(wid,m,yr){return normalizeMonthStatus(base.apply(this,arguments),wid,m,yr);};
-    fn.__v155NoFutureInstallment=true;window.calcMonthStatus=fn;try{calcMonthStatus=fn;}catch(e){}return true;
-  }
-  function refreshViews(){
-    ['renderSettlement','renderSideFinStatus','renderWorkers','renderDash','renderSalContent','renderSummary','updateBadges'].forEach(function(n){try{if(typeof window[n]==='function')window[n]();}catch(e){}});
-  }
-  function installAccounting(){wrapFinal();wrapStatus();try{window.processDueInstallments=function(){return false;};processDueInstallments=window.processDueInstallments;}catch(e){}refreshViews();}
 
-  function tableOf(w){return w&&w.querySelector?w.querySelector('table'):null;}
-  function clamp(n){n=Number(n)||1;return Math.max(MIN_Z,Math.min(MAX_Z,n));}
-  function keyFor(w){var p=w.closest&&w.closest('.page');var id=(p&&p.id)||'page';var i=0,cur=w;while(cur&&cur.previousElementSibling){cur=cur.previousElementSibling;if(cur.classList&&cur.classList.contains('twrap'))i++;}return 'EGTPH_V155_TABLE_ZOOM_'+id+'_'+i;}
-  function label(z){return Math.round(z*100)+'%';}
-  function applyZoom(w,z,save){
-    var t=tableOf(w);if(!t)return;z=clamp(z);w.dataset.v155Zoom=String(z);w.dataset.v153Zoom=String(z);w.classList.add('v155-pinch-wrap','v155-transform');
-    try{t.style.removeProperty('zoom');}catch(e){}
-    t.style.transform='scale('+z+')';
-    t.style.width='calc(100% / '+z+')';
-    t.style.minWidth='calc(max-content / '+z+')';
-    var lab=w._v155Label;if(lab)lab.textContent=label(z);
-    if(save!==false){try{localStorage.setItem(keyFor(w),String(z));}catch(e){}}
-  }
-  function dist(a,b){var dx=a.clientX-b.clientX,dy=a.clientY-b.clientY;return Math.sqrt(dx*dx+dy*dy);}
-  function toolbar(w){
-    var prev=w.previousElementSibling;if(prev&&prev.classList&&prev.classList.contains('v153-zoom-toolbar')){prev.remove();}
-    if(w._v155Toolbar)return;
-    var bar=document.createElement('div');bar.className='v155-zoom-toolbar';
-    bar.innerHTML='<button type="button" data-z="out">−</button><span class="v155-zoom-label">100%</span><button type="button" data-z="in">+</button><button type="button" data-z="fit">عرض كامل</button><button type="button" data-z="reset">100%</button><span class="v155-zoom-hint">التكبير يبقى بعد رفع الأصابع</span>';
-    if(w.parentNode)w.parentNode.insertBefore(bar,w);
-    w._v155Toolbar=bar;w._v155Label=bar.querySelector('.v155-zoom-label');
-    bar.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest?ev.target.closest('button[data-z]'):null;if(!b)return;ev.preventDefault();ev.stopPropagation();var z=clamp(parseFloat(w.dataset.v155Zoom||w.dataset.v153Zoom||'1'));var act=b.getAttribute('data-z');if(act==='in')z+=STEP;else if(act==='out')z-=STEP;else if(act==='reset')z=1;else if(act==='fit'){var t=tableOf(w),rw=Math.max(1,w.clientWidth-10),sw=t?Math.max(t.scrollWidth,t.getBoundingClientRect().width):rw;z=Math.max(MIN_Z,Math.min(1,rw/sw));}applyZoom(w,z,true);},true);
-  }
-  function enhance(w){
-    if(!w||!tableOf(w))return;w.classList.add('v155-pinch-wrap');toolbar(w);
-    if(w.dataset.v155Enhanced!=='1'){
-      w.dataset.v155Enhanced='1';var saved=1;try{saved=parseFloat(localStorage.getItem(keyFor(w))||'1')||1;}catch(e){}
-      applyZoom(w,saved,false);var startD=0,startZ=1,lastFinal=1;
-      w.addEventListener('touchstart',function(ev){if(ev.touches&&ev.touches.length===2){startD=dist(ev.touches[0],ev.touches[1]);startZ=clamp(parseFloat(w.dataset.v155Zoom||w.dataset.v153Zoom||'1'));lastFinal=startZ;}},{passive:true});
-      w.addEventListener('touchmove',function(ev){if(ev.touches&&ev.touches.length===2&&startD>0){ev.preventDefault();lastFinal=clamp(startZ*(dist(ev.touches[0],ev.touches[1])/startD));applyZoom(w,lastFinal,true);}},{passive:false});
-      w.addEventListener('touchend',function(ev){if(ev.touches&&ev.touches.length<2){startD=0;setTimeout(function(){applyZoom(w,lastFinal,true);},0);setTimeout(function(){applyZoom(w,lastFinal,true);},160);setTimeout(function(){applyZoom(w,lastFinal,true);},520);}}, {passive:true});
-    }
-  }
-  function scanTables(){
-    var list=[];try{document.querySelectorAll('.twrap').forEach(function(w){list.push(w);});}catch(e){}
-    try{document.querySelectorAll('div[style*="overflow-x"]').forEach(function(w){if(w.querySelector&&w.querySelector('table'))list.push(w);});}catch(e){}
-    list.forEach(enhance);
-  }
-  function installAll(){installAccounting();scanTables();}
-  [0,120,350,900,1800,3200,6500].forEach(function(ms){setTimeout(installAll,ms);});
-  document.addEventListener('DOMContentLoaded',installAll);window.addEventListener('load',installAll);window.addEventListener('pageshow',installAll);document.addEventListener('click',function(){setTimeout(installAll,60);},true);
-  window.EGTPH_V155={version:VERSION,install:installAll,settlement:officialTempSettlement,normalizeMonthStatus:normalizeMonthStatus,applyZoom:applyZoom,scanTables:scanTables};
+
+<style id="egtph-v160-table-scale-style">
+.v160-table-scale{display:flex;align-items:center;justify-content:flex-start;gap:8px;margin:8px 0;padding:7px 9px;border:1px solid #b9d9cd;border-radius:10px;background:#f7fcfa;color:#17493f;font-weight:800;font-size:12px;direction:rtl}
+.v160-table-scale label{white-space:nowrap}.v160-table-scale select{min-width:92px;padding:6px 8px;border:1px solid #8bb7aa;border-radius:8px;background:#fff;color:#123b33;font-weight:900}
+.twrap.v160-scaled-wrap{overflow-x:auto!important;text-align:center!important}
+.twrap.v160-scaled-wrap>table{display:table!important;margin-inline:auto!important;transform:none!important;transform-origin:top center!important}
+</style>
+<script id="egtph-v160-table-percentage-scale">
+(function(){
+ 'use strict';
+ var VALUES=[100,90,80,70,60];
+ function key(w,i){return 'EGTPH_V160_TABLE_SCALE_'+(w.id||w.dataset.v160ScaleId||i);}
+ function apply(w,t,p){p=Math.max(60,Math.min(100,Number(p)||100));t.style.zoom=(p/100);t.dataset.v160Scale=String(p);w.classList.add('v160-scaled-wrap');try{localStorage.setItem(key(w,0),String(p));}catch(e){}}
+ function install(){
+  var wraps=[].slice.call(document.querySelectorAll('.twrap'));
+  wraps.forEach(function(w,i){
+   var t=w.querySelector(':scope > table')||w.querySelector('table'); if(!t)return;
+   if(!w.id)w.dataset.v160ScaleId='table_'+i;
+   var bar=w.previousElementSibling;
+   if(!(bar&&bar.classList&&bar.classList.contains('v160-table-scale'))){
+    bar=document.createElement('div');bar.className='v160-table-scale';
+    var lab=document.createElement('label');lab.textContent='حجم الجدول';
+    var sel=document.createElement('select');sel.setAttribute('aria-label','حجم الجدول');
+    VALUES.forEach(function(v){var o=document.createElement('option');o.value=v;o.textContent=v+'%';sel.appendChild(o);});
+    bar.appendChild(lab);bar.appendChild(sel);w.parentNode.insertBefore(bar,w);
+    sel.addEventListener('change',function(){apply(w,t,sel.value);});
+   }
+   var select=bar.querySelector('select');var saved='100';try{saved=localStorage.getItem(key(w,i))||'100';}catch(e){}
+   if(VALUES.indexOf(Number(saved))<0)saved='100';select.value=String(saved);apply(w,t,saved);
+  });
+ }
+ document.addEventListener('DOMContentLoaded',install);window.addEventListener('load',install);window.addEventListener('pageshow',install);
+ document.addEventListener('click',function(){setTimeout(install,80);},true);
+ window.EGTPH_V160_TABLE_SCALE={install:install,values:VALUES.slice()};
 })();
 </script>
 
-<style id="egtph-v156-workers-only-stable-zoom-css">
-/* v156: workers page has workers only + stable table zoom. Shape only, no accounting/Firebase changes. */
-#page-workers #wFinStatusWrap{display:none!important;}
-#page-workers .pgtitle::after{content:' — جدول العمال فقط';font-size:12px;color:#5f7d72;font-weight:800;margin-inline-start:6px;}
-.v156-zoom-wrap{overflow:auto!important;-webkit-overflow-scrolling:touch!important;overscroll-behavior:contain!important;touch-action:pan-x pan-y!important;position:relative!important;}
-.v156-zoom-wrap table{transform-origin:top right!important;will-change:auto!important;}
-.v156-zoom-toolbar{display:flex;gap:6px;align-items:center;justify-content:flex-end;margin:6px 2px 8px;direction:ltr;position:relative;z-index:20;pointer-events:auto!important;}
-.v156-zoom-toolbar button{border:1px solid #b8d1c8;background:#fff;color:#0b5948;border-radius:11px;padding:6px 10px;font-weight:900;font-size:12px;line-height:1;box-shadow:0 3px 10px rgba(9,52,39,.08);pointer-events:auto!important;touch-action:manipulation!important;}
-.v156-zoom-toolbar .v156-zoom-label{font-size:11px;font-weight:900;color:#577568;background:#eef8f3;border:1px solid #cfe4dc;border-radius:10px;padding:5px 8px;min-width:48px;text-align:center;}
-.v156-zoom-toolbar .v156-zoom-hint{font-size:10.5px;color:#668177;text-align:left;direction:rtl;margin-inline-start:4px;}
-@media screen and (max-width:900px){.v156-zoom-toolbar{position:sticky;top:0;background:rgba(255,255,255,.92);backdrop-filter:blur(6px);padding:4px;border-radius:12px;}}
-</style>
-<script id="egtph-v156-workers-only-stable-zoom">
-(function(){
-  'use strict';
-  var VERSION='156.0-workers-only-stable-table-zoom';
-  var MIN_Z=0.46,MAX_Z=1.45,STEP=.10;
-  function clamp(n){n=Number(n)||1;return Math.max(MIN_Z,Math.min(MAX_Z,n));}
-  function dist(a,b){var dx=a.clientX-b.clientX,dy=a.clientY-b.clientY;return Math.sqrt(dx*dx+dy*dy);}
-  function tableOf(w){return w&&w.querySelector?w.querySelector('table'):null;}
-  function pageId(w){var p=w&&w.closest&&w.closest('.page');return (p&&p.id)||'page';}
-  function indexOfWrap(w){var p=w&&w.parentNode;if(!p)return 0;var arr=[].slice.call(p.querySelectorAll('.twrap,div[style*="overflow-x"]')).filter(function(x){return x.querySelector&&x.querySelector('table');});return Math.max(0,arr.indexOf(w));}
-  function keyFor(w){var t=tableOf(w),sig=(t&&t.id)||'';return 'EGTPH_V156_TABLE_ZOOM_'+pageId(w)+'_'+indexOfWrap(w)+'_'+sig;}
-  function label(z){return Math.round(z*100)+'%';}
-  function applyZoom(w,z,save){
-    var t=tableOf(w);if(!t)return;z=clamp(z);
-    w.classList.add('v156-zoom-wrap');
-    w.dataset.v156Zoom=String(z);
-    try{t.style.setProperty('zoom',String(z));}catch(e){}
-    // CSS zoom is stable on iPhone Safari. Transform is kept only as fallback.
-    try{
-      if(window.CSS&&CSS.supports&&CSS.supports('zoom','1')){
-        t.style.transform='';t.style.width='';t.style.minWidth='';
-      }else{
-        t.style.removeProperty('zoom');
-        t.style.transform='scale('+z+')';
-        t.style.width='calc(100% / '+z+')';
-        t.style.minWidth='';
-      }
-    }catch(e){
-      t.style.transform='scale('+z+')';
-      t.style.width='calc(100% / '+z+')';
-    }
-    var lab=w._v156Label;if(lab)lab.textContent=label(z);
-    if(save!==false){try{localStorage.setItem(keyFor(w),String(z));}catch(e){}}
-  }
-  function toolbar(w){
-    // remove older duplicated toolbars to avoid confusion
-    var prev=w.previousElementSibling;
-    while(prev&&(prev.classList&&(prev.classList.contains('v153-zoom-toolbar')||prev.classList.contains('v155-zoom-toolbar')||prev.classList.contains('v156-zoom-toolbar')))){var r=prev;prev=prev.previousElementSibling;r.remove();}
-    if(w._v156Toolbar&&document.body.contains(w._v156Toolbar))return;
-    var bar=document.createElement('div');bar.className='v156-zoom-toolbar';
-    bar.innerHTML='<button type="button" data-z="out">−</button><span class="v156-zoom-label">100%</span><button type="button" data-z="in">+</button><button type="button" data-z="fit">عرض كامل</button><button type="button" data-z="reset">100%</button><span class="v156-zoom-hint">يبقى الحجم بعد رفع الأصابع — 100% يرجعه طبيعياً</span>';
-    if(w.parentNode)w.parentNode.insertBefore(bar,w);
-    w._v156Toolbar=bar;w._v156Label=bar.querySelector('.v156-zoom-label');
-    bar.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest?ev.target.closest('button[data-z]'):null;if(!b)return;ev.preventDefault();ev.stopPropagation();var z=clamp(parseFloat(w.dataset.v156Zoom||'1'));var act=b.getAttribute('data-z');if(act==='in')z+=STEP;else if(act==='out')z-=STEP;else if(act==='reset')z=1;else if(act==='fit'){var t=tableOf(w),rw=Math.max(1,w.clientWidth-10),sw=t?Math.max(t.scrollWidth, t.offsetWidth, t.getBoundingClientRect().width):rw;z=Math.max(MIN_Z,Math.min(1,rw/sw));}applyZoom(w,z,true);},true);
-  }
-  function enhance(w){
-    if(!w||!tableOf(w))return;
-    w.classList.add('v156-zoom-wrap');
-    // prevent old v155 engine from installing later on wrappers not yet handled
-    w.dataset.v155Enhanced='1';
-    toolbar(w);
-    if(w.dataset.v156Enhanced!=='1'){
-      w.dataset.v156Enhanced='1';
-      var saved=1;try{saved=parseFloat(localStorage.getItem(keyFor(w))||'1')||1;}catch(e){}
-      applyZoom(w,saved,false);
-      var startD=0,startZ=1,lastZ=saved,lastTap=0;
-      w.addEventListener('touchstart',function(ev){if(ev.touches&&ev.touches.length===2){startD=dist(ev.touches[0],ev.touches[1]);startZ=clamp(parseFloat(w.dataset.v156Zoom||'1'));lastZ=startZ;}},{passive:true});
-      w.addEventListener('touchmove',function(ev){if(ev.touches&&ev.touches.length===2&&startD>0){ev.preventDefault();ev.stopPropagation();lastZ=clamp(startZ*(dist(ev.touches[0],ev.touches[1])/startD));applyZoom(w,lastZ,true);}}, {passive:false});
-      w.addEventListener('touchend',function(ev){if(ev.touches&&ev.touches.length<2){startD=0;setTimeout(function(){applyZoom(w,lastZ,true);},0);setTimeout(function(){applyZoom(w,lastZ,true);},180);}var now=Date.now();if(now-lastTap<300&&!(ev.touches&&ev.touches.length)){lastZ=1;applyZoom(w,1,true);}lastTap=now;},{passive:true});
-      // iOS Safari gesture events: keep table zoom, not page zoom, when available.
-      ['gesturestart','gesturechange','gestureend'].forEach(function(name){w.addEventListener(name,function(ev){try{ev.preventDefault();ev.stopPropagation();}catch(e){}if(name==='gesturestart'){startZ=clamp(parseFloat(w.dataset.v156Zoom||'1'));lastZ=startZ;}else if(name==='gesturechange'&&ev.scale){lastZ=clamp(startZ*ev.scale);applyZoom(w,lastZ,true);}else if(name==='gestureend'){applyZoom(w,lastZ,true);}}, false);});
-    }else{
-      var cur=clamp(parseFloat(w.dataset.v156Zoom||'1'));applyZoom(w,cur,false);
-    }
-  }
-  function removeWorkerFinancialBlock(){
-    try{var x=document.getElementById('wFinStatusWrap');if(x)x.remove();}catch(e){}
-  }
-  function scan(){
-    removeWorkerFinancialBlock();
-    var list=[];
-    try{document.querySelectorAll('.twrap').forEach(function(w){if(w.querySelector&&w.querySelector('table'))list.push(w);});}catch(e){}
-    try{document.querySelectorAll('div[style*="overflow-x"]').forEach(function(w){if(w.querySelector&&w.querySelector('table'))list.push(w);});}catch(e){}
-    list.forEach(enhance);
-  }
-  function patchWorkers(){
-    try{
-      if(typeof window.renderWFinTable==='function'&&!window.renderWFinTable.__v156NoOp){
-        var f=function(){return;};f.__v156NoOp=true;window.renderWFinTable=f;try{renderWFinTable=f;}catch(e){}
-      }
-    }catch(e){}
-  }
-  function install(){patchWorkers();scan();}
-  [0,80,250,700,1400,2600,5200].forEach(function(ms){setTimeout(install,ms);});
-  document.addEventListener('DOMContentLoaded',install);window.addEventListener('load',install);window.addEventListener('pageshow',install);document.addEventListener('click',function(){setTimeout(install,70);},true);
-  window.EGTPH_V156={version:VERSION,install:install,scan:scan,applyZoom:applyZoom,removeWorkerFinancialBlock:removeWorkerFinancialBlock};
-})();
-</script>
 </body></html>
