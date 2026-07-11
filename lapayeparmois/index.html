@@ -2178,13 +2178,12 @@ function _v97MergeData(d){
   if(d.txJournal!==undefined)DB.txJournal=_v97MergeRecordArray(DB.txJournal||[],d.txJournal).slice(-2000);
   if(d.cycleLocks!==undefined)DB.cycleLocks=_v97MergeNode(DB.cycleLocks||{},d.cycleLocks||{});
   if(d.deletedRecords!==undefined)DB.deletedRecords=_v97MergeNode(DB.deletedRecords||{},d.deletedRecords||{});
-  if(d._pendingSyncPatches!==undefined)DB._pendingSyncPatches=_v97MergeNode(DB._pendingSyncPatches||{},d._pendingSyncPatches||{});
   if(d.settings)DB.settings={...DB.settings,..._v97Obj(d.settings)};
   if(d.trash)DB.trash={...{workers:[],advances:[],hours:[],absences:[],bonuses:[],debts:[]},..._v97Obj(DB.trash),..._v97Obj(d.trash)};
   if(Array.isArray(d.deletedIds))DB.deletedIds=Array.from(new Set(_v97Arr(DB.deletedIds).concat(d.deletedIds).map(String)));
 }
 function _applyDBData(d){
-  // v168: تحويل بنيوي محافظ؛ لا ضغط لمفاتيح الأشهر ولا استرجاع محلي ولا إصلاح مالي تلقائي.
+  // v169: تحويل بنيوي محافظ؛ لا ضغط لمفاتيح الأشهر ولا استرجاع محلي ولا إصلاح مالي تلقائي.
   const src=(d&&typeof d==='object')?JSON.parse(JSON.stringify(d)):{};
   const isObj=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
   const clone=v=>JSON.parse(JSON.stringify(v));
@@ -2217,9 +2216,9 @@ function _applyDBData(d){
     return out;
   };
   const workerRoot=root=>{const out={};Object.keys((Array.isArray(root)||isObj(root))?root:{}).forEach(wid=>out[String(wid)]=recordList(root[wid]));return out;};
-  const defaults={workers:[],advances:{},hours:{},absences:{},bonuses:{},debts:{},trash:{workers:[],advances:[],hours:[],absences:[],bonuses:[],debts:[]},deletedIds:[],deletedRecords:{},auditLog:[],ledger:[],txJournal:[],repairLog:[],cycleLocks:{},settings:{mult:1.5,lastBackup:null,backupInterval:7,paydayAlert:true,bonTax:0,userName:'Youcef Abdi'}};
+  const defaults={workers:[],advances:{},hours:{},absences:{},bonuses:{},debts:{},trash:{workers:[],advances:[],hours:[],absences:[],bonuses:[],debts:[]},deletedIds:[],deletedRecords:{},auditLog:[],ledger:[],txJournal:[],repairLog:[],cycleLocks:{},settings:{mult:1.5,holidays:[],lastBackup:null,backupInterval:7,paydayAlert:true,bonTax:0,userName:'Youcef Abdi'}};
   DB=Object.assign({},defaults,src);
-  DB.settings=Object.assign({},defaults.settings,isObj(src.settings)?src.settings:{},{cloudUrl:'https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',cloudKey:'EGTPH-pay-clean-v144-live',cloudAuto:true,v91CloudAuto:false,v168FirebaseOnly:true,v168AuthoritativePath:'/egtph/EGTPH-pay-clean-v144-live'});
+  DB.settings=Object.assign({},defaults.settings,isObj(src.settings)?src.settings:{},{cloudUrl:'https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',cloudKey:'EGTPH-pay-clean-v144-live',cloudAuto:true,v91CloudAuto:false,v169FirebaseOnly:true,v169AuthoritativePath:'/egtph/EGTPH-pay-clean-v144-live'});
   ['v148AdvanceJournal','v148AdvanceJournalUpdatedAt'].forEach(k=>delete DB.settings[k]);
   DB.deletedIds=Array.from(deleted);
   DB.deletedRecords=deletedRecords;
@@ -2240,29 +2239,29 @@ function _applyDBData(d){
     DB.absences[wid].forEach(a=>{if(!Object.prototype.hasOwnProperty.call(a,'deductOpt'))a.deductOpt='now';});
     DB.debts[wid].forEach(x=>{if(x.installment!==undefined&&x.inst===undefined)x.inst=x.installment;});
   });
-  window.__EGTPH_V168_LOAD_COUNTS__={workers:DB.workers.length,advances:Object.values(DB.advances).reduce((s,n)=>s+Object.values(n||{}).reduce((q,a)=>q+(a||[]).length,0),0),hours:Object.values(DB.hours).reduce((s,a)=>s+(a||[]).length,0),absences:Object.values(DB.absences).reduce((s,a)=>s+(a||[]).length,0),bonuses:Object.values(DB.bonuses).reduce((s,n)=>s+Object.values(n||{}).reduce((q,a)=>q+(a||[]).length,0),0),debts:Object.values(DB.debts).reduce((s,a)=>s+(a||[]).length,0)};
+  window.__EGTPH_V169_LOAD_COUNTS__={workers:DB.workers.length,advances:Object.values(DB.advances).reduce((s,n)=>s+Object.values(n||{}).reduce((q,a)=>q+(a||[]).length,0),0),hours:Object.values(DB.hours).reduce((s,a)=>s+(a||[]).length,0),absences:Object.values(DB.absences).reduce((s,a)=>s+(a||[]).length,0),bonuses:Object.values(DB.bonuses).reduce((s,n)=>s+Object.values(n||{}).reduce((q,a)=>q+(a||[]).length,0),0),debts:Object.values(DB.debts).reduce((s,a)=>s+(a||[]).length,0)};
 }
 
 // ══════════════════════════════════════════════════════
-// v164 — مصدر مالي واحد فقط: Firebase
+// v169 — المصدر المرجعي المالي الوحيد: Firebase
 // لا IndexedDB مالي، لا localStorage مالي، لا JSON مضمّن، ولا fallback قديم.
 // ══════════════════════════════════════════════════════
 const MEM_ONLY=true;
-window.__EGTPH_V164_LOADING__=false;
+window.__EGTPH_V169_LOADING__=false;
 window.__EGTPH_DB_READY__=false;
 
-function _v164Clone(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
-function _v164SanitizeCloud(x){
+function _v169Clone(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
+function _v169SanitizeCloud(x){
   // الاسم محفوظ للتوافق فقط؛ المحرك v168 لا يضغط المصفوفات المتباعدة ولا يعيد ترتيب الأشهر.
   if(!x||typeof x!=='object')throw new Error('نسخة Firebase المرجعية غير مكتملة');
   const y=JSON.parse(JSON.stringify(x));
   const count=(v)=>{let n=0;(function walk(z){if(!z)return;if(Array.isArray(z)){Object.keys(z).forEach(k=>walk(z[k]));return;}if(typeof z==='object'){if(z.id!=null||z.amount!=null||z.date||z.type||z.total!=null)n++;else Object.keys(z).forEach(k=>walk(z[k]));}})(v);return n;};
-  window.__EGTPH_V168_RAW_COUNTS__={workers:count(y.workers),advances:count(y.advances),hours:count(y.hours),absences:count(y.absences),bonuses:count(y.bonuses),debts:count(y.debts)};
+  window.__EGTPH_V169_RAW_COUNTS__={workers:count(y.workers),advances:count(y.advances),hours:count(y.hours),absences:count(y.absences),bonuses:count(y.bonuses),debts:count(y.debts)};
   return y;
 }
-async function _v164PullAuthoritativeCloud(){
-  if(window.__EGTPH_V168_LOADING__)return false;
-  window.__EGTPH_V168_LOADING__=true;
+async function _v169PullAuthoritativeCloud(){
+  if(window.__EGTPH_V169_LOADING__)return false;
+  window.__EGTPH_V169_LOADING__=true;
   const URL='https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',KEY='EGTPH-pay-clean-v144-live',SOURCE='firebase:/egtph/'+KEY;
   try{
     if(typeof window.egtphEnsureAuthenticated==='function')await window.egtphEnsureAuthenticated();
@@ -2271,26 +2270,26 @@ async function _v164PullAuthoritativeCloud(){
     const res=await fetch(URL+'/egtph/'+encodeURIComponent(KEY)+'.json?auth='+encodeURIComponent(token),{cache:'no-store',headers:{'Cache-Control':'no-cache'}});
     if(!res.ok)throw new Error('Firebase HTTP '+res.status);
     const raw=await res.json();
-    _applyDBData(_v164SanitizeCloud(raw));
-    DB.settings.v168LastFullPull=new Date().toISOString();DB.settings.v168AuthoritativeSource=SOURCE;
+    _applyDBData(_v169SanitizeCloud(raw));
+    DB.settings.v169LastFullPull=new Date().toISOString();DB.settings.v169AuthoritativeSource=SOURCE;
     _cloudDirty=false;window.__EGTPH_DB_READY__=true;window.__EGTPH_DB_READY_SOURCE__=SOURCE;
-    try{window.dispatchEvent(new CustomEvent('egtph-db-ready',{detail:{source:SOURCE,counts:window.__EGTPH_V168_LOAD_COUNTS__}}));}catch(e){}
+    try{window.dispatchEvent(new CustomEvent('egtph-db-ready',{detail:{source:SOURCE,counts:window.__EGTPH_V169_LOAD_COUNTS__}}));}catch(e){}
     ['renderDash','renderWorkers','renderSettlement','renderAdvances','renderHours','renderAbsences','renderBonuses','renderDebts','renderSummary','updateBadges','cloudFillInputs'].forEach(n=>{try{if(typeof window[n]==='function')window[n]();}catch(e){console.warn('render '+n,e);}});
     try{_cloudStatus('🟢 المصدر المالي الوحيد: Firebase /egtph/'+KEY,'var(--green1)');}catch(e){}
-    console.info('[v168] authoritative Firebase snapshot loaded',window.__EGTPH_V168_LOAD_COUNTS__);
+    console.info('[v169] authoritative Firebase snapshot loaded',window.__EGTPH_V169_LOAD_COUNTS__);
     return true;
   }catch(err){
-    console.error('[v168] Firebase load failed',err);window.__EGTPH_DB_READY__=false;window.__EGTPH_DB_READY_SOURCE__='firebase-error';
+    console.error('[v169] Firebase load failed',err);window.__EGTPH_DB_READY__=false;window.__EGTPH_DB_READY_SOURCE__='firebase-error';
     try{_cloudStatus('🔴 تعذر جلب Firebase؛ لم تُستعمل أي نسخة مالية محلية','var(--red)');}catch(e){}
     try{toast('❌ تعذر جلب Firebase. لم تُستعمل بيانات محلية أو مضمّنة.',true);}catch(e){}
     return false;
-  }finally{window.__EGTPH_V168_LOADING__=false;}
+  }finally{window.__EGTPH_V169_LOADING__=false;}
 }
 function loadDB(){
   // لا مصدر احتياطي مالي: يبدأ فارغاً ثم يجلب المسار المرجعي وحده.
-  _applyDBData({workers:[],advances:{},hours:{},absences:{},bonuses:{},debts:{},deletedIds:[],deletedRecords:{},trash:{workers:[],advances:[],hours:[],absences:[],bonuses:[],debts:[]},settings:{cloudUrl:'https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',cloudKey:'EGTPH-pay-clean-v144-live',cloudAuto:true,v168FirebaseOnly:true}});
+  _applyDBData({workers:[],advances:{},hours:{},absences:{},bonuses:{},debts:{},deletedIds:[],deletedRecords:{},trash:{workers:[],advances:[],hours:[],absences:[],bonuses:[],debts:[]},settings:{cloudUrl:'https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',cloudKey:'EGTPH-pay-clean-v144-live',cloudAuto:true,v169FirebaseOnly:true}});
   window.__EGTPH_DB_READY__=false;window.__EGTPH_DB_READY_SOURCE__='firebase-pending';
-  setTimeout(_v164PullAuthoritativeCloud,0);
+  setTimeout(_v169PullAuthoritativeCloud,0);
 }
 
 function updateOpenAbsences(){
@@ -2323,9 +2322,9 @@ function updateOpenAbsences(){
 let _lastMod=0;
 function nextMod(){ let t=Date.now(); try{t+=(performance.now()%1)/1000;}catch(e){} if(t<=_lastMod)t=_lastMod+0.001; _lastMod=t; return t; }
 function saveDB(){
-  try{markSaved();}catch(e){}
-  try{if(window.EGTPH_V168&&typeof window.EGTPH_V168.save==='function')return window.EGTPH_V168.save();}catch(e){console.error('v168 saveDB',e);}
-  return false;
+  try{markUnsaved();}catch(e){}
+  try{if(window.EGTPH_V169&&typeof window.EGTPH_V169.save==='function')return window.EGTPH_V169.save();}catch(e){console.error('v169 saveDB',e);}
+  return Promise.resolve({ok:false,error:'محرك الحفظ الموثق غير جاهز'});
 }
 
 function genId(){return Date.now()+'_'+Math.random().toString(36).slice(2,9);}
@@ -9340,14 +9339,9 @@ window.addEventListener('message', function(event){
   if(event.data.type === 'egtph-dashboard-request-alerts') scheduleMonthlyDashboardAlerts();
 });
 try{
-  const _monthlySaveDBOriginal = saveDB;
-  saveDB = function(){
-    const result = _monthlySaveDBOriginal.apply(this, arguments);
-    scheduleMonthlyDashboardAlerts();
-    return result;
-  };
+  window.addEventListener('egtph-verified-saved', scheduleMonthlyDashboardAlerts);
 }catch(e){
-  console.warn('Monthly dashboard save hook:', e);
+  console.warn('Monthly dashboard verified-save hook:', e);
 }
 try{
   setTimeout(scheduleMonthlyDashboardAlerts, 900);
@@ -9485,7 +9479,6 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
       item._operationChildren.forEach(function(c){if(c&&c.row&&restoreRecord(d,'advances',item._wid,c.row,c.bucket))restored++;});
     }else if(restoreRecord(d,type,item._wid,item,item.month))restored++;
     a.splice(idx,1);refs.forEach(function(x){markRestored(d,x.section,x.id);});
-    d._pendingSyncPatches=d._pendingSyncPatches&&typeof d._pendingSyncPatches==='object'?d._pendingSyncPatches:{};d._pendingSyncPatches.deletedRecords=copy(d.deletedRecords);d._pendingSyncPatches.deletedIds=copy(d.deletedIds);
     try{if(typeof audit==='function')audit('استرجاع من سلة المهملات: '+type);if(typeof saveDB==='function')saveDB();if(typeof renderTrash==='function')renderTrash();if(typeof renderDash==='function')renderDash();if(typeof renderWorkers==='function')renderWorkers();if(typeof updateBadges==='function')updateBadges();}catch(e){console.warn('v53 restore',e);}
     say(restored?'↩️ تم الاسترجاع بنجاح':'ℹ️ لا يوجد قيد جديد للاسترجاع');
   }
@@ -9501,10 +9494,6 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
     try{if(typeof audit==='function')audit('حذف عملية تسبيق — '+(w.name||''));if(typeof saveDB==='function')saveDB();if(typeof renderSalContent==='function')renderSalContent();if(typeof renderDash==='function')renderDash();}catch(e){console.warn('v53 delete advance',e);}
     say('🗑️ تم حذف العملية وحفظها في سلة المهملات');
   }
-  function ts(r){if(!r)return 0;var v=r._updatedAt||r.updatedAt||r._mod||r.enteredAt||r.realDate||r.date||'';var n=typeof v==='number'?v:Date.parse(v);return isNaN(n)?0:n;}
-  function queueNestedPatch(d,section,wid,bucket){d._pendingSyncPatches=d._pendingSyncPatches&&typeof d._pendingSyncPatches==='object'?d._pendingSyncPatches:{};d._pendingSyncPatches[section+'/'+String(wid)+'/'+String(bucket)]=copy((((d[section]||{})[wid]||{})[bucket])||[]);}
-  function dedupeNested(d,section){var changed=0;Object.keys(d[section]||{}).forEach(function(wid){var seen={};Object.keys(d[section][wid]||{}).forEach(function(bucket){var source=arr(d[section][wid][bucket]), kept=[],bucketChanged=false;source.forEach(function(r){if(!r||r.id===undefined){kept.push(r);return;}var key=String(r.id), prior=seen[key];if(!prior){seen[key]={bucket:String(bucket),row:r};kept.push(r);return;}var useCurrent=ts(r)>=ts(prior.row);if(useCurrent){var oldArr=arr(d[section][wid][prior.bucket]);var oi=oldArr.indexOf(prior.row);if(oi>=0){oldArr.splice(oi,1);queueNestedPatch(d,section,wid,prior.bucket);}seen[key]={bucket:String(bucket),row:r};kept.push(r);bucketChanged=true;}else{changed++;bucketChanged=true;return;}changed++;});if(bucketChanged){d[section][wid][bucket]=kept;queueNestedPatch(d,section,wid,bucket);}});});return changed;}
-  function dedupeSafe(){var d=live();if(!d)return 0;var n=dedupeNested(d,'advances')+dedupeNested(d,'bonuses');return n;}
   function finance(){var d=live();if(!d)return{workers:0,salary:0,debt:0,locks:0};var workers=arr(d.workers),salary=workers.reduce(function(s,w){return s+(+w.salary||0);},0),debt=0;workers.forEach(function(w){arr((d.debts||{})[w.id]).forEach(function(x){debt+=(x&&x.type==='debt'?1:-1)*(+((x||{}).amount)||0);});});var locks=Object.keys(d.cycleLocks||{}).filter(function(k){return d.cycleLocks[k]&&d.cycleLocks[k].locked;}).length;return{workers:workers.length,salary:salary,debt:Math.max(0,debt),locks:locks};}
   function refreshDashboard(){var d=live(),panel=document.getElementById('v53CommandCenter');if(!d||!panel)return;var f=finance();var k=document.getElementById('v53FinancialStrip');if(k)k.innerHTML='<div class="v53-fin primary"><small>العمال النشطون</small><b>'+f.workers+' عامل</b></div><div class="v53-fin success"><small>إجمالي الرواتب الأساسية</small><b>'+money(f.salary)+' دج</b></div><div class="v53-fin danger"><small>الديون المتبقية</small><b>'+money(f.debt)+' دج</b></div><div class="v53-fin warn"><small>دورات مقفلة تلقائياً</small><b>'+f.locks+' دورة</b></div>';
     var select=document.getElementById('v53WorkerSelect'), selected=select&&select.value; if(select){select.innerHTML='<option value="">اختر العامل لتنفيذ عملية سريعة</option>'+arr(d.workers).map(function(w,i){return '<option value="'+String(w.id).replace(/"/g,'&quot;')+'" '+(String(selected)===String(w.id)?'selected':'')+'>'+String(i+1)+'. '+String(w.name||'عامل')+'</option>';}).join('');}
@@ -9514,15 +9503,14 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   function wrap(fnName,after){try{var base=window[fnName];if(typeof base!=='function'||base.__v53Wrapped)return;var wrapped=function(){var r=base.apply(this,arguments);try{after();}catch(e){}return r;};wrapped.__v53Wrapped=true;window[fnName]=wrapped;try{eval(fnName+'=window["'+fnName+'"];');}catch(e){}}catch(e){}}
   function install(){
     var d=live();if(!d)return;
-    var removed=dedupeSafe(); if(removed){try{if(typeof saveDB==='function')saveDB();}catch(e){}}
     window.restoreFromTrash=v53RestoreFromTrash;try{restoreFromTrash=v53RestoreFromTrash;}catch(e){}
     window.delAdv=v53DeleteAdvance;window.deleteAdv=v53DeleteAdvance;try{delAdv=v53DeleteAdvance;deleteAdv=v53DeleteAdvance;}catch(e){}
-    wrap('renderDash',function(){var n=dedupeSafe();if(n){setTimeout(function(){try{if(typeof saveDB==='function')saveDB();}catch(e){}},0);}buildDashboard();refreshDashboard();});
+    wrap('renderDash',function(){buildDashboard();refreshDashboard();});
     wrap('renderWorkers',function(){refreshDashboard();});
     wrap('showPage',function(){setTimeout(function(){buildDashboard();refreshDashboard();},0);});
     try{document.title=(document.title||'EGTPH').replace(/v\d+(?:\.\d+)?/,'v53');var label=document.querySelector('.tlogo span');if(label)label.textContent='| سجل الأجور v77';}catch(e){}
     buildDashboard();refreshDashboard();
-    window.EGTPH_V53={version:V53,restoreFromTrash:v53RestoreFromTrash,deleteAdvance:v53DeleteAdvance,dedupeSafe:dedupeSafe,refresh:refreshDashboard};
+    window.EGTPH_V53={version:V53,restoreFromTrash:v53RestoreFromTrash,deleteAdvance:v53DeleteAdvance,refresh:refreshDashboard};
   }
   setTimeout(install,1200);
 })();
@@ -10230,8 +10218,10 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
     var by=(d.settings&&d.settings.userName)||'Youcef Abdi',opId='ADVOP_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),created=[];
     allocs.forEach(function(a,i){var rec=recFor(wid,w,opId,i,allocs.length,a,realISO,realDmy,userNote,by,allocs);bucket(wid,a.c.m).push(rec);created.push(rec);try{if(typeof autoSettleOnAdvance==='function')autoSettleOnAdvance(wid,a.c.m,a.c.yr,rec,realDmy);}catch(e){console.warn('auto installment failed',e);}});
     try{
-      if(!window.EGTPH_V165||typeof window.EGTPH_V165.persistAdvanceTransaction!=='function')throw new Error('محرك حفظ Firebase v165 غير جاهز');
-      await window.EGTPH_V165.persistAdvanceTransaction(wid,created,beforeDebts,(d.debts&&d.debts[wid])||[]);
+      if(typeof audit==='function')audit('تسبيق قيد التثبيت في Firebase '+fmt(amount)+' — '+w.name+' — '+(allocs.length>1?'توزيع تلقائي':'دورة واحدة'));
+      if(!window.EGTPH_V169||typeof window.EGTPH_V169.save!=='function')throw new Error('محرك الحفظ الموثق v169 غير جاهز');
+      var verified=await window.EGTPH_V169.save();
+      if(!verified||verified.ok!==true)throw new Error((verified&&verified.error)||'أُلغي التسبيق قبل تثبيته');
     }catch(err){
       d.advances[wid]=beforeAdv;
       d.debts[wid]=beforeDebts;
@@ -10239,13 +10229,10 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
       try{if(typeof renderDash==='function')renderDash();}catch(e){}
       try{if(typeof renderSalContent==='function')renderSalContent();}catch(e){}
       try{if(typeof updateBadges==='function')updateBadges();}catch(e){}
-      console.error('[v165] advance Firebase save failed',err);
-      toast2('❌ لم يُحفظ التسبيق في Firebase، لذلك أُلغي محلياً ولم تُسجّل العملية: '+(err&&err.message||err),true);
+      console.error('[v169] advance verified save failed',err);
+      toast2('❌ لم يُثبت التسبيق في Firebase، لذلك أُلغي محلياً: '+(err&&err.message||err),true);
       return false;
     }
-    try{if(typeof audit==='function')audit('تسبيق محفوظ ومتحقق في Firebase '+fmt(amount)+' — '+w.name+' — '+(allocs.length>1?'توزيع تلقائي':'دورة واحدة'));}catch(e){}
-    try{if(window.EGTPH_V144&&typeof window.EGTPH_V144.reconcileWorker==='function')window.EGTPH_V144.reconcileWorker(wid,{includeCurrent:true});}catch(e){}
-    try{if(typeof saveDB==='function')saveDB();if(typeof _cloudDirty!=='undefined')_cloudDirty=false;}catch(e){}
     try{if(typeof closeModal==='function')closeModal('mAdv');}catch(e){}
     try{if(typeof renderDash==='function')renderDash();}catch(e){}try{if(typeof renderSalContent==='function')renderSalContent();}catch(e){}try{if(typeof updateBadges==='function')updateBadges();}catch(e){}
     toast2('✅ حُفظ التسبيق فعلياً وتَمّ التحقق منه داخل Firebase: '+allocs.map(function(a){return fmt(a.amount)+' دج → '+monthName(a.c.m);}).join('، '));
@@ -10378,68 +10365,165 @@ body,table,th,td,button,input,select,textarea{font-family:-apple-system,BlinkMac
 
 
 
-<script id="egtph-v168-surgical-single-finance-engine">
+<script id="egtph-v169-verified-commit-engine">
 (function(){
 'use strict';
-const URL='https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',KEY='EGTPH-pay-clean-v144-live',SOURCE='firebase:/egtph/'+KEY;
-const BASE_FETCH=window.fetch.bind(window),MAX_RETRY=6,RETRY_MS=2000;
-let baseline=null,running=false,queued=false,lastError=null,lastSavedAt=null,retryTimer=null,writes=[];
+const URL='https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app';
+const KEY='EGTPH-pay-clean-v144-live';
+const ROOT='/egtph/'+KEY;
+const SOURCE='firebase:'+ROOT;
+const OUTBOX_KEY='EGTPH_V169_PENDING_OUTBOX';
+const MAX_RETRY=7, RETRY_MS=2500;
+const BASE_FETCH=window.fetch.bind(window);
+let baseline=null, rollbackSnapshot=null, running=false, queued=false, lastError=null, lastSavedAt=null;
+let retryTimer=null, activePromise=null, resolveActive=null, writes=[];
+let uiPending=false, deferredCloses=[], deferredToasts=[];
+
 const clone=v=>{try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}};
 const obj=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
-const list=v=>Array.isArray(v)?Object.keys(v).sort((a,b)=>(+a||0)-(+b||0)).map(k=>v[k]).filter(x=>x!=null):obj(v)?Object.keys(v).sort((a,b)=>(+a||0)-(+b||0)).map(k=>v[k]).filter(x=>x!=null):[];
+const keys=v=>Object.keys((Array.isArray(v)||obj(v))?v:{});
+const list=v=>Array.isArray(v)?Object.keys(v).sort((a,b)=>(+a||0)-(+b||0)).map(k=>v[k]).filter(x=>x!=null):obj(v)?Object.keys(v).sort((a,b)=>{const na=+a,nb=+b;return Number.isFinite(na)&&Number.isFinite(nb)?na-nb:String(a).localeCompare(String(b));}).map(k=>v[k]).filter(x=>x!=null):[];
 const stable=v=>Array.isArray(v)?'['+Object.keys(v).map(k=>stable(v[k])).join(',')+']':obj(v)?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
 const same=(a,b)=>stable(a)===stable(b);
+const empty=v=>v==null||(Array.isArray(v)&&v.length===0)||(obj(v)&&Object.keys(v).length===0);
+const equivalent=(a,b)=>same(a,b)||(empty(a)&&empty(b));
 const hash=s=>{let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0).toString(36);};
-const recKey=(x,i)=>x&&x.id!=null?'id:'+x.id:x&&x.transactionId?'tx:'+x.transactionId+':'+(x.allocationIndex||0):x&&x.operationId?'op:'+x.operationId+':'+(x.allocationIndex||0):'h:'+hash(stable(x));
+const recKey=(x,i)=>x&&x.id!=null?'id:'+String(x.id):x&&x.transactionId?'tx:'+String(x.transactionId)+':'+String(x.allocationIndex||0):x&&x.operationId?'op:'+String(x.operationId)+':'+String(x.allocationIndex||0):'h:'+hash(stable(x));
 const mapList=v=>{const m={};list(v).forEach((x,i)=>m[recKey(x,i)]=x);return m;};
-const deletedSet=d=>{const s=new Set(list(d&&d.deletedIds).map(String));Object.entries(obj(d&&d.deletedRecords)?d.deletedRecords:{}).forEach(([k,r])=>{s.add(String(k).split('|').pop());if(r&&r.id!=null)s.add(String(r.id));});return s;};
-const hasTomb=(d,r)=>{const s=deletedSet(d),ks=[r&&r.id,r&&r.transactionId,r&&r.operationId].filter(x=>x!=null).map(String);return ks.some(k=>s.has(k));};
+const union=(a,b)=>[...new Set([...keys(a),...keys(b)])];
 function changed(before,after){const bm=mapList(before),out=[];list(after).forEach((x,i)=>{const k=recKey(x,i);if(!(k in bm)||!same(bm[k],x))out.push(clone(x));});return out;}
 function merge(remote,updates){const out=list(remote).map(clone),idx={};out.forEach((x,i)=>idx[recKey(x,i)]=i);list(updates).forEach((x,i)=>{const k=recKey(x,i);if(idx[k]==null){idx[k]=out.length;out.push(clone(x));}else out[idx[k]]=obj(out[idx[k]])&&obj(x)?Object.assign({},out[idx[k]],clone(x)):clone(x);});return out;}
-function union(a,b){const s=new Set([...Object.keys(a||{}),...Object.keys(b||{})]);return [...s];}
-function endpoint(path,token){const p=String(path||'').split('/').filter(Boolean).map(encodeURIComponent).join('/');return URL+'/egtph/'+encodeURIComponent(KEY)+(p?'/'+p:'')+'.json?auth='+encodeURIComponent(token);}
-function rootWrite(u,method){try{return new URL(String(u),location.href).pathname==='/egtph/'+KEY+'.json'&&['PUT','PATCH','DELETE'].includes(method);}catch(e){return false;}}
-window.fetch=function(input,init){const method=String(init&&init.method||'GET').toUpperCase();if(rootWrite(input,method)){console.error('[v168] blocked root write',method,input);return Promise.resolve(new Response(JSON.stringify({blocked:true}),{status:409,headers:{'Content-Type':'application/json'}}));}return BASE_FETCH(input,init);};
-async function token(){if(typeof window.egtphEnsureAuthenticated==='function')await window.egtphEnsureAuthenticated();const h=window.EGTPHAuth,t=h&&h.getToken?h.getToken('lapayeparmois'):null;if(!t)throw new Error('لا يوجد رمز Firebase صالح');return t;}
-async function request(url,opt){const r=await BASE_FETCH(url,Object.assign({cache:'no-store'},opt||{}));return r;}
-async function atomicList(path,updates,t){updates=list(updates);if(!updates.length)return;const url=endpoint(path,t);for(let n=0;n<MAX_RETRY;n++){const g=await request(url,{headers:{'X-Firebase-ETag':'true','Cache-Control':'no-cache'}});if(!g.ok)throw new Error('قراءة '+path+' HTTP '+g.status);const et=g.headers.get('etag');const merged=merge(await g.json(),updates);const p=await request(url,{method:'PUT',headers:{'Content-Type':'application/json','If-Match':et||'*'},body:JSON.stringify(merged)});if(p.status===412){await new Promise(r=>setTimeout(r,90*(n+1)));continue;}if(!p.ok)throw new Error('كتابة '+path+' HTTP '+p.status);const v=await request(url);if(!v.ok)throw new Error('تحقق '+path+' HTTP '+v.status);const sm=mapList(await v.json());for(const x of updates){if(!sm[recKey(x,0)])throw new Error('القيد لم يظهر بعد الحفظ: '+path);}writes.push({path,at:new Date().toISOString(),count:updates.length});return;}throw new Error('تعارض متكرر في '+path);}
-function deepMerge(remote,local){if(Array.isArray(local))return merge(remote,local);if(obj(local)){const o=obj(remote)?clone(remote):{};Object.keys(local).forEach(k=>{if(local[k]!==undefined)o[k]=deepMerge(o[k],local[k]);});return o;}return clone(local);}
-async function atomicObject(path,local,t){const url=endpoint(path,t);for(let n=0;n<MAX_RETRY;n++){const g=await request(url,{headers:{'X-Firebase-ETag':'true','Cache-Control':'no-cache'}});if(!g.ok)throw new Error('قراءة '+path+' HTTP '+g.status);const et=g.headers.get('etag');const merged=deepMerge(await g.json(),local||{});const p=await request(url,{method:'PUT',headers:{'Content-Type':'application/json','If-Match':et||'*'},body:JSON.stringify(merged)});if(p.status===412){await new Promise(r=>setTimeout(r,90*(n+1)));continue;}if(!p.ok)throw new Error('كتابة '+path+' HTTP '+p.status);writes.push({path,at:new Date().toISOString(),count:1});return;}throw new Error('تعارض متكرر في '+path);}
-async function atomicValue(path,value,t){const url=endpoint(path,t);for(let n=0;n<MAX_RETRY;n++){const g=await request(url,{headers:{'X-Firebase-ETag':'true'}});if(!g.ok)throw new Error('قراءة '+path+' HTTP '+g.status);const p=await request(url,{method:'PUT',headers:{'Content-Type':'application/json','If-Match':g.headers.get('etag')||'*'},body:JSON.stringify(value)});if(p.status===412){await new Promise(r=>setTimeout(r,80*(n+1)));continue;}if(!p.ok)throw new Error('كتابة '+path+' HTTP '+p.status);writes.push({path,at:new Date().toISOString(),count:1});return;}throw new Error('تعارض متكرر في '+path);}
-function restoreImplicitDeletes(base,target){let restored=0;const restoreLeaf=(b,a)=>{const am=mapList(a),out=list(a).map(clone);list(b).forEach((r,i)=>{const k=recKey(r,i);if(!(k in am)&&!hasTomb(target,r)){out.push(clone(r));restored++;}});return out;};target.workers=restoreLeaf(base.workers,target.workers);for(const sec of ['hours','absences','debts'])for(const wid of union(base[sec],target[sec])){target[sec]=target[sec]||{};target[sec][wid]=restoreLeaf(base[sec]&&base[sec][wid],target[sec][wid]);}for(const sec of ['advances','bonuses'])for(const wid of union(base[sec],target[sec]))for(const m of union(base[sec]&&base[sec][wid],target[sec]&&target[sec][wid])){target[sec]=target[sec]||{};target[sec][wid]=target[sec][wid]||{};target[sec][wid][m]=restoreLeaf(base[sec]&&base[sec][wid]&&base[sec][wid][m],target[sec][wid][m]);}if(restored){window.DB=DB=target;try{toast('🛡️ مُنع حذف تلقائي واستُعيد '+restored+' قيداً. الحذف يجب أن يكون صريحاً.',true);}catch(e){}}return restored;}
-function settingsDelta(b,a){const out={},ignore=new Set(['cloudUrl','cloudKey','cloudAuto','v91CloudAuto','v164FirebaseOnly','v168FirebaseOnly','v168AuthoritativePath','v168LastFullPull','v168AuthoritativeSource','v148AdvanceJournal','v148AdvanceJournalUpdatedAt']);Object.keys(a||{}).forEach(k=>{if(ignore.has(k))return;if(!same(b&&b[k],a[k]))out[k]=clone(a[k]);});return out;}
-async function persist(base,target){const t=await token();const wc=changed(base.workers,target.workers);if(wc.length)await atomicList('workers',wc,t);for(const sec of ['advances','bonuses'])for(const wid of union(base[sec],target[sec]))for(const m of union(base[sec]&&base[sec][wid],target[sec]&&target[sec][wid])){const c=changed(base[sec]&&base[sec][wid]&&base[sec][wid][m],target[sec]&&target[sec][wid]&&target[sec][wid][m]);if(c.length)await atomicList(sec+'/'+wid+'/'+m,c,t);}for(const sec of ['hours','absences','debts'])for(const wid of union(base[sec],target[sec])){const c=changed(base[sec]&&base[sec][wid],target[sec]&&target[sec][wid]);if(c.length)await atomicList(sec+'/'+wid,c,t);}for(const sec of ['auditLog','ledger','txJournal','repairLog']){const c=changed(base[sec],target[sec]);if(c.length)await atomicList(sec,c,t);}for(const sec of ['cycleLocks','deletedRecords','trash'])if(!same(base[sec],target[sec]))await atomicObject(sec,target[sec]||{},t);if(!same(base.deletedIds,target.deletedIds))await atomicValue('deletedIds',Array.from(new Set([...list(base.deletedIds),...list(target.deletedIds)].map(String))),t);const sd=settingsDelta(base.settings,target.settings);if(Object.keys(sd).length)await atomicObject('settings',sd,t);for(const sec of ['device','schemaVersion'])if(target[sec]!==undefined&&!same(base[sec],target[sec]))await atomicValue(sec,target[sec],t);}
-function status(msg,color){try{if(typeof _cloudStatus==='function')_cloudStatus(msg,color);}catch(e){}const el=document.getElementById('cloud_status');if(el){el.textContent=msg;if(color)el.style.color=color;}}
-async function flush(){if(running)return false;if(!queued)return true;if(!window.__EGTPH_DB_READY__||window.__EGTPH_DB_READY_SOURCE__!==SOURCE){status('⏳ انتظار جلب Firebase المرجعي…','var(--amber)');return false;}running=true;queued=false;let base=clone(baseline||DB),target=clone(DB);restoreImplicitDeletes(base,target);status('⏳ حفظ وتحقق: العمال، التسبيقات، الساعات، الغيابات، المكافآت والديون…','var(--teal)');try{await persist(base,target);baseline=clone(target);window.DB=DB=target;lastError=null;lastSavedAt=new Date().toISOString();status('🟢 كل التغييرات محفوظة ومتحققة في '+KEY,'var(--green1)');try{_cloudDirty=false;}catch(e){}return true;}catch(e){lastError=String(e&&e.message||e);queued=true;console.error('[v168] persistence',e);status('🔴 فشل حفظ Firebase؛ التغييرات معلّقة: '+lastError,'var(--red)');try{toast('❌ فشل الحفظ في Firebase: '+lastError,true);}catch(x){}clearTimeout(retryTimer);retryTimer=setTimeout(flush,RETRY_MS);return false;}finally{running=false;if(queued&&!lastError)setTimeout(flush,0);}}
-function save(){try{if(DB&&DB.settings){DB.settings.cloudUrl=URL;DB.settings.cloudKey=KEY;DB.settings.cloudAuto=true;DB.settings.v168FirebaseOnly=true;}}catch(e){}queued=true;Promise.resolve().then(flush);return true;}
-async function persistAdvanceTransaction(wid,created,beforeDebts,afterDebts){const t=await token(),groups={};list(created).forEach(r=>{if(!r||r.id==null)throw new Error('تسبيق بلا معرف');const m=String(Number(r.month));(groups[m]||(groups[m]=[])).push(r);});for(const m of Object.keys(groups))await atomicList('advances/'+wid+'/'+m,groups[m],t);const dc=changed(beforeDebts,afterDebts);if(dc.length)await atomicList('debts/'+wid,dc,t);if(baseline){baseline.advances=baseline.advances||{};baseline.advances[wid]=baseline.advances[wid]||{};Object.keys(groups).forEach(m=>baseline.advances[wid][m]=merge(baseline.advances[wid][m],groups[m]));baseline.debts=baseline.debts||{};baseline.debts[wid]=merge(baseline.debts[wid],dc);}return {ok:true,source:SOURCE};}
-window.saveDB=save;try{saveDB=save;}catch(e){}
-window.cloudSync=async function(){queued=true;const ok=await flush();if(!ok)throw new Error(lastError||'فشل الحفظ');return await window._v164PullAuthoritativeCloud();};try{cloudSync=window.cloudSync;}catch(e){}
-window.cloudPullReplace=window.cloudSync;try{cloudPullReplace=window.cloudSync;}catch(e){}
-window.cloudConfigSave=function(){status('🟢 المسار ثابت: /egtph/'+KEY,'var(--green1)');return true;};
-window.cloudAutoSetup=function(){return true;};window.cloudStartStream=function(){return true;};window.cloudForcePush=function(){throw new Error('الكتابة الكاملة على الجذر محظورة');};
-window.EGTPH_V165={version:'compat-v168',persistAdvanceTransaction,source:SOURCE,noAutomaticDelete:true};
-function ready(){baseline=clone(DB);queued=false;lastError=null;status('🟢 المصدر والحفظ الوحيد: Firebase /egtph/'+KEY,'var(--green1)');}
-window.addEventListener('egtph-db-ready',ready);if(window.__EGTPH_DB_READY__&&window.__EGTPH_DB_READY_SOURCE__===SOURCE)ready();window.addEventListener('online',()=>{if(queued)flush();});window.addEventListener('beforeunload',e=>{if(running||queued||lastError){e.preventDefault();e.returnValue='توجد تغييرات لم يثبت حفظها في Firebase بعد.';}});
+function deepMerge(remote,local){if(Array.isArray(local))return merge(remote,local);if(obj(local)){const out=obj(remote)?clone(remote):{};Object.keys(local).forEach(k=>{out[k]=deepMerge(out[k],local[k]);});return out;}return clone(local);}
+function endpoint(path,token){const p=String(path||'').split('/').filter(Boolean).map(encodeURIComponent).join('/');return URL+ROOT+(p?'/'+p:'')+'.json?auth='+encodeURIComponent(token);}
+function rootWrite(u,method){try{return new URL(String(u),location.href).pathname===ROOT+'.json'&&['PUT','PATCH','DELETE'].includes(method);}catch(e){return false;}}
+window.fetch=function(input,init){const method=String(init&&init.method||'GET').toUpperCase();if(rootWrite(input,method)){console.error('[v169] blocked root write',method,input);return Promise.resolve(new Response(JSON.stringify({blocked:true}),{status:409,headers:{'Content-Type':'application/json'}}));}return BASE_FETCH(input,init);};
+async function token(){if(typeof window.egtphEnsureAuthenticated==='function')await window.egtphEnsureAuthenticated();const h=window.EGTPHAuth,t=h&&typeof h.getToken==='function'?h.getToken('lapayeparmois'):null;if(!t)throw new Error('لا يوجد رمز Firebase صالح');return t;}
+async function request(url,opt){return BASE_FETCH(url,Object.assign({cache:'no-store',headers:Object.assign({'Cache-Control':'no-cache'},opt&&opt.headers||{})},opt||{}));}
 
-// مقياس واحد فقط لكل الجداول: 0..120، يغير الجدول لا الصفحة ويبقيه وسط الإطار.
+function pathGet(root,path){let x=root;for(const p of String(path||'').split('/').filter(Boolean)){if(x==null)return undefined;x=x[p];}return x;}
+function verifyList(remote,updates,path){const rm=mapList(remote);for(const x of list(updates)){const k=recKey(x,0);if(!(k in rm))throw new Error('القيد لم يظهر بعد الحفظ: '+path+' / '+k);if(!same(rm[k],x))throw new Error('القيد ظهر بقيمة مختلفة بعد الحفظ: '+path+' / '+k);}}
+function verifyObjectSubset(remote,local,path){if(Array.isArray(local)){if(!equivalent(remote,local))throw new Error('فشل تحقق '+path);return;}if(obj(local)){for(const k of Object.keys(local))verifyObjectSubset(remote&&remote[k],local[k],path+'/'+k);return;}if(!equivalent(remote,local))throw new Error('فشل تحقق '+path);}
+async function atomicList(path,updates,t){updates=list(updates);if(!updates.length)return;const url=endpoint(path,t);for(let n=0;n<MAX_RETRY;n++){const g=await request(url,{headers:{'X-Firebase-ETag':'true'}});if(!g.ok)throw new Error('قراءة '+path+' HTTP '+g.status);const et=g.headers.get('etag');const merged=merge(await g.json(),updates);const p=await request(url,{method:'PUT',headers:{'Content-Type':'application/json','If-Match':et||'*'},body:JSON.stringify(merged)});if(p.status===412){await new Promise(r=>setTimeout(r,100*(n+1)));continue;}if(!p.ok)throw new Error('كتابة '+path+' HTTP '+p.status);const v=await request(url);if(!v.ok)throw new Error('تحقق '+path+' HTTP '+v.status);verifyList(await v.json(),updates,path);writes.push({path,at:new Date().toISOString(),count:updates.length});return;}throw new Error('تعارض متكرر في '+path);}
+async function atomicObject(path,local,t){const url=endpoint(path,t);for(let n=0;n<MAX_RETRY;n++){const g=await request(url,{headers:{'X-Firebase-ETag':'true'}});if(!g.ok)throw new Error('قراءة '+path+' HTTP '+g.status);const et=g.headers.get('etag');const merged=deepMerge(await g.json(),local||{});const p=await request(url,{method:'PUT',headers:{'Content-Type':'application/json','If-Match':et||'*'},body:JSON.stringify(merged)});if(p.status===412){await new Promise(r=>setTimeout(r,100*(n+1)));continue;}if(!p.ok)throw new Error('كتابة '+path+' HTTP '+p.status);const v=await request(url);if(!v.ok)throw new Error('تحقق '+path+' HTTP '+v.status);verifyObjectSubset(await v.json(),local||{},path);writes.push({path,at:new Date().toISOString(),count:1});return;}throw new Error('تعارض متكرر في '+path);}
+async function atomicValue(path,value,t){const url=endpoint(path,t);for(let n=0;n<MAX_RETRY;n++){const g=await request(url,{headers:{'X-Firebase-ETag':'true'}});if(!g.ok)throw new Error('قراءة '+path+' HTTP '+g.status);const p=await request(url,{method:'PUT',headers:{'Content-Type':'application/json','If-Match':g.headers.get('etag')||'*'},body:JSON.stringify(value)});if(p.status===412){await new Promise(r=>setTimeout(r,90*(n+1)));continue;}if(!p.ok)throw new Error('كتابة '+path+' HTTP '+p.status);const v=await request(url);if(!v.ok)throw new Error('تحقق '+path+' HTTP '+v.status);const got=await v.json();if(!equivalent(got,value))throw new Error('القيمة لم تثبت بعد الحفظ: '+path);writes.push({path,at:new Date().toISOString(),count:1});return;}throw new Error('تعارض متكرر في '+path);}
+
+function settingsDelta(b,a){const out={},ignore=new Set(['cloudUrl','cloudKey','cloudAuto','v91CloudAuto','v169FirebaseOnly','v169AuthoritativePath','v169LastFullPull','v169AuthoritativeSource','v148AdvanceJournal','v148AdvanceJournalUpdatedAt']);Object.keys(a||{}).forEach(k=>{if(ignore.has(k))return;if(!same(b&&b[k],a[k]))out[k]=clone(a[k]);});return out;}
+function buildPatch(base,target){
+  const p={version:169,root:ROOT,txId:'tx_'+Date.now()+'_'+Math.random().toString(36).slice(2,9),createdAt:new Date().toISOString(),workers:changed(base.workers,target.workers),advances:{},hours:{},absences:{},bonuses:{},debts:{},auditLog:changed(base.auditLog,target.auditLog),ledger:changed(base.ledger,target.ledger),txJournal:changed(base.txJournal,target.txJournal),repairLog:changed(base.repairLog,target.repairLog),settings:settingsDelta(base.settings,target.settings)};
+  for(const sec of ['advances','bonuses'])for(const wid of union(base[sec],target[sec]))for(const m of union(base[sec]&&base[sec][wid],target[sec]&&target[sec][wid])){const c=changed(base[sec]&&base[sec][wid]&&base[sec][wid][m],target[sec]&&target[sec][wid]&&target[sec][wid][m]);if(c.length){p[sec][wid]=p[sec][wid]||{};p[sec][wid][m]=c;}}
+  for(const sec of ['hours','absences','debts'])for(const wid of union(base[sec],target[sec])){const c=changed(base[sec]&&base[sec][wid],target[sec]&&target[sec][wid]);if(c.length)p[sec][wid]=c;}
+  for(const sec of ['cycleLocks','deletedRecords','trash'])if(!same(base[sec],target[sec]))p[sec]=clone(target[sec]||{});
+  if(!same(base.deletedIds,target.deletedIds))p.deletedIds=Array.from(new Set(list(target.deletedIds).map(String)));
+  for(const sec of ['device','schemaVersion'])if(target[sec]!==undefined&&!same(base[sec],target[sec]))p[sec]=clone(target[sec]);
+  return p;
+}
+function patchEmpty(p){if(!p)return true;if(list(p.workers).length||list(p.auditLog).length||list(p.ledger).length||list(p.txJournal).length||list(p.repairLog).length)return false;for(const sec of ['advances','bonuses'])for(const wid of keys(p[sec]))for(const m of keys(p[sec][wid]))if(list(p[sec][wid][m]).length)return false;for(const sec of ['hours','absences','debts'])for(const wid of keys(p[sec]))if(list(p[sec][wid]).length)return false;for(const sec of ['cycleLocks','deletedRecords','trash','deletedIds','device','schemaVersion'])if(Object.prototype.hasOwnProperty.call(p,sec))return false;return !Object.keys(p.settings||{}).length;}
+function applyPatch(target,p){
+  target.workers=merge(target.workers,p.workers);
+  for(const sec of ['advances','bonuses'])for(const wid of keys(p[sec]))for(const m of keys(p[sec][wid])){target[sec]=target[sec]||{};target[sec][wid]=target[sec][wid]||{};target[sec][wid][m]=merge(target[sec][wid][m],p[sec][wid][m]);}
+  for(const sec of ['hours','absences','debts'])for(const wid of keys(p[sec])){target[sec]=target[sec]||{};target[sec][wid]=merge(target[sec][wid],p[sec][wid]);}
+  for(const sec of ['auditLog','ledger','txJournal','repairLog'])target[sec]=merge(target[sec],p[sec]);
+  for(const sec of ['cycleLocks','deletedRecords','trash'])if(Object.prototype.hasOwnProperty.call(p,sec))target[sec]=deepMerge(target[sec],p[sec]);
+  if(Object.prototype.hasOwnProperty.call(p,'deletedIds'))target.deletedIds=Array.from(new Set([...list(target.deletedIds),...list(p.deletedIds)].map(String)));
+  target.settings=Object.assign({},target.settings||{},clone(p.settings||{}));
+  for(const sec of ['device','schemaVersion'])if(Object.prototype.hasOwnProperty.call(p,sec))target[sec]=clone(p[sec]);
+  return target;
+}
+function saveOutbox(p){try{localStorage.setItem(OUTBOX_KEY,JSON.stringify(p));return true;}catch(e){throw new Error('تعذر إنشاء طابور الأمان المحلي المؤقت');}}
+function loadOutbox(){try{const p=JSON.parse(localStorage.getItem(OUTBOX_KEY)||'null');return p&&p.version===169&&p.root===ROOT?p:null;}catch(e){return null;}}
+function clearOutbox(){try{localStorage.removeItem(OUTBOX_KEY);}catch(e){}}
+
+async function persistPatch(p){const t=await token();if(list(p.workers).length)await atomicList('workers',p.workers,t);for(const sec of ['advances','bonuses'])for(const wid of keys(p[sec]))for(const m of keys(p[sec][wid]))await atomicList(sec+'/'+wid+'/'+m,p[sec][wid][m],t);for(const sec of ['hours','absences','debts'])for(const wid of keys(p[sec]))await atomicList(sec+'/'+wid,p[sec][wid],t);for(const sec of ['auditLog','ledger','txJournal','repairLog'])if(list(p[sec]).length)await atomicList(sec,p[sec],t);for(const sec of ['cycleLocks','deletedRecords','trash'])if(Object.prototype.hasOwnProperty.call(p,sec))await atomicObject(sec,p[sec]||{},t);if(Object.prototype.hasOwnProperty.call(p,'deletedIds'))await atomicValue('deletedIds',p.deletedIds,t);for(const k of Object.keys(p.settings||{}))await atomicValue('settings/'+k,p.settings[k],t);for(const sec of ['device','schemaVersion'])if(Object.prototype.hasOwnProperty.call(p,sec))await atomicValue(sec,p[sec],t);}
+function verifyPatchInDB(db,p){verifyList(db.workers,p.workers,'workers');for(const sec of ['advances','bonuses'])for(const wid of keys(p[sec]))for(const m of keys(p[sec][wid]))verifyList(db[sec]&&db[sec][wid]&&db[sec][wid][m],p[sec][wid][m],sec+'/'+wid+'/'+m);for(const sec of ['hours','absences','debts'])for(const wid of keys(p[sec]))verifyList(db[sec]&&db[sec][wid],p[sec][wid],sec+'/'+wid);for(const sec of ['auditLog','ledger','txJournal','repairLog'])verifyList(db[sec],p[sec],sec);for(const sec of ['cycleLocks','deletedRecords','trash'])if(Object.prototype.hasOwnProperty.call(p,sec))verifyObjectSubset(db[sec],p[sec],sec);if(Object.prototype.hasOwnProperty.call(p,'deletedIds'))for(const id of p.deletedIds)if(!list(db.deletedIds).map(String).includes(String(id)))throw new Error('معرّف الحذف لم يثبت: '+id);for(const k of Object.keys(p.settings||{}))if(!equivalent(db.settings&&db.settings[k],p.settings[k]))throw new Error('إعداد لم يثبت: '+k);}
+
+const originalToast=window.toast;
+const originalCloseModal=window.closeModal;
+function isErrorToast(arg,msg){return arg===true||(typeof arg==='string'&&(arg.includes('c0392b')||arg.includes('f87171')||arg.includes('red')))||String(msg||'').startsWith('❌')||String(msg||'').startsWith('🔴');}
+function wrappedToast(msg,arg){if(uiPending&&!isErrorToast(arg,msg)){deferredToasts.push([msg,arg]);return;}return originalToast(msg,arg);}
+function wrappedCloseModal(id){if(uiPending){if(!deferredCloses.includes(id))deferredCloses.push(id);return;}return originalCloseModal(id);}
+window.toast=wrappedToast;try{toast=wrappedToast;}catch(e){}
+window.closeModal=wrappedCloseModal;try{closeModal=wrappedCloseModal;}catch(e){}
+function ensureGate(){let g=document.getElementById('egtphV169SaveGate');if(g)return g;g=document.createElement('div');g.id='egtphV169SaveGate';g.innerHTML='<div class="v169-card"><div class="v169-spinner"></div><div class="v169-title">تثبيت العملية في Firebase…</div><div class="v169-msg">لا تغلق الصفحة حتى انتهاء التحقق.</div><div class="v169-actions"><button data-act="retry">إعادة المحاولة</button><button data-act="cancel" class="danger">إلغاء التغيير غير المحفوظ</button></div></div>';document.body.appendChild(g);g.querySelector('[data-act="retry"]').onclick=()=>{g.classList.remove('failed');lastError=null;queued=true;flush();};g.querySelector('[data-act="cancel"]').onclick=cancelPending;return g;}
+function gate(mode,msg){const g=ensureGate();g.style.display='flex';g.classList.toggle('failed',mode==='failed');g.querySelector('.v169-title').textContent=mode==='failed'?'فشل تثبيت العملية':'تثبيت العملية في Firebase…';g.querySelector('.v169-msg').textContent=msg||(mode==='failed'?'العملية لم تعتبر محفوظة. أعد المحاولة أو ألغِ التغيير.':'لا تغلق الصفحة حتى انتهاء القراءة الراجعة.');}
+function hideGate(){const g=document.getElementById('egtphV169SaveGate');if(g)g.style.display='none';}
+function renderAll(){['renderDash','renderWorkers','renderSettlement','renderAdvances','renderHours','renderAbsences','renderBonuses','renderDebts','renderSummary','renderSalContent','renderHrsContent','renderAbsContent','renderBonContent','renderDbtContent','updateBadges'].forEach(n=>{try{if(typeof window[n]==='function')window[n]();}catch(e){}});}
+function releaseSuccess(){uiPending=false;hideGate();const closes=deferredCloses.splice(0),toasts=deferredToasts.splice(0);closes.forEach(id=>{try{originalCloseModal(id);}catch(e){}});toasts.forEach(x=>{try{originalToast(x[0],x[1]);}catch(e){}});}
+function cancelPending(){clearTimeout(retryTimer);queued=false;running=false;lastError=null;clearOutbox();if(rollbackSnapshot){window.DB=DB=clone(rollbackSnapshot);baseline=clone(rollbackSnapshot);}rollbackSnapshot=null;uiPending=false;deferredCloses=[];deferredToasts=[];hideGate();try{markSaved();}catch(e){}renderAll();try{originalToast('↩️ أُلغي التغيير لأنه لم يُحفظ في Firebase','#c0392b');}catch(e){}settlePromise({ok:false,cancelled:true,error:'ألغى المستخدم التغيير غير المحفوظ'});}
+function status(msg,color){try{if(typeof _cloudStatus==='function')_cloudStatus(msg,color);}catch(e){}const el=document.getElementById('cloud_status');if(el){el.textContent=msg;if(color)el.style.color=color;}}
+function beginPromise(){if(activePromise)return activePromise;activePromise=new Promise(res=>{resolveActive=res;});return activePromise;}
+function settlePromise(val){const r=resolveActive;activePromise=null;resolveActive=null;if(r)r(val);}
+
+async function pullRoot(){const t=await token();const r=await request(endpoint('',t));if(!r.ok)throw new Error('إعادة قراءة الجذر HTTP '+r.status);const raw=await r.json();if(!raw||typeof raw!=='object')throw new Error('نسخة Firebase بعد الحفظ غير مكتملة');_applyDBData(_v169SanitizeCloud(raw));window.__EGTPH_DB_READY__=true;window.__EGTPH_DB_READY_SOURCE__=SOURCE;return DB;}
+async function flush(){
+  if(running)return beginPromise();
+  const p=loadOutbox();
+  if(!p){queued=false;lastError=null;if(uiPending)releaseSuccess();settlePromise({ok:true,noChanges:true});return true;}
+  if(!window.__EGTPH_DB_READY__||window.__EGTPH_DB_READY_SOURCE__!==SOURCE){queued=true;status('⏳ انتظار جلب Firebase المرجعي…','var(--amber)');gate('saving','انتظار الاتصال بالمصدر المرجعي…');return beginPromise();}
+  running=true;queued=false;uiPending=true;gate('saving','العملية قيد الكتابة ثم إعادة القراءة والتحقق…');status('⏳ حفظ وتحقق بالقراءة الراجعة — '+p.txId,'var(--teal)');
+  try{
+    await persistPatch(p);
+    const cloudDB=await pullRoot();
+    verifyPatchInDB(cloudDB,p);
+    baseline=clone(cloudDB);rollbackSnapshot=null;clearOutbox();lastError=null;lastSavedAt=new Date().toISOString();try{markSaved();}catch(e){}status('🟢 محفوظ ومتحقق في '+KEY+' — '+p.txId,'var(--green1)');try{window.dispatchEvent(new CustomEvent('egtph-verified-saved',{detail:{txId:p.txId,source:SOURCE,writes:clone(writes)}}));}catch(e){}releaseSuccess();settlePromise({ok:true,txId:p.txId,source:SOURCE});return true;
+  }catch(e){
+    lastError=String(e&&e.message||e);queued=true;console.error('[v169] verified commit failed',e);status('🔴 لم يثبت الحفظ؛ العملية معلّقة: '+lastError,'var(--red)');gate('failed',lastError);try{originalToast('❌ لم تُحفظ العملية بعد: '+lastError,true);}catch(x){}clearTimeout(retryTimer);retryTimer=setTimeout(()=>{if(queued&&navigator.onLine)flush();},RETRY_MS);return false;
+  }finally{running=false;}
+}
+function save(){
+  if(!window.__EGTPH_DB_READY__||window.__EGTPH_DB_READY_SOURCE__!==SOURCE){lastError='Firebase المرجعي غير جاهز';try{originalToast('❌ انتظر حتى يكتمل جلب Firebase قبل تسجيل عملية',true);}catch(e){}return Promise.resolve({ok:false,error:lastError});}
+  const base=clone(baseline||DB), target=clone(DB), p=buildPatch(base,target);
+  if(patchEmpty(p)){try{markSaved();}catch(e){}return Promise.resolve({ok:true,noChanges:true,source:SOURCE});}
+  if(!rollbackSnapshot)rollbackSnapshot=clone(base);
+  saveOutbox(p);queued=true;uiPending=true;try{markUnsaved();}catch(e){}gate('saving','تثبيت '+p.txId+' في المسار '+ROOT+'…');const promise=beginPromise();Promise.resolve().then(flush);return promise;
+}
+
+function ready(){
+  baseline=clone(DB);lastError=null;
+  const p=loadOutbox();
+  if(p){rollbackSnapshot=clone(baseline);applyPatch(DB,p);window.DB=DB;queued=true;uiPending=true;gate('saving','استرجاع عملية غير مؤكدة ثم تثبيتها في Firebase…');renderAll();flush();}
+  else{queued=false;status('🟢 المصدر والحفظ الوحيد: Firebase '+ROOT,'var(--green1)');}
+}
+window.addEventListener('egtph-db-ready',ready);
+if(window.__EGTPH_DB_READY__&&window.__EGTPH_DB_READY_SOURCE__===SOURCE)ready();
+window.addEventListener('online',()=>{if(queued)flush();});
+window.addEventListener('beforeunload',e=>{if(running||queued||loadOutbox()){e.preventDefault();e.returnValue='توجد عملية لم يثبت حفظها في Firebase بعد.';}});
+window.saveDB=save;try{saveDB=save;}catch(e){}
+window.cloudSync=async function(){if(loadOutbox()){const ok=await flush();if(!ok)throw new Error(lastError||'فشل الحفظ');}return await window._v169PullAuthoritativeCloud();};try{cloudSync=window.cloudSync;}catch(e){}
+window.cloudPullReplace=window.cloudSync;try{cloudPullReplace=window.cloudSync;}catch(e){}
+window.cloudConfigSave=function(){status('🟢 المسار ثابت: '+ROOT,'var(--green1)');return true;};
+window.cloudAutoSetup=function(){return true;};window.cloudStartStream=function(){return true;};window.cloudForcePush=function(){throw new Error('الكتابة الكاملة على الجذر محظورة');};
+
+// مقياس وحيد لكل الجداول: 0..120؛ يغيّر الجدول فقط ويبقيه متمركزاً.
 const ZMIN=0,ZMAX=120,ZSTEP=10;
 function zClamp(v){v=Math.round((Number(v)||0)/ZSTEP)*ZSTEP;return Math.max(ZMIN,Math.min(ZMAX,v));}
-function zKey(t,i){return 'EGTPH_V168_TABLE_'+String(t.id||t.getAttribute('data-table-key')||((t.closest('[id]')||{}).id)||i).replace(/[^a-zA-Z0-9_-]/g,'_');}
+function zKey(t,i){return 'EGTPH_V169_TABLE_'+String(t.id||t.getAttribute('data-table-key')||((t.closest('[id]')||{}).id)||i).replace(/[^a-zA-Z0-9_-]/g,'_');}
 function zApply(c,v){if(!c.fixed){const oldScale=c.value>0?c.value/100:1,rect=c.table.getBoundingClientRect();const mw=Math.max(rect.width>0?rect.width/oldScale:0,c.table.scrollWidth||0,c.table.offsetWidth||0),mh=Math.max(rect.height>0?rect.height/oldScale:0,c.table.scrollHeight||0,c.table.offsetHeight||0);if(mw>10&&mh>5){c.naturalWidth=mw;c.naturalHeight=mh;c.fixed=true;c.table.style.setProperty('width',mw+'px','important');c.table.style.setProperty('max-width','none','important');}}v=zClamp(v);const scale=v/100;c.value=v;c.label.textContent=v+'%';try{localStorage.setItem(c.key,String(v));}catch(e){}c.table.style.transformOrigin='top center';c.table.style.position='absolute';c.table.style.left='50%';c.table.style.top='0';c.table.style.transform='translateX(-50%) scale('+scale+')';c.table.style.visibility=v===0?'hidden':'visible';const nw=Math.max((c.naturalWidth||1)*scale,1),nh=Math.max((c.naturalHeight||1)*scale,1);c.stage.style.width=nw+'px';c.stage.style.height=nh+'px';c.stage.style.position='relative';c.stage.style.margin='0 auto';requestAnimationFrame(()=>{const max=Math.max(0,c.stage.offsetWidth-c.viewport.clientWidth);c.viewport.scrollLeft=Math.round(max/2);});}
-function zInstall(t,i){if(!t||t.dataset.v168Zoom==='1'||t.closest('.egtph-v168-stage'))return;t.dataset.v168Zoom='1';const p=t.parentNode,bar=document.createElement('div');bar.className='egtph-v168-toolbar';bar.innerHTML='<button type="button" data-z="-">−</button><span>100%</span><button type="button" data-z="+">+</button><button type="button" data-z="reset">100%</button>';const vp=document.createElement('div'),st=document.createElement('div');vp.className='egtph-v168-viewport';st.className='egtph-v168-stage';p.insertBefore(bar,t);p.insertBefore(vp,t);vp.appendChild(st);st.appendChild(t);t.style.transform='none';const rect=t.getBoundingClientRect();const c={table:t,viewport:vp,stage:st,label:bar.querySelector('span'),naturalWidth:Math.max(t.scrollWidth,t.offsetWidth,rect.width),naturalHeight:Math.max(t.scrollHeight,t.offsetHeight,rect.height),key:zKey(t,i),value:100};bar.querySelector('[data-z="-"]').onclick=()=>zApply(c,c.value-ZSTEP);bar.querySelector('[data-z="+"]').onclick=()=>zApply(c,c.value+ZSTEP);bar.querySelector('[data-z="reset"]').onclick=()=>zApply(c,100);let saved=100;try{saved=Number(localStorage.getItem(c.key)||100);}catch(e){}zApply(c,saved);t._v168Zoom=c;}
+function zInstall(t,i){if(!t||t.dataset.v169Zoom==='1'||t.closest('.egtph-v169-stage'))return;t.dataset.v169Zoom='1';const p=t.parentNode,bar=document.createElement('div');bar.className='egtph-v169-toolbar';bar.innerHTML='<button type="button" data-z="-">−</button><span>100%</span><button type="button" data-z="+">+</button><button type="button" data-z="reset">100%</button>';const vp=document.createElement('div'),st=document.createElement('div');vp.className='egtph-v169-viewport';st.className='egtph-v169-stage';p.insertBefore(bar,t);p.insertBefore(vp,t);vp.appendChild(st);st.appendChild(t);t.style.transform='none';const rect=t.getBoundingClientRect();const c={table:t,viewport:vp,stage:st,label:bar.querySelector('span'),naturalWidth:Math.max(t.scrollWidth,t.offsetWidth,rect.width),naturalHeight:Math.max(t.scrollHeight,t.offsetHeight,rect.height),key:zKey(t,i),value:100};bar.querySelector('[data-z="-"]').onclick=()=>zApply(c,c.value-ZSTEP);bar.querySelector('[data-z="+"]').onclick=()=>zApply(c,c.value+ZSTEP);bar.querySelector('[data-z="reset"]').onclick=()=>zApply(c,100);let saved=100;try{saved=Number(localStorage.getItem(c.key)||100);}catch(e){}zApply(c,saved);t._v169Zoom=c;}
 function zScan(root){Array.from((root||document).querySelectorAll('table')).forEach(zInstall);}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>zScan(document));else zScan(document);new MutationObserver(ms=>{if(ms.some(m=>m.addedNodes.length))requestAnimationFrame(()=>zScan(document));}).observe(document.documentElement,{childList:true,subtree:true});
-window.EGTPH_V168={version:'168.0-surgical-single-engine',source:SOURCE,root:'/egtph/'+KEY,save,flush:()=>{queued=true;return flush();},pull:()=>window._v164PullAuthoritativeCloud(),status:()=>({ready:!!baseline,running,queued,lastError,lastSavedAt,writes:clone(writes)}),persistAdvanceTransaction,sections:['workers','advances','hours','absences','bonuses','debts','auditLog','ledger','txJournal','repairLog','cycleLocks','deletedIds','deletedRecords','trash','settings'],noRootWrite:true,noAutomaticDelete:true,zoom:{min:ZMIN,max:ZMAX,step:ZSTEP,scan:zScan}};
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>zScan(document));else zScan(document);
+new MutationObserver(ms=>{if(ms.some(m=>m.addedNodes.length))requestAnimationFrame(()=>zScan(document));}).observe(document.documentElement,{childList:true,subtree:true});
+
+window.EGTPH_V169={version:'169.0-verified-commit-outbox',source:SOURCE,root:ROOT,save,flush,pull:()=>window._v169PullAuthoritativeCloud(),status:()=>({ready:!!baseline,running,queued,lastError,lastSavedAt,outbox:!!loadOutbox(),writes:clone(writes)}),sections:['workers','advances','hours','absences','bonuses','debts','auditLog','ledger','txJournal','repairLog','cycleLocks','deletedIds','deletedRecords','trash','settings'],noRootWrite:true,noAutomaticDelete:true,outboxIsTemporary:true,zoom:{min:ZMIN,max:ZMAX,step:ZSTEP,scan:zScan}};
 })();
 </script>
-<style id="egtph-v168-table-style">
-.egtph-v168-toolbar{display:flex;align-items:center;justify-content:center;gap:8px;margin:8px auto;padding:6px 8px;width:max-content;max-width:100%;border:1px solid rgba(13,148,136,.3);border-radius:14px;background:rgba(255,255,255,.92);position:relative;z-index:4;direction:ltr}
-.egtph-v168-toolbar button{min-width:42px;height:34px;border:1px solid rgba(13,148,136,.35);border-radius:11px;background:#fff;color:#075e54;font-weight:900;font-size:16px;touch-action:manipulation}
-.egtph-v168-toolbar span{min-width:52px;text-align:center;font-weight:900;color:#075e54;font-variant-numeric:tabular-nums}
-.egtph-v168-viewport{width:100%;max-width:100%;overflow:auto;-webkit-overflow-scrolling:touch;direction:ltr;position:relative}
-.egtph-v168-stage{direction:ltr;min-height:1px;box-sizing:border-box}
-.egtph-v168-stage>table{direction:rtl!important;margin:0!important;max-width:none!important}
+<style id="egtph-v169-verified-commit-style">
+#egtphV169SaveGate{display:none;position:fixed;inset:0;z-index:2147483000;background:rgba(3,13,22,.72);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:18px;direction:rtl;font-family:Tajawal,Arial,sans-serif}
+#egtphV169SaveGate .v169-card{width:min(390px,94vw);background:#fff;color:#123;border:2px solid #0d9488;border-radius:20px;padding:22px;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.36)}
+#egtphV169SaveGate .v169-spinner{width:38px;height:38px;margin:0 auto 12px;border:4px solid #d8f3ef;border-top-color:#0d9488;border-radius:50%;animation:v169spin .85s linear infinite}
+#egtphV169SaveGate.failed .v169-spinner{animation:none;border-color:#fecdd3;border-top-color:#dc2626}
+#egtphV169SaveGate .v169-title{font-size:17px;font-weight:900;margin-bottom:8px}
+#egtphV169SaveGate .v169-msg{font-size:12px;line-height:1.7;color:#475569;word-break:break-word}
+#egtphV169SaveGate .v169-actions{display:none;gap:8px;margin-top:15px}
+#egtphV169SaveGate.failed .v169-actions{display:flex}
+#egtphV169SaveGate button{flex:1;border:0;border-radius:11px;padding:11px 8px;background:#0d9488;color:#fff;font-weight:900;font-family:inherit}
+#egtphV169SaveGate button.danger{background:#dc2626}
+@keyframes v169spin{to{transform:rotate(360deg)}}
+.egtph-v169-toolbar{display:flex;align-items:center;justify-content:center;gap:8px;margin:8px auto;padding:6px 8px;width:max-content;max-width:100%;border:1px solid rgba(13,148,136,.3);border-radius:14px;background:rgba(255,255,255,.92);position:relative;z-index:4;direction:ltr}
+.egtph-v169-toolbar button{min-width:42px;height:34px;border:1px solid rgba(13,148,136,.35);border-radius:11px;background:#fff;color:#075e54;font-weight:900;font-size:16px;touch-action:manipulation}
+.egtph-v169-toolbar span{min-width:52px;text-align:center;font-weight:900;color:#075e54;font-variant-numeric:tabular-nums}
+.egtph-v169-viewport{width:100%;max-width:100%;overflow:auto;-webkit-overflow-scrolling:touch;direction:ltr;position:relative}
+.egtph-v169-stage{direction:ltr;min-height:1px;box-sizing:border-box}
+.egtph-v169-stage>table{direction:rtl!important;margin:0!important;max-width:none!important}
 </style>
 
 </body></html>
