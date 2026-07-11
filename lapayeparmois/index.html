@@ -224,7 +224,7 @@
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes" name="viewport"/>
-<title>EGTPH — سجل الأجور v182</title>
+<title>EGTPH — سجل الأجور v184</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -1135,7 +1135,7 @@ body{background:linear-gradient(145deg,#f2f7f4 0%,#fbfdfc 42%,#eef7f1 100%);}
 }
 @media screen and (max-width:900px){.twrap thead th,.sec table thead th{font-size:11.2px!important;padding:10px 8px!important}.twrap tbody td,.sec table tbody td{font-size:11px!important;padding:10px 8px!important;line-height:1.65!important}#page-settlement .twrap table{min-width:1120px!important}}
 </style>
-<meta content="v182-final-temporary-separated-full-audit" name="egtph-build"/>
+<meta content="v184-table-horizontal-pan-root-fix" name="egtph-build"/>
 <style id="egtph-v176-night-theme">
 /* v176 — ثيم ثانٍ فقط: ليلي أخضر متناسق. الأبيض يبقى الافتراضي. */
 body.egtph-theme-night{
@@ -1488,7 +1488,7 @@ body.egtph-theme-night{
 <div class="" id="toast" style="">✅ تم تنزيل نسخة كاملة: ملف HTML يحتوي البرنامج وكل البيانات الحالية</div>
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div class="topbar">
-<div class="tlogo">EGTPH <span>| سجل الأجور v182</span></div>
+<div class="tlogo">EGTPH <span>| سجل الأجور v184</span></div>
 <div id="autoSv" style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--gray)">
 <span class="auto-save-dot" id="saveDot"></span>
 <span id="saveLabel">—</span>
@@ -9619,7 +9619,7 @@ function zApply(c,v){
   c.label.textContent=v+'%';
   try{localStorage.setItem(c.key,String(v));}catch(e){}
 
-  const oldMax=Math.max(0,c.stage.scrollWidth-c.viewport.clientWidth);
+  const oldMax=Math.max(0,c.viewport.scrollWidth-c.viewport.clientWidth);
   const oldRatio=oldMax>0?c.viewport.scrollLeft/oldMax:0.5;
   const scale=v/100;
   const rect=c.table.getBoundingClientRect();
@@ -9645,10 +9645,23 @@ function zApply(c,v){
     c.stage.style.width='100%';
     c.stage.style.height='auto';
     c.stage.style.position='relative';
-    c.stage.style.margin='0 auto';
+    c.stage.style.margin='0';
     c.appliedValue=100;
     return false;
   }
+
+  const viewportWidth=Math.max(
+    c.viewport.clientWidth||0,
+    (c.viewport.parentElement&&c.viewport.parentElement.clientWidth)||0,
+    Math.min(window.innerWidth||390,900),
+    280
+  );
+  const scaledWidth=Math.max(1,c.naturalWidth*scale);
+  const scaledHeight=Math.max(1,c.naturalHeight*scale);
+
+  // مساحة حركة حقيقية على الجانبين حتى عندما يصبح الجدول أصغر من الإطار.
+  const panGutter=Math.max(120,Math.round(viewportWidth*0.65));
+  const stageWidth=Math.max(scaledWidth,viewportWidth)+(panGutter*2);
 
   c.table.style.transformOrigin='top center';
   c.table.style.position='absolute';
@@ -9656,48 +9669,102 @@ function zApply(c,v){
   c.table.style.top='0';
   c.table.style.transform='translateX(-50%) scale('+scale+')';
   c.table.style.visibility=v===0?'hidden':'visible';
-  c.stage.style.width=Math.max(c.naturalWidth*scale,1)+'px';
-  c.stage.style.height=Math.max(c.naturalHeight*scale,1)+'px';
+
+  c.stage.style.width=stageWidth+'px';
+  c.stage.style.minWidth=stageWidth+'px';
+  c.stage.style.height=scaledHeight+'px';
   c.stage.style.position='relative';
-  c.stage.style.margin='0 auto';
+  c.stage.style.margin='0';
+  c.stage.style.flex='0 0 '+stageWidth+'px';
+
+  c.panGutter=panGutter;
   c.appliedValue=v;
 
   requestAnimationFrame(()=>{
-    const max=Math.max(0,c.stage.scrollWidth-c.viewport.clientWidth);
-    c.viewport.scrollLeft=Math.round(max*Math.max(0,Math.min(1,oldRatio)));
+    const max=Math.max(0,c.viewport.scrollWidth-c.viewport.clientWidth);
+    const ratio=c.userPanned?Math.max(0,Math.min(1,oldRatio)):0.5;
+    c.viewport.scrollLeft=Math.round(max*ratio);
   });
   return true;
 }
 
 function zEnableFingerPan(c){
   const vp=c&&c.viewport;
-  if(!vp||vp.dataset.v179FingerPan==='1')return;
-  vp.dataset.v179FingerPan='1';
-  let sx=0,sy=0,sl=0,tracking=false,horizontal=false;
+  if(!vp||vp.dataset.v184FingerPan==='1')return;
+  vp.dataset.v184FingerPan='1';
 
-  vp.addEventListener('touchstart',e=>{
-    if(!e.touches||e.touches.length!==1)return;
-    const t=e.touches[0];
-    sx=t.clientX;sy=t.clientY;sl=vp.scrollLeft;tracking=true;horizontal=false;
-  },{passive:true});
+  let active=false;
+  let axis='';
+  let pointerId=null;
+  let startX=0,startY=0,startScroll=0;
 
-  vp.addEventListener('touchmove',e=>{
-    if(!tracking||!e.touches||e.touches.length!==1)return;
-    const t=e.touches[0],dx=t.clientX-sx,dy=t.clientY-sy;
-    if(!horizontal){
-      if(Math.abs(dx)<6&&Math.abs(dy)<6)return;
-      if(Math.abs(dx)<=Math.abs(dy))return;
-      horizontal=true;
+  const begin=(x,y,id)=>{
+    active=true;
+    axis='';
+    pointerId=id;
+    startX=x;
+    startY=y;
+    startScroll=vp.scrollLeft;
+  };
+
+  const move=(x,y,event)=>{
+    if(!active)return;
+    const dx=x-startX;
+    const dy=y-startY;
+
+    if(!axis){
+      if(Math.abs(dx)<5&&Math.abs(dy)<5)return;
+      axis=Math.abs(dx)>Math.abs(dy)?'x':'y';
+      if(axis==='y'){
+        active=false;
+        return;
+      }
     }
-    if(horizontal&&vp.scrollWidth>vp.clientWidth){
-      e.preventDefault();
-      vp.scrollLeft=sl-dx;
-    }
-  },{passive:false});
 
-  const stop=()=>{tracking=false;horizontal=false;};
-  vp.addEventListener('touchend',stop,{passive:true});
-  vp.addEventListener('touchcancel',stop,{passive:true});
+    if(axis==='x'){
+      if(event&&event.cancelable)event.preventDefault();
+      vp.scrollLeft=startScroll-dx;
+      c.userPanned=true;
+    }
+  };
+
+  const end=()=>{
+    active=false;
+    axis='';
+    pointerId=null;
+  };
+
+  if(window.PointerEvent){
+    vp.addEventListener('pointerdown',e=>{
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      begin(e.clientX,e.clientY,e.pointerId);
+      try{vp.setPointerCapture(e.pointerId);}catch(_){}
+    },{passive:true});
+
+    vp.addEventListener('pointermove',e=>{
+      if(!active||pointerId!==e.pointerId)return;
+      move(e.clientX,e.clientY,e);
+    },{passive:false});
+
+    vp.addEventListener('pointerup',end,{passive:true});
+    vp.addEventListener('pointercancel',end,{passive:true});
+    vp.addEventListener('lostpointercapture',end,{passive:true});
+  }else{
+    vp.addEventListener('touchstart',e=>{
+      if(!e.touches||e.touches.length!==1)return;
+      const t=e.touches[0];
+      begin(t.clientX,t.clientY,'touch');
+    },{passive:true});
+
+    vp.addEventListener('touchmove',e=>{
+      if(!active||!e.touches||e.touches.length!==1)return;
+      const t=e.touches[0];
+      move(t.clientX,t.clientY,e);
+    },{passive:false});
+
+    vp.addEventListener('touchend',end,{passive:true});
+    vp.addEventListener('touchcancel',end,{passive:true});
+  }
 }
 
 function zInstall(t,i){
@@ -9705,7 +9772,7 @@ function zInstall(t,i){
   t.dataset.v170Zoom='1';
   const p=t.parentNode;
   const host=t.closest('.twrap')||p;
-  if(host&&host.classList)host.classList.add('egtph-v179-zoom-host');
+  if(host&&host.classList)host.classList.add('egtph-v184-pan-host');
 
   const bar=document.createElement('div');
   bar.className='egtph-v170-toolbar';
@@ -9720,12 +9787,29 @@ function zInstall(t,i){
   st.appendChild(t);
   t.style.transform='none';
 
-  const c={table:t,viewport:vp,stage:st,label:bar.querySelector('span'),naturalWidth:0,naturalHeight:0,key:zKey(t,i),value:100,appliedValue:100,fixed:false};
+  const c={
+    table:t,
+    viewport:vp,
+    stage:st,
+    label:bar.querySelector('span'),
+    naturalWidth:0,
+    naturalHeight:0,
+    key:zKey(t,i),
+    value:100,
+    appliedValue:100,
+    fixed:false,
+    userPanned:false,
+    panGutter:0
+  };
+
   zEnableFingerPan(c);
 
   bar.querySelector('[data-z="-"]').onclick=()=>zApply(c,c.value-ZSTEP);
   bar.querySelector('[data-z="+"]').onclick=()=>zApply(c,c.value+ZSTEP);
-  bar.querySelector('[data-z="reset"]').onclick=()=>zApply(c,100);
+  bar.querySelector('[data-z="reset"]').onclick=()=>{
+    c.userPanned=false;
+    zApply(c,100);
+  };
 
   let saved=100;
   try{saved=Number(localStorage.getItem(c.key)||100);}catch(e){}
@@ -9746,7 +9830,7 @@ const EGTPH_SYNC_API={version:'175.0-surgical-sync-undo',source:SOURCE,root:ROOT
 #egtphV170SaveGate .v170-title{font-size:17px;font-weight:900;margin-bottom:8px}#egtphV170SaveGate .v170-msg{font-size:12px;line-height:1.7;color:#475569;word-break:break-word}.v170-actions{display:none;gap:7px;margin-top:14px;flex-wrap:wrap}#egtphV170SaveGate.failed .error-actions,#egtphV170SaveGate.conflict .conflict-actions{display:flex}.v170-actions button,.v170-conf-actions button{flex:1;border:0;border-radius:10px;padding:10px 8px;background:#0d9488;color:#fff;font-family:inherit;font-weight:900}.v170-actions button.danger{background:#dc2626}.v170-actions button.warn,.v170-conf-actions button.warn{background:#ea580c}.v170-conf-actions button.plain{background:#64748b}
 .v170-conf-row{text-align:right;border:1px solid #fed7aa;background:#fff7ed;border-radius:12px;padding:10px;margin:8px 0}.v170-conf-row b{word-break:break-all}.v170-conf-row p{margin:5px 0;color:#7c2d12;font-size:12px}.v170-conf-row small{color:#64748b}.v170-conf-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
 @keyframes v170spin{to{transform:rotate(360deg)}}
-.egtph-v170-toolbar{display:flex;align-items:center;justify-content:center;gap:8px;margin:8px auto;padding:6px 8px;width:max-content;max-width:100%;border:1px solid rgba(13,148,136,.3);border-radius:14px;background:rgba(255,255,255,.92);position:relative;z-index:4;direction:ltr}.egtph-v170-toolbar button{min-width:42px;height:34px;border:1px solid rgba(13,148,136,.35);border-radius:11px;background:#fff;color:#075e54;font-weight:900;font-size:16px;touch-action:manipulation}.egtph-v170-toolbar span{min-width:52px;text-align:center;font-weight:900;color:#075e54;font-variant-numeric:tabular-nums}.egtph-v179-zoom-host{overflow:hidden!important}.egtph-v170-viewport{width:100%;max-width:100%;overflow-x:auto!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch!important;touch-action:pan-x pan-y!important;overscroll-behavior-x:contain;direction:ltr;position:relative;cursor:grab}.egtph-v170-viewport:active{cursor:grabbing}.egtph-v170-stage{direction:ltr;min-height:1px;box-sizing:border-box}.egtph-v170-stage>table{direction:rtl!important;margin:0!important;max-width:none!important}
+.egtph-v170-toolbar{display:flex;align-items:center;justify-content:center;gap:8px;margin:8px auto;padding:6px 8px;width:max-content;max-width:100%;border:1px solid rgba(13,148,136,.3);border-radius:14px;background:rgba(255,255,255,.92);position:relative;z-index:4;direction:ltr}.egtph-v170-toolbar button{min-width:42px;height:34px;border:1px solid rgba(13,148,136,.35);border-radius:11px;background:#fff;color:#075e54;font-weight:900;font-size:16px;touch-action:manipulation}.egtph-v170-toolbar span{min-width:52px;text-align:center;font-weight:900;color:#075e54;font-variant-numeric:tabular-nums}.egtph-v184-pan-host{overflow:hidden!important}.egtph-v170-viewport{width:100%;max-width:100%;overflow-x:auto!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch!important;touch-action:pan-y pinch-zoom!important;overscroll-behavior-x:contain;direction:ltr;position:relative;cursor:grab;user-select:none;-webkit-user-select:none;scroll-behavior:auto!important}.egtph-v170-viewport:active{cursor:grabbing}.egtph-v170-stage{direction:ltr;min-height:1px;box-sizing:border-box;max-width:none!important}.egtph-v170-stage>table{direction:rtl!important;margin:0!important;max-width:none!important;user-select:none;-webkit-user-select:none}
 @media(max-width:560px){.v170-sync-grid{grid-template-columns:1fr}.v170-sync-actions button{flex:1}}
 </style>
 
@@ -9754,8 +9838,8 @@ const EGTPH_SYNC_API={version:'175.0-surgical-sync-undo',source:SOURCE,root:ROOT
 (function(){
   'use strict';
   window.__EGTPH_V175_SURGICAL__=true;
-  window.__EGTPH_V175_BUILD__='v182-final-temporary-separated-single-settlement-engine-full-audit';
-  try{document.title='EGTPH — سجل الأجور v182';}catch(e){}
+  window.__EGTPH_V175_BUILD__='v184-table-horizontal-pan-root-fix';
+  try{document.title='EGTPH — سجل الأجور v184';}catch(e){}
 })();
 </script>
 
