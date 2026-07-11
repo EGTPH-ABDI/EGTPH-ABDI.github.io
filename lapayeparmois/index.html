@@ -2521,6 +2521,23 @@ function _inCycle(dateStr,win){
   if(!d)return false;
   return d>=win.from && d<win.to;
 }
+
+// ══════════════════════════════════════════════════════
+// v173 — مصدر واحد لملكية دورة التسبيق
+// date = التاريخ المحاسبي الذي يحدد دورة الراتب.
+// realDate = تاريخ الدفع الفعلي فقط ولا يغيّر ملكية الدورة.
+// metadata القديمة (cycleStart/cycleKey/ownerCycleId) لا تتغلب على date.
+// ══════════════════════════════════════════════════════
+function advanceAccountingDate(e){
+  if(!e)return '';
+  return e.date || e.accountingDate || e.effectiveDate || e.realDate || '';
+}
+function advanceBelongsToCycle(e,w,m,yr){
+  if(!e||!w||_isInstAdv(e))return false;
+  return _inCycle(advanceAccountingDate(e),cycleWindow(w,m,yr));
+}
+window.advanceAccountingDate=advanceAccountingDate;
+window.advanceBelongsToCycle=advanceBelongsToCycle;
 function cycleAnchorForDate(w,dateValue){
   const d=_toDate(dateValue)||new Date();
   const entryDay=Math.min(+((w||{}).day)||1,28);
@@ -2839,19 +2856,7 @@ function cycleRangeFromDate(w,m,dateStr){
 function calcMonthStatus(wid,m,yr){
   const w=getW(wid);if(!w)return null;
   const _yr=yr||new Date().getFullYear(),calRes=calcSal(w,m,_yr),baseSal=calRes.salary,win=cycleWindow(w,m,_yr);
-  const parse=v=>{try{return _toDate(v);}catch(e){return null;}};
-  const sameDay=(a,b)=>{const x=parse(a),y=b instanceof Date?b:parse(b);return !!(x&&y&&x.getFullYear()===y.getFullYear()&&x.getMonth()===y.getMonth()&&x.getDate()===y.getDate());};
-  const belongs=e=>{
-    if(!e)return false;
-    if(e.cycleStart&&sameDay(e.cycleStart,win.from))return true;
-    if(e.accountingCycleStart&&sameDay(e.accountingCycleStart,win.from))return true;
-    if(e.cycleEnd&&sameDay(e.cycleEnd,win.to))return true;
-    const oid=String(e.ownerCycleId||e.cycleId||'');
-    const f=win.from.getFullYear()+'-'+String(win.from.getMonth()+1).padStart(2,'0')+'-'+String(win.from.getDate()).padStart(2,'0');
-    if(oid&&oid.indexOf(f)>=0)return true;
-    if(e.cycleKey&&String(e.cycleKey)===win.from.getFullYear()+'-'+String(win.from.getMonth()+1).padStart(2,'0'))return true;
-    return _inCycle(e.effectiveDate||e.date,win);
-  };
+  const belongs=e=>advanceBelongsToCycle(e,w,m,_yr);
   const advBuckets=DB.advances[String(wid)]||DB.advances[wid]||{};
   const allAdv=[];Object.values(advBuckets).forEach(rows=>(rows||[]).forEach(e=>{if(e)allAdv.push(e);}));
   let totAdv=0;allAdv.forEach(e=>{if(!_isInstAdv(e)&&belongs(e))totAdv+=advGross(e);});
@@ -4443,19 +4448,9 @@ function renderSalContent(){
   const yr=S._smManual?(S.syr||new Date().getFullYear()):_active.yr;
   if(!DB.advances[w.id])DB.advances[w.id]={};
   if(!DB.advances[w.id][m])DB.advances[w.id][m]=[];
-  // ── عرض تسبيقات الدورة حسب ملكية الدورة الصريحة أولاً ──
-  // realDate تاريخ دفع فعلي فقط؛ لا ينقل التسبيق إلى دورة الدفع عندما يكون
-  // cycleStart أو cycleKey موجودين (مثال: تسوية دورة ماي المدفوعة في 01/07).
-  const _winSal=cycleWindow(w,m,yr);
-  const _monthKeySal=String(yr)+'-'+String(m+1).padStart(2,'0');
-  const _belongsToSalaryCycle=(e)=>{
-    if(!e||_isInstAdv(e))return false;
-    const explicitStart=_toDate(e.cycleStart);
-    if(explicitStart)return explicitStart.getTime()===_winSal.from.getTime();
-    const explicitKey=String(e.cycleKey||'');
-    if(explicitKey)return explicitKey===_monthKeySal;
-    return _inCycle(e.date||e.realDate,_winSal);
-  };
+  // ── v173: نفس مصدر ملكية الدورة المستعمل في الحساب والعرض ──
+  // date هو التاريخ المحاسبي، realDate تاريخ الدفع الفعلي فقط.
+  const _belongsToSalaryCycle=(e)=>advanceBelongsToCycle(e,w,m,yr);
   const entries=[];
   Object.entries(DB.advances[w.id]).forEach(([mk,arr])=>{
     (arr||[]).forEach(e=>{if(_belongsToSalaryCycle(e))entries.push({...e,_bucket:+mk});});
@@ -9316,10 +9311,9 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
       var rows=Array.isArray(source[bucket])?source[bucket]:[];
       rows.forEach(function(a){
         if(!a||a._isInstDeduction)return;
-        var explicit=localDate(a.cycleStart),matches=false;
-        if(explicit) matches=explicit.getTime()===r.from.getTime();
-        else if(str(a.cycleKey)) matches=str(a.cycleKey)===wantKey;
-        else {var dt=localDate(a.date||a.realDate);matches=!!(dt&&dt>=r.from&&dt<r.to);}
+        var matches=(typeof window.advanceBelongsToCycle==='function')
+          ? window.advanceBelongsToCycle(a,w,m,y)
+          : (function(){var dt=localDate(a.date||a.realDate);return !!(dt&&dt>=r.from&&dt<r.to);})();
         if(matches)out.push(a);
       });
     });
@@ -9529,7 +9523,7 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   function rows(map,wid){var src=(map||{})[wid];if(src===undefined)src=(map||{})[S(wid)];if(Array.isArray(src))return src.filter(Boolean);var out=[];Object.keys(O(src)).forEach(function(k){A(src[k]).forEach(function(x){if(x)out.push(x);});});return out;}
   function inRange(v,r){var d=parseDate(v);return !!(d&&d>=r.from&&d<r.to);}
   function advGross2(e){try{if(typeof window.advGross==='function')return window.advGross(e);}catch(err){}return e&&e._isInstDeduction?0:Math.max(0,N(e&&e.amount));}
-  function rowInCycle(e,w,c){var r=range(w,c.m,c.yr);var cs=parseDate(e&&e.cycleStart);if(cs)return cs.getTime()===r.from.getTime();return inRange(e&&e.date,r);}
+  function rowInCycle(e,w,c){return typeof window.advanceBelongsToCycle==='function'?window.advanceBelongsToCycle(e,w,c.m,c.yr):inRange(e&&e.date,range(w,c.m,c.yr));}
   function status(wid,c){
     var d=D(),w=worker(wid);if(!d||!w)return {base:0,abs:0,paid:0,due:0,remaining:0,closed:false,reason:'لا توجد بيانات'};
     var base=N(w.salary),abs=0,paid=0;
@@ -9751,6 +9745,9 @@ body,table,th,td,button,input,select,textarea{font-family:-apple-system,BlinkMac
 #page-advances table{min-width:860px!important;}#page-advances table th:nth-child(2),#page-advances table td:nth-child(2){min-width:145px!important;}
 #page-salaries table{min-width:760px!important;}
 </style>
+<script id="egtph-v173-accounting-cycle-owner">
+window.EGTPH_ADVANCE_OWNER_RULE={version:'173.0',source:'advance.date',actualPaymentField:'realDate',metadataOverride:false};
+</script>
 <script id="egtph-v172-final-sync-engine">
 (function(){
 'use strict';
