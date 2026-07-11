@@ -1022,12 +1022,12 @@ html,body{max-width:100%;overflow-x:hidden}
   <!-- PENDING WAGES (أجور معلّقة) -->
   <div class="page" id="page-pendingwages">
     <div class="toolbar">
-      <span class="text-muted">أجور مدفوعة جزئياً هذا الأسبوع أو سابقاً — تبقى مذكَّرة هنا حتى تُسدَّد كاملاً</span>
+      <span class="text-muted"><i class="fas fa-eye"></i> سجل عرض فقط: الحساب المالي يبقى من إجمالي المعلّق والمسدد والمتبقي، والتسديد الأسبوعي يُسجَّل من الأسبوع نفسه.</span>
     </div>
     <div class="card" style="padding:0">
       <div class="table-container">
         <table>
-          <thead><tr><th>العامل</th><th>الأسبوع الأصلي</th><th>إجمالي المعلَّق</th><th>المسدد</th><th>المتبقي</th><th>آخر تحديث</th><th>إجراءات</th></tr></thead>
+          <thead><tr><th>العامل</th><th>الأسابيع الأصلية</th><th>إجمالي المعلَّق</th><th>المسدد</th><th>المتبقي</th><th>آخر تحديث</th><th>السجل</th></tr></thead>
           <tbody id="pendingWagesTableBody"></tbody>
         </table>
       </div>
@@ -1243,7 +1243,7 @@ html,body{max-width:100%;overflow-x:hidden}
 <div class="toast" id="toast"></div>
 
 <script>
-window.EGTPH_BUILD='v36-debt-history-timeline-audit';
+window.EGTPH_BUILD='v37-pending-wage-readonly-ledger';
 /* ====================================================
    EGTPH - سجل الأجرة الأسبوعي  |  المحرك الرئيسي
    ==================================================== */
@@ -2108,7 +2108,7 @@ function renderTodayPage(){
   const reviewed=workers.filter(w=>st[w.id]).length;
   const cw=DB.currentWeek||{};
   const hasDraft=cw.status==='open' && (((cw.entries||[]).length)||((cw.expenses||[]).length));
-  const pending=(DB.pendingWages||[]).filter(p=>num(p.total)-num(p.paid)>0);
+  const pendingWorkerIds=new Set((DB.pendingWages||[]).filter(p=>pendingWagesRemaining(p)>0).map(p=>p.workerId).filter(Boolean));
   const debts=(DB.debts||[]).filter(d=>num(d.total)-num(d.paid)>0);
   sum.innerHTML=`
     <div class="summary-box primary"><div class="lbl">اليوم</div><div class="val" style="font-size:14px">${formatDateAR(todayKey())}</div></div>
@@ -2118,7 +2118,7 @@ function renderTodayPage(){
   list.innerHTML=workers.length?workers.map(w=>`<div class="today-worker-row"><span><b>#${w.number||''} ${escapeHTML(w.name||'')}</b><br><small class="text-muted">${escapeHTML(w.type||'')} · ${escapeHTML(DB.projects.find(p=>p.id===w.projectId)?.name||'عام')}</small></span><label style="display:flex;align-items:center;gap:6px"><span class="text-muted">تمت</span><input type="checkbox" ${st[w.id]?'checked':''} onchange="setTodayWorkerReviewed('${w.id}',this.checked)"></label></div>`).join(''):'<div class="empty-state" style="padding:20px"><i class="fas fa-users-slash"></i><p>لا يوجد عمال</p></div>';
   const a=[];
   if(hasDraft) a.push(['أسبوع مفتوح',`يوجد أسبوع مفتوح أو مسودة غير محفوظة (${(cw.entries||[]).length} عمال، ${(cw.expenses||[]).length} مصاريف)`,'warning']);
-  if(pending.length) a.push(['أجور معلّقة',`${pending.length} سجل فيه مبلغ متبقي`,'danger']);
+  if(pendingWorkerIds.size) a.push(['أجور معلّقة',`${pendingWorkerIds.size} عامل لديه مبلغ معلّق متبقٍ`,'danger']);
   if(debts.length) a.push(['ديون',`${debts.length} عامل لديه دين متبقٍ`,'warning']);
   const unreviewed=workers.length-reviewed; if(unreviewed) a.push(['مراجعة العمال',`${unreviewed} عامل لم تتم مراجعته اليوم`,'primary']);
   alerts.innerHTML=a.length?a.map(x=>`<div class="today-worker-row"><span><b>${escapeHTML(x[0])}</b><br><small class="text-muted">${escapeHTML(x[1])}</small></span><span class="badge badge-${x[2]}">تنبيه</span></div>`).join(''):'<div class="empty-state" style="padding:20px"><i class="fas fa-check-circle"></i><p>لا توجد تنبيهات مهمة الآن</p></div>';
@@ -3565,7 +3565,8 @@ function distributePendingWagePayment(workerId, amount, note, paidByWeekId=null,
 function updatePendingWagesBadge(){
   const badge=document.getElementById('pendingWagesBadge');
   if(!badge) return;
-  const openCount=(DB.pendingWages||[]).filter(pw=>pendingWagesRemaining(pw)>0).length;
+  const openWorkers=new Set((DB.pendingWages||[]).filter(pw=>pendingWagesRemaining(pw)>0).map(pw=>pw.workerId).filter(Boolean));
+  const openCount=openWorkers.size;
   if(openCount>0){ badge.style.display='inline-flex'; badge.className='badge badge-debt'; badge.textContent=openCount; }
   else{ badge.style.display='none'; }
 }
@@ -3617,97 +3618,159 @@ function removePendingPaymentsFromLinkedWeeks(pw){
     recomputeStoredWeekTotals(week);
   });
 }
-function editPendingWage(pwId){
-  const pw=(DB.pendingWages||[]).find(x=>x.id===pwId);
-  if(!pw) return;
-  const w=DB.workers.find(x=>x.id===pw.workerId);
-  const paid=Math.max(0,num(pw.paid));
-  const ref=getPendingOriginRef(pw);
-  const netLimit=ref?postedEntryNet(ref.entry):Infinity;
-  const hint=ref?`\nحد الأجر الأصلي في الأسبوع: ${money(netLimit)} دج`:'';
-  const v=prompt(`تعديل الأجر المعلّق — ${w?.name||''}\nالحالي: ${money(pw.total)} دج\nالمسدد: ${money(paid)} دج${hint}\n\nاكتب إجمالي الأجر المعلّق الصحيح:`,String(pw.total||0));
-  if(v===null) return;
-  let target=Math.max(0,num(v));
-  if(target<paid){ showToast(`لا يمكن جعل المعلّق ${money(target)} دج لأنه سُدّد منه ${money(paid)} دج.`, 'error'); return; }
-  if(Number.isFinite(netLimit) && target>netLimit){ target=netLimit; showToast('تم تخفيض القيمة إلى حد أجر الصف الأصلي: '+money(netLimit)+' دج','warning'); }
-  pw.dates=Array.isArray(pw.dates)?pw.dates:[];
-  pw.total=target;
-  let add=pw.dates.find(d=>d.type==='add'&&(d.sourceEntryId===pw.sourceEntryId||d.weekId===pw.weekId));
-  if(add){ add.amount=target; add.note='تعديل يدوي لإجمالي الأجر المعلّق'; }
-  else pw.dates.unshift({id:generateId(),date:new Date().toISOString(),amount:target,note:'تعديل يدوي لإجمالي الأجر المعلّق',type:'add',weekId:pw.weekId,weekStart:pw.weekStart,sourceEntryId:pw.sourceEntryId});
-  pw._mod=nextMod();
-  recalculatePendingWagePaid(pw);
-  syncPendingOriginWeekFromRecord(pw);
-  saveDB(); renderPendingWages(); renderArchive(); renderProjects(); renderProjectWeeks(); loadDashboard();
-  showToast('✅ تم تعديل الأجر المعلّق وحفظ الأثر المالي.','success');
+function editPendingWage(){
+  showToast('سجل الأجور المعلّقة للعرض فقط. صحّح الأجر من الأسبوع الأصلي حتى يبقى الأثر المالي مربوطاً بمصدره.','warning');
 }
-function deletePendingWage(pwId){
-  const pw=(DB.pendingWages||[]).find(x=>x.id===pwId);
-  if(!pw) return;
-  const w=DB.workers.find(x=>x.id===pw.workerId);
-  confirmDelete(`الأجر المعلّق لـ ${w?.name||'العامل'} — سيُزال رصيده من صفحة المعلّق وتُصحّح الأسابيع المرتبطة به`,()=>{
-    const snapshot=JSON.parse(JSON.stringify(pw));
-    removePendingPaymentsFromLinkedWeeks(pw);
-    pw.total=0;
-    recalculatePendingWagePaid(pw);
-    syncPendingOriginWeekFromRecord(pw);
-    moveToTrash('pendingWage',snapshot,`أجر معلّق ${w?.name||''}`);
-    _markDeleted(pw.id);
-    DB.pendingWages=(DB.pendingWages||[]).filter(x=>x.id!==pw.id);
-    saveDB(); renderPendingWages(); renderArchive(); renderProjects(); renderProjectWeeks(); loadDashboard();
-    showToast('✅ تم حذف الأجر المعلّق وتصحيح الأسابيع المرتبطة.','success');
+function deletePendingWage(){
+  showToast('لا يمكن حذف الأجر المعلّق من سجل العرض. صحّح الأسبوع الأصلي حتى لا ينكسر التدقيق المالي.','warning');
+}
+function pendingWeekLabel(weekId,weekStart,weekEnd){
+  const week=(DB.weeks||[]).find(w=>w.id===weekId)||null;
+  const start=weekStart||week?.startDate||'';
+  const end=weekEnd||week?.endDate||'';
+  if(start&&end) return `${formatDateAR(start)} → ${formatDateAR(end)}`;
+  if(start) return formatDateAR(start);
+  return 'غير مسجل';
+}
+function getPendingWorkerGroups(){
+  const groups=new Map();
+  (DB.pendingWages||[]).forEach(pw=>{
+    if(!pw||!pw.workerId) return;
+    if(num(pw.total)<=0&&num(pw.paid)<=0) return;
+    if(!groups.has(pw.workerId)) groups.set(pw.workerId,{workerId:pw.workerId,records:[],total:0,paid:0,remaining:0,originKeys:new Set(),lastStamp:0,lastRaw:''});
+    const g=groups.get(pw.workerId);
+    g.records.push(pw);
+    g.total+=Math.max(0,num(pw.total));
+    g.paid+=Math.max(0,num(pw.paid));
+    g.remaining+=pendingWagesRemaining(pw);
+    g.originKeys.add(pw.weekId||pw.weekStart||pw.id);
+    (pw.dates||[]).forEach(d=>{
+      const ts=Date.parse(d?.date||'')||0;
+      if(ts>=g.lastStamp){ g.lastStamp=ts; g.lastRaw=d?.date||g.lastRaw; }
+    });
+    if(!g.lastStamp){
+      const fallback=Date.parse(pw.weekStart||'')||(+pw._mod||0);
+      if(fallback>=g.lastStamp){ g.lastStamp=fallback; g.lastRaw=pw.weekStart||''; }
+    }
   });
+  return [...groups.values()].sort((a,b)=>{
+    const wa=(DB.workers||[]).find(w=>w.id===a.workerId), wb=(DB.workers||[]).find(w=>w.id===b.workerId);
+    return num(wa?.number)-num(wb?.number)||String(wa?.name||'').localeCompare(String(wb?.name||''),'ar');
+  });
+}
+function buildPendingHistoryOperations(records){
+  const all=[];
+  (records||[]).forEach((pw,recordIndex)=>{
+    const originLabel=pendingWeekLabel(pw.weekId,pw.weekStart,pw.weekEnd);
+    let movements=(Array.isArray(pw.dates)?pw.dates:[]).map((d,sourceIndex)=>({entry:d&&typeof d==='object'?d:{},sourceIndex}));
+    if(!movements.some(x=>x.entry.type==='add')&&num(pw.total)>0){
+      movements.unshift({entry:{id:'virtual_'+pw.id,type:'add',amount:num(pw.total),date:pw.weekStart||'',note:'أجر معلّق محفوظ كمجموع من بيانات قديمة',weekId:pw.weekId,weekStart:pw.weekStart,sourceEntryId:pw.sourceEntryId,_virtual:true},sourceIndex:-1});
+    }
+    movements.forEach((row,movementIndex)=>{
+      const d=row.entry;
+      const stamp=formatDebtHistoryStamp(d.date);
+      const paidWeek=(DB.weeks||[]).find(w=>w.id===d.paidByWeekId)||null;
+      const isPay=d.type==='pay';
+      const paymentWeekLabel=isPay
+        ?((d.paidByWeekId||d.paidByWeekStart)?pendingWeekLabel(d.paidByWeekId,d.paidByWeekStart,paidWeek?.endDate||''):'تسديد يدوي قديم غير مربوط بأسبوع')
+        :'—';
+      const parsed=Date.parse(d.date||'');
+      all.push({
+        record:pw,recordIndex,movementIndex,entry:d,
+        amount:Math.max(0,num(d.amount)),stamp,isPay,originLabel,paymentWeekLabel,
+        sort:Number.isFinite(parsed)?parsed:Number.MAX_SAFE_INTEGER
+      });
+    });
+  });
+  return all.sort((a,b)=>a.sort-b.sort||a.recordIndex-b.recordIndex||a.movementIndex-b.movementIndex);
+}
+function openPendingWageHistory(workerId){
+  const group=getPendingWorkerGroups().find(g=>g.workerId===workerId);
+  if(!group){ showToast('سجل الأجر المعلّق غير موجود','error'); return; }
+  const w=(DB.workers||[]).find(x=>x.id===workerId);
+  const operations=buildPendingHistoryOperations(group.records);
+  const historyHTML=operations.length?operations.map((op,index)=>{
+    const d=op.entry;
+    let note=String(d.note||'').trim();
+    if(!note) note=op.isPay?'تسديد أجر معلّق':'تسجيل أجر معلّق';
+    return `<div class="debt-history-item ${op.isPay?'pay':'add'}">
+      <div class="debt-history-head">
+        <div class="debt-history-op"><span class="debt-history-seq">#${index+1}</span><span class="debt-history-type">${op.isPay?'تسديد معلّق':'أجر معلّق'}</span></div>
+        <span class="debt-history-amount">${op.isPay?'-':'+'}${money(op.amount)} دج</span>
+      </div>
+      <div class="debt-history-meta">
+        <span><i class="fas fa-calendar-day"></i> ${op.stamp.date}</span>
+        <span><i class="fas fa-clock"></i> ${op.stamp.time}</span>
+      </div>
+      <div class="debt-history-note">
+        <div><b>الأسبوع الأصلي:</b> ${escapeHTML(op.originLabel)}</div>
+        ${op.isPay?`<div><b>أسبوع التسديد:</b> ${escapeHTML(op.paymentWeekLabel)}</div>`:''}
+        <div style="margin-top:5px;color:var(--text3)">${escapeHTML(note)}</div>
+      </div>
+    </div>`;
+  }).join(''):`<div class="empty-state" style="padding:24px 12px"><i class="fas fa-clock-rotate-left"></i><h4>لا يوجد تفصيل زمني</h4><p>لا توجد حركات مسجلة لهذا العامل.</p></div>`;
+  const carryMap=new Map();
+  group.records.filter(pw=>pendingWagesRemaining(pw)>0).forEach(pw=>{
+    const key=pw.weekId||pw.weekStart||pw.id;
+    if(!carryMap.has(key)) carryMap.set(key,{label:pendingWeekLabel(pw.weekId,pw.weekStart,pw.weekEnd),start:pw.weekStart||'',remaining:0});
+    carryMap.get(key).remaining+=pendingWagesRemaining(pw);
+  });
+  const carryRows=[...carryMap.values()].sort((a,b)=>String(a.start).localeCompare(String(b.start))).map(row=>
+    `<div class="today-worker-row"><span><b>${escapeHTML(row.label)}</b><br><small class="text-muted">يبقى مرحّلاً ويظهر في الأسبوع اللاحق ضمن «معلّق سابق قابل للتسديد»</small></span><span class="badge badge-warning">${money(row.remaining)} دج</span></div>`
+  ).join('');
+  const html=`
+    <div class="debt-history-summary">
+      <div class="debt-history-summary-box"><span class="lbl">إجمالي المعلّق</span><span class="val">${money(group.total)} دج</span></div>
+      <div class="debt-history-summary-box"><span class="lbl">المسدد</span><span class="val">${money(group.paid)} دج</span></div>
+      <div class="debt-history-summary-box"><span class="lbl">المتبقي</span><span class="val">${money(group.remaining)} دج</span></div>
+    </div>
+    <div class="text-muted">الترتيب زمني من الأقدم إلى الأحدث. كل حركة تسديد أسبوعية تعرض أسبوعها الأصلي وأسبوع التسديد الحقيقي.</div>
+    <div class="debt-history-list">${historyHTML}</div>
+    ${carryRows?`<div class="section-title warning" style="margin-top:14px"><i class="fas fa-forward"></i> المبالغ المرحلة للأسبوع اللاحق</div><div>${carryRows}</div>`:''}
+    <div class="debt-history-readonly-note"><i class="fas fa-eye"></i> هذا السجل للعرض فقط. لا يعيد حساب الأجر ولا يوزع التسبيقات ولا يغيّر الأسابيع. الرصيد يبقى معتمداً على إجمالي المعلّق وحركات التسديد الحالية.</div>`;
+  openModal(`سجل الأجر المعلّق: ${escapeHTML(w?.name||'—')}`,html,null);
+  const saveBtn=document.getElementById('modalSaveBtn');
+  if(saveBtn) saveBtn.remove();
+  const closeBtn=document.querySelector('#modalContent .modal-actions .btn-outline');
+  if(closeBtn) closeBtn.innerHTML='<i class="fas fa-times"></i> إغلاق';
+  const icon=document.querySelector('#modalContent h3 i');
+  if(icon) icon.className='fas fa-clock-rotate-left';
 }
 function renderPendingWages(){
   const tb=document.getElementById('pendingWagesTableBody');
-  const open=(DB.pendingWages||[]).filter(pw=>pendingWagesRemaining(pw)>0 || pw.total>0);
+  const groups=getPendingWorkerGroups();
   updatePendingWagesBadge();
-  if(!open.length){ tb.innerHTML='<tr><td colspan="7"><div class="empty-state"><i class="fas fa-circle-check"></i><h4>لا توجد أجور معلّقة</h4><p>كل العمال مدفوعون بالكامل 🎉</p></div></td></tr>'; return; }
-  tb.innerHTML=open.map(pw=>{
-    const w=DB.workers.find(x=>x.id===pw.workerId);
-    const rem=pendingWagesRemaining(pw);
-    const last=pw.dates.slice(-1)[0];
-    const originWeek=DB.weeks.find(x=>x.id===pw.weekId);
-    const originLabel=pw.weekStart?formatDateAR(pw.weekStart):(originWeek?formatDateAR(originWeek.startDate):'—');
-    const history=(pw.dates||[]).slice().reverse().map(d=>
-      `<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px dashed var(--border);font-size:12px">
-        <span>${d.type==='pay'?'💵 تسديد':'➕'} ${d.note||(d.type==='pay'?'تسديد':'إضافة')}</span>
-        <span style="white-space:nowrap;font-weight:700;color:${d.type==='pay'?'var(--success)':'var(--danger)'}">${d.type==='pay'?'-':'+'}${money(d.amount)} دج</span>
-      </div>`).join('');
-    return `<tr class="${rem>0?'debt-row':''}">
-      <td><b>${w?.name||'—'}</b></td>
-      <td>${pw.weekId?`<button class="btn btn-outline btn-xs" onclick="editWeek('${pw.weekId}')"><i class="fas fa-arrow-up-right-from-square"></i> ${originLabel}</button>`:originLabel}</td>
-      <td>${money(pw.total)} دج</td>
-      <td>${money(pw.paid)} دج</td>
-      <td><span class="badge ${rem>0?'badge-debt':'badge-paid'}">${money(rem)} دج</span></td>
-      <td>${last?formatDateAR(last.date):'—'}</td>
-      <td><div style="display:flex;gap:5px;flex-wrap:wrap;min-width:150px">
-        ${rem>0?`<button class="btn btn-success btn-xs" onclick="settlePendingWage('${pw.id}')"><i class="fas fa-hand-holding-usd"></i> تسديد</button>`:''}
-        <button class="btn btn-outline btn-xs" onclick="editPendingWage('${pw.id}')"><i class="fas fa-edit"></i> تعديل</button>
-        <button class="btn btn-danger btn-xs" onclick="deletePendingWage('${pw.id}')"><i class="fas fa-trash"></i> حذف</button>
-      </div></td>
-    </tr>
-    <tr><td colspan="7" style="padding:0;border:0">
-      <details style="margin:0 8px 8px"><summary style="cursor:pointer;color:var(--text3);font-size:12px;padding:4px 0">📋 لماذا معلّق؟ — عرض التفاصيل (${pw.dates.length})</summary>
-        <div style="padding:6px 4px">${history}</div>
-      </details>
-    </td></tr>`;
+  if(!groups.length){ tb.innerHTML='<tr><td colspan="7"><div class="empty-state"><i class="fas fa-circle-check"></i><h4>لا توجد أجور معلّقة</h4><p>كل العمال مدفوعون بالكامل 🎉</p></div></td></tr>'; return; }
+  tb.innerHTML=groups.map(g=>{
+    const w=(DB.workers||[]).find(x=>x.id===g.workerId);
+    const originRecords=g.records.slice().sort((a,b)=>String(a.weekStart||'').localeCompare(String(b.weekStart||'')));
+    const uniqueOrigins=[]; const seen=new Set();
+    originRecords.forEach(pw=>{
+      const key=pw.weekId||pw.weekStart||pw.id;
+      if(seen.has(key)) return;
+      seen.add(key); uniqueOrigins.push(pw);
+    });
+    let originHTML='—';
+    if(uniqueOrigins.length===1){
+      const pw=uniqueOrigins[0];
+      originHTML=`<span class="badge badge-info">${escapeHTML(pendingWeekLabel(pw.weekId,pw.weekStart,pw.weekEnd))}</span>`;
+    }else if(uniqueOrigins.length>1){
+      originHTML=`<span class="badge badge-info">${uniqueOrigins.length} أسابيع أصلية</span>`;
+    }
+    const lastLabel=g.lastRaw?formatDebtHistoryStamp(g.lastRaw).date:'—';
+    return `<tr class="${g.remaining>0?'debt-row':''}">
+      <td><b>${escapeHTML(w?.name||'—')}</b></td>
+      <td>${originHTML}</td>
+      <td>${money(g.total)} دج</td>
+      <td>${money(g.paid)} دج</td>
+      <td><span class="badge ${g.remaining>0?'badge-debt':'badge-paid'}">${money(g.remaining)} دج</span></td>
+      <td>${lastLabel}</td>
+      <td><button class="btn btn-outline btn-xs" onclick="openPendingWageHistory('${g.workerId}')"><i class="fas fa-clock-rotate-left"></i> السجل</button></td>
+    </tr>`;
   }).join('');
 }
-function settlePendingWage(pwId){
-  const pw=(DB.pendingWages||[]).find(x=>x.id===pwId);
-  if(!pw) return;
-  const w=DB.workers.find(x=>x.id===pw.workerId);
-  const rem=pendingWagesRemaining(pw);
-  const amountStr=prompt(`تسديد أجر معلّق — ${w?.name||''}\nالمتبقي: ${money(rem)} دج\n\nادخل المبلغ المدفوع الآن:`, String(rem));
-  if(amountStr===null) return;
-  const amount=Math.min(Math.max(0,num(amountStr)), rem);
-  if(amount<=0) return;
-  pw.dates=Array.isArray(pw.dates)?pw.dates:[];
-  pw.dates.push({id:generateId(),date:new Date().toISOString(),amount,note:'تسديد يدوي من صفحة الأجور المعلّقة',type:'pay'});
-  recalculatePendingWagePaid(pw);
-  saveDB(); renderPendingWages(); renderProjects(); renderProjectWeeks(); loadDashboard();
-  showToast(`✅ تم تسديد ${money(amount)} دج لـ${w?.name||''}`,'success');
+function settlePendingWage(){
+  showToast('سجّل تسديد المعلّق من الأسبوع الذي دُفع فيه، عبر خانة «معلّق سابق قابل للتسديد»، حتى يُحفظ أسبوع التسديد الحقيقي.','warning');
 }
 
 /* ====================================================
