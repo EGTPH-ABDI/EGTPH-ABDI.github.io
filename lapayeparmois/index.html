@@ -1697,7 +1697,19 @@ body.theme-blue .sec,body.theme-purple .sec,body.theme-red .sec,body.theme-sand 
 
 
 <div id="cloud_status" style="font-size:11px;color:var(--green1);margin-top:8px;padding:10px;border:1px solid rgba(13,148,136,.35);border-radius:10px">⏳ انتظار المصدر المرجعي Firebase…</div>
-<div style="font-size:10px;color:var(--green1);margin-top:6px">✅ المزامنة الكاملة: الإضافة، التعديل، والحذف كلها تتزامن بين الأجهزة. عند تعديل نفس القيد في جهازين، النسخة الأحدث تغلب.</div>
+<div style="font-size:10px;color:var(--green1);margin-top:6px">✅ كل قيد يُزامَن حسب معرّفه الخاص. لا يوجد ترجيح تلقائي حسب الوقت. إذا اختلف نفس المعرّف في جهازين يتوقف الحفظ ويُسجَّل تعارض للمراجعة، ولا تُستبدل أي نسخة تلقائياً.</div>
+<div id="v170SyncHealth" class="v170-sync-health">
+  <div class="v170-sync-head"><b id="v170SyncHeadline">⏳ فحص المزامنة…</b><span id="v170SyncBadge">انتظار</span></div>
+  <div class="v170-sync-grid">
+    <div><small>المصدر المرجعي</small><b>/egtph/EGTPH-pay-clean-v144-live</b></div>
+    <div><small>التغييرات المعلقة</small><b id="v170Pending">—</b></div>
+    <div><small>التعارضات المفتوحة</small><b id="v170Conflicts">—</b></div>
+    <div><small>آخر رفع متحقق</small><b id="v170LastVerified">—</b></div>
+    <div><small>آخر جلب كامل</small><b id="v170LastPull">—</b></div>
+    <div><small>آخر خطأ</small><b id="v170LastError">لا يوجد</b></div>
+  </div>
+  <div class="v170-sync-actions"><button type="button" onclick="EGTPH_V170.refreshHealth(true)">🩺 فحص المزامنة</button><button type="button" onclick="EGTPH_V170.showConflicts()">⚠️ عرض التعارضات</button></div>
+</div>
 </div>
 </div>
 <div class="sec">
@@ -2218,7 +2230,7 @@ function _applyDBData(d){
   const workerRoot=root=>{const out={};Object.keys((Array.isArray(root)||isObj(root))?root:{}).forEach(wid=>out[String(wid)]=recordList(root[wid]));return out;};
   const defaults={workers:[],advances:{},hours:{},absences:{},bonuses:{},debts:{},trash:{workers:[],advances:[],hours:[],absences:[],bonuses:[],debts:[]},deletedIds:[],deletedRecords:{},auditLog:[],ledger:[],txJournal:[],repairLog:[],cycleLocks:{},settings:{mult:1.5,holidays:[],lastBackup:null,backupInterval:7,paydayAlert:true,bonTax:0,userName:'Youcef Abdi'}};
   DB=Object.assign({},defaults,src);
-  DB.settings=Object.assign({},defaults.settings,isObj(src.settings)?src.settings:{},{cloudUrl:'https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',cloudKey:'EGTPH-pay-clean-v144-live',cloudAuto:true,v91CloudAuto:false,v169FirebaseOnly:true,v169AuthoritativePath:'/egtph/EGTPH-pay-clean-v144-live'});
+  DB.settings=Object.assign({},defaults.settings,isObj(src.settings)?src.settings:{},{cloudUrl:'https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',cloudKey:'EGTPH-pay-clean-v144-live',cloudAuto:true,v91CloudAuto:false,v170FirebaseOnly:true,v170AuthoritativePath:'/egtph/EGTPH-pay-clean-v144-live'});
   ['v148AdvanceJournal','v148AdvanceJournalUpdatedAt'].forEach(k=>delete DB.settings[k]);
   DB.deletedIds=Array.from(deleted);
   DB.deletedRecords=deletedRecords;
@@ -2239,7 +2251,7 @@ function _applyDBData(d){
     DB.absences[wid].forEach(a=>{if(!Object.prototype.hasOwnProperty.call(a,'deductOpt'))a.deductOpt='now';});
     DB.debts[wid].forEach(x=>{if(x.installment!==undefined&&x.inst===undefined)x.inst=x.installment;});
   });
-  window.__EGTPH_V169_LOAD_COUNTS__={workers:DB.workers.length,advances:Object.values(DB.advances).reduce((s,n)=>s+Object.values(n||{}).reduce((q,a)=>q+(a||[]).length,0),0),hours:Object.values(DB.hours).reduce((s,a)=>s+(a||[]).length,0),absences:Object.values(DB.absences).reduce((s,a)=>s+(a||[]).length,0),bonuses:Object.values(DB.bonuses).reduce((s,n)=>s+Object.values(n||{}).reduce((q,a)=>q+(a||[]).length,0),0),debts:Object.values(DB.debts).reduce((s,a)=>s+(a||[]).length,0)};
+  window.__EGTPH_V170_LOAD_COUNTS__={workers:DB.workers.length,advances:Object.values(DB.advances).reduce((s,n)=>s+Object.values(n||{}).reduce((q,a)=>q+(a||[]).length,0),0),hours:Object.values(DB.hours).reduce((s,a)=>s+(a||[]).length,0),absences:Object.values(DB.absences).reduce((s,a)=>s+(a||[]).length,0),bonuses:Object.values(DB.bonuses).reduce((s,n)=>s+Object.values(n||{}).reduce((q,a)=>q+(a||[]).length,0),0),debts:Object.values(DB.debts).reduce((s,a)=>s+(a||[]).length,0)};
 }
 
 // ══════════════════════════════════════════════════════
@@ -2247,7 +2259,7 @@ function _applyDBData(d){
 // لا IndexedDB مالي، لا localStorage مالي، لا JSON مضمّن، ولا fallback قديم.
 // ══════════════════════════════════════════════════════
 const MEM_ONLY=true;
-window.__EGTPH_V169_LOADING__=false;
+window.__EGTPH_V170_LOADING__=false;
 window.__EGTPH_DB_READY__=false;
 
 function _v169Clone(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
@@ -2256,12 +2268,12 @@ function _v169SanitizeCloud(x){
   if(!x||typeof x!=='object')throw new Error('نسخة Firebase المرجعية غير مكتملة');
   const y=JSON.parse(JSON.stringify(x));
   const count=(v)=>{let n=0;(function walk(z){if(!z)return;if(Array.isArray(z)){Object.keys(z).forEach(k=>walk(z[k]));return;}if(typeof z==='object'){if(z.id!=null||z.amount!=null||z.date||z.type||z.total!=null)n++;else Object.keys(z).forEach(k=>walk(z[k]));}})(v);return n;};
-  window.__EGTPH_V169_RAW_COUNTS__={workers:count(y.workers),advances:count(y.advances),hours:count(y.hours),absences:count(y.absences),bonuses:count(y.bonuses),debts:count(y.debts)};
+  window.__EGTPH_V170_RAW_COUNTS__={workers:count(y.workers),advances:count(y.advances),hours:count(y.hours),absences:count(y.absences),bonuses:count(y.bonuses),debts:count(y.debts)};
   return y;
 }
 async function _v169PullAuthoritativeCloud(){
-  if(window.__EGTPH_V169_LOADING__)return false;
-  window.__EGTPH_V169_LOADING__=true;
+  if(window.__EGTPH_V170_LOADING__)return false;
+  window.__EGTPH_V170_LOADING__=true;
   const URL='https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',KEY='EGTPH-pay-clean-v144-live',SOURCE='firebase:/egtph/'+KEY;
   try{
     if(typeof window.egtphEnsureAuthenticated==='function')await window.egtphEnsureAuthenticated();
@@ -2271,23 +2283,23 @@ async function _v169PullAuthoritativeCloud(){
     if(!res.ok)throw new Error('Firebase HTTP '+res.status);
     const raw=await res.json();
     _applyDBData(_v169SanitizeCloud(raw));
-    DB.settings.v169LastFullPull=new Date().toISOString();DB.settings.v169AuthoritativeSource=SOURCE;
+    DB.settings.v170LastFullPull=new Date().toISOString();DB.settings.v170AuthoritativeSource=SOURCE;
     _cloudDirty=false;window.__EGTPH_DB_READY__=true;window.__EGTPH_DB_READY_SOURCE__=SOURCE;
-    try{window.dispatchEvent(new CustomEvent('egtph-db-ready',{detail:{source:SOURCE,counts:window.__EGTPH_V169_LOAD_COUNTS__}}));}catch(e){}
+    try{window.dispatchEvent(new CustomEvent('egtph-db-ready',{detail:{source:SOURCE,counts:window.__EGTPH_V170_LOAD_COUNTS__}}));}catch(e){}
     ['renderDash','renderWorkers','renderSettlement','renderAdvances','renderHours','renderAbsences','renderBonuses','renderDebts','renderSummary','updateBadges','cloudFillInputs'].forEach(n=>{try{if(typeof window[n]==='function')window[n]();}catch(e){console.warn('render '+n,e);}});
     try{_cloudStatus('🟢 المصدر المالي الوحيد: Firebase /egtph/'+KEY,'var(--green1)');}catch(e){}
-    console.info('[v169] authoritative Firebase snapshot loaded',window.__EGTPH_V169_LOAD_COUNTS__);
+    console.info('[v170] authoritative Firebase snapshot loaded',window.__EGTPH_V170_LOAD_COUNTS__);
     return true;
   }catch(err){
-    console.error('[v169] Firebase load failed',err);window.__EGTPH_DB_READY__=false;window.__EGTPH_DB_READY_SOURCE__='firebase-error';
+    console.error('[v170] Firebase load failed',err);window.__EGTPH_DB_READY__=false;window.__EGTPH_DB_READY_SOURCE__='firebase-error';
     try{_cloudStatus('🔴 تعذر جلب Firebase؛ لم تُستعمل أي نسخة مالية محلية','var(--red)');}catch(e){}
     try{toast('❌ تعذر جلب Firebase. لم تُستعمل بيانات محلية أو مضمّنة.',true);}catch(e){}
     return false;
-  }finally{window.__EGTPH_V169_LOADING__=false;}
+  }finally{window.__EGTPH_V170_LOADING__=false;}
 }
 function loadDB(){
   // لا مصدر احتياطي مالي: يبدأ فارغاً ثم يجلب المسار المرجعي وحده.
-  _applyDBData({workers:[],advances:{},hours:{},absences:{},bonuses:{},debts:{},deletedIds:[],deletedRecords:{},trash:{workers:[],advances:[],hours:[],absences:[],bonuses:[],debts:[]},settings:{cloudUrl:'https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',cloudKey:'EGTPH-pay-clean-v144-live',cloudAuto:true,v169FirebaseOnly:true}});
+  _applyDBData({workers:[],advances:{},hours:{},absences:{},bonuses:{},debts:{},deletedIds:[],deletedRecords:{},trash:{workers:[],advances:[],hours:[],absences:[],bonuses:[],debts:[]},settings:{cloudUrl:'https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',cloudKey:'EGTPH-pay-clean-v144-live',cloudAuto:true,v170FirebaseOnly:true}});
   window.__EGTPH_DB_READY__=false;window.__EGTPH_DB_READY_SOURCE__='firebase-pending';
   setTimeout(_v169PullAuthoritativeCloud,0);
 }
@@ -2318,13 +2330,13 @@ function updateOpenAbsences(){
   if(changed)saveDB();
 }
 
-// ── طابع زمني بدقّة الميلي-ثانية مع تصاعد صارم: الأحدث يغلب دائماً حتى لو نفس الميلي ──
+// ── طابع محلي تصاعدي للتدقيق فقط؛ لا يُستعمل لحسم تعارضات المزامنة ──
 let _lastMod=0;
 function nextMod(){ let t=Date.now(); try{t+=(performance.now()%1)/1000;}catch(e){} if(t<=_lastMod)t=_lastMod+0.001; _lastMod=t; return t; }
 function saveDB(){
   try{markUnsaved();}catch(e){}
-  try{if(window.EGTPH_V169&&typeof window.EGTPH_V169.save==='function')return window.EGTPH_V169.save();}catch(e){console.error('v169 saveDB',e);}
-  return Promise.resolve({ok:false,error:'محرك الحفظ الموثق غير جاهز'});
+  try{if(window.EGTPH_V170&&typeof window.EGTPH_V170.save==='function')return window.EGTPH_V170.save();}catch(e){console.error('v170 saveDB',e);}
+  return Promise.resolve({ok:false,error:'محرك الحفظ والمزامنة v170 غير جاهز'});
 }
 
 function genId(){return Date.now()+'_'+Math.random().toString(36).slice(2,9);}
@@ -8063,8 +8075,7 @@ function shareData(){
 }
 
 // ══════════════════════════════════════════════════════
-//  mergeImportData — دمج ذكي: يضيف القيود الجديدة فقط
-//  (حسب id) بدون مسح الموجود — للعمل من جهازين
+//  نظام المحذوفات والاستيراد الآمن حسب المعرّف
 // ══════════════════════════════════════════════════════
 // ── نظام المحذوفات (tombstones): يمنع رجوع المحذوف من السحابة ──
 function _markDeleted(id){
@@ -8107,366 +8118,70 @@ function _applyDeletions(delIds){
   {const before=DB.workers.length;DB.workers=DB.workers.filter(x=>!dset.has(String(x.id)));removed+=before-DB.workers.length;}
   return removed;
 }
-function mergeImportData(d){
-  // ── طابع زمني بدقّة الميلي-ثانية مع تصاعد صارم (الأحدث يغلب حتى لو نفس المللي) ──
-  // ── حارس الطابع: أي _mod مستقبلي (>الآن+دقيقتين، ساعة جهاز غلط) يُعامَل كصفر فلا يغلب ──
-  const _NOWMAX=Date.now()+120000;
-  const _modOf=x=>{let m=+((x&&x._mod))||0;return (m>_NOWMAX)?0:m;};
-  let added={workers:0,advances:0,hours:0,absences:0,bonuses:0,debts:0};
-  // ── دمج قوائم المحذوفات أولاً (الاتحاد) ثم تطبيقها محلياً ──
-  if(!DB.deletedIds)DB.deletedIds=[];
-  if(Array.isArray(d.deletedIds)){
-    d.deletedIds.forEach(id=>{if(DB.deletedIds.indexOf(String(id))<0)DB.deletedIds.push(String(id));});
-  }
-  const _del=new Set((DB.deletedIds||[]).map(String));
-  _applyDeletions(DB.deletedIds);
-  // ── عمال: جديد يُضاف، والموجود يُحدَّث إذا النسخة البعيدة أحدث ──
-  const wById={};DB.workers.forEach(w=>{wById[String(w.id)]=w;});
-  (d.workers||[]).forEach(w=>{
-    if(_del.has(String(w.id)))return;
-    const loc=wById[String(w.id)];
-    if(!loc){
-      ['exitDate','startDate','phone','idnum'].forEach(f=>{if(!w.hasOwnProperty(f))w[f]='';});
-      w.payday=+w.day||1;delete w.contract;
-      DB.workers.push(w);wById[String(w.id)]=w;added.workers++;
-    }
-    else if(_modOf(w)>_modOf(loc)){
-      ['exitDate','startDate','phone','idnum'].forEach(f=>{if(!w.hasOwnProperty(f))w[f]='';});
-      w.payday=+w.day||1;delete w.contract;
-      Object.assign(loc,w); // الأحدث يغلب
-    }
-  });
-  // ── تسبيقات/مكافآت: wid → شهر → قائمة (دمج حسب id + الأحدث يغلب) ──
-  ['advances','bonuses'].forEach(k=>{
-    Object.entries(d[k]||{}).forEach(([wid,months])=>{
-      if(!DB[k][wid])DB[k][wid]={};
-      Object.entries(months||{}).forEach(([m,arr])=>{
-        if(!DB[k][wid][m])DB[k][wid][m]=[];
-        const byId={};DB[k][wid][m].forEach(x=>{if(x&&x.id)byId[x.id]=x;});
-        (arr||[]).forEach(x=>{
-          if(!x||!x.id||_del.has(String(x.id)))return;
-          const loc=byId[x.id];
-          if(!loc){DB[k][wid][m].push(x);byId[x.id]=x;added[k]++;}
-          else if(_modOf(x)>_modOf(loc)){Object.assign(loc,x);} // الأحدث يغلب
-        });
-      });
-    });
-  });
-  // ── ساعات/غيابات: wid → قائمة (دمج حسب id + الأحدث يغلب) ──
-  ['hours','absences'].forEach(k=>{
-    Object.entries(d[k]||{}).forEach(([wid,arr])=>{
-      if(!DB[k][wid])DB[k][wid]=[];
-      const byId={};DB[k][wid].forEach(x=>{if(x&&x.id)byId[x.id]=x;});
-      (arr||[]).forEach(x=>{
-        if(!x||!x.id||_del.has(String(x.id)))return;
-        const loc=byId[x.id];
-        if(!loc){
-          if(k==='absences'&&!x.hasOwnProperty('deductOpt'))x.deductOpt='now';
-          DB[k][wid].push(x);byId[x.id]=x;added[k]++;
-        }
-        else if(_modOf(x)>_modOf(loc)){Object.assign(loc,x);} // الأحدث يغلب
-      });
-    });
-  });
-  // ── ديون: دمج حسب id + لنفس الدين نأخذ الأحدث في الأقساط (instPaid الأكبر) ──
-  Object.entries(d.debts||{}).forEach(([wid,arr])=>{
-    if(!DB.debts[wid])DB.debts[wid]=[];
-    (arr||[]).forEach(x=>{
-      if(!x||!x.id||_del.has(String(x.id)))return;
-      const loc=DB.debts[wid].find(e=>e.id===x.id);
-      if(!loc){DB.debts[wid].push(x);added.debts++;}
-      else if(_modOf(x)>_modOf(loc)){Object.assign(loc,x);} // الأحدث يغلب
-      else if(x.type==='debt'&&(+x.instPaid||0)>(+loc.instPaid||0)){
-        loc.instPaid=x.instPaid;loc.nextDue=x.nextDue;
-        if(x.instDisabled!==undefined)loc.instDisabled=x.instDisabled;
-      }
-    });
-  });
-  // ── حارس مزدوج: نطبّق الحذف مرّة أخرى بعد الدمج، لضمان أن لا يتسرّب أي قيد محذوف ──
-  _applyDeletions(DB.deletedIds);
-  return added;
-}
-
 // ══════════════════════════════════════════════════════
-//  المزامنة السحابية — Firebase Realtime Database (REST)
-//  تعمل من ملف محلي بدون SDK ولا OAuth — fetch فقط
-//  الاستراتيجية: سحب JSON البعيد → دمج ذكي (إضافات فقط
-//  + تحديث الأقساط) → رفع النسخة المدموجة كاملة
+//  Firebase foundation only — the old "latest wins" merge engine was removed.
+//  v170 owns all synchronization and conflict handling.
 // ══════════════════════════════════════════════════════
-// ── جلب مرن: مهلة + لا تخزين مؤقت + إعادة محاولة عند فشل الشبكة ──
-// يحلّ «تعذّر الاتصال / Load failed» على الأيفون (انقطاع لحظي في الشبكة)
-const FB_TIMEOUT=15000;
-async function fbFetch(url,opts,tries){
-  opts=opts||{};tries=(tries==null)?3:tries;let lastErr=null;
-  for(let attempt=1;attempt<=tries;attempt++){
-    const ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
-    const timer=ctrl?setTimeout(function(){try{ctrl.abort();}catch(e){}},FB_TIMEOUT):null;
-    try{
-      const o=Object.assign({cache:'no-store'},opts);if(ctrl)o.signal=ctrl.signal;
-      const r=await fetch(url,o);if(timer)clearTimeout(timer);return r;
-    }catch(e){
-      if(timer)clearTimeout(timer);lastErr=e;
-      const m=String((e&&e.name||'')+' '+(e&&e.message||e));
-      if(!/Load failed|NetworkError|abort|timed? ?out|Failed to fetch|connection|network/i.test(m)||attempt===tries)throw e;
-      await new Promise(function(res){setTimeout(res,600*attempt);});
-    }
-  }
-  throw lastErr;
-}
-// ── حماية حقيقية: تسجيل دخول بكلمة سر (مرة واحدة لكل جهاز)، الرمز يتجدد وحده ──
-// لا يبدأ أي طلب Firebase قبل وجود Firebase ID token صالح.
 const EGTPH_AUTH_APP_ID='lapayeparmois';
 let __EGTPH_AUTH_READY__=null;
 window.egtphEnsureAuthenticated=function(){
   const helper=window.EGTPHAuth;
   if(!helper||typeof helper.init!=='function'||typeof helper.getToken!=='function'){
-    return Promise.reject(new Error('مساعد المصادقة EGTPHAuth غير محمّل. افتح ملف HTML الكامل، وليس نسخة تعتمد على ملف JS خارجي مفقود.'));
+    return Promise.reject(new Error('مساعد المصادقة EGTPHAuth غير محمّل.'));
   }
   if(!__EGTPH_AUTH_READY__){
     __EGTPH_AUTH_READY__=Promise.resolve(helper.init({
       appId:EGTPH_AUTH_APP_ID,
       apiKey:'AIzaSyD6Up-mmyDwqhr0UMBmV3aI5Xv-TjvoMDA',
       email:'abdiyoucefislam@gmail.com',
-      onReady:function(){
-        try{
-          const status=document.getElementById('cloud_status');
-          if(status){status.textContent='🟢 تم تسجيل الدخول — جاهز للمزامنة';status.style.color='var(--green1)';}
-        }catch(e){}
-      },
-      onTokenChange:function(){
-        try{
-          const status=document.getElementById('cloud_status');
-          if(status){status.textContent='🟢 تم تجديد تسجيل الدخول — جاهز للمزامنة';status.style.color='var(--green1)';}
-        }catch(e){}
-      }
+      onReady:function(){try{_cloudStatus('🟢 تم تسجيل الدخول — جاهز للمزامنة','var(--green1)');}catch(e){}},
+      onTokenChange:function(){try{_cloudStatus('🟢 تم تجديد تسجيل الدخول — جاهز للمزامنة','var(--green1)');}catch(e){}}
     }));
   }
   return __EGTPH_AUTH_READY__;
 };
-window.egtphEnsureAuthenticated().catch(function(err){
-  console.warn('EGTPH authentication bootstrap:',err);
-});
-function _cloudSettings(){
-  return {url:'https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',key:'EGTPH-pay-clean-v144-live',safe:'EGTPH-pay-clean-v144-live'};
-}
+window.egtphEnsureAuthenticated().catch(function(err){console.warn('EGTPH authentication bootstrap:',err);});
+function _cloudSettings(){return {url:'https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',key:'EGTPH-pay-clean-v144-live',safe:'EGTPH-pay-clean-v144-live'};}
 function _cloudCfg(){
-  const base=_cloudSettings();
-  const helper=window.EGTPHAuth;
+  const base=_cloudSettings(),helper=window.EGTPHAuth;
   const token=helper&&typeof helper.getToken==='function'?helper.getToken(EGTPH_AUTH_APP_ID):null;
-  if(!base||!token)return null;
+  if(!token)return null;
   return{endpoint:base.url+'/egtph/'+encodeURIComponent(base.safe)+'.json?auth='+encodeURIComponent(token)};
 }
-function _cloudStatus(txt,col){
-  const el=document.getElementById('cloud_status');
-  if(el){el.textContent=txt;el.style.color=col||'var(--gray)';}
-}
+function _cloudStatus(txt,col){const el=document.getElementById('cloud_status');if(el){el.textContent=txt;el.style.color=col||'var(--gray)';}}
+let _cloudBusy=false,_cloudDirty=true;
 function cloudConfigSave(){
   DB.settings.cloudUrl='https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app';
-  DB.settings.cloudKey='EGTPH-pay-clean-v144-live';
-  DB.settings.cloudAuto=true;
-  DB.settings.v91CloudAuto=false;
-  saveDB();cloudFillInputs();toast('✅ المصدر ثابت: Firebase / EGTPH-pay-clean-v144-live');
+  DB.settings.cloudKey='EGTPH-pay-clean-v144-live';DB.settings.cloudAuto=true;DB.settings.v91CloudAuto=false;
+  try{saveDB();}catch(e){}cloudFillInputs();toast('✅ المصدر ثابت: Firebase / EGTPH-pay-clean-v144-live');
 }
 function cloudFillInputs(){
   const u=document.getElementById('cloud_url'),k=document.getElementById('cloud_key'),a=document.getElementById('cloud_auto');
-  if(u)u.value=DB.settings.cloudUrl||'';
-  if(k)k.value=DB.settings.cloudKey||'';
-  if(a)a.checked=!!DB.settings.cloudAuto;
-  if(DB.settings.cloudLastSync)_cloudStatus('🟢 آخر مزامنة: '+DB.settings.cloudLastSync,'var(--green1)');
-  else if(_cloudCfg())_cloudStatus('🟡 مهيأة — لم تتم مزامنة بعد','var(--amber)');
+  if(u)u.value='https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app';
+  if(k)k.value='EGTPH-pay-clean-v144-live';if(a)a.checked=true;
 }
-let _cloudBusy=false;
-let _cloudDirty=true; // عند الفتح: نعتبر أن هناك ما يُرفع (أول مزامنة كاملة)
-
-// ── حارس ضد إعادة الرسم أثناء الكتابة / نافذة محلولة ──
-// لا نعيد رسم اللوحة والمستخدم راه يكتب أو فيه modal محلول؛ نؤجّل حتى يكمّل
-// ونعيد الرسم مرة وحدة. (الدمج والرفع يكملان عادي — البيانات لا تضيع.)
-let _deferDash=false;
-function isUserBusy(){
-  const el=document.activeElement;
-  if(el){const t=el.tagName;if(t==='INPUT'||t==='TEXTAREA'||t==='SELECT'||el.isContentEditable)return true;}
-  if(document.querySelector('.mo.open'))return true;
-  const lr=document.getElementById('mLogicReport'),ch=document.getElementById('mChart');
-  if((lr&&lr.style.display==='flex')||(ch&&ch.style.display==='flex'))return true;
-  return false;
-}
-function safeDash(){ if(isUserBusy()){_deferDash=true;return;} _deferDash=false; try{renderDash();}catch(e){} }
-function flushDeferredDash(){ if(_deferDash&&!isUserBusy()){_deferDash=false;try{renderDash();}catch(e){}} }
-document.addEventListener('focusout',()=>{setTimeout(flushDeferredDash,200);});
-
 async function cloudSync(manual){
-  try{await window.egtphEnsureAuthenticated();}catch(authErr){
-    _cloudStatus('🔴 يلزم تسجيل الدخول إلى Firebase','var(--red)');
-    if(manual)toast('❌ تعذر تسجيل الدخول إلى Firebase: '+(authErr&&authErr.message||authErr),true);
-    return;
-  }
-  const cfg=_cloudCfg();
-  if(!cfg){if(manual)toast('❌ هيّئ الإعدادات أولاً (رابط + مفتاح) ثم سجّل الدخول',true);return;}
-  if(_cloudBusy)return;
-  if(!navigator.onLine){if(manual)toast('📡 لا يوجد اتصال — حاول لاحقاً',true);_cloudStatus('📡 بدون اتصال','var(--red)');return;}
-  _cloudBusy=true;
-  try{
-    // 0) فحص خفيف (بايتات فقط): طابع آخر رفع في السحابة
-    //    إذا لم يتغير منذ آخر مرة ولا توجد تغييرات محلية → لا نقل إطلاقاً
-    const probe=await fbFetch(cfg.endpoint.replace('.json','/syncedAt.json'));
-    if(!probe.ok)throw new Error('HTTP '+probe.status);
-    const remoteStamp=await probe.json(); // null أول مرة
-    if(!_cloudDirty&&remoteStamp&&remoteStamp===DB.settings.cloudRemoteStamp){
-      _cloudBusy=false;
-      if(manual){toast('☁️ لا جديد — كل شيء متزامن');}
-      return;
-    }
-    _cloudStatus('⏳ جارٍ المزامنة...','var(--teal)');
-    // 1) سحب البعيد
-    const res=await fbFetch(cfg.endpoint);
-    if(!res.ok)throw new Error('HTTP '+res.status);
-    const remote=await res.json(); // null إذا أول مرة
-    let addedTxt='';
-    if(remote&&typeof remote==='object'&&Array.isArray(remote.workers)){
-      const added=mergeImportData(remote);
-      const tot=added.advances+added.hours+added.absences+added.bonuses+added.debts+added.workers;
-      if(tot>0){
-        try{runDoubleVerification();}catch(e){}
-        /* v164: no automatic installment processing */
-        addedTxt=' | جديد: +'+tot+' قيد';
-        audit('مزامنة سحابية — '+tot+' قيد جديد من الجهاز الآخر');
-      }
-    }
-    // 2) رفع النسخة المدموجة
-    const payload=JSON.stringify({workers:DB.workers,advances:DB.advances,hours:DB.hours,
-      absences:DB.absences,bonuses:DB.bonuses,debts:DB.debts,deletedIds:DB.deletedIds||[],
-      syncedAt:new Date().toISOString(),device:DB.settings.userName||''});
-    const up=await fbFetch(cfg.endpoint,{method:'PUT',headers:{'Content-Type':'application/json'},body:payload});
-    if(!up.ok)throw new Error('رفع HTTP '+up.status);
-    const now=todayStr()+' '+new Date().toLocaleTimeString('fr-DZ',{hour:'2-digit',minute:'2-digit'});
-    DB.settings.cloudLastSync=now;
-    DB.settings.cloudRemoteStamp=JSON.parse(payload).syncedAt; // طابع نسختنا في السحابة
-    _lastPushedSyncedAt=DB.settings.cloudRemoteStamp; // لتمييز صدى رفعنا نحن عبر SSE
-    saveDB();updateBadges();
-    _cloudDirty=false; // بعد saveDB() حتى لا يُعاد تعليمها فوراً (saveDB يُعلِّمها مركزياً)
-    try{safeDash();}catch(e){}
-    // تحديث قائمة العمال المعروضة أيضاً — حتى لو كانت الصفحة الحالية، حتى يختفي فوراً
-    // أي عامل «أُعيد» مؤقتاً من اللقطة المضمّنة ثم صحّحه الحذف المزامَن من السحابة
-    try{renderWorkers();}catch(e){}
-    _cloudStatus('🟢 آخر مزامنة: '+now,'var(--green1)');
-    if(manual)toast('☁️ تمت المزامنة'+addedTxt);
-  }catch(err){
-    console.warn('cloudSync:',err);
-    _cloudStatus('🔴 فشل: '+err.message,'var(--red)');
-    if(manual)toast('❌ فشلت المزامنة: '+err.message,true);
-  }
-  _cloudBusy=false;
+  if(window.EGTPH_V170&&typeof window.EGTPH_V170.sync==='function')return window.EGTPH_V170.sync(!!manual);
+  throw new Error('محرك المزامنة v170 لم يجهز بعد');
 }
-// ── رفع قسري: يكتب فوق السحابة مباشرة بلا أي سحب أو دمج — لتنظيف بيانات سحابية تالفة ──
-async function cloudForcePush(){
-  const cfg=_cloudCfg();
-  if(!cfg){toast('❌ هيّئ الإعدادات أولاً (رابط + مفتاح)',true);return;}
-  if(!navigator.onLine){toast('📡 لا يوجد اتصال — حاول لاحقاً',true);return;}
-  if(!confirm('⚠️ سيتم محو كل بيانات السحابة الحالية واستبدالها ببيانات هذا الجهاز فقط، بلا أي دمج.\n\nاستخدم هذا فقط إذا كنت متأكداً أن بيانات هذا الجهاز هي الصحيحة (مثلاً بعد استيراد نسخة نظيفة).\n\nمتأكد؟')) return;
-  if(_cloudBusy){toast('⏳ مزامنة أخرى جارية، انتظر قليلاً',true);return;}
-  _cloudBusy=true;
-  try{
-    _cloudStatus('⏳ جارٍ الرفع القسري...','var(--red)');
-    const payload=JSON.stringify({workers:DB.workers,advances:DB.advances,hours:DB.hours,
-      absences:DB.absences,bonuses:DB.bonuses,debts:DB.debts,deletedIds:DB.deletedIds||[],
-      syncedAt:new Date().toISOString(),device:DB.settings.userName||''});
-    const up=await fbFetch(cfg.endpoint,{method:'PUT',headers:{'Content-Type':'application/json'},body:payload});
-    if(!up.ok)throw new Error('رفع HTTP '+up.status);
-    const now=todayStr()+' '+new Date().toLocaleTimeString('fr-DZ',{hour:'2-digit',minute:'2-digit'});
-    DB.settings.cloudLastSync=now;
-    DB.settings.cloudRemoteStamp=JSON.parse(payload).syncedAt;
-    audit('🚀 رفع قسري — استبدال كامل لبيانات السحابة');
-    saveDB();updateBadges();
-    _cloudDirty=false;
-    _cloudStatus('🟢 تمّ الاستبدال الكامل: '+now,'var(--green1)');
-    toast('✅ تم استبدال بيانات السحابة بالكامل بنسخة هذا الجهاز');
-  }catch(err){
-    console.warn('cloudForcePush:',err);
-    _cloudStatus('🔴 فشل الرفع القسري: '+err.message,'var(--red)');
-    toast('❌ فشل الرفع القسري: '+err.message,true);
-  }
-  _cloudBusy=false;
-}
-// ── جلب-استبدال: يجلب نسخة السحابة ويستبدل بها بيانات هذا الجهاز بالكامل (بلا دمج) ──
-//    لتنظيف جهاز رجعت فيه بيانات قديمة، بعد أن رفعت النسخة الصحيحة من جهاز آخر بالرفع القسري.
-async function cloudPullReplace(){
-  const cfg=_cloudCfg();
-  if(!cfg){toast('❌ هيّئ الإعدادات أولاً (رابط + مفتاح)',true);return;}
-  if(!navigator.onLine){toast('📡 لا يوجد اتصال — حاول لاحقاً',true);return;}
-  if(!confirm('⬇️ سيتم استبدال كل بيانات هذا الجهاز بنسخة السحابة بالكامل، بلا أي دمج.\n\nاستخدمه في الجهاز الذي رجعت فيه بيانات قديمة، بعد أن رفعت النسخة الصحيحة من الجهاز الآخر بالرفع القسري.\n\nمتابعة؟')) return;
-  if(_cloudBusy){toast('⏳ مزامنة أخرى جارية، انتظر قليلاً',true);return;}
-  _cloudBusy=true;
-  try{
-    _cloudStatus('⏳ جارٍ جلب السحابة...','var(--teal)');
-    const res=await fbFetch(cfg.endpoint);
-    if(!res.ok)throw new Error('HTTP '+res.status);
-    const remote=await res.json();
-    if(!remote||!Array.isArray(remote.workers)){_cloudBusy=false;toast('❌ السحابة فارغة — لا يوجد ما يُجلب',true);_cloudStatus('🔴 السحابة فارغة','var(--red)');return;}
-    DB.workers=remote.workers||[];
-    DB.advances=remote.advances||{};
-    DB.hours=remote.hours||{};
-    DB.absences=remote.absences||{};
-    DB.bonuses=remote.bonuses||{};
-    DB.debts=remote.debts||{};
-    DB.deletedIds=remote.deletedIds||[];
-    const now=todayStr()+' '+new Date().toLocaleTimeString('fr-DZ',{hour:'2-digit',minute:'2-digit'});
-    DB.settings.cloudLastSync=now;
-    DB.settings.cloudRemoteStamp=remote.syncedAt||'';
-    _lastPushedSyncedAt=DB.settings.cloudRemoteStamp;
-    audit('⬇️ جلب السحابة — استبدال كامل لهذا الجهاز');
-    saveDB();updateBadges();
-    _cloudDirty=false;
-    try{safeDash();}catch(e){}
-    try{renderWorkers();}catch(e){}
-    _cloudStatus('🟢 تمّ الاستبدال من السحابة: '+now,'var(--green1)');
-    toast('✅ تم استبدال بيانات هذا الجهاز بنسخة السحابة');
-  }catch(err){
-    console.warn('cloudPullReplace:',err);
-    _cloudStatus('🔴 فشل الاستبدال: '+err.message,'var(--red)');
-    toast('❌ فشل الاستبدال: '+err.message,true);
-  }
-  _cloudBusy=false;
-}
-// ── البثّ المباشر (SSE) الأذكى: يبثّ syncedAt فقط (طابع خفيف)؛ عند تغيّره يُزامِن فوراً ──
-let _sse=null, _sseRetry=null, _lastPushedSyncedAt='';
-function cloudStartStream(){
-  const cfg=_cloudCfg();
-  if(!cfg||!('EventSource' in window)) return; // غير مهيّأ أو متصفّح قديم → الفحص الدوري يكفي
-  if(_sse){ try{_sse.close();}catch(e){} _sse=null; }
-  if(!navigator.onLine) return;
-  try{
-    _sse=new EventSource(cfg.endpoint.replace('.json','/syncedAt.json'));
-    _sse.addEventListener('put',_sseOnChange);
-    _sse.addEventListener('patch',_sseOnChange);
-    _sse.onerror=()=>{
-      try{_sse.close();}catch(e){} _sse=null;
-      if(_sseRetry)clearTimeout(_sseRetry);
-      _sseRetry=setTimeout(cloudStartStream,8000);
-    };
-  }catch(e){_sse=null;}
-}
-let _sseDeb=null;
-function _sseOnChange(ev){
-  try{
-    const j=JSON.parse((ev&&ev.data)||'{}');
-    if(j&&j.data&&j.data===_lastPushedSyncedAt)return; // صدى رفعنا نحن — تجاهله
-  }catch(e){}
-  if(_sseDeb)clearTimeout(_sseDeb);
-  _sseDeb=setTimeout(()=>{ if(DB.settings.cloudAuto&&navigator.onLine&&!_cloudBusy)(!window.__EGTPH_V50_CLEAN__ ? cloudSync(false) : undefined); },300);
-}
-let _cloudDebTimer=null;
-// ── مزامنة آمنة واحدة بعد ~1.5ث من آخر إدخال (debounce) — تُطلق فقط عند وجود تغيير ──
-function fbScheduleAutoPush(){
-  if(!(DB.settings.cloudAuto&&_cloudCfg()))return;
-  if(_cloudDebTimer)clearTimeout(_cloudDebTimer);
-  _cloudDebTimer=setTimeout(()=>{ _cloudDebTimer=null; if(_cloudDirty)(!window.__EGTPH_V50_CLEAN__ ? cloudSync(false) : undefined); },1500);
-}
-function cloudAutoSetup(){
-  if(_cloudTimer){clearInterval(_cloudTimer);_cloudTimer=null;}
-  if(DB.settings.cloudAuto&&_cloudCfg()){
-    // مزامنة خفيفة دورية (فحص بايتات فقط؛ تتوقف فوراً إن لا جديد) — لجلب تعديلات الأجهزة الأخرى
-    _cloudTimer=setInterval(()=>(!window.__EGTPH_V50_CLEAN__ ? cloudSync(false) : undefined),15000);
-  }
+async function cloudPullReplace(){return cloudSync(true);}
+function cloudAutoSetup(){return true;}
+function cloudStartStream(){return true;}
+function fbScheduleAutoPush(){if(window.EGTPH_V170&&typeof window.EGTPH_V170.schedule==='function')window.EGTPH_V170.schedule();}
+async function cloudForcePush(){throw new Error('الاستبدال الكامل للسحابة محظور؛ المزامنة تتم حسب معرّف كل قيد.');}
+
+function safeImportMerge(d){
+  const clone=v=>JSON.parse(JSON.stringify(v));
+  const stable=v=>Array.isArray(v)?'['+Object.keys(v).map(k=>stable(v[k])).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
+  const key=(x,i)=>x&&x.id!=null?'id:'+String(x.id):x&&x.transactionId?'tx:'+String(x.transactionId)+':'+String(x.allocationIndex||0):x&&x.operationId?'op:'+String(x.operationId)+':'+String(x.allocationIndex||0):'row:'+i+':'+stable(x);
+  const vals=v=>(Array.isArray(v)||v&&typeof v==='object')?Object.keys(v).sort((a,b)=>(+a||0)-(+b||0)).map(k=>v[k]).filter(x=>x!=null):[];
+  const mergeList=(a,b,path,conflicts)=>{const out=vals(a).map(clone),idx={};out.forEach((x,i)=>idx[key(x,i)]=i);vals(b).forEach((x,i)=>{const k=key(x,i);if(idx[k]==null){idx[k]=out.length;out.push(clone(x));}else if(stable(out[idx[k]])!==stable(x))conflicts.push(path+' / '+k);});return out;};
+  const next=clone(DB),conflicts=[];
+  next.workers=mergeList(next.workers,d.workers,'workers',conflicts);
+  ['advances','bonuses'].forEach(sec=>{Object.keys(d[sec]||{}).forEach(wid=>{next[sec][wid]=next[sec][wid]||{};Object.keys(d[sec][wid]||{}).forEach(m=>{next[sec][wid][m]=mergeList(next[sec][wid][m],d[sec][wid][m],sec+'/'+wid+'/'+m,conflicts);});});});
+  ['hours','absences','debts'].forEach(sec=>{Object.keys(d[sec]||{}).forEach(wid=>{next[sec][wid]=mergeList(next[sec][wid],d[sec][wid],sec+'/'+wid,conflicts);});});
+  if(conflicts.length)throw new Error('توقف الدمج: توجد معرّفات موجودة بقيم مختلفة: '+conflicts.slice(0,5).join(' | ')+(conflicts.length>5?' …':''));
+  window.DB=DB=next;return {workers:0,advances:0,hours:0,absences:0,bonuses:0,debts:0,conflicts:0};
 }
 
 function importData(e){
@@ -8487,14 +8202,14 @@ function importData(e){
         e.target.value='';return;
       }
       // ── اختيار طريقة الاستيراد: دمج ذكي أم استبدال كامل ──
-      const doMerge=confirm(`📥 ملف فيه ${d.workers.length} عامل.\n\n✅ موافق = دمج ذكي (يضيف القيود الجديدة فقط — للعمل من جهازين)\n❌ إلغاء = الانتقال لخيار الاستبدال الكامل`);
+      const doMerge=confirm(`📥 ملف فيه ${d.workers.length} عامل.\n\n✅ موافق = دمج المعرّفات الجديدة فقط؛ أي معرّف مختلف يوقف الاستيراد\n❌ إلغاء = الانتقال لخيار الاستبدال الكامل`);
       if(doMerge){
-        const added=mergeImportData(d);
+        const added=safeImportMerge(d);
         try{runDoubleVerification();}catch(ex){}
         /* v164: no automatic installment processing */
-        audit(`دمج JSON — +${added.advances} تسبيق، +${added.hours} ساعات، +${added.absences} غياب، +${added.bonuses} مكافأة، +${added.debts} دين، +${added.workers} عامل`);
+        audit(`دمج JSON آمن حسب المعرّف — دون استبدال أي قيد موجود`);
         saveDB();updateBadges();showPage('dashboard');
-        toast(`✅ دمج: +${added.advances} تسبيق | +${added.absences} غياب | +${added.debts} دين | +${added.workers} عامل`);
+        toast(`✅ تم دمج المعرّفات الجديدة فقط دون استبدال أي قيد موجود`);
         e.target.value='';return;
       }
       if(!confirm(`⚠️ استبدال كامل: سيتم مسح بيانات هذا الجهاز ووضع بيانات الملف مكانها.\nمتأكد؟`)){e.target.value='';return;}
@@ -10349,181 +10064,156 @@ body,table,th,td,button,input,select,textarea{font-family:-apple-system,BlinkMac
 
 
 
-<style id="egtph-v168-firebase-only-table-scale">
-.egtph-v168-toolbar{display:flex;align-items:center;justify-content:center;gap:8px;margin:8px auto;padding:6px;border:1px solid #b7d2c9;border-radius:14px;background:#f7fbfa;max-width:max-content;direction:ltr}
-.egtph-v168-toolbar button{min-width:42px;height:36px;border:1px solid #9fc4b8;border-radius:11px;background:#fff;color:#164f43;font-weight:800;font-size:18px;touch-action:manipulation}
-.egtph-v168-percent{min-width:58px;text-align:center;font-weight:900;color:#185b4c;direction:ltr}
-.egtph-v168-reset{font-size:14px!important;min-width:62px!important}
-.egtph-v168-viewport{width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;position:relative;margin:0 auto;direction:ltr!important;text-align:center}
-.egtph-v168-stage{direction:ltr!important}
-.egtph-v168-stage>table{direction:rtl!important}
-.egtph-v168-stage{position:relative;margin:0 auto;min-width:1px;min-height:1px}
-#cloud_url[readonly],#cloud_key[readonly]{background:#eef8f4!important;color:#174d42!important}
-</style>
-
-
-
-
-
-<script id="egtph-v169-verified-commit-engine">
+<script id="egtph-v170-conflict-safe-sync-engine">
 (function(){
 'use strict';
+const VERSION=170;
 const URL='https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app';
 const KEY='EGTPH-pay-clean-v144-live';
 const ROOT='/egtph/'+KEY;
 const SOURCE='firebase:'+ROOT;
-const OUTBOX_KEY='EGTPH_V169_PENDING_OUTBOX';
-const MAX_RETRY=7, RETRY_MS=2500;
+const OUTBOX_KEY='EGTPH_V170_PENDING_OUTBOX';
+const DIAG_KEY='EGTPH_V170_SYNC_DIAGNOSTICS';
+const DEVICE_KEY='EGTPH_DEVICE_ID_V170';
+const MAX_RETRY=7, RETRY_MS=3000;
 const BASE_FETCH=window.fetch.bind(window);
-let baseline=null, rollbackSnapshot=null, running=false, queued=false, lastError=null, lastSavedAt=null;
-let retryTimer=null, activePromise=null, resolveActive=null, writes=[];
-let uiPending=false, deferredCloses=[], deferredToasts=[];
+let baseline=null,rollbackSnapshot=null,running=false,queued=false,lastError=null,lastSavedAt=null,lastPullAt=null;
+let retryTimer=null,activePromise=null,resolveActive=null,writes=[],currentConflicts=[],uiPending=false,deferredCloses=[],deferredToasts=[];
+let scheduleTimer=null;
 
+function deviceId(){try{let x=localStorage.getItem(DEVICE_KEY);if(!x){x='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9);localStorage.setItem(DEVICE_KEY,x);}return x;}catch(e){return 'dev_'+Math.random().toString(36).slice(2,10);}}
+const DEVICE=deviceId();
 const clone=v=>{try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}};
 const obj=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
-const keys=v=>Object.keys((Array.isArray(v)||obj(v))?v:{});
-const list=v=>Array.isArray(v)?Object.keys(v).sort((a,b)=>(+a||0)-(+b||0)).map(k=>v[k]).filter(x=>x!=null):obj(v)?Object.keys(v).sort((a,b)=>{const na=+a,nb=+b;return Number.isFinite(na)&&Number.isFinite(nb)?na-nb:String(a).localeCompare(String(b));}).map(k=>v[k]).filter(x=>x!=null):[];
 const stable=v=>Array.isArray(v)?'['+Object.keys(v).map(k=>stable(v[k])).join(',')+']':obj(v)?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
 const same=(a,b)=>stable(a)===stable(b);
-const empty=v=>v==null||(Array.isArray(v)&&v.length===0)||(obj(v)&&Object.keys(v).length===0);
+const empty=v=>v==null||(Array.isArray(v)&&Object.keys(v).length===0)||(obj(v)&&Object.keys(v).length===0);
 const equivalent=(a,b)=>same(a,b)||(empty(a)&&empty(b));
 const hash=s=>{let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0).toString(36);};
-const recKey=(x,i)=>x&&x.id!=null?'id:'+String(x.id):x&&x.transactionId?'tx:'+String(x.transactionId)+':'+String(x.allocationIndex||0):x&&x.operationId?'op:'+String(x.operationId)+':'+String(x.allocationIndex||0):'h:'+hash(stable(x));
-const mapList=v=>{const m={};list(v).forEach((x,i)=>m[recKey(x,i)]=x);return m;};
-const union=(a,b)=>[...new Set([...keys(a),...keys(b)])];
-function changed(before,after){const bm=mapList(before),out=[];list(after).forEach((x,i)=>{const k=recKey(x,i);if(!(k in bm)||!same(bm[k],x))out.push(clone(x));});return out;}
-function merge(remote,updates){const out=list(remote).map(clone),idx={};out.forEach((x,i)=>idx[recKey(x,i)]=i);list(updates).forEach((x,i)=>{const k=recKey(x,i);if(idx[k]==null){idx[k]=out.length;out.push(clone(x));}else out[idx[k]]=obj(out[idx[k]])&&obj(x)?Object.assign({},out[idx[k]],clone(x)):clone(x);});return out;}
-function deepMerge(remote,local){if(Array.isArray(local))return merge(remote,local);if(obj(local)){const out=obj(remote)?clone(remote):{};Object.keys(local).forEach(k=>{out[k]=deepMerge(out[k],local[k]);});return out;}return clone(local);}
-function endpoint(path,token){const p=String(path||'').split('/').filter(Boolean).map(encodeURIComponent).join('/');return URL+ROOT+(p?'/'+p:'')+'.json?auth='+encodeURIComponent(token);}
-function rootWrite(u,method){try{return new URL(String(u),location.href).pathname===ROOT+'.json'&&['PUT','PATCH','DELETE'].includes(method);}catch(e){return false;}}
-window.fetch=function(input,init){const method=String(init&&init.method||'GET').toUpperCase();if(rootWrite(input,method)){console.error('[v169] blocked root write',method,input);return Promise.resolve(new Response(JSON.stringify({blocked:true}),{status:409,headers:{'Content-Type':'application/json'}}));}return BASE_FETCH(input,init);};
-async function token(){if(typeof window.egtphEnsureAuthenticated==='function')await window.egtphEnsureAuthenticated();const h=window.EGTPHAuth,t=h&&typeof h.getToken==='function'?h.getToken('lapayeparmois'):null;if(!t)throw new Error('لا يوجد رمز Firebase صالح');return t;}
-async function request(url,opt){return BASE_FETCH(url,Object.assign({cache:'no-store',headers:Object.assign({'Cache-Control':'no-cache'},opt&&opt.headers||{})},opt||{}));}
-
-function pathGet(root,path){let x=root;for(const p of String(path||'').split('/').filter(Boolean)){if(x==null)return undefined;x=x[p];}return x;}
-function verifyList(remote,updates,path){const rm=mapList(remote);for(const x of list(updates)){const k=recKey(x,0);if(!(k in rm))throw new Error('القيد لم يظهر بعد الحفظ: '+path+' / '+k);if(!same(rm[k],x))throw new Error('القيد ظهر بقيمة مختلفة بعد الحفظ: '+path+' / '+k);}}
-function verifyObjectSubset(remote,local,path){if(Array.isArray(local)){if(!equivalent(remote,local))throw new Error('فشل تحقق '+path);return;}if(obj(local)){for(const k of Object.keys(local))verifyObjectSubset(remote&&remote[k],local[k],path+'/'+k);return;}if(!equivalent(remote,local))throw new Error('فشل تحقق '+path);}
-async function atomicList(path,updates,t){updates=list(updates);if(!updates.length)return;const url=endpoint(path,t);for(let n=0;n<MAX_RETRY;n++){const g=await request(url,{headers:{'X-Firebase-ETag':'true'}});if(!g.ok)throw new Error('قراءة '+path+' HTTP '+g.status);const et=g.headers.get('etag');const merged=merge(await g.json(),updates);const p=await request(url,{method:'PUT',headers:{'Content-Type':'application/json','If-Match':et||'*'},body:JSON.stringify(merged)});if(p.status===412){await new Promise(r=>setTimeout(r,100*(n+1)));continue;}if(!p.ok)throw new Error('كتابة '+path+' HTTP '+p.status);const v=await request(url);if(!v.ok)throw new Error('تحقق '+path+' HTTP '+v.status);verifyList(await v.json(),updates,path);writes.push({path,at:new Date().toISOString(),count:updates.length});return;}throw new Error('تعارض متكرر في '+path);}
-async function atomicObject(path,local,t){const url=endpoint(path,t);for(let n=0;n<MAX_RETRY;n++){const g=await request(url,{headers:{'X-Firebase-ETag':'true'}});if(!g.ok)throw new Error('قراءة '+path+' HTTP '+g.status);const et=g.headers.get('etag');const merged=deepMerge(await g.json(),local||{});const p=await request(url,{method:'PUT',headers:{'Content-Type':'application/json','If-Match':et||'*'},body:JSON.stringify(merged)});if(p.status===412){await new Promise(r=>setTimeout(r,100*(n+1)));continue;}if(!p.ok)throw new Error('كتابة '+path+' HTTP '+p.status);const v=await request(url);if(!v.ok)throw new Error('تحقق '+path+' HTTP '+v.status);verifyObjectSubset(await v.json(),local||{},path);writes.push({path,at:new Date().toISOString(),count:1});return;}throw new Error('تعارض متكرر في '+path);}
-async function atomicValue(path,value,t){const url=endpoint(path,t);for(let n=0;n<MAX_RETRY;n++){const g=await request(url,{headers:{'X-Firebase-ETag':'true'}});if(!g.ok)throw new Error('قراءة '+path+' HTTP '+g.status);const p=await request(url,{method:'PUT',headers:{'Content-Type':'application/json','If-Match':g.headers.get('etag')||'*'},body:JSON.stringify(value)});if(p.status===412){await new Promise(r=>setTimeout(r,90*(n+1)));continue;}if(!p.ok)throw new Error('كتابة '+path+' HTTP '+p.status);const v=await request(url);if(!v.ok)throw new Error('تحقق '+path+' HTTP '+v.status);const got=await v.json();if(!equivalent(got,value))throw new Error('القيمة لم تثبت بعد الحفظ: '+path);writes.push({path,at:new Date().toISOString(),count:1});return;}throw new Error('تعارض متكرر في '+path);}
-
-function settingsDelta(b,a){const out={},ignore=new Set(['cloudUrl','cloudKey','cloudAuto','v91CloudAuto','v169FirebaseOnly','v169AuthoritativePath','v169LastFullPull','v169AuthoritativeSource','v148AdvanceJournal','v148AdvanceJournalUpdatedAt']);Object.keys(a||{}).forEach(k=>{if(ignore.has(k))return;if(!same(b&&b[k],a[k]))out[k]=clone(a[k]);});return out;}
+const recKey=(x,i)=>x&&x.id!=null?'id:'+String(x.id):x&&x.transactionId?'tx:'+String(x.transactionId)+':'+String(x.allocationIndex||0):x&&x.operationId?'op:'+String(x.operationId)+':'+String(x.allocationIndex||0):'h:'+hash(stable(x))+(i==null?'':':'+i);
+function rawEntries(v){if(Array.isArray(v)||obj(v))return Object.keys(v).filter(k=>v[k]!=null).map(k=>[String(k),v[k]]);return [];}
+function list(v){return rawEntries(v).sort((a,b)=>{const na=+a[0],nb=+b[0];return Number.isFinite(na)&&Number.isFinite(nb)?na-nb:a[0].localeCompare(b[0]);}).map(x=>x[1]);}
+function keys(v){return Object.keys((Array.isArray(v)||obj(v))?v:{});}
+function union(a,b){return [...new Set([...keys(a),...keys(b)])];}
+function normalizeRecord(path,x){if(!obj(x))return clone(x);const y=clone(x);if(path==='workers'){['exitDate','startDate','phone','idnum'].forEach(f=>{if(!Object.prototype.hasOwnProperty.call(y,f))y[f]='';});if(!Object.prototype.hasOwnProperty.call(y,'contract'))y.contract='';y.payday=+y.payday||+y.day||1;}if(path.startsWith('absences/')){if(!Object.prototype.hasOwnProperty.call(y,'deductOpt'))y.deductOpt='now';}if(path.startsWith('debts/')){if(y.installment!==undefined&&y.inst===undefined)y.inst=y.installment;}return y;}
+function listMap(v,path){const m={};rawEntries(v).forEach(([storage,x],i)=>{const n=normalizeRecord(path,x);m[recKey(n,i)]={storage,record:n,raw:x};});return m;}
+function listChanges(before,after,path){const bm=listMap(before,path),tm=listMap(after,path),out=[];Object.keys(tm).forEach(k=>{const a=tm[k].record,b=bm[k]&&bm[k].record;if(!b)out.push({key:k,existsBefore:false,after:clone(a)});else if(!same(b,a))out.push({key:k,existsBefore:true,before:clone(b),after:clone(a)});});return out;}
+function setAt(root,path,value){const ps=String(path||'').split('/').filter(Boolean);let x=root;for(let i=0;i<ps.length-1;i++){if(!obj(x[ps[i]])&&!Array.isArray(x[ps[i]]))x[ps[i]]={};x=x[ps[i]];}if(ps.length)x[ps[ps.length-1]]=value;}
+function getAt(root,path){let x=root;for(const p of String(path||'').split('/').filter(Boolean)){if(x==null)return undefined;x=x[p];}return x;}
+function mergeListInto(root,path,ops){const cur=list(getAt(root,path)).map(clone),idx={};cur.forEach((x,i)=>idx[recKey(normalizeRecord(path,x),i)]=i);ops.forEach(op=>{if(idx[op.key]==null){idx[op.key]=cur.length;cur.push(clone(op.after));}else cur[idx[op.key]]=clone(op.after);});setAt(root,path,cur);}
+function countPatch(p){let n=0;Object.values(p.listOps||{}).forEach(a=>n+=a.length);n+=Object.keys(p.valueOps||{}).length;n+=(p.setAdds&&p.setAdds.deletedIds||[]).length;return n;}
+function countData(d){const c={workers:list(d&&d.workers).length,advances:0,hours:0,absences:0,bonuses:0,debts:0};for(const sec of ['advances','bonuses'])for(const wid of keys(d&&d[sec]))for(const m of keys(d[sec][wid]))c[sec]+=list(d[sec][wid][m]).length;for(const sec of ['hours','absences','debts'])for(const wid of keys(d&&d[sec]))c[sec]+=list(d[sec][wid]).length;return c;}
+function settingsDelta(b,a){const out={};const ignore=new Set(['cloudUrl','cloudKey','cloudAuto','v91CloudAuto','v169FirebaseOnly','v169AuthoritativePath','v169LastFullPull','v169AuthoritativeSource','v170FirebaseOnly','v170AuthoritativePath','v148AdvanceJournal','v148AdvanceJournalUpdatedAt']);Object.keys(a||{}).forEach(k=>{if(ignore.has(k))return;if(!same(b&&b[k],a[k])&&a[k]!==undefined)out['settings/'+k]={existsBefore:Object.prototype.hasOwnProperty.call(b||{},k),before:clone(b&&b[k]),after:clone(a[k])};});return out;}
 function buildPatch(base,target){
-  const p={version:169,root:ROOT,txId:'tx_'+Date.now()+'_'+Math.random().toString(36).slice(2,9),createdAt:new Date().toISOString(),workers:changed(base.workers,target.workers),advances:{},hours:{},absences:{},bonuses:{},debts:{},auditLog:changed(base.auditLog,target.auditLog),ledger:changed(base.ledger,target.ledger),txJournal:changed(base.txJournal,target.txJournal),repairLog:changed(base.repairLog,target.repairLog),settings:settingsDelta(base.settings,target.settings)};
-  for(const sec of ['advances','bonuses'])for(const wid of union(base[sec],target[sec]))for(const m of union(base[sec]&&base[sec][wid],target[sec]&&target[sec][wid])){const c=changed(base[sec]&&base[sec][wid]&&base[sec][wid][m],target[sec]&&target[sec][wid]&&target[sec][wid][m]);if(c.length){p[sec][wid]=p[sec][wid]||{};p[sec][wid][m]=c;}}
-  for(const sec of ['hours','absences','debts'])for(const wid of union(base[sec],target[sec])){const c=changed(base[sec]&&base[sec][wid],target[sec]&&target[sec][wid]);if(c.length)p[sec][wid]=c;}
-  for(const sec of ['cycleLocks','deletedRecords','trash'])if(!same(base[sec],target[sec]))p[sec]=clone(target[sec]||{});
-  if(!same(base.deletedIds,target.deletedIds))p.deletedIds=Array.from(new Set(list(target.deletedIds).map(String)));
-  for(const sec of ['device','schemaVersion'])if(target[sec]!==undefined&&!same(base[sec],target[sec]))p[sec]=clone(target[sec]);
+  const p={version:VERSION,root:ROOT,txId:'tx_'+Date.now()+'_'+Math.random().toString(36).slice(2,9),createdAt:new Date().toISOString(),deviceId:DEVICE,listOps:{},valueOps:{},setAdds:{deletedIds:[]},force:false};
+  const addList=(path,b,a)=>{const c=listChanges(b,a,path);if(c.length)p.listOps[path]=c;};
+  addList('workers',base.workers,target.workers);
+  for(const sec of ['advances','bonuses'])for(const wid of union(base[sec],target[sec]))for(const m of union(base[sec]&&base[sec][wid],target[sec]&&target[sec][wid]))addList(sec+'/'+wid+'/'+m,base[sec]&&base[sec][wid]&&base[sec][wid][m],target[sec]&&target[sec][wid]&&target[sec][wid][m]);
+  for(const sec of ['hours','absences','debts'])for(const wid of union(base[sec],target[sec]))addList(sec+'/'+wid,base[sec]&&base[sec][wid],target[sec]&&target[sec][wid]);
+  for(const sec of ['auditLog','ledger','txJournal','repairLog'])addList(sec,base[sec],target[sec]);
+  const trashKeys=new Set([...keys(base.trash),...keys(target.trash)]);trashKeys.forEach(sec=>addList('trash/'+sec,base.trash&&base.trash[sec],target.trash&&target.trash[sec]));
+  for(const sec of ['cycleLocks','deletedRecords'])for(const k of union(base[sec],target[sec])){const bv=base[sec]&&base[sec][k],av=target[sec]&&target[sec][k];if(av!==undefined&&!same(bv,av))p.valueOps[sec+'/'+k]={existsBefore:bv!==undefined,before:clone(bv),after:clone(av)};}
+  Object.assign(p.valueOps,settingsDelta(base.settings,target.settings));
+  for(const sec of ['device','schemaVersion'])if(target[sec]!==undefined&&!same(base[sec],target[sec]))p.valueOps[sec]={existsBefore:base[sec]!==undefined,before:clone(base[sec]),after:clone(target[sec])};
+  const oldIds=new Set(list(base.deletedIds).map(String));p.setAdds.deletedIds=list(target.deletedIds).map(String).filter(x=>!oldIds.has(x));
   return p;
 }
-function patchEmpty(p){if(!p)return true;if(list(p.workers).length||list(p.auditLog).length||list(p.ledger).length||list(p.txJournal).length||list(p.repairLog).length)return false;for(const sec of ['advances','bonuses'])for(const wid of keys(p[sec]))for(const m of keys(p[sec][wid]))if(list(p[sec][wid][m]).length)return false;for(const sec of ['hours','absences','debts'])for(const wid of keys(p[sec]))if(list(p[sec][wid]).length)return false;for(const sec of ['cycleLocks','deletedRecords','trash','deletedIds','device','schemaVersion'])if(Object.prototype.hasOwnProperty.call(p,sec))return false;return !Object.keys(p.settings||{}).length;}
-function applyPatch(target,p){
-  target.workers=merge(target.workers,p.workers);
-  for(const sec of ['advances','bonuses'])for(const wid of keys(p[sec]))for(const m of keys(p[sec][wid])){target[sec]=target[sec]||{};target[sec][wid]=target[sec][wid]||{};target[sec][wid][m]=merge(target[sec][wid][m],p[sec][wid][m]);}
-  for(const sec of ['hours','absences','debts'])for(const wid of keys(p[sec])){target[sec]=target[sec]||{};target[sec][wid]=merge(target[sec][wid],p[sec][wid]);}
-  for(const sec of ['auditLog','ledger','txJournal','repairLog'])target[sec]=merge(target[sec],p[sec]);
-  for(const sec of ['cycleLocks','deletedRecords','trash'])if(Object.prototype.hasOwnProperty.call(p,sec))target[sec]=deepMerge(target[sec],p[sec]);
-  if(Object.prototype.hasOwnProperty.call(p,'deletedIds'))target.deletedIds=Array.from(new Set([...list(target.deletedIds),...list(p.deletedIds)].map(String)));
-  target.settings=Object.assign({},target.settings||{},clone(p.settings||{}));
-  for(const sec of ['device','schemaVersion'])if(Object.prototype.hasOwnProperty.call(p,sec))target[sec]=clone(p[sec]);
-  return target;
-}
+function patchEmpty(p){return !p||(!Object.keys(p.listOps||{}).length&&!Object.keys(p.valueOps||{}).length&&!(p.setAdds&&p.setAdds.deletedIds&&p.setAdds.deletedIds.length));}
+function applyPatch(target,p){Object.keys(p.listOps||{}).forEach(path=>mergeListInto(target,path,p.listOps[path]));Object.keys(p.valueOps||{}).forEach(path=>setAt(target,path,clone(p.valueOps[path].after)));if(p.setAdds&&p.setAdds.deletedIds&&p.setAdds.deletedIds.length)target.deletedIds=Array.from(new Set([...list(target.deletedIds).map(String),...p.setAdds.deletedIds.map(String)]));return target;}
 function saveOutbox(p){try{localStorage.setItem(OUTBOX_KEY,JSON.stringify(p));return true;}catch(e){throw new Error('تعذر إنشاء طابور الأمان المحلي المؤقت');}}
-function loadOutbox(){try{const p=JSON.parse(localStorage.getItem(OUTBOX_KEY)||'null');return p&&p.version===169&&p.root===ROOT?p:null;}catch(e){return null;}}
+function loadOutbox(){try{const p=JSON.parse(localStorage.getItem(OUTBOX_KEY)||'null');return p&&p.version===VERSION&&p.root===ROOT?p:null;}catch(e){return null;}}
 function clearOutbox(){try{localStorage.removeItem(OUTBOX_KEY);}catch(e){}}
-
-async function persistPatch(p){const t=await token();if(list(p.workers).length)await atomicList('workers',p.workers,t);for(const sec of ['advances','bonuses'])for(const wid of keys(p[sec]))for(const m of keys(p[sec][wid]))await atomicList(sec+'/'+wid+'/'+m,p[sec][wid][m],t);for(const sec of ['hours','absences','debts'])for(const wid of keys(p[sec]))await atomicList(sec+'/'+wid,p[sec][wid],t);for(const sec of ['auditLog','ledger','txJournal','repairLog'])if(list(p[sec]).length)await atomicList(sec,p[sec],t);for(const sec of ['cycleLocks','deletedRecords','trash'])if(Object.prototype.hasOwnProperty.call(p,sec))await atomicObject(sec,p[sec]||{},t);if(Object.prototype.hasOwnProperty.call(p,'deletedIds'))await atomicValue('deletedIds',p.deletedIds,t);for(const k of Object.keys(p.settings||{}))await atomicValue('settings/'+k,p.settings[k],t);for(const sec of ['device','schemaVersion'])if(Object.prototype.hasOwnProperty.call(p,sec))await atomicValue(sec,p[sec],t);}
-function verifyPatchInDB(db,p){verifyList(db.workers,p.workers,'workers');for(const sec of ['advances','bonuses'])for(const wid of keys(p[sec]))for(const m of keys(p[sec][wid]))verifyList(db[sec]&&db[sec][wid]&&db[sec][wid][m],p[sec][wid][m],sec+'/'+wid+'/'+m);for(const sec of ['hours','absences','debts'])for(const wid of keys(p[sec]))verifyList(db[sec]&&db[sec][wid],p[sec][wid],sec+'/'+wid);for(const sec of ['auditLog','ledger','txJournal','repairLog'])verifyList(db[sec],p[sec],sec);for(const sec of ['cycleLocks','deletedRecords','trash'])if(Object.prototype.hasOwnProperty.call(p,sec))verifyObjectSubset(db[sec],p[sec],sec);if(Object.prototype.hasOwnProperty.call(p,'deletedIds'))for(const id of p.deletedIds)if(!list(db.deletedIds).map(String).includes(String(id)))throw new Error('معرّف الحذف لم يثبت: '+id);for(const k of Object.keys(p.settings||{}))if(!equivalent(db.settings&&db.settings[k],p.settings[k]))throw new Error('إعداد لم يثبت: '+k);}
-
-const originalToast=window.toast;
-const originalCloseModal=window.closeModal;
+function loadDiag(){try{return Object.assign({},JSON.parse(localStorage.getItem(DIAG_KEY)||'{}'));}catch(e){return {};}}
+function saveDiag(x){try{localStorage.setItem(DIAG_KEY,JSON.stringify(x));}catch(e){}}
+let diag=loadDiag();
+async function token(){if(typeof window.egtphEnsureAuthenticated==='function')await window.egtphEnsureAuthenticated();const h=window.EGTPHAuth,t=h&&typeof h.getToken==='function'?h.getToken('lapayeparmois'):null;if(!t)throw new Error('لا يوجد رمز Firebase صالح');return t;}
+function endpoint(path,t){const p=String(path||'').split('/').filter(Boolean).map(encodeURIComponent).join('/');return URL+ROOT+(p?'/'+p:'')+'.json?auth='+encodeURIComponent(t);}
+async function request(url,opt){return BASE_FETCH(url,Object.assign({cache:'no-store',headers:Object.assign({'Cache-Control':'no-cache'},opt&&opt.headers||{})},opt||{}));}
+function nextIndex(node){let max=-1;rawEntries(node).forEach(([k])=>{const n=Number(k);if(Number.isInteger(n)&&n>=0)max=Math.max(max,n);});return String(max+1);}
+function conflict(kind,path,key,op,remote){return {kind,path,recordKey:key||path,base:clone(op&&op.before),local:clone(op&&op.after),remote:clone(remote),message:kind==='id-collision'?'نفس المعرّف موجود بقيمة مختلفة في السحابة':'تم تعديل نفس القيد في جهاز آخر بعد آخر جلب'};}
+async function writeConflictRecords(items,t,txId){const now=new Date().toISOString(),ids=[];for(let i=0;i<items.length;i++){const id='cf_'+Date.now().toString(36)+'_'+DEVICE.replace(/[^a-zA-Z0-9_-]/g,'_')+'_'+i+'_'+Math.random().toString(36).slice(2,6);const rec=Object.assign({id,status:'open',txId,deviceId:DEVICE,detectedAt:now,source:SOURCE},items[i]);const r=await request(endpoint('syncConflicts/'+id,t),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)});if(!r.ok)throw new Error('تعذر تسجيل التعارض '+id+' HTTP '+r.status);ids.push(id);}currentConflicts=items.map((x,i)=>Object.assign({id:ids[i],status:'open',txId},x));return ids;}
+async function markConflictResolution(mode){if(!currentConflicts.length)return;try{const t=await token();for(const c of currentConflicts){await request(endpoint('syncConflicts/'+c.id+'/resolution',t),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode,resolvedAt:new Date().toISOString(),deviceId:DEVICE})});await request(endpoint('syncConflicts/'+c.id+'/status',t),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify('resolved')});}}catch(e){console.warn('conflict resolution mark',e);}}
+function addUpdate(updates,path,value){updates[String(path).replace(/^\/+/, '')]=clone(value);}
+function validateAndBuild(raw,p,force){const updates={},conflicts=[];
+  for(const path of Object.keys(p.listOps||{})){
+    const node=getAt(raw,path),rm=listMap(node,path);let next=nextIndex(node);
+    for(const op of p.listOps[path]){
+      const found=rm[op.key],remote=found&&found.record;
+      if(found&&same(remote,op.after))continue;
+      if(force){addUpdate(updates,path+'/'+(found?found.storage:next),op.after);if(!found)next=String(Number(next)+1);continue;}
+      if(op.existsBefore){if(found&&same(remote,op.before)){addUpdate(updates,path+'/'+found.storage,op.after);}else conflicts.push(conflict('concurrent-edit',path,op.key,op,remote));}
+      else{if(!found){addUpdate(updates,path+'/'+next,op.after);next=String(Number(next)+1);}else conflicts.push(conflict('id-collision',path,op.key,op,remote));}
+    }
+  }
+  for(const path of Object.keys(p.valueOps||{})){
+    const op=p.valueOps[path],remote=getAt(raw,path);if(equivalent(remote,op.after))continue;if(force){addUpdate(updates,path,op.after);continue;}if(op.existsBefore?equivalent(remote,op.before):remote===undefined||remote===null)addUpdate(updates,path,op.after);else conflicts.push(conflict('concurrent-edit',path,path,op,remote));
+  }
+  if(p.setAdds&&p.setAdds.deletedIds&&p.setAdds.deletedIds.length){const node=getAt(raw,'deletedIds'),vals=new Set(list(node).map(String));let next=nextIndex(node);for(const id of p.setAdds.deletedIds)if(!vals.has(String(id))){addUpdate(updates,'deletedIds/'+next,String(id));next=String(Number(next)+1);}}
+  return {updates,conflicts};
+}
+function verifyPatch(raw,p){for(const path of Object.keys(p.listOps||{})){const rm=listMap(getAt(raw,path),path);for(const op of p.listOps[path]){const got=rm[op.key]&&rm[op.key].record;if(!got||!same(got,op.after))throw new Error('القيد لم يثبت بعد الحفظ: '+path+' / '+op.key);}}for(const path of Object.keys(p.valueOps||{}))if(!equivalent(getAt(raw,path),p.valueOps[path].after))throw new Error('القيمة لم تثبت: '+path);if(p.setAdds&&p.setAdds.deletedIds)for(const id of p.setAdds.deletedIds)if(!list(getAt(raw,'deletedIds')).map(String).includes(String(id)))throw new Error('معرّف الحذف لم يثبت: '+id);}
+async function atomicCommit(p){const t=await token();for(let attempt=0;attempt<MAX_RETRY;attempt++){
+  const g=await request(endpoint('',t),{headers:{'X-Firebase-ETag':'true'}});if(!g.ok)throw new Error('قراءة المصدر المرجعي HTTP '+g.status);const etag=g.headers.get('etag')||'*',raw=await g.json();if(!raw||typeof raw!=='object')throw new Error('نسخة Firebase المرجعية غير مكتملة');
+  const plan=validateAndBuild(raw,p,!!p.force);if(plan.conflicts.length&&!p.force){await writeConflictRecords(plan.conflicts,t,p.txId);const e=new Error('تعارض مزامنة: نفس المعرّف عُدّل في جهازين. لم تُستبدل أي نسخة.');e.code='SYNC_CONFLICT';e.conflicts=plan.conflicts;throw e;}
+  const now=new Date().toISOString(),receipt={txId:p.txId,status:'verified',deviceId:DEVICE,createdAt:p.createdAt,verifiedAt:now,recordCount:countPatch(p),paths:Object.keys(plan.updates),forcedByUser:!!p.force};
+  addUpdate(plan.updates,'syncReceipts/'+DEVICE+'/'+p.txId,receipt);addUpdate(plan.updates,'syncMeta/lastVerified',receipt);addUpdate(plan.updates,'syncedAt',now);addUpdate(plan.updates,'device',DB.settings&&DB.settings.userName||DEVICE);
+  const w=await request(endpoint('',t),{method:'PATCH',headers:{'Content-Type':'application/json','If-Match':etag,'X-EGTPH-Scoped-Patch':'v170'},body:JSON.stringify(plan.updates)});if(w.status===412){await new Promise(r=>setTimeout(r,120*(attempt+1)));continue;}if(!w.ok)throw new Error('رفع ذري HTTP '+w.status);
+  const v=await request(endpoint('',t));if(!v.ok)throw new Error('القراءة الراجعة HTTP '+v.status);const after=await v.json();verifyPatch(after,p);const savedReceipt=getAt(after,'syncReceipts/'+DEVICE+'/'+p.txId);if(!savedReceipt||savedReceipt.status!=='verified')throw new Error('إيصال المزامنة لم يثبت');writes.push({txId:p.txId,at:now,paths:Object.keys(plan.updates),count:countPatch(p)});return {raw:after,receipt};
+ }throw new Error('تعارض ETag متكرر؛ لم تُكتب أي نسخة فوق الأخرى');}
+function panel(){return document.getElementById('v170SyncHealth');}
+function fmtTime(x){if(!x)return '—';try{return new Date(x).toLocaleString('fr-DZ');}catch(e){return String(x);}}
+function pendingCount(){const p=loadOutbox();return p?countPatch(p):0;}
+function setPanel(mode,msg){const p=panel();if(!p)return;const h=document.getElementById('v170SyncHeadline'),b=document.getElementById('v170SyncBadge');if(h)h.textContent=msg||'';if(b){b.textContent=mode==='ok'?'متزامن':mode==='saving'?'جارٍ الحفظ':mode==='conflict'?'تعارض':mode==='error'?'خطأ':'انتظار';b.className='v170-badge '+mode;}const q=document.getElementById('v170Pending'),c=document.getElementById('v170Conflicts'),lv=document.getElementById('v170LastVerified'),lp=document.getElementById('v170LastPull'),le=document.getElementById('v170LastError');if(q)q.textContent=String(pendingCount());if(c)c.textContent=String(diag.openConflicts||currentConflicts.length||0);if(lv)lv.textContent=fmtTime(lastSavedAt||diag.lastSavedAt);if(lp)lp.textContent=fmtTime(lastPullAt||diag.lastPullAt);if(le)le.textContent=lastError||diag.lastError||'لا يوجد';p.dataset.state=mode;}
+function status(msg,color,mode){try{if(typeof _cloudStatus==='function')_cloudStatus(msg,color);}catch(e){}setPanel(mode||'wait',msg);}
+async function refreshHealth(showToast){try{const t=await token();const [cr,meta]=await Promise.all([request(endpoint('syncConflicts',t)),request(endpoint('syncMeta/lastVerified',t))]);if(!cr.ok)throw new Error('فحص التعارضات HTTP '+cr.status);const all=await cr.json()||{},open=Object.values(all).filter(x=>x&&x.status==='open');diag.openConflicts=open.length;currentConflicts=open;const m=meta.ok?await meta.json():null;if(m&&m.verifiedAt&&!lastSavedAt)lastSavedAt=m.verifiedAt;diag.lastSavedAt=lastSavedAt||diag.lastSavedAt;diag.lastPullAt=lastPullAt||diag.lastPullAt;diag.lastError=lastError||'';saveDiag(diag);const mode=open.length?'conflict':lastError?'error':pendingCount()?'saving':'ok';const msg=open.length?'⚠️ توجد '+open.length+' تعارضات مفتوحة؛ لم تُستبدل أي نسخة تلقائياً':pendingCount()?'⏳ توجد تغييرات معلقة لم يثبت رفعها بعد':'🟢 كل التغييرات المحلية مرفوعة ومتحققة؛ لا توجد عمليات معلقة';setPanel(mode,msg);if(showToast)originalToast(msg,open.length||lastError?true:undefined);return {ok:!open.length&&!lastError&&!pendingCount(),openConflicts:open.length,pending:pendingCount(),lastSavedAt,lastPullAt,lastError};}catch(e){lastError=String(e&&e.message||e);diag.lastError=lastError;saveDiag(diag);setPanel('error','🔴 فشل فحص المزامنة: '+lastError);if(showToast)originalToast('❌ فشل فحص المزامنة: '+lastError,true);return {ok:false,error:lastError};}}
+function ensureConflictModal(){let m=document.getElementById('v170ConflictModal');if(m)return m;m=document.createElement('div');m.id='v170ConflictModal';m.innerHTML='<div class="v170-conf-card"><h3>⚠️ تعارضات المزامنة</h3><div id="v170ConflictList"></div><div class="v170-conf-actions"><button data-act="remote">اعتماد نسخة السحابة وإلغاء التعديل المعلق</button><button data-act="local" class="warn">اعتماد نسخة هذا الجهاز بعد التأكيد</button><button data-act="close" class="plain">إغلاق</button></div></div>';document.body.appendChild(m);m.querySelector('[data-act="close"]').onclick=()=>m.style.display='none';m.querySelector('[data-act="remote"]').onclick=acceptRemote;m.querySelector('[data-act="local"]').onclick=forceLocal;return m;}
+function showConflicts(){const m=ensureConflictModal(),box=document.getElementById('v170ConflictList');const rows=currentConflicts.length?currentConflicts:[{message:'لا توجد تعارضات محملة حالياً.'}];box.innerHTML=rows.map(c=>'<div class="v170-conf-row"><b>'+String(c.path||'')+' — '+String(c.recordKey||'')+'</b><p>'+String(c.message||'')+'</p><small>معرّف التعارض: '+String(c.id||'—')+'</small></div>').join('');m.style.display='flex';}
+async function acceptRemote(){if(!confirm('سيتم إلغاء التعديل المحلي المعلق واعتماد نسخة Firebase. هل أنت متأكد؟'))return;await markConflictResolution('remote');clearOutbox();queued=false;running=false;lastError=null;currentConflicts=[];rollbackSnapshot=null;uiPending=false;hideGate();const m=document.getElementById('v170ConflictModal');if(m)m.style.display='none';await pullRoot();originalToast('✅ تم اعتماد نسخة السحابة وإلغاء التعديل المتعارض');}
+async function forceLocal(){if(!confirm('سيتم اعتماد تعديل هذا الجهاز يدوياً فوق النسخة المتعارضة. هذا ليس اختياراً تلقائياً. متابعة؟'))return;const p=loadOutbox();if(!p){originalToast('لا توجد عملية معلقة',true);return;}p.force=true;saveOutbox(p);const m=document.getElementById('v170ConflictModal');if(m)m.style.display='none';lastError=null;queued=true;await flush();if(!lastError)await markConflictResolution('local-forced');}
+const originalToast=window.toast,originalCloseModal=window.closeModal;
 function isErrorToast(arg,msg){return arg===true||(typeof arg==='string'&&(arg.includes('c0392b')||arg.includes('f87171')||arg.includes('red')))||String(msg||'').startsWith('❌')||String(msg||'').startsWith('🔴');}
 function wrappedToast(msg,arg){if(uiPending&&!isErrorToast(arg,msg)){deferredToasts.push([msg,arg]);return;}return originalToast(msg,arg);}
 function wrappedCloseModal(id){if(uiPending){if(!deferredCloses.includes(id))deferredCloses.push(id);return;}return originalCloseModal(id);}
-window.toast=wrappedToast;try{toast=wrappedToast;}catch(e){}
-window.closeModal=wrappedCloseModal;try{closeModal=wrappedCloseModal;}catch(e){}
-function ensureGate(){let g=document.getElementById('egtphV169SaveGate');if(g)return g;g=document.createElement('div');g.id='egtphV169SaveGate';g.innerHTML='<div class="v169-card"><div class="v169-spinner"></div><div class="v169-title">تثبيت العملية في Firebase…</div><div class="v169-msg">لا تغلق الصفحة حتى انتهاء التحقق.</div><div class="v169-actions"><button data-act="retry">إعادة المحاولة</button><button data-act="cancel" class="danger">إلغاء التغيير غير المحفوظ</button></div></div>';document.body.appendChild(g);g.querySelector('[data-act="retry"]').onclick=()=>{g.classList.remove('failed');lastError=null;queued=true;flush();};g.querySelector('[data-act="cancel"]').onclick=cancelPending;return g;}
-function gate(mode,msg){const g=ensureGate();g.style.display='flex';g.classList.toggle('failed',mode==='failed');g.querySelector('.v169-title').textContent=mode==='failed'?'فشل تثبيت العملية':'تثبيت العملية في Firebase…';g.querySelector('.v169-msg').textContent=msg||(mode==='failed'?'العملية لم تعتبر محفوظة. أعد المحاولة أو ألغِ التغيير.':'لا تغلق الصفحة حتى انتهاء القراءة الراجعة.');}
-function hideGate(){const g=document.getElementById('egtphV169SaveGate');if(g)g.style.display='none';}
+window.toast=wrappedToast;try{toast=wrappedToast;}catch(e){}window.closeModal=wrappedCloseModal;try{closeModal=wrappedCloseModal;}catch(e){}
+function ensureGate(){let g=document.getElementById('egtphV170SaveGate');if(g)return g;g=document.createElement('div');g.id='egtphV170SaveGate';g.innerHTML='<div class="v170-card"><div class="v170-spinner"></div><div class="v170-title">تثبيت العملية في Firebase…</div><div class="v170-msg">لا تغلق الصفحة حتى انتهاء التحقق.</div><div class="v170-actions error-actions"><button data-act="retry">إعادة المحاولة</button><button data-act="cancel" class="danger">إلغاء التغيير غير المحفوظ</button></div><div class="v170-actions conflict-actions"><button data-act="show">عرض التعارض</button><button data-act="remote">اعتماد السحابة</button><button data-act="local" class="warn">اعتماد هذا الجهاز</button></div></div>';document.body.appendChild(g);g.querySelector('[data-act="retry"]').onclick=()=>{g.className='';lastError=null;queued=true;flush();};g.querySelector('[data-act="cancel"]').onclick=cancelPending;g.querySelector('[data-act="show"]').onclick=showConflicts;g.querySelector('[data-act="remote"]').onclick=acceptRemote;g.querySelector('[data-act="local"]').onclick=forceLocal;return g;}
+function gate(mode,msg){const g=ensureGate();g.style.display='flex';g.className=mode==='conflict'?'conflict':mode==='failed'?'failed':'';g.querySelector('.v170-title').textContent=mode==='conflict'?'تعارض مزامنة — لم تُستبدل أي نسخة':mode==='failed'?'فشل تثبيت العملية':'تثبيت العملية في Firebase…';g.querySelector('.v170-msg').textContent=msg||'';}
+function hideGate(){const g=document.getElementById('egtphV170SaveGate');if(g)g.style.display='none';}
 function renderAll(){['renderDash','renderWorkers','renderSettlement','renderAdvances','renderHours','renderAbsences','renderBonuses','renderDebts','renderSummary','renderSalContent','renderHrsContent','renderAbsContent','renderBonContent','renderDbtContent','updateBadges'].forEach(n=>{try{if(typeof window[n]==='function')window[n]();}catch(e){}});}
 function releaseSuccess(){uiPending=false;hideGate();const closes=deferredCloses.splice(0),toasts=deferredToasts.splice(0);closes.forEach(id=>{try{originalCloseModal(id);}catch(e){}});toasts.forEach(x=>{try{originalToast(x[0],x[1]);}catch(e){}});}
-function cancelPending(){clearTimeout(retryTimer);queued=false;running=false;lastError=null;clearOutbox();if(rollbackSnapshot){window.DB=DB=clone(rollbackSnapshot);baseline=clone(rollbackSnapshot);}rollbackSnapshot=null;uiPending=false;deferredCloses=[];deferredToasts=[];hideGate();try{markSaved();}catch(e){}renderAll();try{originalToast('↩️ أُلغي التغيير لأنه لم يُحفظ في Firebase','#c0392b');}catch(e){}settlePromise({ok:false,cancelled:true,error:'ألغى المستخدم التغيير غير المحفوظ'});}
-function status(msg,color){try{if(typeof _cloudStatus==='function')_cloudStatus(msg,color);}catch(e){}const el=document.getElementById('cloud_status');if(el){el.textContent=msg;if(color)el.style.color=color;}}
+function cancelPending(){clearTimeout(retryTimer);queued=false;running=false;lastError=null;clearOutbox();if(rollbackSnapshot){window.DB=DB=clone(rollbackSnapshot);baseline=clone(rollbackSnapshot);}rollbackSnapshot=null;uiPending=false;deferredCloses=[];deferredToasts=[];hideGate();try{markSaved();}catch(e){}renderAll();setPanel('ok','🟢 لا توجد عملية معلقة');try{originalToast('↩️ أُلغي التغيير لأنه لم يُحفظ في Firebase','#c0392b');}catch(e){}settlePromise({ok:false,cancelled:true});}
 function beginPromise(){if(activePromise)return activePromise;activePromise=new Promise(res=>{resolveActive=res;});return activePromise;}
 function settlePromise(val){const r=resolveActive;activePromise=null;resolveActive=null;if(r)r(val);}
-
-async function pullRoot(){const t=await token();const r=await request(endpoint('',t));if(!r.ok)throw new Error('إعادة قراءة الجذر HTTP '+r.status);const raw=await r.json();if(!raw||typeof raw!=='object')throw new Error('نسخة Firebase بعد الحفظ غير مكتملة');_applyDBData(_v169SanitizeCloud(raw));window.__EGTPH_DB_READY__=true;window.__EGTPH_DB_READY_SOURCE__=SOURCE;return DB;}
-async function flush(){
-  if(running)return beginPromise();
-  const p=loadOutbox();
-  if(!p){queued=false;lastError=null;if(uiPending)releaseSuccess();settlePromise({ok:true,noChanges:true});return true;}
-  if(!window.__EGTPH_DB_READY__||window.__EGTPH_DB_READY_SOURCE__!==SOURCE){queued=true;status('⏳ انتظار جلب Firebase المرجعي…','var(--amber)');gate('saving','انتظار الاتصال بالمصدر المرجعي…');return beginPromise();}
-  running=true;queued=false;uiPending=true;gate('saving','العملية قيد الكتابة ثم إعادة القراءة والتحقق…');status('⏳ حفظ وتحقق بالقراءة الراجعة — '+p.txId,'var(--teal)');
-  try{
-    await persistPatch(p);
-    const cloudDB=await pullRoot();
-    verifyPatchInDB(cloudDB,p);
-    baseline=clone(cloudDB);rollbackSnapshot=null;clearOutbox();lastError=null;lastSavedAt=new Date().toISOString();try{markSaved();}catch(e){}status('🟢 محفوظ ومتحقق في '+KEY+' — '+p.txId,'var(--green1)');try{window.dispatchEvent(new CustomEvent('egtph-verified-saved',{detail:{txId:p.txId,source:SOURCE,writes:clone(writes)}}));}catch(e){}releaseSuccess();settlePromise({ok:true,txId:p.txId,source:SOURCE});return true;
-  }catch(e){
-    lastError=String(e&&e.message||e);queued=true;console.error('[v169] verified commit failed',e);status('🔴 لم يثبت الحفظ؛ العملية معلّقة: '+lastError,'var(--red)');gate('failed',lastError);try{originalToast('❌ لم تُحفظ العملية بعد: '+lastError,true);}catch(x){}clearTimeout(retryTimer);retryTimer=setTimeout(()=>{if(queued&&navigator.onLine)flush();},RETRY_MS);return false;
-  }finally{running=false;}
-}
-function save(){
-  if(!window.__EGTPH_DB_READY__||window.__EGTPH_DB_READY_SOURCE__!==SOURCE){lastError='Firebase المرجعي غير جاهز';try{originalToast('❌ انتظر حتى يكتمل جلب Firebase قبل تسجيل عملية',true);}catch(e){}return Promise.resolve({ok:false,error:lastError});}
-  const base=clone(baseline||DB), target=clone(DB), p=buildPatch(base,target);
-  if(patchEmpty(p)){try{markSaved();}catch(e){}return Promise.resolve({ok:true,noChanges:true,source:SOURCE});}
-  if(!rollbackSnapshot)rollbackSnapshot=clone(base);
-  saveOutbox(p);queued=true;uiPending=true;try{markUnsaved();}catch(e){}gate('saving','تثبيت '+p.txId+' في المسار '+ROOT+'…');const promise=beginPromise();Promise.resolve().then(flush);return promise;
-}
-
-function ready(){
-  baseline=clone(DB);lastError=null;
-  const p=loadOutbox();
-  if(p){rollbackSnapshot=clone(baseline);applyPatch(DB,p);window.DB=DB;queued=true;uiPending=true;gate('saving','استرجاع عملية غير مؤكدة ثم تثبيتها في Firebase…');renderAll();flush();}
-  else{queued=false;status('🟢 المصدر والحفظ الوحيد: Firebase '+ROOT,'var(--green1)');}
-}
-window.addEventListener('egtph-db-ready',ready);
-if(window.__EGTPH_DB_READY__&&window.__EGTPH_DB_READY_SOURCE__===SOURCE)ready();
-window.addEventListener('online',()=>{if(queued)flush();});
-window.addEventListener('beforeunload',e=>{if(running||queued||loadOutbox()){e.preventDefault();e.returnValue='توجد عملية لم يثبت حفظها في Firebase بعد.';}});
-window.saveDB=save;try{saveDB=save;}catch(e){}
-window.cloudSync=async function(){if(loadOutbox()){const ok=await flush();if(!ok)throw new Error(lastError||'فشل الحفظ');}return await window._v169PullAuthoritativeCloud();};try{cloudSync=window.cloudSync;}catch(e){}
-window.cloudPullReplace=window.cloudSync;try{cloudPullReplace=window.cloudSync;}catch(e){}
-window.cloudConfigSave=function(){status('🟢 المسار ثابت: '+ROOT,'var(--green1)');return true;};
-window.cloudAutoSetup=function(){return true;};window.cloudStartStream=function(){return true;};window.cloudForcePush=function(){throw new Error('الكتابة الكاملة على الجذر محظورة');};
+async function pullRoot(){const t=await token(),r=await request(endpoint('',t));if(!r.ok)throw new Error('جلب Firebase HTTP '+r.status);const raw=await r.json();if(!raw||typeof raw!=='object')throw new Error('نسخة Firebase المرجعية غير مكتملة');_applyDBData(_v169SanitizeCloud(raw));window.__EGTPH_DB_READY__=true;window.__EGTPH_DB_READY_SOURCE__=SOURCE;baseline=clone(DB);lastPullAt=new Date().toISOString();diag.lastPullAt=lastPullAt;diag.counts=countData(DB);diag.lastError='';saveDiag(diag);renderAll();setPanel('ok','🟢 تم جلب النسخة السحابية بالكامل؛ لا توجد تغييرات محلية معلقة');return DB;}
+async function flush(){if(running)return beginPromise();const p=loadOutbox();if(!p){queued=false;lastError=null;if(uiPending)releaseSuccess();setPanel('ok','🟢 كل التغييرات المحلية مرفوعة ومتحققة');settlePromise({ok:true,noChanges:true});return true;}if(!window.__EGTPH_DB_READY__||window.__EGTPH_DB_READY_SOURCE__!==SOURCE){queued=true;status('⏳ انتظار جلب Firebase المرجعي…','var(--amber)','saving');gate('saving','انتظار الاتصال بالمصدر المرجعي…');return beginPromise();}running=true;queued=false;uiPending=true;gate('saving','العملية قيد الرفع الذري ثم القراءة الراجعة والتحقق…');status('⏳ رفع ذري وتحقق — '+p.txId,'var(--teal)','saving');try{const result=await atomicCommit(p);_applyDBData(_v169SanitizeCloud(result.raw));window.__EGTPH_DB_READY__=true;window.__EGTPH_DB_READY_SOURCE__=SOURCE;baseline=clone(DB);rollbackSnapshot=null;clearOutbox();lastError=null;lastSavedAt=result.receipt.verifiedAt;lastPullAt=lastSavedAt;diag.lastSavedAt=lastSavedAt;diag.lastPullAt=lastPullAt;diag.lastTxId=p.txId;diag.lastError='';diag.openConflicts=0;diag.counts=countData(DB);saveDiag(diag);try{markSaved();}catch(e){}status('🟢 رُفعت كل تغييرات العملية وتحقق منها — '+p.txId,'var(--green1)','ok');try{window.dispatchEvent(new CustomEvent('egtph-verified-saved',{detail:{txId:p.txId,source:SOURCE,writes:clone(writes)}}));}catch(e){}releaseSuccess();renderAll();settlePromise({ok:true,txId:p.txId,source:SOURCE});return true;}catch(e){lastError=String(e&&e.message||e);diag.lastError=lastError;saveDiag(diag);queued=true;console.error('[v170] verified sync failed',e);if(e&&e.code==='SYNC_CONFLICT'){status('⚠️ تعارض: لم تُستبدل أي نسخة تلقائياً','var(--amber)','conflict');gate('conflict',lastError);settlePromise({ok:false,conflict:true,error:lastError});return false;}status('🔴 لم يثبت الحفظ؛ العملية معلقة: '+lastError,'var(--red)','error');gate('failed',lastError);try{originalToast('❌ لم تُحفظ العملية بعد: '+lastError,true);}catch(x){}clearTimeout(retryTimer);retryTimer=setTimeout(()=>{if(queued&&navigator.onLine)flush();},RETRY_MS);settlePromise({ok:false,error:lastError});return false;}finally{running=false;}}
+function save(){if(!window.__EGTPH_DB_READY__||window.__EGTPH_DB_READY_SOURCE__!==SOURCE){lastError='Firebase المرجعي غير جاهز';setPanel('error','🔴 Firebase المرجعي غير جاهز');try{originalToast('❌ انتظر حتى يكتمل جلب Firebase قبل تسجيل عملية',true);}catch(e){}return Promise.resolve({ok:false,error:lastError});}const base=clone(baseline||DB),target=clone(DB),p=buildPatch(base,target);if(patchEmpty(p)){try{markSaved();}catch(e){}setPanel('ok','🟢 لا توجد تغييرات غير مرفوعة');return Promise.resolve({ok:true,noChanges:true,source:SOURCE});}if(!rollbackSnapshot)rollbackSnapshot=clone(base);saveOutbox(p);queued=true;uiPending=true;try{markUnsaved();}catch(e){}gate('saving','تثبيت '+countPatch(p)+' تغييراً بمعرّفاتها داخل '+ROOT+'…');setPanel('saving','⏳ توجد '+countPatch(p)+' تغييرات قيد الرفع والتحقق');const promise=beginPromise();Promise.resolve().then(flush);return promise;}
+function ready(){baseline=clone(DB);lastError=null;lastPullAt=new Date().toISOString();diag.lastPullAt=lastPullAt;diag.counts=countData(DB);saveDiag(diag);const p=loadOutbox();if(p){rollbackSnapshot=clone(baseline);applyPatch(DB,p);window.DB=DB;queued=true;uiPending=true;gate('saving','استرجاع عملية غير مؤكدة ثم فحص التعارض قبل تثبيتها…');renderAll();flush();}else{queued=false;status('🟢 المصدر الوحيد: Firebase '+ROOT,'var(--green1)','ok');refreshHealth(false);}}
+function schedule(){clearTimeout(scheduleTimer);scheduleTimer=setTimeout(()=>{if(loadOutbox()&&!running)flush();},500);}
+async function sync(manual){if(loadOutbox()){const ok=await flush();if(!ok)return {ok:false,error:lastError};}try{await pullRoot();await refreshHealth(false);if(manual)originalToast('☁️ تم الجلب الكامل وفحص حالة المزامنة');return {ok:true};}catch(e){lastError=String(e&&e.message||e);diag.lastError=lastError;saveDiag(diag);status('🔴 فشل المزامنة: '+lastError,'var(--red)','error');if(manual)originalToast('❌ فشلت المزامنة: '+lastError,true);return {ok:false,error:lastError};}}
+window.addEventListener('egtph-db-ready',ready);if(window.__EGTPH_DB_READY__&&window.__EGTPH_DB_READY_SOURCE__===SOURCE)ready();window.addEventListener('online',()=>{if(queued)flush();else refreshHealth(false);});window.addEventListener('beforeunload',e=>{if(running||queued||loadOutbox()){e.preventDefault();e.returnValue='توجد عملية لم يثبت حفظها في Firebase بعد.';}});
+window.saveDB=save;try{saveDB=save;}catch(e){}window.cloudSync=sync;try{cloudSync=sync;}catch(e){}window.cloudPullReplace=()=>sync(true);try{cloudPullReplace=window.cloudPullReplace;}catch(e){}window.cloudConfigSave=function(){status('🟢 المسار ثابت: '+ROOT,'var(--green1)','ok');return true;};window.cloudAutoSetup=function(){return true;};window.cloudStartStream=function(){return true;};window.cloudForcePush=function(){throw new Error('الاستبدال التلقائي أو الكامل محظور؛ حل التعارض يكون بقرار صريح.');};
 
 // مقياس وحيد لكل الجداول: 0..120؛ يغيّر الجدول فقط ويبقيه متمركزاً.
 const ZMIN=0,ZMAX=120,ZSTEP=10;
 function zClamp(v){v=Math.round((Number(v)||0)/ZSTEP)*ZSTEP;return Math.max(ZMIN,Math.min(ZMAX,v));}
-function zKey(t,i){return 'EGTPH_V169_TABLE_'+String(t.id||t.getAttribute('data-table-key')||((t.closest('[id]')||{}).id)||i).replace(/[^a-zA-Z0-9_-]/g,'_');}
+function zKey(t,i){return 'EGTPH_V170_TABLE_'+String(t.id||t.getAttribute('data-table-key')||((t.closest('[id]')||{}).id)||i).replace(/[^a-zA-Z0-9_-]/g,'_');}
 function zApply(c,v){if(!c.fixed){const oldScale=c.value>0?c.value/100:1,rect=c.table.getBoundingClientRect();const mw=Math.max(rect.width>0?rect.width/oldScale:0,c.table.scrollWidth||0,c.table.offsetWidth||0),mh=Math.max(rect.height>0?rect.height/oldScale:0,c.table.scrollHeight||0,c.table.offsetHeight||0);if(mw>10&&mh>5){c.naturalWidth=mw;c.naturalHeight=mh;c.fixed=true;c.table.style.setProperty('width',mw+'px','important');c.table.style.setProperty('max-width','none','important');}}v=zClamp(v);const scale=v/100;c.value=v;c.label.textContent=v+'%';try{localStorage.setItem(c.key,String(v));}catch(e){}c.table.style.transformOrigin='top center';c.table.style.position='absolute';c.table.style.left='50%';c.table.style.top='0';c.table.style.transform='translateX(-50%) scale('+scale+')';c.table.style.visibility=v===0?'hidden':'visible';const nw=Math.max((c.naturalWidth||1)*scale,1),nh=Math.max((c.naturalHeight||1)*scale,1);c.stage.style.width=nw+'px';c.stage.style.height=nh+'px';c.stage.style.position='relative';c.stage.style.margin='0 auto';requestAnimationFrame(()=>{const max=Math.max(0,c.stage.offsetWidth-c.viewport.clientWidth);c.viewport.scrollLeft=Math.round(max/2);});}
-function zInstall(t,i){if(!t||t.dataset.v169Zoom==='1'||t.closest('.egtph-v169-stage'))return;t.dataset.v169Zoom='1';const p=t.parentNode,bar=document.createElement('div');bar.className='egtph-v169-toolbar';bar.innerHTML='<button type="button" data-z="-">−</button><span>100%</span><button type="button" data-z="+">+</button><button type="button" data-z="reset">100%</button>';const vp=document.createElement('div'),st=document.createElement('div');vp.className='egtph-v169-viewport';st.className='egtph-v169-stage';p.insertBefore(bar,t);p.insertBefore(vp,t);vp.appendChild(st);st.appendChild(t);t.style.transform='none';const rect=t.getBoundingClientRect();const c={table:t,viewport:vp,stage:st,label:bar.querySelector('span'),naturalWidth:Math.max(t.scrollWidth,t.offsetWidth,rect.width),naturalHeight:Math.max(t.scrollHeight,t.offsetHeight,rect.height),key:zKey(t,i),value:100};bar.querySelector('[data-z="-"]').onclick=()=>zApply(c,c.value-ZSTEP);bar.querySelector('[data-z="+"]').onclick=()=>zApply(c,c.value+ZSTEP);bar.querySelector('[data-z="reset"]').onclick=()=>zApply(c,100);let saved=100;try{saved=Number(localStorage.getItem(c.key)||100);}catch(e){}zApply(c,saved);t._v169Zoom=c;}
-function zScan(root){Array.from((root||document).querySelectorAll('table')).forEach(zInstall);}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>zScan(document));else zScan(document);
-new MutationObserver(ms=>{if(ms.some(m=>m.addedNodes.length))requestAnimationFrame(()=>zScan(document));}).observe(document.documentElement,{childList:true,subtree:true});
-
-window.EGTPH_V169={version:'169.0-verified-commit-outbox',source:SOURCE,root:ROOT,save,flush,pull:()=>window._v169PullAuthoritativeCloud(),status:()=>({ready:!!baseline,running,queued,lastError,lastSavedAt,outbox:!!loadOutbox(),writes:clone(writes)}),sections:['workers','advances','hours','absences','bonuses','debts','auditLog','ledger','txJournal','repairLog','cycleLocks','deletedIds','deletedRecords','trash','settings'],noRootWrite:true,noAutomaticDelete:true,outboxIsTemporary:true,zoom:{min:ZMIN,max:ZMAX,step:ZSTEP,scan:zScan}};
+function zInstall(t,i){if(!t||t.dataset.v170Zoom==='1'||t.closest('.egtph-v170-stage'))return;t.dataset.v170Zoom='1';const p=t.parentNode,bar=document.createElement('div');bar.className='egtph-v170-toolbar';bar.innerHTML='<button type="button" data-z="-">−</button><span>100%</span><button type="button" data-z="+">+</button><button type="button" data-z="reset">100%</button>';const vp=document.createElement('div'),st=document.createElement('div');vp.className='egtph-v170-viewport';st.className='egtph-v170-stage';p.insertBefore(bar,t);p.insertBefore(vp,t);vp.appendChild(st);st.appendChild(t);t.style.transform='none';const rect=t.getBoundingClientRect();const c={table:t,viewport:vp,stage:st,label:bar.querySelector('span'),naturalWidth:Math.max(t.scrollWidth,t.offsetWidth,rect.width),naturalHeight:Math.max(t.scrollHeight,t.offsetHeight,rect.height),key:zKey(t,i),value:100};bar.querySelector('[data-z="-"]').onclick=()=>zApply(c,c.value-ZSTEP);bar.querySelector('[data-z="+"]').onclick=()=>zApply(c,c.value+ZSTEP);bar.querySelector('[data-z="reset"]').onclick=()=>zApply(c,100);let saved=100;try{saved=Number(localStorage.getItem(c.key)||100);}catch(e){}zApply(c,saved);t._v170Zoom=c;}
+function zScan(root){Array.from((root||document).querySelectorAll('table')).forEach(zInstall);}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>zScan(document));else zScan(document);new MutationObserver(ms=>{if(ms.some(m=>m.addedNodes.length))requestAnimationFrame(()=>zScan(document));}).observe(document.documentElement,{childList:true,subtree:true});
+window.EGTPH_V170={version:'170.0-conflict-safe-sync-diagnostics',source:SOURCE,root:ROOT,save,flush,sync,schedule,refreshHealth,showConflicts,acceptRemote,forceLocal,status:()=>({ready:!!baseline,running,queued,pending:pendingCount(),lastError,lastSavedAt,lastPullAt,openConflicts:diag.openConflicts||currentConflicts.length||0,outbox:!!loadOutbox(),writes:clone(writes),source:SOURCE}),noLatestWins:true,conflictPolicy:'same-id-difference-stops-and-records-conflict',atomicScopedPatch:true,noAutomaticDelete:true,zoom:{min:ZMIN,max:ZMAX,step:ZSTEP,scan:zScan}};
 })();
 </script>
-<style id="egtph-v169-verified-commit-style">
-#egtphV169SaveGate{display:none;position:fixed;inset:0;z-index:2147483000;background:rgba(3,13,22,.72);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:18px;direction:rtl;font-family:Tajawal,Arial,sans-serif}
-#egtphV169SaveGate .v169-card{width:min(390px,94vw);background:#fff;color:#123;border:2px solid #0d9488;border-radius:20px;padding:22px;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.36)}
-#egtphV169SaveGate .v169-spinner{width:38px;height:38px;margin:0 auto 12px;border:4px solid #d8f3ef;border-top-color:#0d9488;border-radius:50%;animation:v169spin .85s linear infinite}
-#egtphV169SaveGate.failed .v169-spinner{animation:none;border-color:#fecdd3;border-top-color:#dc2626}
-#egtphV169SaveGate .v169-title{font-size:17px;font-weight:900;margin-bottom:8px}
-#egtphV169SaveGate .v169-msg{font-size:12px;line-height:1.7;color:#475569;word-break:break-word}
-#egtphV169SaveGate .v169-actions{display:none;gap:8px;margin-top:15px}
-#egtphV169SaveGate.failed .v169-actions{display:flex}
-#egtphV169SaveGate button{flex:1;border:0;border-radius:11px;padding:11px 8px;background:#0d9488;color:#fff;font-weight:900;font-family:inherit}
-#egtphV169SaveGate button.danger{background:#dc2626}
-@keyframes v169spin{to{transform:rotate(360deg)}}
-.egtph-v169-toolbar{display:flex;align-items:center;justify-content:center;gap:8px;margin:8px auto;padding:6px 8px;width:max-content;max-width:100%;border:1px solid rgba(13,148,136,.3);border-radius:14px;background:rgba(255,255,255,.92);position:relative;z-index:4;direction:ltr}
-.egtph-v169-toolbar button{min-width:42px;height:34px;border:1px solid rgba(13,148,136,.35);border-radius:11px;background:#fff;color:#075e54;font-weight:900;font-size:16px;touch-action:manipulation}
-.egtph-v169-toolbar span{min-width:52px;text-align:center;font-weight:900;color:#075e54;font-variant-numeric:tabular-nums}
-.egtph-v169-viewport{width:100%;max-width:100%;overflow:auto;-webkit-overflow-scrolling:touch;direction:ltr;position:relative}
-.egtph-v169-stage{direction:ltr;min-height:1px;box-sizing:border-box}
-.egtph-v169-stage>table{direction:rtl!important;margin:0!important;max-width:none!important}
+<style id="egtph-v170-conflict-safe-sync-style">
+.v170-sync-health{margin-top:10px;padding:12px;border:1px solid rgba(13,148,136,.35);border-radius:14px;background:linear-gradient(180deg,#f8fffd,#eefaf7);font-size:11px}
+.v170-sync-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.v170-sync-head b{font-size:12px}.v170-sync-head span{padding:4px 9px;border-radius:999px;background:#e2e8f0;font-weight:900;white-space:nowrap}.v170-sync-head span.ok{background:#dcfce7;color:#166534}.v170-sync-head span.saving{background:#fef3c7;color:#92400e}.v170-sync-head span.conflict{background:#ffedd5;color:#9a3412}.v170-sync-head span.error{background:#fee2e2;color:#991b1b}
+.v170-sync-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.v170-sync-grid>div{background:#fff;border:1px solid #d9eee8;border-radius:10px;padding:8px;min-width:0}.v170-sync-grid small{display:block;color:#64748b;margin-bottom:3px}.v170-sync-grid b{display:block;word-break:break-word;font-size:10px;color:#173f38}.v170-sync-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.v170-sync-actions button{border:0;border-radius:10px;padding:9px 12px;background:#0d9488;color:#fff;font-family:inherit;font-weight:900}
+#egtphV170SaveGate,#v170ConflictModal{display:none;position:fixed;inset:0;z-index:2147483000;background:rgba(3,13,22,.74);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:18px;direction:rtl;font-family:Tajawal,Arial,sans-serif}
+#egtphV170SaveGate .v170-card,#v170ConflictModal .v170-conf-card{width:min(430px,95vw);max-height:88vh;overflow:auto;background:#fff;color:#123;border:2px solid #0d9488;border-radius:20px;padding:20px;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.36)}
+#egtphV170SaveGate .v170-spinner{width:38px;height:38px;margin:0 auto 12px;border:4px solid #d8f3ef;border-top-color:#0d9488;border-radius:50%;animation:v170spin .85s linear infinite}#egtphV170SaveGate.failed .v170-spinner,#egtphV170SaveGate.conflict .v170-spinner{animation:none;border-color:#fed7aa;border-top-color:#ea580c}
+#egtphV170SaveGate .v170-title{font-size:17px;font-weight:900;margin-bottom:8px}#egtphV170SaveGate .v170-msg{font-size:12px;line-height:1.7;color:#475569;word-break:break-word}.v170-actions{display:none;gap:7px;margin-top:14px;flex-wrap:wrap}#egtphV170SaveGate.failed .error-actions,#egtphV170SaveGate.conflict .conflict-actions{display:flex}.v170-actions button,.v170-conf-actions button{flex:1;border:0;border-radius:10px;padding:10px 8px;background:#0d9488;color:#fff;font-family:inherit;font-weight:900}.v170-actions button.danger{background:#dc2626}.v170-actions button.warn,.v170-conf-actions button.warn{background:#ea580c}.v170-conf-actions button.plain{background:#64748b}
+.v170-conf-row{text-align:right;border:1px solid #fed7aa;background:#fff7ed;border-radius:12px;padding:10px;margin:8px 0}.v170-conf-row b{word-break:break-all}.v170-conf-row p{margin:5px 0;color:#7c2d12;font-size:12px}.v170-conf-row small{color:#64748b}.v170-conf-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+@keyframes v170spin{to{transform:rotate(360deg)}}
+.egtph-v170-toolbar{display:flex;align-items:center;justify-content:center;gap:8px;margin:8px auto;padding:6px 8px;width:max-content;max-width:100%;border:1px solid rgba(13,148,136,.3);border-radius:14px;background:rgba(255,255,255,.92);position:relative;z-index:4;direction:ltr}.egtph-v170-toolbar button{min-width:42px;height:34px;border:1px solid rgba(13,148,136,.35);border-radius:11px;background:#fff;color:#075e54;font-weight:900;font-size:16px;touch-action:manipulation}.egtph-v170-toolbar span{min-width:52px;text-align:center;font-weight:900;color:#075e54;font-variant-numeric:tabular-nums}.egtph-v170-viewport{width:100%;max-width:100%;overflow:auto;-webkit-overflow-scrolling:touch;direction:ltr;position:relative}.egtph-v170-stage{direction:ltr;min-height:1px;box-sizing:border-box}.egtph-v170-stage>table{direction:rtl!important;margin:0!important;max-width:none!important}
+@media(max-width:560px){.v170-sync-grid{grid-template-columns:1fr}.v170-sync-actions button{flex:1}}
 </style>
 
 </body></html>
