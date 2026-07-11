@@ -302,6 +302,29 @@ table tbody tr:last-child td{border-bottom:none}
 .debt-row{background:#fff5f5 !important}
 .dark .debt-row{background:#2d1f1f !important}
 
+/* === DEBT HISTORY — display/audit only === */
+.debt-history-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.debt-history-summary-box{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px;text-align:center;min-width:0}
+.debt-history-summary-box .lbl{display:block;color:var(--text2);font-size:11px;font-weight:700;margin-bottom:3px}
+.debt-history-summary-box .val{display:block;color:var(--text);font-size:15px;font-weight:900;overflow-wrap:anywhere}
+.debt-history-list{display:grid;grid-template-columns:1fr;gap:9px;margin-top:12px}
+.debt-history-item{background:var(--card);border:1px solid var(--border);border-right:4px solid var(--danger);border-radius:12px;padding:11px 12px}
+.debt-history-item.pay{border-right-color:var(--success)}
+.debt-history-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.debt-history-op{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.debt-history-seq{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:26px;padding:0 7px;border-radius:8px;background:var(--bg2);color:var(--text2);font-size:11px;font-weight:900}
+.debt-history-type{font-size:12px;font-weight:900}
+.debt-history-amount{font-size:15px;font-weight:900;color:var(--danger);direction:ltr}
+.debt-history-item.pay .debt-history-amount{color:var(--success)}
+.debt-history-meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;color:var(--text2);font-size:11.5px;font-weight:700}
+.debt-history-note{margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);color:var(--text2);font-size:12px;line-height:1.6}
+.debt-history-readonly-note{margin-top:12px;padding:9px 11px;border:1px dashed var(--border2);border-radius:10px;background:var(--primary-soft);color:var(--text2);font-size:11.5px;line-height:1.7}
+@media(max-width:560px){
+  .debt-history-summary{grid-template-columns:1fr}
+  .debt-history-head{align-items:flex-start}
+  .debt-history-amount{width:100%;text-align:right}
+}
+
 .empty-state{text-align:center;padding:40px 20px;color:var(--text3)}
 .empty-state i{font-size:48px;margin-bottom:14px;color:var(--text3);opacity:.5}
 .empty-state h4{font-size:16px;font-weight:700;color:var(--text2);margin-bottom:6px}
@@ -1220,7 +1243,7 @@ html,body{max-width:100%;overflow-x:hidden}
 <div class="toast" id="toast"></div>
 
 <script>
-window.EGTPH_BUILD='v35-real-pdf-file-share-fixed';
+window.EGTPH_BUILD='v36-debt-history-timeline-audit';
 /* ====================================================
    EGTPH - سجل الأجرة الأسبوعي  |  المحرك الرئيسي
    ==================================================== */
@@ -1320,6 +1343,9 @@ function migrateDB(){
   });
   if(!DB.weeks)    DB.weeks=[];
   if(!DB.debts)    DB.debts=[];
+  /* سجل حركات الدين قد يكون غائباً في بعض البيانات القديمة.
+     نهيئه كمصفوفة فقط من دون إعادة بناء تاريخ أو تغيير total/paid. */
+  DB.debts.forEach(d=>{ if(d&&!Array.isArray(d.dates)) d.dates=[]; });
   if(!DB.pendingWages) DB.pendingWages=[]; // أجور مدفوعة جزئياً — تذكير بالمتبقي حتى يُسدَّد كاملاً
   if(!DB.workers)  DB.workers=[];
   if(!DB.projects) DB.projects=[];
@@ -3242,6 +3268,7 @@ function openDebtModal(){
     if(existing){
       existing.total+=t;
       if(inst>0) existing.installment=inst;
+      existing.dates=Array.isArray(existing.dates)?existing.dates:[];
       existing.dates.push({date:new Date().toISOString(),amount:t,note,type:'add'});
       existing._mod=nextMod();
     } else {
@@ -3275,7 +3302,7 @@ function addDebtFromWeek(workerId){
     if(amount<=0){ showToast('المبلغ غير صحيح','error'); return false; }
     const note=document.getElementById('newDebtNote').value;
     const existing=DB.debts.find(d=>d.workerId===workerId);
-    if(existing){ existing.total+=amount; if(inst>0)existing.installment=inst; existing.dates.push({date:new Date().toISOString(),amount,note,type:'add'}); existing._mod=nextMod(); }
+    if(existing){ existing.total+=amount; if(inst>0)existing.installment=inst; existing.dates=Array.isArray(existing.dates)?existing.dates:[]; existing.dates.push({date:new Date().toISOString(),amount,note,type:'add'}); existing._mod=nextMod(); }
     else DB.debts.push({id:generateId(),workerId,total:amount,paid:0,installment:inst,_mod:nextMod(),dates:[{date:new Date().toISOString(),amount,note,type:'add'}]});
     saveDB(); renderWeek(); renderDebts();
     showToast('✅ تم تسجيل الدين');
@@ -3291,9 +3318,12 @@ function editDebtPlan(wid){
     <div class="form-group mt-2"><label>تسديد يدوي (دج) — اختياري</label><input type="number" id="editPay" min="0" placeholder="مبلغ تسدده الآن"></div>`,()=>{
     d.installment=num(document.getElementById('editInst').value);
     const pay=num(document.getElementById('editPay').value);
-    if(pay>0){
-      d.paid+=Math.min(pay,d.total-d.paid);
-      d.dates.push({date:new Date().toISOString(),amount:pay,type:'pay'});
+    const remaining=Math.max(0,num(d.total)-num(d.paid));
+    const actualPay=Math.min(pay,remaining);
+    if(actualPay>0){
+      d.dates=Array.isArray(d.dates)?d.dates:[];
+      d.dates.push({date:new Date().toISOString(),amount:actualPay,note:'تسديد يدوي',type:'pay'});
+      recalculateDebtPaid(d);
     }
     d._mod=nextMod();
     saveDB(); renderDebts(); renderWorkers();
@@ -3310,13 +3340,73 @@ function deleteDebt(wid){
     saveDB(); renderDebts(); renderWorkers();
   });
 }
+function formatDebtHistoryStamp(value){
+  const raw=String(value||'').trim();
+  const dt=new Date(raw);
+  const valid=Number.isFinite(dt.getTime());
+  const hasTime=/(?:T|\s)\d{1,2}:\d{2}/.test(raw);
+  return {
+    sort:valid?dt.getTime():Number.MAX_SAFE_INTEGER,
+    date:valid?dt.toLocaleDateString('ar-DZ',{year:'numeric',month:'2-digit',day:'2-digit'}):'غير مسجل',
+    time:valid&&hasTime?dt.toLocaleTimeString('ar-DZ',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}):'غير مسجلة'
+  };
+}
+function getDebtHistoryOperations(debt){
+  return (Array.isArray(debt?.dates)?debt.dates:[]).map((entry,sourceIndex)=>{
+    const safeEntry=entry&&typeof entry==='object'?entry:{};
+    return {entry:safeEntry,sourceIndex,stamp:formatDebtHistoryStamp(safeEntry.date)};
+  }).sort((a,b)=>a.stamp.sort-b.stamp.sort||a.sourceIndex-b.sourceIndex);
+}
+function openDebtHistory(wid){
+  const d=(DB.debts||[]).find(x=>x.workerId===wid);
+  if(!d){ showToast('سجل الدين غير موجود','error'); return; }
+  const w=(DB.workers||[]).find(x=>x.id===wid);
+  const rem=Math.max(0,num(d.total)-num(d.paid));
+  const operations=getDebtHistoryOperations(d);
+  const historyHTML=operations.length?operations.map((row,index)=>{
+    const x=row.entry;
+    const isPay=x.type==='pay';
+    const amount=Math.max(0,num(x.amount));
+    let note=String(x.note||'').trim();
+    if(!note&&isPay&&x.weekStart) note=`خصم دين ضمن أسبوع ${formatDateAR(x.weekStart)}`;
+    if(!note) note=isPay?'تسديد / قسط':'إضافة دين';
+    return `<div class="debt-history-item ${isPay?'pay':'add'}">
+      <div class="debt-history-head">
+        <div class="debt-history-op"><span class="debt-history-seq">#${index+1}</span><span class="debt-history-type">${isPay?'تسديد / قسط':'دين مضاف'}</span></div>
+        <span class="debt-history-amount">${isPay?'-':'+'}${money(amount)} دج</span>
+      </div>
+      <div class="debt-history-meta">
+        <span><i class="fas fa-calendar-day"></i> ${row.stamp.date}</span>
+        <span><i class="fas fa-clock"></i> ${row.stamp.time}</span>
+      </div>
+      <div class="debt-history-note">${escapeHTML(note)}</div>
+    </div>`;
+  }).join(''):`<div class="empty-state" style="padding:24px 12px"><i class="fas fa-clock-rotate-left"></i><h4>لا يوجد تفصيل زمني قديم</h4><p>هذا الدين محفوظ كمجموع فقط، لذلك لن أخمّن تاريخاً أو ساعة غير موجودين في البيانات.</p></div>`;
+  const html=`
+    <div class="debt-history-summary">
+      <div class="debt-history-summary-box"><span class="lbl">إجمالي الدين</span><span class="val">${money(d.total)} دج</span></div>
+      <div class="debt-history-summary-box"><span class="lbl">المسدد</span><span class="val">${money(d.paid)} دج</span></div>
+      <div class="debt-history-summary-box"><span class="lbl">المتبقي</span><span class="val">${money(rem)} دج</span></div>
+    </div>
+    <div class="text-muted">الترتيب زمني من الأقدم إلى الأحدث.</div>
+    <div class="debt-history-list">${historyHTML}</div>
+    <div class="debt-history-readonly-note"><i class="fas fa-eye"></i> هذا السجل للعرض والتدقيق فقط. الحساب المالي يبقى معتمداً على إجمالي الدين والمسدد والمتبقي الحاليين كما هو.</div>`;
+  openModal(`سجل دين العامل: ${escapeHTML(w?.name||'—')}`,html,null);
+  const saveBtn=document.getElementById('modalSaveBtn');
+  if(saveBtn) saveBtn.remove();
+  const closeBtn=document.querySelector('#modalContent .modal-actions .btn-outline');
+  if(closeBtn) closeBtn.innerHTML='<i class="fas fa-times"></i> إغلاق';
+  const icon=document.querySelector('#modalContent h3 i');
+  if(icon) icon.className='fas fa-clock-rotate-left';
+}
 function renderDebts(){
   const tb=document.getElementById('debtsTableBody');
   if(!DB.debts.length){ tb.innerHTML='<tr><td colspan="7"><div class="empty-state"><i class="fas fa-circle-check"></i><h4>لا توجد ديون</h4><p>كل الحسابات مسددة 🎉</p></div></td></tr>'; return; }
   tb.innerHTML=DB.debts.map(d=>{
     const w=DB.workers.find(x=>x.id===d.workerId);
     const rem=d.total-d.paid;
-    const lastPay=d.dates.filter(x=>x.type==='pay').slice(-1)[0];
+    const dates=Array.isArray(d.dates)?d.dates:[];
+    const lastPay=dates.filter(x=>x&&x.type==='pay').slice(-1)[0];
     const weeksLeft=d.installment>0?Math.ceil(rem/d.installment):0;
     return `<tr class="${rem>0?'debt-row':''}">
       <td><b>${w?.name||'—'}</b></td>
@@ -3325,7 +3415,7 @@ function renderDebts(){
       <td><span class="badge ${rem>0?'badge-debt':'badge-paid'}">${money(rem)} دج</span></td>
       <td>${d.installment>0?`<span class="badge badge-info">${money(d.installment)} دج/أسبوع</span>${rem>0?`<br><span class="text-muted">باقٍ ~${weeksLeft} أسبوع</span>`:''}`:'<span class="text-muted">بدون خطة</span>'}</td>
       <td>${lastPay?formatDateAR(lastPay.date):'—'}</td>
-      <td><button class="btn btn-outline btn-xs" onclick="editDebtPlan('${d.workerId}')"><i class="fas fa-edit"></i></button> <button class="btn btn-danger btn-xs" onclick="deleteDebt('${d.workerId}')"><i class="fas fa-trash"></i></button></td>
+      <td><button class="btn btn-info btn-xs" onclick="openDebtHistory('${d.workerId}')"><i class="fas fa-clock-rotate-left"></i> السجل</button> <button class="btn btn-outline btn-xs" onclick="editDebtPlan('${d.workerId}')"><i class="fas fa-edit"></i></button> <button class="btn btn-danger btn-xs" onclick="deleteDebt('${d.workerId}')"><i class="fas fa-trash"></i></button></td>
     </tr>`;
   }).join('');
 }
