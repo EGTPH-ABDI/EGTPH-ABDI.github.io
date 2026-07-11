@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script src="../egtph-auth.js"></script>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#1c2436">
 <title>EGTPH · صيانة الأسطول</title>
 <style>
@@ -137,6 +137,8 @@ main{max-width:680px;margin:0 auto;padding:14px 12px 0;}
 .albadge.now{background:#fdf3e0;color:var(--soon);}
 .albadge.soon{background:#e7f0fd;color:#1456b8;}
 .savemsg{font-size:10.5px;color:var(--muted);margin-top:4px;min-height:13px;}
+.action-toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);z-index:600;max-width:calc(100vw - 28px);background:var(--ink);color:#fff;border:1px solid var(--gold);border-radius:12px;padding:10px 14px;font-size:12.5px;font-weight:800;text-align:center;box-shadow:0 8px 28px rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;}
+.action-toast.show{opacity:1;transform:translate(-50%,0);}
 .calcbtn{display:block;width:calc(100% - 28px);margin:4px 14px 0;border:none;background:linear-gradient(160deg,var(--ink),var(--ink2));color:var(--cream);font-family:'Cairo';font-weight:800;font-size:14px;border-radius:12px;padding:12px;cursor:pointer;}
 .calcbtn:active{transform:scale(.98);}
 .calcbox{margin:12px 14px 2px;border:1px solid var(--gold);border-radius:12px;overflow:hidden;display:none;}
@@ -376,7 +378,7 @@ footer{text-align:center;font-size:10px;color:var(--muted);padding:16px 12px 4px
       <div class="dtabs">
         <button class="dtab active" data-t="maint" onclick="setDetailTab('maint')"><span>🔧</span>الصيانة</button>
         <button class="dtab" data-t="alerts" onclick="setDetailTab('alerts')"><span>🔔</span>التنبيهات</button>
-        <button class="dtab" data-t="log" onclick="setDetailTab('log')"><span>✚</span>تسجيل</button>
+        <button class="dtab" data-t="log" onclick="openLog()"><span>✚</span>تسجيل</button>
         <button class="dtab" data-t="hist" onclick="setDetailTab('hist')"><span>📜</span>السجل</button>
         <button class="dtab" data-t="rate" onclick="setDetailTab('rate')"><span>📅</span>المعدّل</button>
         <button class="dtab" data-t="info" onclick="setDetailTab('info')"><span>🪪</span>المعلومات</button>
@@ -458,6 +460,7 @@ footer{text-align:center;font-size:10px;color:var(--muted);padding:16px 12px 4px
 </main>
 
 <div id="printArea"></div>
+<div id="actionToast" class="action-toast" role="status" aria-live="polite"></div>
 
 <div class="overlay" id="dedupeOverlay"><div class="modal" style="max-width:520px;max-height:88vh;overflow:auto">
   <h3>🔍 حذف الآلات المكرّرة</h3>
@@ -708,6 +711,7 @@ function migrate(){let ch=false;
   if(DB.settings.rateLockTruck==null){DB.settings.rateLockTruck=true;ch=true;}
   if(DB.settings.rateLockMachine==null){DB.settings.rateLockMachine=true;ch=true;}
   if(!Array.isArray(DB.deletedIds)){DB.deletedIds=[];ch=true;}
+  if(!DB._settingsMods||typeof DB._settingsMods!=='object'||Array.isArray(DB._settingsMods)){DB._settingsMods={};ch=true;}
   DB.machines.forEach(mc=>{
     if(!mc||typeof mc!=='object')return;
     if(!mc.id){mc.id=m();ch=true;}
@@ -726,16 +730,20 @@ function migrate(){let ch=false;
       if(Number.isFinite(r)&&d&&!histKeys.has(key)){mc.history.push({r:r,d:d,ids:[id],note:'ترحيل تلقائي لتسجيل يدوي سابق',manual:true,legacy:true});histKeys.add(key);ch=true;}
     });
     if(stageHx220hdBreatherOem(mc))ch=true;
+    if(ensureMachineSyncMeta(mc))ch=true;
   });
+  if(ensureSettingsSyncMeta())ch=true;
   // لا تُعاد إضافة آلات محذوفة تلقائياً؛ ولا يُنشأ كتالوج مخصص قبل أول تعديل يدوي.
   if(ch&&!MEM_ONLY){try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}}
 }
 // طابع مزامنة موحّد: يُصحَّح بساعة Firebase Server ولا يعتمد على ساعة الجهاز وحدها.
 // كل تعديل آلة يوسَم مباشرة بالآلة المقصودة، وليس بـ DB.active فقط.
-const SYNC_SCHEMA_VERSION=4;
-const DIRTY_MACHINES_KEY='egtph_parc_dirty_machines_v4';
+const SYNC_SCHEMA_VERSION=5;
+const DIRTY_MACHINES_KEY='egtph_parc_dirty_machines_v5';
 const DEVICE_ID_KEY='egtph_parc_device_id_v4';
+const MACHINE_META_KEYS=new Set(['history','readings','conditionHistory','done','catalog','_deletedHistory','_deletedReadings','_deletedAirf','_deletedCatalogPurchases','_fieldMods','_mod','_rev','_device','_dirty','_lastChange']);
 let _lastMod=0,_serverOffset=0,_serverOffsetAt=0;
+let _machineSnapshots=new Map(),_settingsSnapshot=new Map();
 function getDeviceId(){
   try{
     let id=localStorage.getItem(DEVICE_ID_KEY);
@@ -745,53 +753,59 @@ function getDeviceId(){
 }
 function serverNow(){ return Date.now()+(_serverOffset||0); }
 function nextMod(){ let t=serverNow(); try{t+=(performance.now()%1)/1000;}catch(e){} if(t<=_lastMod)t=_lastMod+0.001; _lastMod=t; return t; }
+function deepClone(v){return v==null?v:JSON.parse(JSON.stringify(v));}
+function canonicalStringify(v){
+  const walk=x=>{if(Array.isArray(x))return x.map(walk);if(x&&typeof x==='object'){const o={};Object.keys(x).sort().forEach(k=>{if(x[k]!==undefined)o[k]=walk(x[k]);});return o;}return x;};
+  return JSON.stringify(walk(v));
+}
+function syncRecordId(kind){const t=Math.round(nextMod()*1000);return String(kind||'rec')+'_'+getDeviceId().slice(-10)+'_'+t.toString(36)+'_'+Math.random().toString(36).slice(2,7);}
+function legacyRecordId(kind,e){const c=Object.assign({},e||{});delete c._id;delete c._mod;delete c._device;return 'legacy_'+kind+'_'+fbHash(canonicalStringify(c));}
+function legacyRecordMod(mc,e){const d=e&&e.d&&_parseISO(e.d);const dt=d?Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()):0;return Math.max(dt,Number(mc&&mc._mod)||0,1);}
+function ensureRecordMeta(mc,kind,e){if(!e||typeof e!=='object')return false;let ch=false;if(!e._id){e._id=legacyRecordId(kind,e);ch=true;}if(!Number.isFinite(Number(e._mod))||Number(e._mod)<=0){e._mod=legacyRecordMod(mc,e);ch=true;}if(!e._device){e._device=String(mc&&mc._device||'legacy');ch=true;}return ch;}
+function ensureCatalogMeta(mc){let ch=false;const cat=mc&&mc.catalog;if(!cat||typeof cat!=='object'||Array.isArray(cat))return ch;['filters','oils','purchases'].forEach(kind=>{if(!Array.isArray(cat[kind]))return;cat[kind].forEach(e=>{if(ensureRecordMeta(mc,'cat_'+kind,e))ch=true;});});if(!Array.isArray(mc._deletedCatalogPurchases)){mc._deletedCatalogPurchases=[];ch=true;}return ch;}
+function machineFieldKeys(mc){const keys=new Set(Object.keys(mc||{}));Object.keys((mc&&mc._fieldMods)||{}).forEach(k=>keys.add(k));MACHINE_META_KEYS.forEach(k=>keys.delete(k));return Array.from(keys);}
+function ensureMachineSyncMeta(mc){if(!mc||typeof mc!=='object')return false;let ch=false;if(!Number.isFinite(Number(mc._mod))||Number(mc._mod)<=0){mc._mod=1;ch=true;}if(!Number.isFinite(Number(mc._rev))||Number(mc._rev)<0){mc._rev=0;ch=true;}if(!mc._device){mc._device='legacy';ch=true;}if(!mc.conditionHistory||typeof mc.conditionHistory!=='object'||Array.isArray(mc.conditionHistory)){mc.conditionHistory={};ch=true;}if(!Array.isArray(mc.conditionHistory.airf)){mc.conditionHistory.airf=[];ch=true;}if(!mc._fieldMods||typeof mc._fieldMods!=='object'||Array.isArray(mc._fieldMods)){mc._fieldMods={};ch=true;}const base=Math.max(Number(mc._mod)||0,1);machineFieldKeys(mc).forEach(k=>{if(!Number.isFinite(Number(mc._fieldMods[k]))||Number(mc._fieldMods[k])<=0){mc._fieldMods[k]=base;ch=true;}});if(!Array.isArray(mc._deletedHistory)){mc._deletedHistory=[];ch=true;}if(!Array.isArray(mc._deletedReadings)){mc._deletedReadings=[];ch=true;}if(!Array.isArray(mc._deletedAirf)){mc._deletedAirf=[];ch=true;}(mc.history||[]).forEach(e=>{if(ensureRecordMeta(mc,'hist',e))ch=true;});(mc.readings||[]).forEach(e=>{if(ensureRecordMeta(mc,'read',e))ch=true;});airFilterCleaningEntries(mc).forEach(e=>{if(ensureRecordMeta(mc,'airf',e))ch=true;});if(ensureCatalogMeta(mc))ch=true;if('_dirty' in mc){delete mc._dirty;ch=true;}return ch;}
+function ensureSettingsSyncMeta(){let ch=false;if(!DB._settingsMods||typeof DB._settingsMods!=='object'||Array.isArray(DB._settingsMods)){DB._settingsMods={};ch=true;}const base=Math.max(Number(DB._mod)||0,1);const keys=new Set(Object.keys(DB.settings||{}));Object.keys(DB._settingsMods||{}).forEach(k=>keys.add(k));keys.forEach(k=>{if(!Number.isFinite(Number(DB._settingsMods[k]))||Number(DB._settingsMods[k])<=0){DB._settingsMods[k]=base;ch=true;}});return ch;}
+function snapshotMachine(mc){const m=new Map();machineFieldKeys(mc).forEach(k=>m.set(k,canonicalStringify(mc[k])));return m;}
+function snapshotSettings(){const m=new Map();const keys=new Set(Object.keys(DB.settings||{}));Object.keys(DB._settingsMods||{}).forEach(k=>keys.add(k));keys.forEach(k=>m.set(k,canonicalStringify((DB.settings||{})[k])));return m;}
+function initSyncSnapshots(){_machineSnapshots=new Map();(DB.machines||[]).forEach(mc=>_machineSnapshots.set(String(mc.id),snapshotMachine(mc)));_settingsSnapshot=snapshotSettings();}
+function stampChangedFields(mc,t){ensureMachineSyncMeta(mc);const id=String(mc.id),prev=_machineSnapshots.get(id)||new Map(),cur=snapshotMachine(mc);const keys=new Set([...prev.keys(),...cur.keys()]);let changed=false;keys.forEach(k=>{if(prev.get(k)!==cur.get(k)){mc._fieldMods[k]=t;changed=true;}});return changed;}
+function stampChangedSettings(t){ensureSettingsSyncMeta();const prev=_settingsSnapshot||new Map(),cur=snapshotSettings();const keys=new Set([...prev.keys(),...cur.keys()]);let changed=false;keys.forEach(k=>{if(prev.get(k)!==cur.get(k)){DB._settingsMods[k]=t;changed=true;}});return changed;}
+function newSyncRecord(kind,data){const e=Object.assign({},data||{});e._id=syncRecordId(kind);e._mod=nextMod();e._device=getDeviceId();return e;}
+function touchSyncRecord(kind,e){if(!e)return e;if(!e._id)e._id=legacyRecordId(kind,e);e._mod=nextMod();e._device=getDeviceId();return e;}
+function recordTombstone(mc,key,e){if(!mc||!e)return;const id=String(e._id||legacyRecordId(key,e));const prop=key==='hist'?'_deletedHistory':key==='read'?'_deletedReadings':key==='airf'?'_deletedAirf':'_deletedCatalogPurchases';if(!Array.isArray(mc[prop]))mc[prop]=[];const t=nextMod();const old=mc[prop].find(x=>String(x&&x.id)===id);if(old){if(t>Number(old.t||0)){old.t=t;old.device=getDeviceId();}}else mc[prop].push({id,t,device:getDeviceId()});if(mc[prop].length>1000)mc[prop]=mc[prop].slice(-1000);}
+function removeHistoryWhere(mc,pred){const keep=[];(mc.history||[]).forEach(e=>{if(pred(e))recordTombstone(mc,'hist',e);else keep.push(e);});mc.history=keep;}
 function _loadDirtyMachines(){try{return new Set(JSON.parse(localStorage.getItem(DIRTY_MACHINES_KEY)||'[]').map(String));}catch(e){return new Set();}}
 let _dirtyMachines=_loadDirtyMachines();
 function _saveDirtyMachines(){try{localStorage.setItem(DIRTY_MACHINES_KEY,JSON.stringify(Array.from(_dirtyMachines)));}catch(e){}}
 function markDirtyMachine(id){ if(id==null)return; _dirtyMachines.add(String(id)); _saveDirtyMachines(); _fbDirty=true; }
-function clearDirtyMachines(ids){
-  if(!ids){_dirtyMachines.clear();}
-  else{ids.forEach(id=>_dirtyMachines.delete(String(id)));}
-  _saveDirtyMachines();
-}
-function touchMachine(ref,reason){
+function clearDirtyMachines(ids){if(!ids){_dirtyMachines.clear();}else{ids.forEach(id=>_dirtyMachines.delete(String(id)));}_saveDirtyMachines();}
+function touchMachine(ref,reason,stamp){
   try{
     if(!DB||!Array.isArray(DB.machines))return null;
-    const id=(ref&&typeof ref==='object')?ref.id:ref;
-    if(id==null)return null;
-    const mc=(ref&&typeof ref==='object'&&ref.id)?ref:DB.machines.find(x=>String(x.id)===String(id));
-    if(!mc)return null;
-    const t=nextMod();
-    mc._mod=t;
-    mc._rev=(Number(mc._rev)||0)+1;
-    mc._device=getDeviceId();
-    mc._dirty=true;
-    if(reason)mc._lastChange=reason;
-    DB._mod=Math.max(Number(DB._mod)||0,t);
-    DB._device=getDeviceId();
-    markDirtyMachine(mc.id);
-    return mc;
+    const id=(ref&&typeof ref==='object')?ref.id:ref;if(id==null)return null;
+    const mc=(ref&&typeof ref==='object'&&ref.id)?ref:DB.machines.find(x=>String(x.id)===String(id));if(!mc)return null;
+    const t=Number(stamp)||nextMod();mc._mod=Math.max(Number(mc._mod)||0,t);mc._rev=(Number(mc._rev)||0)+1;mc._device=getDeviceId();if(reason)mc._lastChange=reason;DB._mod=Math.max(Number(DB._mod)||0,t);DB._device=getDeviceId();markDirtyMachine(mc.id);return mc;
   }catch(e){return null;}
 }
 function touchActive(reason){return DB&&DB.active?touchMachine(DB.active,reason||'active-save'):null;}
-function touchMachines(ids,reason){(ids||[]).forEach(id=>touchMachine(id,reason||'batch-save'));}
+function touchMachines(ids,reason){const t=nextMod();(ids||[]).forEach(id=>{const mc=DB.machines.find(x=>String(x.id)===String(id));if(mc){stampChangedFields(mc,t);touchMachine(mc,reason||'batch-save',t);}});}
 let ft;function save(machineId){
   try{
-    DB._mod=nextMod();
-    DB._device=getDeviceId();
+    const t=nextMod();DB._mod=Math.max(Number(DB._mod)||0,t);DB._device=getDeviceId();stampChangedSettings(t);
     const target=(machineId!==undefined)?machineId:DB.active;
-    if(target!==false&&target!=null)touchMachine(target,'save');
-    if(!MEM_ONLY) localStorage.setItem(KEY,JSON.stringify(DB));
-    flash('✓ تمّ الحفظ');
+    if(target!==false&&target!=null){const mc=DB.machines.find(x=>String(x.id)===String(target));if(mc){stampChangedFields(mc,t);touchMachine(mc,'save',t);}}
+    if(!MEM_ONLY)localStorage.setItem(KEY,JSON.stringify(DB));initSyncSnapshots();flash('✓ تمّ الحفظ');
   }catch(e){flash('⚠ الحفظ غير متاح هنا');}
-  try{ fbScheduleAutoPush(); }catch(e){}
-  try{ scheduleMaintenanceDashboardAlerts(); }catch(e){}
+  try{fbScheduleAutoPush();}catch(e){}try{scheduleMaintenanceDashboardAlerts();}catch(e){}
 }
 function flash(t){const e=document.getElementById('saveMsg');if(!e)return;e.textContent=t;clearTimeout(ft);ft=setTimeout(()=>e.textContent='',2000);}
+let actionToastTimer=null;
+function actionFeedback(message){const el=document.getElementById('actionToast');if(!el){flash(message);return;}el.textContent=String(message||'');el.classList.add('show');clearTimeout(actionToastTimer);actionToastTimer=setTimeout(()=>el.classList.remove('show'),2400);}
 const ACC={"truck": [["زيت المحرك WP10/WP12", "Huile moteur", [[4, "15W-40 · API CI-4 (أو ACEA E7) — يغطي حتى +50° محيطة: الأنسب لمناخ الشلف. أمثلة: Petroser X4 · Baraka Ultima Pro 740 · Chelia TD · Rubia TIR 7400 · Rimula R4"], [3, "10W-40 ديزل CI-4/E7 — جيد لكنه لا يضيف شيئاً في الصيف وغالباً أغلى"], [2, "CH-4 / CF-4 بلزوجة 15W-40 — يصلح إن كان هو المذكور في الدفتر، لكن CI-4 أفضل حماية"], [2, "20W-50 ديزل — للمحركات القديمة المستهلكة فقط، وليس للحديثة"], [1, "زيوت البنزين (API SL/SN دون تصنيف ديزل) · الزيوت الرقيقة 5W-30/0W-20 · زيت دون مواصفة مدوّنة · خلط نوعين"]]], ["علبة السرعة والجسور", "Boîte & ponts", [[4, "85W-90 API GL-5 — Tranself EP · Total EP · Carter EP · Spirax S3"], [3, "80W-90 GL-5 — يصلح، و85W-90 أثبت في الحرارة"], [1, "GL-4 وحدها (حماية ناقصة للتروس hypoïde) · زيت محرك في العلبة · ATF في الجسور"]]], ["الدركسيون", "Direction", [[4, "ISO VG 32 / ATF وفق الدفتر — Equivis ZS 32"], [1, "سائل فرامل في الدركسيون · زيت سميك 46+ (توجيه ثقيل في البرد)"]]], ["الشحم", "Graisse", [[4, "Lithium EP · NLGI 2 — يتحمّل الحرارة: Multis EP 2 · Naftal EP 2 · Gadus S2"], [3, "Lithium complexe NLGI 2 — أغلى وأكثر تحملاً للحرارة العالية"], [2, "NLGI 3 — للمحاور إذا نصّ عليها الدفتر (محاور Shacman)"], [1, "NLGI 0/1 (يسيل صيفاً) · شحم الكالسيوم العادي للنقاط الساخنة · خلط أنواع الشحم"]]], ["المبرّد", "Refroidissement", [[4, "G12/G12+ عضوي OAT · مزيج 50/50 · -36/-37° — حماية كاملة من التآكل والغليان (المطلوب)"], [3, "G13 · -36° — الجيل الأحدث، صالح أيضاً"], [2, "G12 جاهز -26° (≈40% غليكول) — مقبول في الشلف؛ لا يُضاف إليه ماء، ويبقى -36° الأفضل صيفاً"], [1, "G11 بدرجة -5°/-10° (مخفّف جداً) · الماء وحده · خلط الألوان/الأنواع · ماء معدني أو نقي دون غليكول"]]]], "exc": [["زيت المحرك Cummins", "Huile moteur", [[4, "15W-40 · API CI-4 (أو ACEA E7) — يغطي حتى +50° محيطة: الأنسب لمناخ الشلف. أمثلة: Petroser X4 · Baraka Ultima Pro 740 · Chelia TD · Rubia TIR 7400 · Rimula R4"], [3, "10W-40 ديزل CI-4/E7 — جيد لكنه لا يضيف شيئاً في الصيف وغالباً أغلى"], [2, "CH-4 / CF-4 بلزوجة 15W-40 — يصلح إن كان هو المذكور في الدفتر، لكن CI-4 أفضل حماية"], [2, "20W-50 ديزل — للمحركات القديمة المستهلكة فقط، وليس للحديثة"], [1, "زيوت البنزين (API SL/SN دون تصنيف ديزل) · الزيوت الرقيقة 5W-30/0W-20 · زيت دون مواصفة مدوّنة · خلط نوعين"]]], ["الهيدروليك", "Hydraulique", [[4, "ISO VG 68 صيفاً — وارد رسمياً في جدول Hyundai (نطاقه يتجاوز +40°): الأنسب لصيف الشلف، وهو ما تعمل به ✓"], [4, "ISO VG 46 — الخيار الرسمي لعموم السنة"], [2, "VG 32 — وارد رسمياً لكن للأجواء الباردة: لا يناسب الصيف"], [1, "خلط 46 مع 68 · زيت محرك بدل الهيدروليك · ATF · زيت متغيّر اللون (حليبي = ماء في الدارة)"]]], ["مخفّضات السير/الدوران", "Réducteurs", [[4, "SAE 85W-140 GL-5 — تعبئة المصنع الرسمية والأنسب للحرارة: Total Axle 7"], [3, "SAE 80W-90 GL-5 — وارد في جدول الحرارة الرسمي حتى ~+40°"], [2, "75W-90 — للمناطق الباردة فقط: لا حاجة إليه في الشلف"], [1, "GL-4 وحدها · زيت محرك · شحم بدل الزيت داخل المخفّض"]]], ["الشحم", "Graisse", [[4, "Lithium EP · NLGI 2 — يتحمّل الحرارة: Multis EP 2 · Naftal EP 2 · Gadus S2"], [3, "Lithium complexe NLGI 2 — أغلى وأكثر تحملاً للحرارة العالية"], [2, "NLGI 3 — للمحاور إذا نصّ عليها الدفتر (محاور Shacman)"], [1, "NLGI 0/1 (يسيل صيفاً) · شحم الكالسيوم العادي للنقاط الساخنة · خلط أنواع الشحم"]]], ["المبرّد (31L · 50/50)", "Refroidissement", [[4, "G12/G12+ عضوي OAT · مزيج 50/50 · -36/-37° — حماية كاملة من التآكل والغليان (المطلوب)"], [3, "G13 · -36° — الجيل الأحدث، صالح أيضاً"], [2, "G12 جاهز -26° (≈40% غليكول) — مقبول في الشلف؛ لا يُضاف إليه ماء، ويبقى -36° الأفضل صيفاً"], [1, "G11 بدرجة -5°/-10° (مخفّف جداً) · الماء وحده · خلط الألوان/الأنواع · ماء معدني أو نقي دون غليكول"]]]], "loader": [["زيت المحرك WP6", "Huile moteur", [[4, "15W-40 · API CI-4 (أو ACEA E7) — يغطي حتى +50° محيطة: الأنسب لمناخ الشلف. أمثلة: Petroser X4 · Baraka Ultima Pro 740 · Chelia TD · Rubia TIR 7400 · Rimula R4"], [3, "10W-40 ديزل CI-4/E7 — جيد لكنه لا يضيف شيئاً في الصيف وغالباً أغلى"], [2, "CH-4 / CF-4 بلزوجة 15W-40 — يصلح إن كان هو المذكور في الدفتر، لكن CI-4 أفضل حماية"], [2, "20W-50 ديزل — للمحركات القديمة المستهلكة فقط، وليس للحديثة"], [1, "زيوت البنزين (API SL/SN دون تصنيف ديزل) · الزيوت الرقيقة 5W-30/0W-20 · زيت دون مواصفة مدوّنة · خلط نوعين"]]], ["العلبة + convertisseur", "Boîte hydraulique", [[4, "8# (Q/SY RH2042) أو ATF Dexron II/III — Fluide ATX · Mobil ATF 220 (وهو ما يلائم الـconvertisseur)"], [2, "Caltex Torque Fluid / زيوت TO-4 — بعد تأكيد المطابقة"], [1, "GL-5 داخل العلبة (رغوة واحتكاك خاطئ = إتلاف الـconvertisseur) · زيت محرك داخل العلبة · هيدروليك VG46 داخلها"]]], ["الجسور", "Ponts", [[4, "85W-90 GL-5 (GB13895) — Total EP · Carter EP (للجسور غير ZF)"], [4, "Mobilube LS 85W-90 — إلزامي إذا كانت الجسور ZF AP410/AP412 (الدفتر: GL-5 SAE90+LS)"], [1, "85W-90 عادي في جسر ZF ذي الانزلاق المحدود — غير كافٍ (تحقق من لوحة الجسر) · GL-4 · ATF في الجسور"]]], ["سائل الفرامل", "Liquide de frein", [[4, "HZY4 تركيبي (GB12981) / DOT4 — Total HBF4"], [1, "سائل فرامل بترولي (يتلف الموانع — الدفتر يمنعه نصاً) · DOT5 سيليكون · زيت هيدروليك في دارة الفرامل"]]], ["الهيدروليك", "Hydraulique", [[4, "L-HV 46 — معامل لزوجة مرتفع يثبت بين برودة الصباح وحرارة الظهيرة"], [4, "L-HM 46 — المعيار المطلوب في دفتر Lovol"], [2, "VG 68 — دفتر Lovol يذكر عائلة الـ46 فقط؛ إن استُعمل صيفاً فبتأكيد من الوكيل ودون خلطه مع 46"], [1, "VG 32 صيفاً (رقيق → فقدان ضغط وحرارة) · ATF في الهيدروليك · زيت محرك بدله · زيت به ماء"]]], ["المبرّد", "Refroidissement", [[4, "G12/G12+ عضوي OAT · مزيج 50/50 · -36/-37° — حماية كاملة من التآكل والغليان (المطلوب)"], [3, "G13 · -36° — الجيل الأحدث، صالح أيضاً"], [2, "G12 جاهز -26° (≈40% غليكول) — مقبول في الشلف؛ لا يُضاف إليه ماء، ويبقى -36° الأفضل صيفاً"], [1, "G11 بدرجة -5°/-10° (مخفّف جداً) · الماء وحده · خلط الألوان/الأنواع · ماء معدني أو نقي دون غليكول"]]]], "jcb": [["زيت المحرك Dieselmax", "Huile moteur", [[4, "JCB EP 15W-40 (4001/1805) — الرسمي: CH-4/SJ · ACEA E5، مصمّم من -10° إلى +50°"], [4, "15W-40 CI-4/E7 معتمد للشاحنات — Petroser X4 · Baraka 740 · Rubia TIR 7400"], [2, "5W-40 (4001/2705) — للبرد القارس؛ لا حاجة إليه في الشلف"], [1, "زيت بنزين · زيت دون مواصفة · «huile moteur ordinaire» (الدفتر يحذّر منه نصاً في الهيدروليك والجسور)"]]], ["علبة Syncro Shuttle", "Boîte manuelle", [[4, "JCB Extreme Performance EP · SAE30 (4000/2605) — المحدّد من -5° إلى +46°: مثالي للشلف"], [2, "10W (4000/2505) — من -32° إلى +40°: يصلح شتاءً، وSAE30 أفضل صيفاً"], [1, "ATF (غير محدّد لهذه العلبة) · GL-5 · زيت محرك متعدد الدرجات عادي"]]], ["الجسور والمحاور", "Ponts & moyeux", [[4, "JCB Gear Oil HP Plus (4000/2205) — إلزامي إذا كان الجسر LSD أو بفرامل داخلية"], [4, "JCB HP90 (4000/0305) — للجسور العادية، والمحاور دائماً HP90"], [2, "GL-5 85W-90 تجاري — للجسر العادي فقط (دون LSD) وبتأكيد الوكيل"], [1, "GL-5 عادي في جسر LSD (يسبب اهتزاز الفرامل الداخلية ويتلفها — الدفتر صريح) · زيت محرك"]]], ["الهيدروليك (والفرامل منه)", "Hydraulique", [[4, "JCB HP46 (4002/0805) فوق 38° — صيف الشلف"], [3, "JCB Optimum Performance (4002/2005) — الأرقى"], [2, "HP32 (4002/1025) — دون 38° فقط: أي شتاءً"], [1, "VG68 خارج جدول JCB (الحد الأقصى HP46 حتى في الحر) — والفرامل تعمل بهذا الزيت: التزم بـHP46 · يُمنع DOT4 في هذه الدارة · يُمنع «huile moteur ordinaire» (تحذير الدفتر)"]]], ["الشحم", "Graisse", [[4, "JCB Special HP Grease (4003/2017) — الموصى بها"], [3, "Lithium EP2 — Multis EP2 · Naftal EP2"], [2, "JCB MPL-EP (4003/1501) — مسموح بها مع زيادة وتيرة التشحيم (الدفتر note 7)"], [1, "NLGI 0/1 · شحم عادي لا يتحمّل الحرارة"]]], ["المبرّد (17.5L)", "Refroidissement", [[4, "JCB Antifreeze HP 50/50 (4006/1120) — ASTM D3306/D6210"], [3, "G12/G12+ عضوي OAT -36° · 50/50"], [2, "G12 جاهز -26° — مقبول، و-36° أفضل"], [1, "G11 بدرجة -5/-10° · الماء وحده · الخلط · تعبئة أسرع من 10L/دقيقة (تحبس هواءً — تحذير الدفتر)"]]]]};
 const GRL={"4": "⭐ ممتاز", "3": "✓ جيد", "2": "〜 مقبول بشرط", "1": "✗ غير مقبول"};
 function buildAcc(mc){const a=ACC[mc.type];if(!a)return '';let h='<div class="note" style="margin:0 0 10px;">التدرّج محسوب وفق <b>مناخ الشلف</b> (صيف 40-45°) ودفاتر آلاتك. القاعدة: المواصفة قبل الماركة.</div>';h+=a.map(m=>'<div class="amat"><div class="ah">'+m[0]+'<span class="fr">'+m[1]+'</span></div>'+m[2].map(r=>'<div class="arow g'+r[0]+'"><span class="ab">'+GRL[r[0]]+'</span><span class="at">'+r[1]+'</span></div>').join('')+'</div>').join('');return h;}
-const TIRES={"truck": {"rims": [20], "alt": {}, "list": [["12.00R20", 4, "المقاس الشائع لشاحنات F2000 (راديال) — تأكّد من الإطار المركّب حالياً/لوحة الصانع"], ["12.00-20", 3, "المقاس نفسه ببنية قطرية (bias) — الجنط نفسه، وعمره أقصر على الطرق المعبّدة"], ["11.00R20", 2, "قطر الجنط نفسه بعرض أقل — يتطلب التحقق من مؤشر الحمولة (indice de charge)"], ["12R22.5", 1, "قطر جنط مختلف (22.5) — لا يُركّب على جنط 20 إطلاقاً"]], "note": "الضغط وفق الحمولة — راجع لوحة الضغط/الدفتر."}, "exc": {"tracked": true, "note": "آلة مجنزرة — لا إطارات. يُؤخذ عرض حذاء الجنزير بالقياس المباشر، ويُضبط شدّ الجنزير وفق الدفتر."}, "loader": {"rims": [25], "alt": {}, "list": [["17.5-25 (12PR · L-3)", 4, "المقاس الشائع لفئة FL936H — الضغط الرسمي من دفتر Lovol: أمامي 0.30-0.32 MPa · خلفي 0.28-0.30 MPa"], ["17.5R25", 3, "المكافئ الراديال — الجنط نفسه"], ["20.5-25", 2, "أعرض — يتطلب جنطاً مناسباً وتأكيد الخلوص؛ استشر المورّد"], ["قطر ≠ 25", 1, "غير قابل للتركيب دون تغيير الجنوط"]], "note": "عزم براغي العجلات (Lovol): 500-585 N·m."}, "jcb": {"rims": [18, 28], "alt": {"26": "بديل وارد في بعض الأسواق (مثل 18.4-26) — يتطلب جنط 26 وتأكيد الخلوص لدى وكيل JCB"}, "pos": {"18": "أمامي", "28": "خلفي"}, "list": [["أمامي: 12.5/80-18", 4, "الشائع لـ3CX 4WD — تأكّد من الإطار المركّب حالياً (دفترك: صفحة الإطارات 407)"], ["خلفي: 16.9-28", 4, "الشائع لـ3CX — عزم البراغي 680 N·m (رسمي)"], ["خلفي: 16.9R28", 3, "المكافئ الراديال — الجنط نفسه"], ["خلفي: 18.4-26", 2, "بديل وارد — يتطلب جنط 26 وتأكيد الخلوص"]], "note": "عزم براغي العجلات (JCB الرسمي): 680 N·m."}};
+const TIRES={"truck": {"rims": [20], "alt": {}, "list": [["12.00R20", 4, "المقاس الشائع لشاحنات F2000 (راديال) — تأكّد من الإطار المركّب حالياً/لوحة الصانع"], ["12.00-20", 3, "المقاس نفسه ببنية قطرية (bias) — الجنط نفسه، وعمره أقصر على الطرق المعبّدة"], ["11.00R20", 2, "قطر الجنط نفسه بعرض أقل — يتطلب التحقق من مؤشر الحمولة (indice de charge)"], ["12R22.5", 1, "قطر جنط مختلف (22.5) — لا يُركّب على جنط 20 إطلاقاً"]], "note": "الضغط وفق الحمولة — راجع لوحة الضغط/الدفتر."}, "jmc": {"rims": [15, 16], "alt": {}, "list": [["6.50R15 · 10PR", 4, "مذكور في شهادة المطابقة للـJMC: المرجع الأقوى في بيانات هذا العتاد"], ["6.50R16", 2, "مذكور في Proforma Invoice للمورّد، لكنه يخالف شهادة المطابقة: تحقّق من المقاس المكتوب على الإطار والجنط المركّبين قبل الشراء"]], "note": "يوجد تعارض داخل مستندات العتاد بين 6.50R15 في شهادة المطابقة و6.50R16 في PI؛ لا تعتمد R16 قبل فحص العجلة فعلياً."}, "exc": {"tracked": true, "note": "آلة مجنزرة — لا إطارات. يُؤخذ عرض حذاء الجنزير بالقياس المباشر، ويُضبط شدّ الجنزير وفق الدفتر."}, "loader": {"rims": [25], "alt": {}, "list": [["17.5-25 (12PR · L-3)", 4, "المقاس الشائع لفئة FL936H — الضغط الرسمي من دفتر Lovol: أمامي 0.30-0.32 MPa · خلفي 0.28-0.30 MPa"], ["17.5R25", 3, "المكافئ الراديال — الجنط نفسه"], ["20.5-25", 2, "أعرض — يتطلب جنطاً مناسباً وتأكيد الخلوص؛ استشر المورّد"], ["قطر ≠ 25", 1, "غير قابل للتركيب دون تغيير الجنوط"]], "note": "عزم براغي العجلات (Lovol): 500-585 N·m."}, "jcb": {"rims": [18, 28], "alt": {"26": "بديل وارد في بعض الأسواق (مثل 18.4-26) — يتطلب جنط 26 وتأكيد الخلوص لدى وكيل JCB"}, "pos": {"18": "أمامي", "28": "خلفي"}, "list": [["أمامي: 12.5/80-18", 4, "الشائع لـ3CX 4WD — تأكّد من الإطار المركّب حالياً (دفترك: صفحة الإطارات 407)"], ["خلفي: 16.9-28", 4, "الشائع لـ3CX — عزم البراغي 680 N·m (رسمي)"], ["خلفي: 16.9R28", 3, "المكافئ الراديال — الجنط نفسه"], ["خلفي: 18.4-26", 2, "بديل وارد — يتطلب جنط 26 وتأكيد الخلوص"]], "note": "عزم براغي العجلات (JCB الرسمي): 680 N·m."}};
 function buildTires(mc){const t=TIRES[mc.type];if(!t)return '';if(t.tracked){return '<div class="note" style="margin:0;">'+t.note+'</div>';}let h='<div class="note" style="margin:0 0 10px;">المقاسات أدناه هي الشائعة لفئة الآلة — تأكّد دائماً من الإطار المركّب حالياً ومن لوحة الصانع قبل الشراء.</div>';h+='<div class="amat"><div class="ah">المقاسات المرجعية<span class="fr">Dimensions de référence</span></div>'+t.list.map(r=>'<div class="arow g'+r[1]+'"><span class="ab">'+GRL[r[1]]+'</span><span class="at"><b>'+r[0]+'</b> — '+r[2]+'</span></div>').join('')+'</div>';h+='<div class="note" style="margin:8px 0 10px;">'+t.note+'</div>';h+='<div style="display:flex;gap:8px;margin-top:4px;"><input id="tireInp" placeholder="اكتب المرجع: مثل 17.5-25 أو 12.00R20" style="flex:1;border:2px solid var(--gold);border-radius:11px;padding:9px 11px;font-family:Saira,Cairo;font-size:13px;direction:ltr;text-align:left;"><button onclick="checkTire()" style="border:none;background:linear-gradient(160deg,var(--ink),var(--ink2));color:var(--cream);font-family:Cairo;font-weight:800;font-size:12.5px;border-radius:11px;padding:0 14px;cursor:pointer;">افحص</button></div><div id="tireRes" style="margin-top:8px;"></div>';return h;}
 function checkTire(){const mc=DB.machines.find(x=>x.id===DB.active);const t=TIRES[mc.type];const res=document.getElementById('tireRes');let v=(document.getElementById('tireInp').value||'').trim().toUpperCase().replace(/×/g,'X').replace(/\s+/g,'');if(!v){res.innerHTML='';return;}function row(g,txt){return '<div class="arow g'+g+'" style="border:1px solid var(--line);border-radius:10px;"><span class="ab">'+GRL[g]+'</span><span class="at">'+txt+'</span></div>';}if(t.tracked){res.innerHTML=row(2,'هذه آلة مجنزرة — لا إطارات لفحصها.');return;}const hit=t.list.find(r=>r[0].toUpperCase().replace(/\s+/g,'').indexOf(v)>=0);if(hit){res.innerHTML=row(hit[1],'<b>'+hit[0]+'</b> — '+hit[2]);return;}const ms=[...v.matchAll(/(?:R|-|X|\/)(\d{2}(?:\.5)?)(?!\d)/g)];const rim=ms.length?parseFloat(ms[ms.length-1][1]):null;if(rim===null){res.innerHTML=row(2,'تعذّرت قراءة المقاس — اكتبه بصيغة مثل: 17.5-25 أو 12.00R20 أو 16.9-28.');return;}if(t.rims.indexOf(rim)>=0){const pos=t.pos&&t.pos[rim]?' ('+t.pos[rim]+')':'';res.innerHTML=row(2,'قطر الجنط مطابق'+pos+' — لكن المقاس غير مدرج في القائمة: تحقّق من العرض ومؤشر الحمولة والخلوص قبل التركيب.');return;}if(t.alt&&t.alt[rim]){res.innerHTML=row(2,t.alt[rim]);return;}res.innerHTML=row(1,'قطر الجنط ('+rim+') لا يطابق المطلوب ('+t.rims.join(' أو ')+') — غير قابل للتركيب دون تغيير الجنوط.');}
 const GUIDES={"truck": {"svg": "<svg viewBox=\"0 0 340 152\" dir=\"ltr\"><line x1=\"8\" y1=\"140\" x2=\"332\" y2=\"140\" stroke=\"#cdbf9a\" stroke-width=\"2\" stroke-dasharray=\"5 4\"/><rect x=\"20\" y=\"34\" width=\"222\" height=\"68\" rx=\"3\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#e8ddc0\"/><rect x=\"250\" y=\"44\" width=\"66\" height=\"58\" rx=\"6\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#f5edda\"/><rect x=\"300\" y=\"52\" width=\"14\" height=\"22\" rx=\"2\" fill=\"#cfe0ee\" stroke=\"#2b3550\"/><rect x=\"16\" y=\"102\" width=\"306\" height=\"11\" rx=\"2\" fill=\"#2b3550\"/><circle cx=\"68\" cy=\"125\" r=\"15\" fill=\"#2b3550\"/><circle cx=\"68\" cy=\"125\" r=\"6\" fill=\"#f5edda\"/><circle cx=\"108\" cy=\"125\" r=\"15\" fill=\"#2b3550\"/><circle cx=\"108\" cy=\"125\" r=\"6\" fill=\"#f5edda\"/><circle cx=\"288\" cy=\"125\" r=\"15\" fill=\"#2b3550\"/><circle cx=\"288\" cy=\"125\" r=\"6\" fill=\"#f5edda\"/><g><circle cx=\"266\" cy=\"113\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"266\" y=\"116.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">1</text></g><g><circle cx=\"250\" cy=\"92\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"250\" y=\"95.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">2</text></g><g><circle cx=\"212\" cy=\"113\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"212\" y=\"116.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">3</text></g><g><circle cx=\"88\" cy=\"125\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"88\" y=\"128.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">4</text></g><g><circle cx=\"296\" cy=\"62\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"296\" y=\"65.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">5</text></g><g><circle cx=\"322\" cy=\"78\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"322\" y=\"81.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">6</text></g></svg>", "leg": [["1", "سدادة تفريغ حوض المحرك (أسفل الكابينة)"], ["2", "فلتر الزيت (جانب المحرك)"], ["3", "علبة السرعة (تفريغ سفلي · تعبئة جانبية)"], ["4", "الجسور الخلفية (تفريغ سفلي · مستوى جانبي)"], ["5", "خزان الدركسيون"], ["6", "المشعّ (المبرّد)"]], "ops": [["تبديل زيت المحرك (WP10 ≈24L · WP12 ≈28L)", "Vidange moteur", ["شغّل المحرك 5 دقائق لتسخين الزيت ثم أوقفه واسحب المفتاح.", "ضع وعاءً واسعاً تحت سدادة الحوض <b>①</b> وفكّها بتأنٍّ — اترك الزيت يسيل كاملاً (~10 دقائق).", "استبدل حلقة السدادة (joint) ثم أحكم ربطها دون مبالغة.", "فكّ الفلتر <b>②</b> بمفتاح الفلاتر، نظّف القاعدة، وادهن حلقة الفلتر الجديد بزيت نظيف ثم ركّبه <b>باليد</b> مع ¾ لفة إضافية.", "املأ بالزيت الجديد من فتحة التعبئة وراقب الكمية بعصا القياس (jauge).", "شغّل المحرك دقيقة — تأكد من انطفاء ضوء الضغط ومن عدم وجود تسرب عند الفلتر والسدادة.", "أوقف المحرك، انتظر 5 دقائق، ثم اضبط المستوى بين min وmax."]], ["علبة السرعة والجسور (85W-90 GL-5)", "Boîte & ponts", ["التفريغ من السدادة السفلية <b>③</b>/<b>④</b> والزيت ساخن.", "التعبئة من <b>الفتحة الجانبية</b> — المستوى الصحيح أن يبلغ الزيت <b>حافة فتحة التعبئة</b> ويبدأ بالفيض.", "أغلق الفتحة عند بدء الفيض؛ بذلك يكون المستوى مضبوطاً تماماً."]], ["الدركسيون", "Direction", ["اضبط مستوى الخزان <b>⑤</b> على البارد بين العلامتين. الزيت: ISO VG 32 / ATF وفق الدفتر."]]]}, "exc": {"svg": "<svg viewBox=\"0 0 340 152\" dir=\"ltr\"><line x1=\"8\" y1=\"140\" x2=\"332\" y2=\"140\" stroke=\"#cdbf9a\" stroke-width=\"2\" stroke-dasharray=\"5 4\"/><rect x=\"58\" y=\"106\" width=\"225\" height=\"30\" rx=\"15\" fill=\"#2b3550\"/><circle cx=\"75\" cy=\"121\" r=\"9\" fill=\"#f5edda\"/><circle cx=\"130\" cy=\"121\" r=\"9\" fill=\"#f5edda\"/><circle cx=\"185\" cy=\"121\" r=\"9\" fill=\"#f5edda\"/><circle cx=\"263\" cy=\"121\" r=\"9\" fill=\"#f5edda\"/><rect x=\"66\" y=\"52\" width=\"168\" height=\"52\" rx=\"6\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#e8ddc0\"/><rect x=\"186\" y=\"28\" width=\"44\" height=\"44\" rx=\"5\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#f5edda\"/><rect x=\"194\" y=\"34\" width=\"18\" height=\"16\" rx=\"2\" fill=\"#cfe0ee\" stroke=\"#2b3550\"/><path d=\"M232 70 L290 42 L312 58 L268 86 Z\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#e8ddc0\"/><path d=\"M306 54 L330 96 L318 102 L296 66 Z\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#e8ddc0\"/><path d=\"M316 100 L334 116 L320 130 L308 112 Z\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#f5edda\"/><g><circle cx=\"98\" cy=\"96\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"98\" y=\"99.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">1</text></g><g><circle cx=\"128\" cy=\"96\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"128\" y=\"99.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">2</text></g><g><circle cx=\"168\" cy=\"80\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"168\" y=\"83.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">3</text></g><g><circle cx=\"268\" cy=\"121\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"268\" y=\"124.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">4</text></g><g><circle cx=\"152\" cy=\"108\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"152\" y=\"111.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">5</text></g><g><circle cx=\"82\" cy=\"68\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"82\" y=\"71.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">6</text></g></svg>", "leg": [["1", "سدادة تفريغ حوض المحرك (Cummins)"], ["2", "فلتر الزيت"], ["3", "خزان الهيدروليك (الغطاء + breather)"], ["4", "مخفّض السير (سدادتان)"], ["5", "مخفّض الدوران (أسفل البرج)"], ["6", "المشعّ"]], "ops": [["تبديل زيت المحرك (14L حتى #1161 · 20L من #1162)", "Vidange moteur", ["سخّن المحرك ثم أوقفه واسحب المفتاح. ضع وعاءً تحت السدادة <b>①</b>.", "فرّغ كاملاً، استبدل الحلقة، ثم اربط السدادة.", "الفلتر <b>②</b>: فكّ القديم، ادهن حلقة الجديد، وركّبه باليد مع ¾ لفة.", "املأ، شغّل دقيقة، ثم أوقف واضبط المستوى بعد 5 دقائق."]], ["مخفّضات السير (85W-140 GL-5 · 4.5L لكل جهة · 1000سا)", "Réducteurs de translation", ["<b>أدر الجنزير</b> حتى تصبح السدادتان <b>④</b> إحداهما في الأعلى والأخرى في الأسفل (خط عمودي).", "فرّغ من السدادة السفلية في وعاء.", "املأ من السدادة العلوية حتى <b>يفيض الزيت من حافة الفتحة</b> ثم أغلق الاثنتين.", "كرّر العملية للجهة الأخرى."]], ["مخفّض الدوران (6.2L · 1000سا)", "Réducteur de rotation", ["فرّغ واملأ وفق عصا قياس المخفّض <b>⑤</b> — وعند 1000سا أيضاً: شحم ترس الدوران والترس الصغير (7.9 كغ)."]], ["الهيدروليك (165L · 2000سا تقليدي / 5000سا أصلي)", "Circuit hydraulique", ["نظّف جيداً حول غطاء الخزان <b>③</b> قبل فتحه — الغبار هو العدو الأول للمضخة.", "استبدل فلاتر الرجوع/التفريغ/الـpilote وعنصر التنفّس كل 1000سا، والزيت كاملاً في موعده."]], ["التشحيم", "Graissage", ["محاور القادوس والذراع (11 نقطة) كل 250سا — ويومياً في الأشغال الشاقة والغبار. شحم محمل الدوران كل 250سا. شحم Lithium EP2."]]]}, "loader": {"svg": "<svg viewBox=\"0 0 340 152\" dir=\"ltr\"><line x1=\"8\" y1=\"140\" x2=\"332\" y2=\"140\" stroke=\"#cdbf9a\" stroke-width=\"2\" stroke-dasharray=\"5 4\"/><rect x=\"28\" y=\"56\" width=\"100\" height=\"50\" rx=\"6\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#e8ddc0\"/><rect x=\"128\" y=\"34\" width=\"62\" height=\"72\" rx=\"5\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#f5edda\"/><rect x=\"138\" y=\"42\" width=\"22\" height=\"20\" rx=\"2\" fill=\"#cfe0ee\" stroke=\"#2b3550\"/><rect x=\"200\" y=\"70\" width=\"52\" height=\"36\" rx=\"5\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#e8ddc0\"/><line x1=\"193\" y1=\"62\" x2=\"193\" y2=\"112\" stroke=\"#2b3550\" stroke-width=\"4\"/><path d=\"M252 78 L308 64 L316 76 L262 92 Z\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#e8ddc0\"/><path d=\"M308 60 L336 78 L324 110 L300 92 Z\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#f5edda\"/><circle cx=\"80\" cy=\"120\" r=\"17\" fill=\"#2b3550\"/><circle cx=\"80\" cy=\"120\" r=\"7\" fill=\"#f5edda\"/><circle cx=\"246\" cy=\"120\" r=\"17\" fill=\"#2b3550\"/><circle cx=\"246\" cy=\"120\" r=\"7\" fill=\"#f5edda\"/><g><circle cx=\"86\" cy=\"108\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"86\" y=\"111.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">1</text></g><g><circle cx=\"166\" cy=\"108\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"166\" y=\"111.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">2</text></g><g><circle cx=\"118\" cy=\"74\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"118\" y=\"77.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">3</text></g><g><circle cx=\"246\" cy=\"138\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"246\" y=\"141.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">4</text></g><g><circle cx=\"80\" cy=\"138\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"80\" y=\"141.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">4</text></g><g><circle cx=\"193\" cy=\"56\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"193\" y=\"59.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">5</text></g><g><circle cx=\"34\" cy=\"80\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"34\" y=\"83.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">6</text></g></svg>", "leg": [["1", "سدادة تفريغ حوض المحرك (Weichai WP6)"], ["2", "علبة السرعة + convertisseur (تفريغ سفلي)"], ["3", "خزان الهيدروليك"], ["4", "الجسور الأمامي/الخلفي (تفريغ سفلي · مستوى جانبي)"], ["5", "المفصل المركزي — قضيب التأمين + التشحيم"], ["6", "المشعّ"]], "ops": [["⚠️ قبل كل شيء: قضيب تأمين المفصل", "Barre de sécurité", ["ركّب <b>قضيب تأمين المفصل ⑤</b> قبل أي عمل وسط الآلة حتى لا تنطوي عليك، وأزِله بعد الانتهاء."]], ["تبديل زيت المحرك (WP6 · 20L رسمي)", "Vidange moteur", ["سخّن ثم أوقف المحرك. ضع وعاءً تحت السدادة <b>①</b>، فرّغ كاملاً، واستبدل الحلقة.", "فلتر الزيت: ادهن الحلقة وركّبه باليد مع ¾ لفة.", "املأ، شغّل دقيقة، ثم أوقف واضبط المستوى بعصا القياس."]], ["العلبة + convertisseur (8#/ATF · 38L رسمي · ~1000سا)", "Boîte & convertisseur", ["فرّغ من سدادة حوض العلبة <b>②</b> والزيت ساخن.", "استبدل <b>فلتر الضغط المنخفض</b> و<b>فلتر رجوع الهيدروليك</b> في الموعد نفسه.", "املأ ثم <b>اضبط المستوى بعصا القياس والمحرك يعمل بالحد الأدنى (ralenti)</b> والزيت ساخن — هكذا تُضبط العلب الهيدروليكية."]], ["الجسور (85W-90 GL-5 · 12L لكل جسر · 700سا)", "Ponts AV/AR", ["التفريغ من السدادة السفلية <b>④</b> · التعبئة من الفتحة الجانبية حتى الفيض · ثم أغلق."]], ["الهيدروليك (110L رسمي · 2500سا)", "Hydraulique", ["نظّف حول الغطاء <b>③</b> وعنصر التنفّس. استبدال كامل في الموعد مع الفلاتر."]]]}, "jcb": {"svg": "<svg viewBox=\"0 0 340 152\" dir=\"ltr\"><line x1=\"8\" y1=\"140\" x2=\"332\" y2=\"140\" stroke=\"#cdbf9a\" stroke-width=\"2\" stroke-dasharray=\"5 4\"/><rect x=\"200\" y=\"60\" width=\"70\" height=\"42\" rx=\"6\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#e8ddc0\"/><rect x=\"140\" y=\"30\" width=\"62\" height=\"72\" rx=\"5\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#f5edda\"/><rect x=\"150\" y=\"38\" width=\"20\" height=\"18\" rx=\"2\" fill=\"#cfe0ee\" stroke=\"#2b3550\"/><path d=\"M268 74 L312 68 L318 80 L274 90 Z\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#e8ddc0\"/><path d=\"M312 64 L338 80 L326 108 L304 92 Z\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#f5edda\"/><path d=\"M140 64 L96 36 L86 48 L122 78 Z\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#e8ddc0\"/><path d=\"M92 44 L58 96 L70 104 L100 56 Z\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#e8ddc0\"/><path d=\"M62 100 L42 124 L60 134 L74 110 Z\" stroke=\"#2b3550\" stroke-width=\"2\" fill=\"#f5edda\"/><line x1=\"132\" y1=\"100\" x2=\"116\" y2=\"136\" stroke=\"#2b3550\" stroke-width=\"5\"/><circle cx=\"118\" cy=\"114\" r=\"21\" fill=\"#2b3550\"/><circle cx=\"118\" cy=\"114\" r=\"9\" fill=\"#f5edda\"/><circle cx=\"242\" cy=\"120\" r=\"14\" fill=\"#2b3550\"/><circle cx=\"242\" cy=\"120\" r=\"6\" fill=\"#f5edda\"/><g><circle cx=\"232\" cy=\"104\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"232\" y=\"107.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">1</text></g><g><circle cx=\"258\" cy=\"88\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"258\" y=\"91.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">2</text></g><g><circle cx=\"172\" cy=\"106\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"172\" y=\"109.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">3</text></g><g><circle cx=\"242\" cy=\"138\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"242\" y=\"141.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">4</text></g><g><circle cx=\"118\" cy=\"140\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"118\" y=\"143.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">4</text></g><g><circle cx=\"206\" cy=\"68\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"206\" y=\"71.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">5</text></g><g><circle cx=\"268\" cy=\"72\" r=\"9\" fill=\"#b8862f\" stroke=\"#fff\" stroke-width=\"1.5\"/><text x=\"268\" y=\"75.5\" font-size=\"10\" font-weight=\"700\" fill=\"#fff\" text-anchor=\"middle\" font-family=\"Saira,Arial\">6</text></g></svg>", "leg": [["1", "سدادة تفريغ حوض المحرك — عزم 40-60 N·m"], ["2", "فلتر الزيت"], ["3", "علبة Syncro Shuttle (تفريغ سفلي + فلتر)"], ["4", "الجسور والمحاور — سدادة الجسر 79 N·m"], ["5", "خزان الهيدروليك — سدادة التفريغ 100 N·m"], ["6", "المشعّ + فاصل الماء"]], "ops": [["تبديل زيت المحرك (12-15L)", "Vidange moteur Dieselmax", ["سخّن، أوقف المحرك، واسحب المفتاح. ضع وعاءً تحت السدادة <b>①</b>.", "فرّغ، استبدل الحلقة، واربط السدادة بعزم <b>40-60 N·m</b>.", "الفلتر <b>②</b>: ادهن الحلقة وركّبه باليد مع ¾ لفة.", "املأ 12L ثم أكمل تدريجياً حتى علامة max (الفارق بين min وmax ≈ 3L).", "شغّل دقيقة، أوقف، ثم أعد ضبط المستوى بعد 5 دقائق."]], ["علبة Syncro Shuttle (≈15L · يدوية · 1000سا)", "Boîte Syncro Shuttle", ["فرّغ من السدادة أسفل العلبة <b>③</b> والزيت ساخن.", "استبدل <b>فلتر ناقل الحركة</b> (كل 500سا).", "املأ بزيت JCB EP / SAE30 (للحر) — <b>واضبط المستوى بالطريقة المبيّنة في دفتر JCB</b>.", "جولة قصيرة ثم راجع المستوى والتسرب."]], ["الجسور والمحاور (HP90 / HP Plus · 1000سا)", "Ponts & moyeux", ["الجسر: تفريغ من الأسفل · تعبئة جانبية حتى حافة الفتحة · سدادة بعزم <b>79 N·m</b>.", "المحور (moyeu): <b>أدر العجلة حتى تصبح السدادة أفقية</b> (مستوى الزيت = حافة الفتحة) · 1.9L لكل محور."]], ["الهيدروليك (130L · HP46 · 2000سا)", "Hydraulique", ["نظّف حول الغطاء <b>⑤</b>. سدادة التفريغ بعزم <b>100 N·m</b>.", "غطاء فلتر الخزان: <b>24 N·m</b>. اضبط المستوى والقادوس والذراع في وضعية السير."]], ["فاصل الماء والوقود", "Séparateur d'eau", ["نظّف فاصل الماء <b>⑥</b> أسبوعياً (50سا) — مهم جداً مع الوقود المحلي.", "فلتر الوقود كل 500سا · فلتر وقود المحرك كل 1000سا."]]]}};
@@ -1017,13 +1031,13 @@ function saveCatalogModal(){
     const q=fieldVal('catQty'),p=fieldVal('catUnitPrice');if(q&&numOrNull(q)==null){alert('الكمية غير صالحة.');return;}if(p&&numOrNull(p)==null){alert('سعر الوحدة غير صالح.');return;}
     Object.assign(row,{ref:fieldVal('catRef'),designation,qty:q,unitPrice:p,supplier:fieldVal('catSupplier'),date:fieldVal('catDate'),invoice:fieldVal('catInvoice'),note:fieldVal('catNote'),itemId:fieldVal('catItem')});
   }
-  if(isNew)rows.push(row);
+  touchSyncRecord('cat_'+kind,row);if(isNew)rows.push(row);
   save();closeCatalogModal();renderDetail();setDetailTab(kind==='purchases'?'buy':'ref');flash('✓ تم حفظ '+(kind==='filters'?'مرجع OEM':kind==='oils'?'الزيت/المادة':'الشراء'));
 }
 function deletePurchase(id){
   const mc=getActive();if(!mc)return;const rows=ensureCatalogRows(mc,'purchases');const row=rows.find(x=>x.id===id);if(!row)return;
   if(!confirm('حذف شراء «'+(row.designation||row.ref||'')+'»؟'))return;
-  mc.catalog.purchases=rows.filter(x=>x.id!==id);save();renderDetail();setDetailTab('buy');flash('✓ حُذف الشراء');
+  recordTombstone(mc,'cat_purchase',row);mc.catalog.purchases=rows.filter(x=>x.id!==id);save();renderDetail();setDetailTab('buy');flash('✓ حُذف الشراء');
 }
 
 function renderOilGuide(){
@@ -1055,7 +1069,12 @@ function unit(mc){return mc.unit||(isRoadType(mc.type)?'km':'h');}
 function todayISO(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
 // ── تواريخ مساعدة (تُستعمل في محرّك التنبيهات التلقائي) ──
-function _parseISO(s){if(!s)return null;const p=String(s).split('-');if(p.length!==3)return null;const d=new Date(+p[0],+p[1]-1,+p[2]);return isNaN(d)?null:d;}
+function _parseISO(s){if(!/^\d{4}-\d{2}-\d{2}$/.test(String(s||'')))return null;const p=String(s).split('-').map(Number),y=p[0],m=p[1],d0=p[2];if(y<1900||m<1||m>12||d0<1||d0>31)return null;const d=new Date(y,m-1,d0);if(isNaN(d)||d.getFullYear()!==y||d.getMonth()!==m-1||d.getDate()!==d0)return null;return d;}
+function validISODate(s){return !!_parseISO(s);}
+function requireISODate(s){if(validISODate(s))return String(s);alert('التاريخ غير صالح. استعمل الصيغة YYYY-MM-DD، مثلاً 2026-07-11.');return null;}
+function addMonthsISO(dateISO,months){const d=_parseISO(dateISO);if(!d)return null;const n=Math.trunc(Number(months)||0);const day=d.getDate();const first=new Date(d.getFullYear(),d.getMonth()+n,1);const lastDay=new Date(first.getFullYear(),first.getMonth()+1,0).getDate();first.setDate(Math.min(day,lastDay));return first.getFullYear()+'-'+String(first.getMonth()+1).padStart(2,'0')+'-'+String(first.getDate()).padStart(2,'0');}
+function calendarDaysDiff(fromISO,toISO){const a=_parseISO(fromISO),b=_parseISO(toISO);if(!a||!b)return null;const au=Date.UTC(a.getFullYear(),a.getMonth(),a.getDate()),bu=Date.UTC(b.getFullYear(),b.getMonth(),b.getDate());return Math.round((bu-au)/86400000);}
+function calendarIntervalLabel(it){const n=Math.max(1,Math.trunc(Number(it&&it.interval)||12));if(n===12)return 'كل 12 شهر (سنة)';if(n===24)return 'كل 24 شهر (سنتان)';return 'كل '+fmt(n)+' شهر';}
 // عدد أيام العمل بين تاريخين (يستثني الجمعة) — لا يشمل تاريخ البداية، يشمل النهاية
 function workDaysBetween(fromISO,toISO){
   const a=_parseISO(fromISO), b=_parseISO(toISO);
@@ -1090,9 +1109,10 @@ function scheduleLabel(mc,it){
   if(it&&it.conditionOnly==='airFilter')return 'حسب مؤشر الانسداد أو 6 تنظيفات';
   if(it&&it.manualOnly)return lovolLoaderVariant(mc)==='FL936F'?'يدوي — دليل FL936F/Serial مطلوب':'يدوي — دليل المحرك/الحالة';
   if(it&&it.milestones)return it.plan||'برنامج المصنع حسب مراحل الساعات';
+  if(it&&it.months)return calendarIntervalLabel(it);
   const n=intervalOf(mc,it);return Number.isFinite(n)?'كل '+fmt(n)+' '+unit(mc):'حسب الدليل';
 }
-function intervalOf(mc,it){if(isManualMaintenance(it)||Array.isArray(it&&it.milestones))return null; if(it.months)return (it.interval||12)*30; if(it.engineOil){if(isRoadType(mc.type))return mc.engInt||5000;if(mc.type==='jcb')return mc.engInt||500;return mc.engInt||250;}return it.interval;}
+function intervalOf(mc,it){if(isManualMaintenance(it)||Array.isArray(it&&it.milestones)||(it&&it.months))return null;if(it.engineOil){if(isRoadType(mc.type))return mc.engInt||5000;if(mc.type==='jcb')return mc.engInt||500;return mc.engInt||250;}return it.interval;}
 function capLabel(mc,it){if(it.engineOil){if(mc.type==='exc')return mc.engInt===500?'20 L':'14 L';if(mc.type==='truck')return mc.engine==='WP12'?'28 L':'24 L';if(mc.type==='jmc')return '≈6–7 L زيت محرك (مرجعي؛ تحقق بالعصا)';if(mc.type==='jcb')return '12–15 L';return mc.type==='loader'&&lovolLoaderVariant(mc)==='FL936F'?'تأكيد بالسيريال/دليل المحرك':'20 L (رسمي)';}return it.cap||'';}
 // العدّاد المعتمد للتحذيرات: آخر قراءة فعلية مسجّلة (من الصيانة أو من رِلڤيه)
 function currentReading(mc){return mc.reading||0;}
@@ -1100,8 +1120,8 @@ function currentReading(mc){return mc.reading||0;}
 // كل نقاط القراءة الفعلية لآلة (من سجل الصيانة + من قراءات Relevé) — تاريخ وعدّاد فعليين، بلا أي تخمين
 function historyPoints(mc){
   const pts=[];
-  (mc.history||[]).forEach(e=>{if(e&&e.d&&typeof e.r==='number')pts.push({r:e.r,d:e.d});});
-  (mc.readings||[]).forEach(e=>{if(e&&e.d&&typeof e.r==='number')pts.push({r:e.r,d:e.d});});
+  (mc.history||[]).forEach(e=>{if(e&&validISODate(e.d)&&typeof e.r==='number')pts.push({r:e.r,d:e.d});});
+  (mc.readings||[]).forEach(e=>{if(e&&validISODate(e.d)&&typeof e.r==='number')pts.push({r:e.r,d:e.d});});
   pts.sort((a,b)=>(a.d||'').localeCompare(b.d||'')||(a.r-b.r));
   return pts;
 }
@@ -1154,6 +1174,20 @@ function estReadingToday(mc){
   return{val:base+added,added,hasEst:added>0,days,rate,lastDate};
 }
 
+// تقدير العدّاد عند تاريخ صيانة زمني: يبدأ من أحدث قراءة فعلية بين آخر صيانة وتاريخ الاستحقاق،
+// ثم يضيف معدّل الاستعمال لكل يوم عمل (الجمعة مستثناة). النتيجة تقديرية وليست شرط استحقاق.
+function calendarDueReading(mc,dueDate,lastReading,lastDate){
+  const rate=effectiveRate(mc);
+  if(!dueDate||lastReading==null||!lastDate||!Number.isFinite(rate)||rate<=0)return null;
+  let anchor={r:Number(lastReading)||0,d:lastDate};
+  historyPoints(mc).forEach(p=>{
+    if(!p||!p.d||p.d<lastDate||p.d>dueDate)return;
+    if(p.d>anchor.d||(p.d===anchor.d&&Number(p.r)>Number(anchor.r)))anchor={r:Number(p.r)||0,d:p.d};
+  });
+  const days=workDaysBetween(anchor.d,dueDate);
+  return {val:Math.max(0,Math.round(anchor.r+(days*rate))),rate,days,anchorDate:anchor.d,anchorReading:anchor.r};
+}
+
 function airFilterCleaningEntries(mc){
   const h=mc&&mc.conditionHistory&&typeof mc.conditionHistory==='object'?mc.conditionHistory:{};
   return Array.isArray(h.airf)?h.airf:[];
@@ -1178,6 +1212,20 @@ function statusOf(mc,it){
     return {cls:'st-manual',label:replace?'بدّل الزوج':'حسب المؤشر',rem:null,due:null,urgency:null,condition:true,cleanCount:count,replace};
   }
   if(it&&it.manualOnly)return {cls:'st-manual',label:lovolLoaderVariant(mc)==='FL936F'?'دليل F مطلوب':'حسب الدليل',rem:null,due:null,urgency:null,manual:true};
+  if(it&&it.months){
+    const lastDate=lastDateOf(mc,it.id);
+    if(last==null||!lastDate)return {cls:'st-none',label:'غير مسجّل',rem:null,due:null,urgency:null,calendar:true,dueDate:null,remDays:null};
+    const months=Math.max(1,Math.trunc(Number(it.interval)||12));
+    const dueDate=addMonthsISO(lastDate,months);
+    const days=calendarDaysDiff(todayISO(),dueDate);
+    if(!dueDate||days==null)return {cls:'st-none',label:'غير مسجّل',rem:null,due:null,urgency:null,calendar:true,dueDate:null,remDays:null};
+    const dueReadingEst=calendarDueReading(mc,dueDate,last,lastDate);
+    const base={calendar:true,rem:null,due:null,dueDate,estDate:dueDate,days,remDays:days,months,dueReading:dueReadingEst?dueReadingEst.val:null,dueRate:dueReadingEst?dueReadingEst.rate:null,dueReadingDays:dueReadingEst?dueReadingEst.days:null,dueReadingAnchorDate:dueReadingEst?dueReadingEst.anchorDate:null};
+    if(days<0)return Object.assign(base,{cls:'st-late',label:'متأخّر',urgency:'late'});
+    if(days===0)return Object.assign(base,{cls:'st-soon',label:'في وقته',urgency:'now'});
+    if(days<=alertDaysThreshold())return Object.assign(base,{cls:'st-soon',label:'قريب',urgency:'soon'});
+    return Object.assign(base,{cls:'st-ok',label:'سليم',urgency:'ok'});
+  }
   const planned=Array.isArray(it&&it.milestones)?nextMilestoneAfter(last,it):null;
   if(last==null){
     return {cls:'st-none',label:'غير مسجّل',rem:null,due:null,planDue:planned};
@@ -1189,7 +1237,6 @@ function statusOf(mc,it){
   const normalThr=Math.max(isRoadType(mc.type)?500:30,Math.round((intv||0)*0.1));
   const tolerance=toleranceFor(it,due);
   const beforeWindow=tolerance||normalThr;
-  // تقدير تاريخي: خاص بالآلة (إن وُجد) > مُستنتج من سجلّها الفعلي > عام افتراضي — مستقل تماماً عن العدّاد المُسجَّل
   let days=null,estDate=null;
   const rate=effectiveRate(mc);
   if(rate){
@@ -1203,6 +1250,7 @@ function statusOf(mc,it){
   if(days!=null && days<=alertDaysThreshold())return {cls:'st-soon',label:'قريب',urgency:'soon',rem,due,est:cur,days,estDate,tolerance};
   return {cls:'st-ok',label:'سليم',urgency:'ok',rem,due,est:cur,days,estDate,tolerance};
 }
+
 function recordAirFilterCleaning(){
   const mc=getActive();const it=mc&&itemsFor(mc).find(x=>x.id==='airf'&&x.conditionOnly==='airFilter');if(!mc||!it)return;
   const current=airFilterCleanCount(mc);
@@ -1210,22 +1258,21 @@ function recordAirFilterCleaning(){
   const rv=prompt('عداد الساعات عند تنظيف فلتر الهواء الخارجي:',mc.reading||0);if(rv===null)return;
   const r=Math.max(0,parseInt(rv,10)||0);
   const dv=prompt('تاريخ التنظيف (سنة-شهر-يوم):',todayISO());if(dv===null)return;
-  const d=(dv&&dv.trim())?dv.trim():todayISO();
+  const d=requireISODate((dv&&dv.trim())?dv.trim():todayISO());if(!d)return;
   if(!mc.conditionHistory||typeof mc.conditionHistory!=='object')mc.conditionHistory={};
   if(!Array.isArray(mc.conditionHistory.airf))mc.conditionHistory.airf=[];
-  mc.conditionHistory.airf.push({r,d});
+  mc.conditionHistory.airf.push(newSyncRecord('airf',{r,d}));
   if(r>(mc.reading||0))mc.reading=r;
   save();renderDetail();
 }
 function editAirFilterCleaning(i){
   const mc=getActive(),arr=airFilterCleaningEntries(mc),e=arr[i];if(!e)return;
   const rv=prompt('عداد الساعات عند التنظيف:',e.r!=null?e.r:'');if(rv===null)return;
-  const r=Math.max(0,parseInt(rv,10)||0);const dv=prompt('تاريخ التنظيف (سنة-شهر-يوم):',e.d||todayISO());if(dv===null)return;
-  arr[i]={r,d:(dv&&dv.trim())?dv.trim():todayISO()};if(r>(mc.reading||0))mc.reading=r;save();renderDetail();
+  const r=Math.max(0,parseInt(rv,10)||0);const dv=prompt('تاريخ التنظيف (سنة-شهر-يوم):',e.d||todayISO());if(dv===null)return;const d=requireISODate((dv&&dv.trim())?dv.trim():todayISO());if(!d)return;Object.assign(e,{r,d});touchSyncRecord('airf',e);if(r>(mc.reading||0))mc.reading=r;save();renderDetail();
 }
 function deleteAirFilterCleaning(i){
   const mc=getActive(),arr=airFilterCleaningEntries(mc);if(!arr[i])return;
-  if(!confirm('حذف تسجيل تنظيف فلتر الهواء؟'))return;arr.splice(i,1);save();renderDetail();
+  if(!confirm('حذف تسجيل تنظيف فلتر الهواء؟'))return;recordTombstone(mc,'airf',arr[i]);arr.splice(i,1);save();renderDetail();
 }
 
 function toggleRateLock(kind,on){
@@ -1310,7 +1357,13 @@ function buildAlerts(){
   rows.sort((a,b)=>(rank[a.s.urgency]-rank[b.s.urgency])||((a.s.days==null?999:a.s.days)-(b.s.days==null?999:b.s.days)));
   return rows;
 }
-function alertWhenTxt(s){
+function alertWhenTxt(s,u){
+  if(s&&s.calendar){
+    const meter=s.dueReading!=null?' · ≈ '+fmt(s.dueReading)+' '+(u||''):'';
+    if(s.urgency==='late')return 'متأخر منذ '+fmt(Math.abs(s.remDays||0))+' يوم · '+esc(s.dueDate||'')+meter;
+    if(s.urgency==='now')return 'مستحق اليوم · '+esc(s.dueDate||'')+meter;
+    return 'بعد '+fmt(Math.max(0,s.remDays||0))+' يوم · '+esc(s.dueDate||'')+meter;
+  }
   if(s.urgency==='late'){
     if(s.days!=null)return 'منذ ~'+Math.abs(s.days)+' يوم عمل (تقدير) · '+esc(s.estDate||'');
     return 'بالعدّاد: تجاوز بـ'+fmt(Math.abs(s.rem));
@@ -1341,6 +1394,7 @@ function renderDashRatePanel(){
 function saveDashRates(){
   const t=Math.max(0,parseFloat(document.getElementById('dashRateTruck').value)||0);
   const m=Math.max(0,parseFloat(document.getElementById('dashRateMachine').value)||0);
+  if(!t||!m){flash('أدخل معدّلاً أكبر من 0 للشاحنات والآلات');return;}
   if(!DB.settings)DB.settings={};
   DB.settings.rateTruck=t;DB.settings.rateTruckSetAt=new Date().toISOString();
   DB.settings.rateMachine=m;DB.settings.rateMachineSetAt=new Date().toISOString();
@@ -1365,7 +1419,7 @@ function renderAlertsCard(){
         +'<td class="reg-nm">'+icon(g.mc)+' '+esc(g.mc.name)+'</td>'
         +'<td style="font-size:11.5px"><b>'+(g.items.length)+'</b> بند · '+(g.late?'🔴 '+g.late+' ':'')+(g.now?'🟡 '+g.now+' ':'')+(g.soon?'🟠 '+g.soon:'')+'</td>'
         +'<td><span class="albadge '+g.top+'">'+(g.top==='late'?'متأخر':g.top==='now'?'في وقته':'قريب')+'</span></td>'
-        +'<td style="font-size:10.5px;color:var(--muted)">'+esc(g.first.it.ar)+'<br>القادم: '+fmt(g.first.s.due)+' '+g.first.u+' · الحالي: '+fmt(currentReading(g.mc))+' '+g.first.u+'<br>'+alertWhenTxt(g.first.s)+'</td>'
+        +'<td style="font-size:10.5px;color:var(--muted)">'+esc(g.first.it.ar)+'<br>القادم: '+(g.first.s.calendar?('📅 '+esc(g.first.s.dueDate||'—')+(g.first.s.dueReading!=null?' · ≈ '+fmt(g.first.s.dueReading)+' '+g.first.u:'')):(fmt(g.first.s.due)+' '+g.first.u))+' · الحالي: '+fmt(currentReading(g.mc))+' '+g.first.u+'<br>'+alertWhenTxt(g.first.s,g.first.u)+'</td>'
       +'</tr>').join('')+'</tbody></table>';
   }
   box.innerHTML='<div class="card alerts-card">'
@@ -1441,6 +1495,12 @@ function renderMachineAlerts(mc){
   const rank={late:0,now:1,soon:2}; rows.sort((a,b)=>(rank[a.s.urgency]-rank[b.s.urgency]));
   const u=unit(mc), cur=currentReading(mc);
   function deltaTxt(r){
+    if(r.s.calendar){
+      const d=Number(r.s.remDays)||0;
+      if(d<0)return '<span style="color:var(--late);font-weight:800">متأخر بـ '+fmt(Math.abs(d))+' يوم</span>';
+      if(d===0)return '<span style="color:var(--soon);font-weight:800">مستحق اليوم</span>';
+      return '<span style="color:var(--ok);font-weight:800">باقي '+fmt(d)+' يوم</span>';
+    }
     const d=(r.s.due||0)-cur;
     if(d<0)return '<span style="color:var(--late);font-weight:800">متأخر بـ '+fmt(Math.abs(d))+' '+u+'</span>';
     return '<span style="color:var(--ok);font-weight:800">باقي '+fmt(d)+' '+u+'</span>';
@@ -1451,14 +1511,16 @@ function renderMachineAlerts(mc){
     +'</tr></thead><tbody>'+
     rows.map(r=>{
       const last=lastReadOf(mc,r.it.id), ld=lastDateOf(mc,r.it.id);
-      const due=r.s.due!=null?r.s.due:'—';
-      const est=r.s.estDate?(' · '+esc(r.s.estDate)):'';
+      const due=r.s.calendar?('📅 '+esc(r.s.dueDate||'—')):(r.s.due!=null?fmt(r.s.due)+' '+u:'—');
+      const est=r.s.calendar
+        ? (r.s.dueReading!=null?('≈ '+fmt(r.s.dueReading)+' '+u+' عند الموعد'):'العداد التقديري غير متاح')
+        : (r.s.estDate?('تاريخ تقديري · '+esc(r.s.estDate)):'تاريخ تقديري غير متاح');
       return '<tr onclick="setDetailTab(\'maint\')">'
         +'<td><span class="albadge '+r.s.urgency+'">'+(r.s.urgency==='late'?'متأخر':r.s.urgency==='now'?'في وقته':'قريب')+'</span></td>'
         +'<td class="reg-nm">'+esc(r.it.ar)+'<div class="fr">'+esc(r.it.fr||'')+'</div></td>'
         +'<td style="font-size:10.5px;color:var(--muted)">'
           +(last!=null?('عند '+fmt(last)+' '+u):'غير مسجل')+'<br>'+(ld?esc(ld):'—')+'</td>'
-        +'<td style="font-size:10.5px;color:var(--ink)"><b>'+fmt(due)+' '+u+'</b><br><span style="color:var(--muted)">تاريخ تقديري'+est+'</span></td>'
+        +'<td style="font-size:10.5px;color:var(--ink)"><b>'+due+'</b><br><span style="color:var(--muted)">'+est+'</span></td>'
         +'<td style="font-size:10.5px">الحالي: <b>'+fmt(cur)+' '+u+'</b><br>'+deltaTxt(r)+'</td>'
         +'<td><button class="set-btn" onclick="event.stopPropagation();setDetailTab(\'log\')">تسجيل</button></td>'
       +'</tr>';
@@ -1536,10 +1598,13 @@ function renderForecast(){
       }
       if(s.cls==='st-none')return '<tr class="fc-na"><td>'+esc(it.ar)+'</td><td>'+(s.planDue!=null?fmt(s.planDue)+' '+u:'—')+'</td><td>غير مسجّل</td><td class="fc-when">'+(s.planDue!=null?'أول مرحلة رسمية — سجّلها عند إنجازها':'—')+'</td></tr>';
       const badge='<span class="albadge '+(s.urgency==='late'?'late':s.urgency==='now'?'now':s.urgency==='soon'?'soon':'')+'" style="'+(s.urgency==='ok'?'background:#e8f5ee;color:#1a7a47':'')+'">'+s.label+'</span>';
-      const when = s.estDate
-        ? ((s.days!=null&&s.days<0)?('منذ ~'+Math.abs(s.days)+' يوم · '+esc(s.estDate)):('~'+(s.days!=null?s.days+' يوم · ':'')+esc(s.estDate)))
-        : (s.rem!=null?('باقي '+fmt(s.rem)+' '+u):'—');
-      return '<tr><td class="fc-it">'+esc(it.ar)+'</td><td class="ltr">'+fmt(s.due)+' '+u+'</td><td>'+badge+'</td><td class="fc-when">'+when+'</td></tr>';
+      const when = s.calendar
+        ? (s.remDays<0?('منذ '+fmt(Math.abs(s.remDays))+' يوم · '+esc(s.dueDate||'')+(s.dueReading!=null?' · ≈ '+fmt(s.dueReading)+' '+u:'')):(s.remDays===0?('اليوم · '+esc(s.dueDate||'')+(s.dueReading!=null?' · ≈ '+fmt(s.dueReading)+' '+u:'')):('بعد '+fmt(s.remDays)+' يوم · '+esc(s.dueDate||'')+(s.dueReading!=null?' · ≈ '+fmt(s.dueReading)+' '+u:''))))
+        : (s.estDate
+          ? ((s.days!=null&&s.days<0)?('منذ ~'+Math.abs(s.days)+' يوم · '+esc(s.estDate)):('~'+(s.days!=null?s.days+' يوم · ':'')+esc(s.estDate)))
+          : (s.rem!=null?('باقي '+fmt(s.rem)+' '+u):'—'));
+      const dueTxt=s.calendar?('📅 '+esc(s.dueDate||'—')+(s.dueReading!=null?' · ≈ '+fmt(s.dueReading)+' '+u:'')):(fmt(s.due)+' '+u);
+      return '<tr><td class="fc-it">'+esc(it.ar)+'</td><td class="ltr">'+dueTxt+'</td><td>'+badge+'</td><td class="fc-when">'+when+'</td></tr>';
     }).join('');
     return '<div class="fc-block"><div class="fc-head">'+icon(mc)+' '+esc(mc.name)+'</div>'
       +'<div class="fc-meta">'+estLine+'</div>'
@@ -1671,10 +1736,14 @@ function renderDetail(){
   // items
   const wrap=document.getElementById('items');wrap.innerHTML='';
   itemsFor(mc).forEach(it=>{const st=statusOf(mc,it),last=lastReadOf(mc,it.id),ldate=lastDateOf(mc,it.id);
-    let remTxt='';if(st.rem!==null)remTxt=st.rem<0?('+'+fmt(Math.abs(st.rem))):fmt(st.rem);
+    let remTxt='';
+    if(st.calendar&&st.remDays!=null)remTxt=st.remDays<0?('+'+fmt(Math.abs(st.remDays))+' يوم'):(st.remDays===0?'اليوم':fmt(st.remDays)+' يوم');
+    else if(st.rem!==null)remTxt=st.rem<0?('+'+fmt(Math.abs(st.rem))):fmt(st.rem);
     let lastInfo='';
     if(last==null){
       lastInfo='<span class="last-info">لم تُسجَّل · <span class="fr">Non enregistré</span>'+(st.planDue!=null?' · أول مرحلة رسمية: <b>'+fmt(st.planDue)+' '+u+'</b>':'')+'</span>';
+    }else if(st.calendar){
+      lastInfo='<span class="last-info">آخر: <b>'+fmt(last)+'</b> '+u+(ldate?' <span class="ltr">📅'+esc(ldate)+'</span>':'')+(st.dueDate?' · القادمة: <b class="ltr">📅'+esc(st.dueDate)+'</b>'+(st.dueReading!=null?' · <b>≈ '+fmt(st.dueReading)+' '+u+'</b>':''):'')+'</span>';
     }else{
       lastInfo='<span class="last-info">آخر: <b>'+fmt(last)+'</b> '+u+(ldate?' <span class="ltr">📅'+esc(ldate)+'</span>':'')+(st.due!=null?' · القادمة: <b>'+fmt(st.due)+' '+u+'</b>':'')+'</span>';
     }
@@ -1686,7 +1755,7 @@ function renderDetail(){
     }
     const doneTxt=it.conditionOnly==='airFilter'?'✓ بدّل الزوج':'✓ تمّ الآن';
     const d=document.createElement('div');d.className='item';
-    d.innerHTML='<div class="item-top"><div class="item-info"><div class="item-name">'+it.ar+'</div><div class="item-fr">'+it.fr+'</div><div class="item-spec">'+tags.join('')+'</div></div><div class="status '+st.cls+'">'+(st.rem!==null?'<span class="big ltr">'+remTxt+'</span>':'')+st.label+'</div></div><div class="item-bottom">'+lastInfo+'<button class="set-btn" onclick="setLast(\''+it.id+'\')">✎</button><button class="done-btn" onclick="markDone(\''+it.id+'\')">'+doneTxt+'</button></div>'+conditionCtl;
+    d.innerHTML='<div class="item-top"><div class="item-info"><div class="item-name">'+it.ar+'</div><div class="item-fr">'+it.fr+'</div><div class="item-spec">'+tags.join('')+'</div></div><div class="status '+st.cls+'">'+(remTxt?'<span class="big ltr">'+remTxt+'</span>':'')+st.label+'</div></div><div class="item-bottom">'+lastInfo+'<button class="set-btn" onclick="setLast(\''+it.id+'\')">✎</button><button class="done-btn" onclick="markDone(\''+it.id+'\')">'+doneTxt+'</button></div>'+conditionCtl;
     wrap.appendChild(d);});
 
   renderHistory(mc);
@@ -1720,12 +1789,13 @@ function calcSummary(){
   const late=[],soon=[],ok=[],none=[];
   itemsFor(mc).forEach(it=>{const s=statusOf(mc,it);if(s.cls==='st-late')late.push([it,s]);else if(s.cls==='st-soon')soon.push([it,s]);else if(s.cls==='st-ok')ok.push([it,s]);else none.push([it,s]);});
   const rate=usageRate(mc);
-  const proj=(rem)=>{if(!rate||rate.perDay<=0)return '';const days=Math.round(rem/rate.perDay);const dt=new Date();dt.setDate(dt.getDate()+days);return ' <span style="color:var(--muted)">(≈ '+dt.toISOString().slice(0,10)+')</span>';};
+  const proj=(rem)=>{if(!rate||rate.perDay<=0)return '';const days=Math.round(rem/rate.perDay);return ' <span style="color:var(--muted)">(≈ '+addWorkdays(todayISO(),days)+')</span>';};
   let h='<div class="ch">📍 على '+fmt(mc.reading)+' '+u+' — '+esc(mc.name)+'</div>';
   if(rate)h+='<div class="cg" style="background:rgba(10,125,58,.05)"><div class="ttl" style="color:#0a7d3a">📊 معدّل ≈ '+fmt(Math.round(rate.perMonth))+' '+u+'/شهر — التواريخ المقدّرة أدناه</div></div>';
-  if(late.length)h+='<div class="cg late"><div class="ttl">🔴 بدّلها الآن ('+late.length+')</div><ul>'+late.map(x=>'<li>'+x[0].ar+' — متأخّر بـ '+fmt(Math.abs(x[1].rem))+' '+u+'</li>').join('')+'</ul></div>';
-  if(soon.length)h+='<div class="cg soon"><div class="ttl">🟠 قريباً ('+soon.length+')</div><ul>'+soon.map(x=>'<li>'+x[0].ar+' — باقي '+fmt(x[1].rem)+' '+u+proj(x[1].rem)+'</li>').join('')+'</ul></div>';
-  if(ok.length)h+='<div class="cg ok"><div class="ttl">🟢 سليمة ('+ok.length+')</div><ul>'+ok.map(x=>'<li>'+x[0].ar+' — باقي '+fmt(x[1].rem)+' '+u+proj(x[1].rem)+'</li>').join('')+'</ul></div>';
+  const calcLine=x=>{const it=x[0],s=x[1];if(s.calendar){const meter=s.dueReading!=null?' · ≈ '+fmt(s.dueReading)+' '+u:'';if(s.remDays<0)return it.ar+' — متأخّر بـ '+fmt(Math.abs(s.remDays))+' يوم · '+esc(s.dueDate||'')+meter;if(s.remDays===0)return it.ar+' — مستحق اليوم · '+esc(s.dueDate||'')+meter;return it.ar+' — باقي '+fmt(s.remDays)+' يوم · '+esc(s.dueDate||'')+meter;}return it.ar+' — باقي '+fmt(s.rem)+' '+u+proj(s.rem);};
+  if(late.length)h+='<div class="cg late"><div class="ttl">🔴 بدّلها الآن ('+late.length+')</div><ul>'+late.map(x=>'<li>'+calcLine(x)+'</li>').join('')+'</ul></div>';
+  if(soon.length)h+='<div class="cg soon"><div class="ttl">🟠 قريباً ('+soon.length+')</div><ul>'+soon.map(x=>'<li>'+calcLine(x)+'</li>').join('')+'</ul></div>';
+  if(ok.length)h+='<div class="cg ok"><div class="ttl">🟢 سليمة ('+ok.length+')</div><ul>'+ok.map(x=>'<li>'+calcLine(x)+'</li>').join('')+'</ul></div>';
   if(none.length)h+='<div class="cg"><div class="ttl" style="color:var(--muted)">⚪ غير مسجّلة ('+none.length+')</div><ul>'+none.map(x=>'<li>'+x[0].ar+'</li>').join('')+'</ul></div>';
   box.innerHTML=h;box.classList.add('show');
 }
@@ -1739,29 +1809,23 @@ function logReadingOnly(){const mc=getActive();const u=unit(mc);
   const v=prompt('قراءة العدّاد الحالية ('+u+'):',mc.reading||'');
   if(v===null)return;const r=Math.max(0,parseInt(v,10)||0);
   const dv=prompt('تاريخ القراءة (سنة-شهر-يوم):',todayISO());if(dv===null)return;
-  const d=(dv&&dv.trim())?dv.trim():todayISO();
+  const d=requireISODate((dv&&dv.trim())?dv.trim():todayISO());if(!d)return;
   if(!mc.readings)mc.readings=[];
-  mc.readings.push({r:r,d:d});
+  if(mc.readings.some(x=>x&&Number(x.r)===r&&x.d===d)){actionFeedback('✓ هذه القراءة مسجّلة بالفعل');return;}
+  mc.readings.push(newSyncRecord('read',{r:r,d:d}));
   if(r>(mc.reading||0))mc.reading=r;
   save();renderDetail();}
-function usageRate(mc){ // returns {perMonth, from, to} based on readings+history meter points
-  const pts=[];(mc.readings||[]).forEach(x=>{if(x&&x.d&&typeof x.r==='number')pts.push(x);});
-  (mc.history||[]).forEach(x=>{if(x&&x.d&&typeof x.r==='number')pts.push({r:x.r,d:x.d});});
-  if(pts.length<2)return null;
-  pts.sort((a,b)=>(a.d||'').localeCompare(b.d||''));
-  const a=pts[0],b=pts[pts.length-1];
-  const days=(new Date(b.d)-new Date(a.d))/86400000;
-  if(days<=0||b.r<=a.r)return null;
-  return {perMonth:(b.r-a.r)/days*30, perDay:(b.r-a.r)/days, from:a, to:b};}
+function usageRate(mc){ // معدل العرض مبني على أيام العمل نفسها المستعملة في التوقعات (الجمعة مستثناة)
+  const pts=historyPoints(mc);if(pts.length<2)return null;const a=pts[0],b=pts[pts.length-1];const days=workDaysBetween(a.d,b.d);if(days<=0||b.r<=a.r)return null;const perDay=(b.r-a.r)/days;return {perMonth:perDay*26,perDay,from:a,to:b,workDays:days};}
 let logEditIdx=null;  // null = new entry; number = editing mc.history[idx]
-function openLog(){const mc=getActive();const u=unit(mc);logEditIdx=null;
+function openLog(){const mc=getActive();if(!mc)return;const u=unit(mc);logEditIdx=null;
   document.getElementById('logTitle').textContent='تسجيل صيانة';
   document.getElementById('logReading').value=mc.reading||'';
   document.getElementById('logDate').value=todayISO();
   document.getElementById('logNote').value='';
   document.getElementById('logHint').textContent='('+u+')';
   document.getElementById('logItems').innerHTML=itemsFor(mc).map(it=>'<label class="logitem"><input type="checkbox" value="'+it.id+'"><span class="nm">'+it.ar+(it.conditionOnly==='airFilter'?' (استبدال الزوج)':'')+'<div class="fr">'+(it.fr||'')+'</div></span></label>').join('');
-  setDetailTab('log');window.scrollTo(0,0);}
+  setDetailTab('log');window.scrollTo(0,0);actionFeedback('🧾 تم فتح تسجيل الصيانة — اختر البنود ثم اضغط حفظ');}
 function editHistory(i){const mc=getActive();const e=(mc.history||[])[i];if(!e)return;const u=unit(mc);logEditIdx=i;
   document.getElementById('logTitle').textContent='✏️ تعديل سجلّ صيانة';
   document.getElementById('logReading').value=e.r!=null?e.r:'';
@@ -1774,26 +1838,25 @@ function editHistory(i){const mc=getActive();const e=(mc.history||[])[i];if(!e)r
 function closeLog(){logEditIdx=null;}
 function cancelLogTab(){logEditIdx=null;setDetailTab('maint');}
 function logSelectAll(v){document.querySelectorAll('#logItems input[type=checkbox]').forEach(c=>c.checked=v);}
-function saveLog(){const mc=getActive();
+function saveLog(){const mc=getActive();if(!mc)return;
   const r=Math.max(0,parseInt(document.getElementById('logReading').value,10)||0);
-  const d=document.getElementById('logDate').value||todayISO();
+  const d=requireISODate(document.getElementById('logDate').value||todayISO());if(!d)return;
   const note=document.getElementById('logNote').value.trim();
   const ids=[...document.querySelectorAll('#logItems input:checked')].map(c=>c.value);
   if(!ids.length){alert('اختر على الأقل عنصراً واحداً تم تبديله، أو اضغط «اختر الكل».');return;}
   if(!mc.history)mc.history=[];
-  if(logEditIdx!=null&&mc.history[logEditIdx]){mc.history[logEditIdx]={r:r,d:d,ids:ids,note:note};}
-  else{mc.history.push({r:r,d:d,ids:ids,note:note});}
-  // recompute each item's last-change from the most recent history entry that includes it
+  const wasEdit=logEditIdx!=null&&!!mc.history[logEditIdx];
+  if(wasEdit){const e=mc.history[logEditIdx];Object.assign(e,{r:r,d:d,ids:ids,note:note});touchSyncRecord('hist',e);}
+  else{mc.history.push(newSyncRecord('hist',{r:r,d:d,ids:ids,note:note}));}
   recomputeDone(mc);
   const maxr=Math.max(mc.reading||0,...(mc.history||[]).map(h=>h.r||0),...(mc.readings||[]).map(x=>x.r||0));
   if(maxr>(mc.reading||0))mc.reading=maxr;
-  save();closeLog();renderDetail();setDetailTab('maint');}
-function recomputeDone(mc){ // rebuild mc.done from history so edits/deletes stay consistent
-  const done={};(mc.history||[]).slice().sort((a,b)=>(a.d||'').localeCompare(b.d||'')||(a.r-b.r)).forEach(h=>{(h.ids||[]).forEach(id=>{done[id]={r:h.r,d:h.d};});});
-  mc.done=done;}
+  save();closeLog();renderDetail();setDetailTab('maint');actionFeedback((wasEdit?'✓ تم تعديل سجل الصيانة':'✓ تم تسجيل الصيانة')+' — '+ids.length+' بند');}
+function recomputeDone(mc){ // rebuild mc.done from valid history so edits/deletes stay consistent
+  const done={};(mc.history||[]).filter(h=>h&&validISODate(h.d)&&Number.isFinite(Number(h.r))).slice().sort((a,b)=>(a.d||'').localeCompare(b.d||'')||(Number(a._mod||0)-Number(b._mod||0))||(Number(a.r)-Number(b.r))||String(a._id||'').localeCompare(String(b._id||''))).forEach(h=>{(h.ids||[]).forEach(id=>{done[id]={r:Number(h.r),d:h.d};});});mc.done=done;}
 function deleteHistory(i){const mc=getActive();if(!mc.history||!mc.history[i])return;
   if(!confirm('حذف هذا السجلّ؟'))return;
-  mc.history.splice(i,1);recomputeDone(mc);save();renderDetail();}
+  recordTombstone(mc,'hist',mc.history[i]);mc.history.splice(i,1);recomputeDone(mc);save();renderDetail();}
 function renderHistory(mc){const el=document.getElementById('histRef');if(!el)return;const u=unit(mc);
   // build a combined timeline: maintenance events + meter readings
   const ev=[];
@@ -1824,15 +1887,13 @@ function editReading(i){const mc=getActive();const e=(mc.readings||[])[i];if(!e)
   const v=prompt('تعديل قراءة العدّاد ('+u+'):',e.r!=null?e.r:'');
   if(v===null)return;const r=Math.max(0,parseInt(v,10)||0);
   const dv=prompt('تعديل التاريخ (سنة-شهر-يوم):',e.d||todayISO());if(dv===null)return;
-  mc.readings[i]={r:r,d:(dv&&dv.trim())?dv.trim():e.d};
-  const maxr=Math.max(...(mc.readings||[]).map(x=>x.r||0),...(mc.history||[]).map(h=>h.r||0));
+  const d=requireISODate((dv&&dv.trim())?dv.trim():e.d);if(!d)return;Object.assign(e,{r:r,d:d});touchSyncRecord('read',e);
+  const maxr=Math.max(0,...(mc.readings||[]).map(x=>x.r||0),...(mc.history||[]).map(h=>h.r||0));
   if(maxr>(mc.reading||0))mc.reading=maxr;
   save();renderDetail();}
-function deleteReading(i){const mc=getActive();if(!mc.readings||!mc.readings[i])return;
-  if(!confirm('حذف هذه القراءة؟'))return;mc.readings.splice(i,1);save();renderDetail();}
-function markDone(id){const mc=getActive();if(!mc.history)mc.history=[];mc.history=mc.history.filter(h=>!(h&&h.manual===true&&Array.isArray(h.ids)&&h.ids.length===1&&h.ids[0]===id));mc.history.push({r:mc.reading,d:todayISO(),ids:[id],note:''});recomputeDone(mc);
-  save();renderDetail();}
-function setLast(id){const mc=getActive(),curR=lastReadOf(mc,id),curD=lastDateOf(mc,id),u=unit(mc);const v=prompt('آخر تغيير على أيّ '+(u==='km'?'كيلومتر':'ساعة')+'؟\n(فارغ = حذف التسجيل اليدوي)',curR!=null?curR:'');if(v===null)return;if(!mc.history)mc.history=[];if(v.trim()===''){mc.history=mc.history.filter(h=>!(h&&h.manual===true&&Array.isArray(h.ids)&&h.ids.length===1&&h.ids[0]===id));recomputeDone(mc);save();renderDetail();return;}const n=parseInt(v,10);if(isNaN(n)||n<0)return;const dv=prompt('تاريخ التغيير؟ (سنة-شهر-يوم)\nمثال: 2026-06-10 · فارغ = تاريخ اليوم',curD||todayISO());const d=(dv&&dv.trim()!=='')?dv.trim():todayISO();mc.history=mc.history.filter(h=>!(h&&h.manual===true&&Array.isArray(h.ids)&&h.ids.length===1&&h.ids[0]===id));mc.history.push({r:n,d:d,ids:[id],note:'ضبط يدوي لآخر تغيير',manual:true});recomputeDone(mc);save();renderDetail();}
+function deleteReading(i){const mc=getActive();if(!mc.readings||!mc.readings[i])return;if(!confirm('حذف هذه القراءة؟'))return;recordTombstone(mc,'read',mc.readings[i]);mc.readings.splice(i,1);save();renderDetail();}
+function markDone(id){const mc=getActive();if(!mc)return;const it=itemsFor(mc).find(x=>x.id===id);if(!mc.history)mc.history=[];const r=Number(mc.reading)||0,d=todayISO();const before=mc.history.length;removeHistoryWhere(mc,h=>h&&h.manual===true&&Array.isArray(h.ids)&&h.ids.length===1&&h.ids[0]===id);const removedManual=mc.history.length!==before;const same=mc.history.some(h=>h&&h.d===d&&Number(h.r)===r&&Array.isArray(h.ids)&&h.ids.includes(id));if(!same)mc.history.push(newSyncRecord('hist',{r:r,d:d,ids:[id],note:''}));recomputeDone(mc);if(!same||removedManual)save();renderDetail();actionFeedback(same?'✓ '+(it&&it.ar||'الصيانة')+' مسجّلة اليوم بالفعل':'✓ تم تسجيل '+(it&&it.ar||'الصيانة')+' عند '+fmt(r)+' '+unit(mc));}
+function setLast(id){const mc=getActive(),curR=lastReadOf(mc,id),curD=lastDateOf(mc,id),u=unit(mc);const v=prompt('آخر تغيير على أيّ '+(u==='km'?'كيلومتر':'ساعة')+'؟\n(فارغ = حذف التسجيل اليدوي)',curR!=null?curR:'');if(v===null)return;if(!mc.history)mc.history=[];if(v.trim()===''){removeHistoryWhere(mc,h=>h&&h.manual===true&&Array.isArray(h.ids)&&h.ids.length===1&&h.ids[0]===id);recomputeDone(mc);save();renderDetail();return;}const n=parseInt(v,10);if(isNaN(n)||n<0)return;const dv=prompt('تاريخ التغيير؟ (سنة-شهر-يوم)\nمثال: 2026-06-10 · فارغ = تاريخ اليوم',curD||todayISO());if(dv===null)return;const d=requireISODate((dv&&dv.trim()!=='')?dv.trim():todayISO());if(!d)return;removeHistoryWhere(mc,h=>h&&h.manual===true&&Array.isArray(h.ids)&&h.ids.length===1&&h.ids[0]===id);mc.history.push(newSyncRecord('hist',{r:n,d:d,ids:[id],note:'ضبط يدوي لآخر تغيير',manual:true}));recomputeDone(mc);if(n>(mc.reading||0))mc.reading=n;save();renderDetail();}
 function renameMachine(){const mc=getActive();const v=prompt('اسم/رقم الآلة',mc.name);if(v&&v.trim()){mc.name=v.trim();save();renderDetail();}}
 function deleteMachine(){const mc=getActive();if(confirm('حذف "'+mc.name+'"؟')){_markDeleted(mc.id);DB.machines=DB.machines.filter(x=>x.id!==mc.id);DB.active=null;save(false);renderGarage();}}
 
@@ -1846,8 +1907,9 @@ function doPrint(){
   let buys='<table class="pa-t"><tr><th>التاريخ/الفاتورة</th><th>المرجع والتعيين</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr>'+purchaseRows.map(r=>{const q=numOrNull(r.qty),p=numOrNull(r.unitPrice),total=q!=null&&p!=null?q*p:null;return '<tr><td>'+esc(r.date||'—')+(r.invoice?' · '+esc(r.invoice):'')+'</td><td>'+esc(r.ref||'—')+' · '+esc(r.designation||'—')+'</td><td>'+esc(r.qty||'—')+'</td><td>'+esc(r.unitPrice||'—')+'</td><td>'+esc(total==null?'—':fmt(total)+' دج')+'</td></tr>';}).join('')+'</table>';
   let rows=itemsFor(mc).map(it=>{const s=statusOf(mc,it),last=lastReadOf(mc,it.id),ldate=lastDateOf(mc,it.id);const cp=capLabel(mc,it);
     const stt=s.cls==='st-late'?'متأخّر':s.cls==='st-soon'?'قريب':s.cls==='st-ok'?'سليم':s.cls==='st-manual'?s.label:'—';
-    const due=s.due!=null?fmt(s.due)+' '+u:(s.planDue!=null?fmt(s.planDue)+' '+u:'—');
-    return '<tr><td>'+esc(it.ar)+'</td><td>'+esc((it.spec||'')+(cp?' · '+cp:''))+'</td><td>'+esc(scheduleLabel(mc,it))+'</td><td>'+(last!=null?fmt(last)+' '+u+(ldate?' ('+esc(ldate)+')':''):'—')+'</td><td>'+due+'</td><td>'+stt+(s.rem!=null?' ('+(s.rem<0?'+':'')+fmt(s.rem)+')':'')+'</td></tr>';}).join('');
+    const due=s.calendar?('📅 '+esc(s.dueDate||'—')+(s.dueReading!=null?' · ≈ '+fmt(s.dueReading)+' '+u:'')):(s.due!=null?fmt(s.due)+' '+u:(s.planDue!=null?fmt(s.planDue)+' '+u:'—'));
+    const delta=s.calendar&&s.remDays!=null?' ('+(s.remDays<0?'+':'')+fmt(s.remDays)+' يوم)':(s.rem!=null?' ('+(s.rem<0?'+':'')+fmt(s.rem)+')':'');
+    return '<tr><td>'+esc(it.ar)+'</td><td>'+esc((it.spec||'')+(cp?' · '+cp:''))+'</td><td>'+esc(scheduleLabel(mc,it))+'</td><td>'+(last!=null?fmt(last)+' '+u+(ldate?' ('+esc(ldate)+')':''):'—')+'</td><td>'+due+'</td><td>'+stt+delta+'</td></tr>';}).join('');
   const d=new Date().toLocaleDateString('fr-FR');
   document.getElementById('printArea').innerHTML=
     '<div class="pa-head"><div class="lg">EGTPH</div><div><h2>'+esc(mc.name)+' — '+typeName+'</h2><div class="s">EGTPH ABDI YOUSSOUF ISLAM · Oued Sly, Chlef · ⚙️ '+esc(mc.eng)+' · العدّاد: '+fmt(mc.reading)+' '+u+'</div></div></div>'+
@@ -1867,7 +1929,7 @@ function setAddCat(cat){const sel=document.getElementById('addTpl');const arr=Ob
 function pickTemplate(key){addType=key;const t=FLEET_TEMPLATES[key]||FLEET_TEMPLATES.generic_truck;document.getElementById('addReadLbl').textContent=(t.unit==='h')?'عدّاد الساعات الحالي (h)':'العدّاد الحالي (km)';document.getElementById('tplNote').innerHTML='📌 '+esc(t.note||'')+'<br><b>درجة المصدر:</b> '+(t.sourceLevel==='official'?'موثّق/رسمي':t.sourceLevel==='vin_required'?'يلزم VIN/Serial لتأكيد OEM':'احتياطي آمن');}
 function pickType(t){const map={truck:'shacman_f2000',jmc:'jmc_4x2',exc:'hyundai_hx220',loader:'foton_fl936h',jcb:'jcb_3cx'};pickTemplate(map[t]||t);}
 async function decodeVinOnline(){const vin=(document.getElementById('addVin').value||'').trim().toUpperCase();const box=document.getElementById('vinResult');if(!vin){box.textContent='أدخل VIN أولاً';return;}box.textContent='جار البحث عبر الإنترنت...';const localJmc=()=>{if(vin==='LEFYFCC23SHN09912'||vin.startsWith('LEF')){document.getElementById('addTpl').value='jmc_4x2';pickTemplate('jmc_4x2');const txt=(vin==='LEFYFCC23SHN09912'?'مطابقة داخلية: JMC Dump Truck 4×2 CLW5042ZXJX2 · ':'JMC / Jiangling Motors محتمل · ')+'محرك JX493ZQ4A · 2771cc · 68kW/92HP · Euro II · بيانات من الشهادة و PI. ملاحظة: NHTSA قد لا يرجع تفاصيل للشاحنات الصينية غير المباعة في أمريكا.';box.textContent=txt;if(!document.getElementById('addName').value.trim())document.getElementById('addName').value='JMC 2025';return true;}return false;};try{const url='https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/'+encodeURIComponent(vin)+'?format=json';const r=await fetch(url,{cache:'no-store'});const j=await r.json();const v=(j.Results&&j.Results[0])||{};const make=v.Make||'';const model=v.Model||'';const year=v.ModelYear||'';const engine=[v.EngineModel,v.DisplacementL?v.DisplacementL+'L':'',v.FuelTypePrimary].filter(Boolean).join(' ');let txt=[year,make,model].filter(Boolean).join(' ');if(engine)txt+=' · '+engine;if(txt.trim()){box.textContent=txt;if(!document.getElementById('addName').value.trim())document.getElementById('addName').value=txt;}else if(!localJmc()){box.textContent='لم يرجع NHTSA معلومات كافية. جرّب كتابة الماركة/الموديل أو استعمل القالب المناسب، وسيبقى VIN محفوظاً داخل البطاقة.';}}catch(e){if(!localJmc())box.textContent='تعذّر البحث: تحقق من الإنترنت. تم حفظ VIN عند الإضافة ويمكن التأكيد لاحقاً من الوكيل/الكتالوج.';}}
-function confirmAdd(){const t=FLEET_TEMPLATES[addType]||FLEET_TEMPLATES.generic_truck;const name=document.getElementById('addName').value.trim()||t.label;const vin=(document.getElementById('addVin').value||'').trim();const read=Math.max(0,+document.getElementById('addRead').value||0);const mc={id:m(),name:name,type:t.type,templateKey:addType,unit:t.unit,eng:t.eng,engine:t.engine,engInt:t.engInt||250,reading:read,done:{},info:{},sourceLevel:t.sourceLevel,sourceNote:t.note};if(vin)mc.info.vin=vin;if(addType==='jmc_4x2'){mc.info={vin:vin||'LEFYFCC23SHN09912',engno:'S2005638'};}if(t.info)mc.profileInfo=t.info;if(t.filters)mc.filters=t.filters;if(t.oils)mc.oils=t.oils;if(t.reminders)mc.reminders=t.reminders;DB.machines.push(mc);touchMachine(mc.id,'add');closeAdd();save(mc.id);renderGarage();}
+function confirmAdd(){const t=FLEET_TEMPLATES[addType]||FLEET_TEMPLATES.generic_truck;const name=document.getElementById('addName').value.trim()||t.label;const vin=(document.getElementById('addVin').value||'').trim();const read=Math.max(0,+document.getElementById('addRead').value||0);const mc={id:m(),name:name,type:t.type,templateKey:addType,unit:t.unit,eng:t.eng,engine:t.engine,engInt:t.engInt||250,reading:read,done:{},history:[],readings:[],conditionHistory:{airf:[]},info:{},sourceLevel:t.sourceLevel,sourceNote:t.note};if(vin)mc.info.vin=vin;if(addType==='jmc_4x2'){mc.info={vin:vin||'LEFYFCC23SHN09912',engno:'S2005638'};}if(t.info)mc.profileInfo=t.info;if(t.filters)mc.filters=t.filters;if(t.oils)mc.oils=t.oils;if(t.reminders)mc.reminders=t.reminders;DB.machines.push(mc);touchMachine(mc.id,'add');closeAdd();save(mc.id);renderGarage();}
 function resetAll(){if(confirm('مسح كل البيانات وإرجاع الأسطول الأصلي؟')){try{localStorage.removeItem(KEY);}catch(e){}seed();migrate();save();renderGarage();}}
 
 // ══════ حذف الآلات المكرّرة (بنفس الاسم) مع اختيار النسخة المُبقاة ══════
@@ -1937,8 +1999,11 @@ function confirmDedupe(){
 
 function exportData(){try{const data=JSON.stringify(DB,null,2);const blob=new Blob([data],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');const d=new Date().toISOString().slice(0,10);a.href=url;a.download='egtph_parc_'+d+'.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},600);}catch(e){alert('تعذّر التصدير: '+e.message);}}
 function importData(input){const f=input.files&&input.files[0];if(!f){return;}const r=new FileReader();r.onload=function(){try{const obj=JSON.parse(r.result);if(!obj||!Array.isArray(obj.machines))throw new Error('ملف غير صالح');
-  const merge=confirm('طريقة الاستيراد:\n\nموافق = دمج ذكي (يضيف الناقص ويحدّث الأقدم — لا يحذف بياناتك)\n\nإلغاء = استبدال كامل');
-  if(merge){ const st=mergeCloud({machines:obj.machines,deletedIds:obj.deletedIds||[]}); DB.active=null; save(false); renderGarage(); alert('✓ دمج ذكي: أُضيف '+st.added+' · حُدِّث '+st.updated); }
+  const merge=confirm('طريقة الاستيراد:\n\nموافق = دمج ذكي (يضيف الناقص ويحدّث الأقدم، ويستورد إعدادات النسخة الاحتياطية — لا يحذف بياناتك)\n\nإلغاء = استبدال كامل');
+  if(merge){
+    const incoming={machines:obj.machines,deletedIds:obj.deletedIds||[],settings:(obj.settings&&typeof obj.settings==='object')?deepClone(obj.settings):{},_settingsMods:(obj._settingsMods&&typeof obj._settingsMods==='object')?deepClone(obj._settingsMods):{},_mod:Number(obj._mod)||0,deviceId:String(obj._device||obj.deviceId||'import')};
+    if(Object.keys(incoming.settings).length&&!Object.keys(incoming._settingsMods).length){const t=nextMod();Object.keys(incoming.settings).forEach(k=>incoming._settingsMods[k]=t);incoming._mod=Math.max(incoming._mod,t);incoming.deviceId=getDeviceId();}
+    const st=mergeCloud(incoming); DB.active=null; save(false); renderGarage(); alert('✓ دمج ذكي: أُضيف '+st.added+' · حُدِّث '+st.updated+' · إعدادات '+st.settings); }
   else { if(!confirm('استبدال كل المحتوى الحالي بـ '+obj.machines.length+' آلة؟')){input.value='';return;} DB=obj;DB.active=null;if(!DB.deletedIds)DB.deletedIds=[];migrate();(DB.machines||[]).forEach(mc=>touchMachine(mc.id,'import-replace'));save(false);renderGarage();alert('✓ تمّ الاستيراد — '+obj.machines.length+' آلة'); }
 }catch(e){alert('خطأ في الاستيراد: '+e.message);}finally{input.value='';}};r.readAsText(f);}
 
@@ -1951,7 +2016,7 @@ const FB_SECRET = 'EGTPH-svc2-2026-a3VF6JCQhvRTaYIemD9Lp9RR'; // مفتاح جد
 const FB_BASE   = '/egtph/' + FB_SECRET; // البيانات في مسار سرّي — لا يصلها إلا من يملك المفتاح
 function FB_AUTH_PARAM(){try{return (window.EGTPHAuth&&typeof window.EGTPHAuth.authParam==='function')?window.EGTPHAuth.authParam('service'):'';}catch(e){return '';}}
 function FB_NODE_FN(){ return FB_BASE + '.json' + FB_AUTH_PARAM(); }
-const FB_SYNC_INTERVAL = 30000; // SSE يستقبل التعديل فوراً؛ والفحص الاحتياطي كل 30ث لتقليل استهلاك البطارية والبيانات
+const FB_SYNC_INTERVAL = 15000; // SSE لحظي؛ وفحص احتياطي كل 15ث عند تعليق البث في iOS
 // ── حماية حقيقية: تسجيل دخول بكلمة سر (مرة واحدة لكل جهاز)، الرمز يتجدد وحده ──
 // كلمة السر لا تُكتب هنا أبداً — تُكتب من المستخدم في النافذة التي تظهر.
 if(window.EGTPHAuth&&typeof window.EGTPHAuth.init==='function'){
@@ -1959,7 +2024,7 @@ if(window.EGTPHAuth&&typeof window.EGTPHAuth.init==='function'){
     appId:   'service',
     apiKey:  'AIzaSyA5fS3IgHJdrZIR3rJ97OJJvDQdT0XlKf4', // Web API Key — مشروع egtph-service
     email:   'abdiyoucefislam@gmail.com',
-    onReady: function(){ try{ if(typeof fbAutoTick==='function') fbAutoTick(); }catch(e){} }
+    onReady: function(){ try{ if(typeof fbRefreshServerTimeOffset==='function') fbRefreshServerTimeOffset(); if(typeof fbStartStream==='function') fbStartStream(); if(typeof fbStartupCheck==='function') fbStartupCheck(); }catch(e){} }
   });
 }else{
   console.warn('egtph-auth.js غير متاح: البرنامج يعمل محلياً، والمزامنة معطلة إلى أن يعود الملف.');
@@ -1994,17 +2059,7 @@ async function fbRefreshServerTimeOffset(){
   return _serverOffset||0;
 }
 function fbServerISO(){ return new Date(serverNow()).toISOString(); }
-function stampDirtyMachinesForSync(reason){
-  const ids=Array.from(_dirtyMachines||[]);
-  if(!ids.length)return ids;
-  ids.forEach(id=>touchMachine(id,reason||'sync-stamp'));
-  try{ if(!MEM_ONLY)localStorage.setItem(KEY,JSON.stringify(DB)); }catch(e){}
-  return ids;
-}
-async function fbPrepareLocalForCloud(reason){
-  try{ await fbRefreshServerTimeOffset(); }catch(e){}
-  return stampDirtyMachinesForSync(reason||'cloud');
-}
+async function fbPrepareLocalForCloud(){try{await fbRefreshServerTimeOffset();}catch(e){}return Array.from(_dirtyMachines||[]);}
 
 // ── شواهد الحذف (tombstones) ──
 if(!DB.deletedIds) DB.deletedIds=[];
@@ -2025,14 +2080,14 @@ const _gzOK = typeof CompressionStream!=='undefined' && typeof DecompressionStre
 async function _gzB64(str){const cs=new CompressionStream('gzip');const ab=await new Response(new Blob([str]).stream().pipeThrough(cs)).arrayBuffer();const u=new Uint8Array(ab);let b='';for(let i=0;i<u.length;i+=0x8000)b+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(b);}
 async function _b64Gz(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);const ds=new DecompressionStream('gzip');const ab=await new Response(new Blob([u]).stream().pipeThrough(ds)).arrayBuffer();return new TextDecoder().decode(ab);}
 
-function fbBuildData(){
-  const core={machines:DB.machines||[], deletedIds:DB.deletedIds||[]};
-  const contentHash=fbHash(JSON.stringify(core));
-  const savedAt=fbServerISO();
-  return { app:'parc', version:4, syncSchema:SYNC_SCHEMA_VERSION, savedAt:savedAt,
-    savedAtLocal:new Date().toISOString(), deviceId:getDeviceId(), contentHash:contentHash,
-    machines:DB.machines||[], deletedIds:DB.deletedIds||[], settings:DB.settings||{}, _mod:DB._mod||serverNow() };
+function fbHashCore(){
+  const machines=deepClone(DB.machines||[]).sort((a,b)=>String(a&&a.id||'').localeCompare(String(b&&b.id||'')));
+  machines.forEach(mc=>{if(Array.isArray(mc.history))mc.history.sort((a,b)=>String(a&&a._id||'').localeCompare(String(b&&b._id||'')));if(Array.isArray(mc.readings))mc.readings.sort((a,b)=>String(a&&a._id||'').localeCompare(String(b&&b._id||'')));if(mc.conditionHistory&&Array.isArray(mc.conditionHistory.airf))mc.conditionHistory.airf.sort((a,b)=>String(a&&a._id||'').localeCompare(String(b&&b._id||'')));if(mc.catalog&&typeof mc.catalog==='object')Object.keys(mc.catalog).forEach(k=>{if(Array.isArray(mc.catalog[k]))mc.catalog[k].sort((a,b)=>String(a&&a.id||a&&a._id||'').localeCompare(String(b&&b.id||b&&b._id||'')));});});
+  const deletedIds=deepClone(DB.deletedIds||[]).sort((a,b)=>String(a&&a.id||'').localeCompare(String(b&&b.id||''))||(Number(a&&a.t||0)-Number(b&&b.t||0)));
+  return {machines,deletedIds,settings:deepClone(DB.settings||{}),settingsMods:deepClone(DB._settingsMods||{})};
 }
+function fbCurrentHash(){return fbHash(canonicalStringify(fbHashCore()));}
+function fbBuildData(){const contentHash=fbCurrentHash(),savedAt=fbServerISO();return {app:'parc',version:5,syncSchema:SYNC_SCHEMA_VERSION,savedAt,savedAtLocal:new Date().toISOString(),deviceId:getDeviceId(),contentHash,machines:DB.machines||[],deletedIds:DB.deletedIds||[],settings:DB.settings||{},_settingsMods:DB._settingsMods||{},_mod:DB._mod||serverNow()};}
 
 // ── فك ضغط gzip بـ JavaScript خالص (احتياطي لـ iOS القديم بدون DecompressionStream) ──
 function _tinyInflate(data){
@@ -2070,7 +2125,11 @@ function _inflateRaw(input){
   do{
     final=getBit(); const type=getBits(2);
     if(type===0){
-      bitPos=0; if(bitPos)bytePos++; const len=input[bytePos]|(input[bytePos+1]<<8); bytePos+=4;
+      // Stored block يبدأ على حدّ البايت التالي. إذا قرأنا جزءاً من البايت الحالي نتجاوزه أولاً.
+      if(bitPos!==0){bitPos=0;bytePos++;}
+      const len=input[bytePos]|(input[bytePos+1]<<8),nlen=input[bytePos+2]|(input[bytePos+3]<<8);
+      if(((len^0xffff)&0xffff)!==nlen)throw new Error('inflate stored block length');
+      bytePos+=4;
       for(let i=0;i<len;i++) out.push(input[bytePos++]);
     } else {
       let litTree,distTree;
@@ -2101,62 +2160,29 @@ function _inflateRaw(input){
   } while(!final);
   return new Uint8Array(out);
 }
-async function fbFetchData(){
-  const r=await fetch(FB_URL+FB_NODE_FN());
-  if(!r.ok) throw new Error('HTTP '+r.status);
-  const raw=await r.json();
-  if(!raw) return null;
-  if(raw.gz){
-    let json;
-    if(typeof DecompressionStream!=='undefined'){
-      try{ json=await _b64Gz(raw.gz); }catch(e){ json=null; }
-    }
-    if(json==null){ // احتياطي JS خالص (iOS قديم)
-      const bin=atob(raw.gz); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
-      json=new TextDecoder().decode(_tinyInflate(u));
-    }
-    const d=JSON.parse(json); d.savedAt=raw.savedAt||d.savedAt; d.contentHash=raw.contentHash||d.contentHash; d.deviceId=raw.deviceId||d.deviceId; return d;
-  }
-  return raw;
+async function fbDecodeRaw(raw){
+  if(!raw)return null;if(raw.gz){let json=null;if(typeof DecompressionStream!=='undefined'){try{json=await _b64Gz(raw.gz);}catch(e){json=null;}}if(json==null){const bin=atob(raw.gz),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);json=new TextDecoder().decode(_tinyInflate(u));}const d=JSON.parse(json);d.savedAt=raw.savedAt||d.savedAt;d.contentHash=raw.contentHash||d.contentHash;d.deviceId=raw.deviceId||d.deviceId;return d;}return raw;
 }
+async function fbFetchSnapshot(){const r=await fetch(FB_URL+FB_NODE_FN(),{cache:'no-store',headers:{'X-Firebase-ETag':'true'}});if(!r.ok)throw new Error('HTTP '+r.status);const raw=await r.json();return {data:await fbDecodeRaw(raw),etag:r.headers.get('ETag')||r.headers.get('etag')||null};}
+async function fbFetchData(){return (await fbFetchSnapshot()).data;}
 
 // ── الدمج الذكي: حذف يُطبَّق ولا يعود · جديد يُضاف · موجود يُحدَّث إذا أحدث (_mod) بعد تصحيح ساعة السيرفر ──
+function syncNewer(a,b){const am=Number(a&&a._mod)||0,bm=Number(b&&b._mod)||0;if(am!==bm)return am>bm;return String(a&&a._device||'')>String(b&&b._device||'');}
+function mergeTombstones(a,b){const map=new Map();[...(a||[]),...(b||[])].forEach(x=>{if(!x||x.id==null)return;const id=String(x.id),old=map.get(id);if(!old||Number(x.t||0)>Number(old.t||0))map.set(id,deepClone(x));});return Array.from(map.values()).sort((x,y)=>String(x.id).localeCompare(String(y.id))).slice(-1000);}
+function mergeSyncList(mc,local,remote,localDel,remoteDel,kind){const dels=mergeTombstones(localDel,remoteDel),dm=new Map(dels.map(x=>[String(x.id),Number(x.t)||0])),map=new Map();const add=e=>{if(!e||typeof e!=='object')return;ensureRecordMeta(mc,kind,e);const id=String(e._id),dt=dm.get(id);if(dt!=null&&dt>=Number(e._mod||0))return;const old=map.get(id);if(!old||syncNewer(e,old))map.set(id,deepClone(e));};(local||[]).forEach(add);(remote||[]).forEach(add);const list=Array.from(map.values()).sort((a,b)=>(String(a.d||'').localeCompare(String(b.d||'')))||(Number(a.r||0)-Number(b.r||0))||String(a._id).localeCompare(String(b._id)));return {list,dels};}
+function catalogRowsActual(mc,kind){return mc&&mc.catalog&&Array.isArray(mc.catalog[kind])?mc.catalog[kind]:null;}
+function mergeCatalogData(ex,inc){const kinds=['filters','oils','purchases'];let changed=false;if(!ex.catalog&&inc.catalog)ex.catalog={};kinds.forEach(kind=>{const a=catalogRowsActual(ex,kind),b=catalogRowsActual(inc,kind);if(!a&&!b)return;if(!ex.catalog)ex.catalog={};if(!a&&b){ex.catalog[kind]=deepClone(b);changed=true;return;}if(a&&!b)return;const localDel=kind==='purchases'?ex._deletedCatalogPurchases:[],remoteDel=kind==='purchases'?inc._deletedCatalogPurchases:[];const r=mergeSyncList(ex,a,b,localDel,remoteDel,'cat_'+kind);if(canonicalStringify(a)!==canonicalStringify(r.list)){ex.catalog[kind]=r.list;changed=true;}if(kind==='purchases'){const d=mergeTombstones(localDel,remoteDel);if(canonicalStringify(ex._deletedCatalogPurchases||[])!==canonicalStringify(d)){ex._deletedCatalogPurchases=d;changed=true;}}});return changed;}
+function fieldMod(mc,k){return Number(mc&&mc._fieldMods&&mc._fieldMods[k])||Number(mc&&mc._mod)||0;}
+function incomingFieldWins(ex,inc,k){const im=fieldMod(inc,k),em=fieldMod(ex,k);if(im!==em)return im>em;return String(inc&&inc._device||'')>String(ex&&ex._device||'');}
+function mergeMachineData(ex,inc){ensureMachineSyncMeta(ex);ensureMachineSyncMeta(inc);const before=canonicalStringify(ex),exMod=Number(ex._mod)||0,incMod=Number(inc._mod)||0;const keys=new Set([...machineFieldKeys(ex),...machineFieldKeys(inc),...Object.keys(ex._fieldMods||{}),...Object.keys(inc._fieldMods||{})]);keys.forEach(k=>{if(incomingFieldWins(ex,inc,k)){if(Object.prototype.hasOwnProperty.call(inc,k))ex[k]=deepClone(inc[k]);else delete ex[k];ex._fieldMods[k]=fieldMod(inc,k);}});let r=mergeSyncList(ex,ex.history,inc.history,ex._deletedHistory,inc._deletedHistory,'hist');ex.history=r.list;ex._deletedHistory=r.dels;r=mergeSyncList(ex,ex.readings,inc.readings,ex._deletedReadings,inc._deletedReadings,'read');ex.readings=r.list;ex._deletedReadings=r.dels;const ea=airFilterCleaningEntries(ex),ia=airFilterCleaningEntries(inc);r=mergeSyncList(ex,ea,ia,ex._deletedAirf,inc._deletedAirf,'airf');if(!ex.conditionHistory||typeof ex.conditionHistory!=='object')ex.conditionHistory={};ex.conditionHistory.airf=r.list;ex._deletedAirf=r.dels;mergeCatalogData(ex,inc);if(incMod>exMod)ex._device=inc._device;ex._mod=Math.max(exMod,incMod);ex._rev=Math.max(Number(ex._rev)||0,Number(inc._rev)||0);recomputeDone(ex);const maxMeter=Math.max(Number(ex.reading)||0,...(ex.history||[]).map(x=>Number(x.r)||0),...(ex.readings||[]).map(x=>Number(x.r)||0),...airFilterCleaningEntries(ex).map(x=>Number(x.r)||0));ex.reading=maxMeter;return before!==canonicalStringify(ex);}
+function mergeSettings(data){if(!data||!data.settings||typeof data.settings!=='object')return false;ensureSettingsSyncMeta();const remoteMods=(data._settingsMods&&typeof data._settingsMods==='object')?data._settingsMods:{};const keys=new Set([...Object.keys(DB.settings||{}),...Object.keys(data.settings||{}),...Object.keys(DB._settingsMods||{}),...Object.keys(remoteMods)]);let changed=false;keys.forEach(k=>{const em=Number(DB._settingsMods[k])||Number(DB._mod)||0,im=Number(remoteMods[k])||Number(data._mod)||0;if(im>em||(im===em&&String(data.deviceId||'')>String(DB._device||''))){const has=Object.prototype.hasOwnProperty.call(data.settings,k),before=canonicalStringify((DB.settings||{})[k]),after=has?canonicalStringify(data.settings[k]):undefined,oldMod=Number(DB._settingsMods[k])||0;if(has)DB.settings[k]=deepClone(data.settings[k]);else delete DB.settings[k];DB._settingsMods[k]=im;if(before!==after||oldMod!==im)changed=true;}});return changed;}
 function mergeCloud(data){
-  const stats={added:0,updated:0,deleted:0,kept:0,conflictLocalKept:0};
-  const _NOWMAX=serverNow()+120000;
-  const _modOf=x=>{let v=Number((x&&x._mod)||0);return (v>_NOWMAX)?0:v;};
-  const dirtyLocal=new Set(Array.from(_dirtyMachines||[]).map(String));
-  // 1) اتحاد شواهد الحذف
-  const localDel=DB.deletedIds||[];
-  const delMap=new Map(localDel.map(d=>[String(d.id),Number(d.t)||0]));
-  for(const d of (data.deletedIds||[])){ const t=Number(d&&d.t)||0, id=String(d&&d.id); if(id&&(!delMap.has(id)||t>delMap.get(id))) delMap.set(id,t); }
-  DB.deletedIds=Array.from(delMap, ([id,t])=>({id,t}));
-  if(DB.deletedIds.length>1000) DB.deletedIds=DB.deletedIds.slice(-1000);
-  // 2) دمج الآلات
+  const stats={added:0,updated:0,deleted:0,kept:0,conflictLocalKept:0,settings:0};if(!data||typeof data!=='object')return stats;const dirtyLocal=new Set(Array.from(_dirtyMachines||[]).map(String));
+  const delRows=mergeTombstones(DB.deletedIds||[],data.deletedIds||[]),delMap=new Map(delRows.map(d=>[String(d.id),Number(d.t)||0]));DB.deletedIds=delRows;
   const map=new Map((DB.machines||[]).map(x=>[String(x.id),x]));
-  // طبّق الحذف على المحلي (إن كان الحذف أحدث من تعديل الآلة)
-  for(const [id,ex] of Array.from(map.entries())){
-    const dt=delMap.get(id);
-    if(dt!==undefined && dt>_modOf(ex)){ map.delete(id); clearDirtyMachines([id]); stats.deleted++; }
-  }
-  for(const inc of (data.machines||[])){
-    if(!inc||!inc.id) continue;
-    const id=String(inc.id);
-    const dt=delMap.get(id);
-    if(dt!==undefined && dt>_modOf(inc)) continue; // محذوف — لا يُعاد
-    const ex=map.get(id);
-    if(!ex){ map.set(id,inc); stats.added++; continue; }
-    const im=_modOf(inc), em=_modOf(ex);
-    if(im>em){ Object.assign(ex,inc); if(!dirtyLocal.has(id)) clearDirtyMachines([id]); stats.updated++; }
-    else { if(dirtyLocal.has(id)&&em>im) stats.conflictLocalKept++; stats.kept++; }
-  }
-  DB.machines=Array.from(map.values());
-  migrate(); // يحافظ على ترحيلات البيانات والسجلات المبدئية بعد أي دمج سحابي
-  // الإعدادات العامة: خذ الأحدث (حسب _mod الكلي بعد التصحيح)
-  if(data.settings && typeof data.settings==='object'){
-    if((Number(data._mod)||0) > (Number(DB._mod)||0)) DB.settings=Object.assign({}, DB.settings||{}, data.settings);
-  }
-  return stats;
+  for(const [id,ex] of Array.from(map.entries())){const dt=delMap.get(id);if(dt!==undefined&&dt>=Number(ex&&ex._mod||0)){map.delete(id);clearDirtyMachines([id]);stats.deleted++;}}
+  for(const raw of (data.machines||[])){if(!raw||!raw.id)continue;const inc=deepClone(raw);ensureMachineSyncMeta(inc);const id=String(inc.id),dt=delMap.get(id);if(dt!==undefined&&dt>=Number(inc._mod||0))continue;const ex=map.get(id);if(!ex){map.set(id,inc);stats.added++;continue;}const changed=mergeMachineData(ex,inc);if(changed){stats.updated++;}else stats.kept++;if(dirtyLocal.has(id)&&Number(ex._mod||0)>Number(inc._mod||0))stats.conflictLocalKept++;}
+  DB.machines=Array.from(map.values());if(mergeSettings(data))stats.settings++;DB._mod=Math.max(Number(DB._mod)||0,Number(data._mod)||0);migrate();initSyncSnapshots();return stats;
 }
 
 function fbFmtTS(t){ try{ return t?new Date(t).toLocaleString('fr-DZ'):''; }catch(e){ return ''; } }
@@ -2182,75 +2208,16 @@ function fbStatus(state,title){
   if(el){ const lt=fbLastTS(),hs=fbHashShort(fbLastHash()); el.textContent=lt?('آخر مزامنة: '+fbFmtTS(lt)+(hs?' · بصمة: '+hs:'')):'لم تتم أي مزامنة بعد'; }
 }
 
-async function fbPush(silent){
-  if(_fbBusy) return false;
-  if(!navigator.onLine){ if(!silent) flash('لا يوجد اتصال'); fbStatus('off','غير متصل'); return false; }
-  // حارس مضادّ للطمس: لا ترفع قبل قراءة السحابة بنجاح هذه الجلسة
-  if(!_fbSynced){ if(!silent) flash('⏳ لم تُقرأ السحابة بعد — جارٍ المزامنة أولاً'); try{ if(typeof fbSync==='function'){ await fbSync(silent); } }catch(e){} return false; }
-  await fbPrepareLocalForCloud('push');
-  const data=fbBuildData();
-  const core=JSON.stringify({machines:data.machines,deletedIds:data.deletedIds});
-  const h=fbHash(core);
-  if(silent && h===_fbLastHash && !_dirtyMachines.size){ _fbDirty=false; return true; }
-  _fbBusy=true; fbStatus('sync','جارٍ الرفع…');
-  try{
-    let body;
-    if(_gzOK){ const gz=await _gzB64(JSON.stringify(data)); body=JSON.stringify({app:'parc',version:4,syncSchema:SYNC_SCHEMA_VERSION,savedAt:data.savedAt,contentHash:data.contentHash,deviceId:data.deviceId,gz}); }
-    else body=JSON.stringify(data);
-    const r=await fetch(FB_URL+FB_NODE_FN(),{method:'PUT',headers:{'Content-Type':'application/json'},body});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    _fbLastHash=h; _fbDirty=false; clearDirtyMachines(); _fbSetTS(data.savedAt); _fbSetHash(h); _lastPushedSavedAt=data.savedAt;
-    fbStatus('ok','آخر مزامنة: '+new Date(data.savedAt).toLocaleString('fr-DZ'));
-    if(!silent) flash('☁️ تم الرفع ('+Math.round(body.length/1024)+' KB)');
-    const el=document.getElementById('fb-last-txt'); if(el) el.textContent='آخر مزامنة: '+new Date(data.savedAt).toLocaleString('fr-DZ')+' · بصمة: '+fbHashShort(h);
-    _fbBusy=false; return true;
-  }catch(e){ _fbBusy=false; fbStatus('err','فشل الرفع: '+e.message); if(!silent) flash('فشل الرفع: '+e.message); return false; }
+async function fbEncodeBody(data){if(_gzOK){const gz=await _gzB64(JSON.stringify(data));return JSON.stringify({app:'parc',version:5,syncSchema:SYNC_SCHEMA_VERSION,savedAt:data.savedAt,contentHash:data.contentHash,deviceId:data.deviceId,gz});}return JSON.stringify(data);}
+function fbAcceptSynced(data,h){const currentHash=fbCurrentHash(),changedDuringUpload=currentHash!==h;_fbLastHash=h;_fbSetTS(data.savedAt);_fbSetHash(h);_lastPushedSavedAt=data.savedAt;if(changedDuringUpload){_fbDirty=true;}else{_fbDirty=false;clearDirtyMachines();}try{if(!MEM_ONLY)localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}initSyncSnapshots();const when=new Date(data.savedAt).toLocaleString('fr-DZ');if(changedDuringUpload){fbStatus('sync','تم رفع دفعة، ويوجد تعديل أحدث محلياً جارٍ إرساله…');try{fbScheduleAutoPush();}catch(e){}}else fbStatus('ok','آخر مزامنة: '+when);const el=document.getElementById('fb-last-txt');if(el)el.textContent=changedDuringUpload?'تم رفع دفعة · تعديل أحدث بانتظار الرفع':'آخر مزامنة: '+when+' · بصمة: '+fbHashShort(h);}
+async function fbPush(silent,seedSnapshot){
+  if(_fbBusy)return false;if(!navigator.onLine){if(!silent)flash('لا يوجد اتصال');fbStatus('off','غير متصل');return false;}if(!_fbSynced){if(!silent)flash('⏳ تُقرأ السحابة أولاً لمنع طمس بيانات الجهاز الآخر');return await fbSync(silent);}await fbPrepareLocalForCloud();_fbBusy=true;fbStatus('sync','جارٍ دمج ورفع آمن…');
+  try{let snap=seedSnapshot||null,lastBody='';for(let attempt=1;attempt<=6;attempt++){if(!snap)snap=await fbFetchSnapshot();_fbSynced=true;if(snap.data&&snap.data.machines)mergeCloud(snap.data);const data=fbBuildData(),h=data.contentHash,remoteHash=snap.data&&snap.data.contentHash;if(remoteHash&&remoteHash===h){const stamp=snap.data.savedAt||data.savedAt;data.savedAt=stamp;fbAcceptSynced(data,h);_fbBusy=false;return true;}if(!snap.etag)throw new Error('Firebase لم يُرجع ETag؛ أوقفت الرفع لحماية بيانات الجهازين');lastBody=await fbEncodeBody(data);const r=await fetch(FB_URL+FB_NODE_FN(),{method:'PUT',headers:{'Content-Type':'application/json','if-match':snap.etag},body:lastBody});if(r.status===412){fbStatus('sync','تعديل متزامن من جهاز آخر — إعادة الدمج '+attempt+'/6');snap=null;continue;}if(!r.ok)throw new Error('HTTP '+r.status);fbAcceptSynced(data,h);if(!silent)flash('☁️ تم الرفع الآمن ('+Math.round(lastBody.length/1024)+' KB)');_fbBusy=false;return true;}throw new Error('تعارض متكرر بين الجهازين؛ لم أكتب فوق أي بيانات');}catch(e){_fbBusy=false;fbStatus('err','فشل الرفع الآمن: '+e.message);if(!silent)flash('فشل الرفع الآمن: '+e.message);return false;}
 }
 
 // ── المزامنة الآمنة: جلب → دمج → رفع · مع رسائل واضحة ──
 async function fbSync(silent){
-  if(_fbBusy) return false;
-  if(!navigator.onLine){ if(!silent) flash('⚠️ لا يوجد اتصال بالإنترنت'); fbStatus('off','غير متصل بالإنترنت'); return false; }
-  _fbBusy=true; fbStatus('sync','جارٍ المزامنة…');
-  let data=null, fetchErr=null;
-  try{ data=await fbFetchData(); }
-  catch(e){ fetchErr=e; }
-  if(fetchErr){
-    _fbBusy=false;
-    const msg=String(fetchErr.message||fetchErr);
-    let hint='فشل الاتصال بالسحابة';
-    if(/401|403|Permission|denied/i.test(msg)) hint='⛔ مرفوض — تحقّق من قواعد Firebase (المسار egtph_parc_v3_)';
-    else if(/404/.test(msg)) hint='المسار غير موجود بعد — سيُنشأ عند الرفع';
-    else hint='تعذّر الاتصال: '+msg;
-    fbStatus('err',hint);
-    if(!silent) flash(hint);
-    return false;
-  }
-  let stats=null;
-  _fbSynced=true; // قرأنا السحابة بنجاح هذه الجلسة → الرفع أصبح آمناً
-  await fbPrepareLocalForCloud('sync-before-merge');
-  if(data && data.machines){ stats=mergeCloud(data); _fbSetTS(data.savedAt); if(data.contentHash)_fbSetHash(data.contentHash); }
-  _fbBusy=false;
-  const ok=await fbPush(true);
-  try{ if(DB.active && !DB.machines.some(x=>x.id===DB.active)) DB.active=null; }catch(e){}
-  if(!MEM_ONLY){ try{ localStorage.setItem(KEY,JSON.stringify(DB)); }catch(e){} }
-  if(!ok){ if(!silent) flash('⚠️ تعذّر رفع البيانات — حاول مجدداً'); return false; }
-  fbStatus('ok');
-  const changed=!!(stats && (stats.added||stats.updated||stats.deleted));
-  if(changed) safeRender();
-  if(!silent){
-    if(changed){
-      const parts=[];
-      if(stats.added)   parts.push('جديد: '+stats.added);
-      if(stats.updated) parts.push('محدّث: '+stats.updated);
-      if(stats.deleted) parts.push('محذوف: '+stats.deleted);
-      if(stats.conflictLocalKept) parts.push('محلي محفوظ: '+stats.conflictLocalKept);
-      flash('🔔 يوجد جديد — '+parts.join(' · '));
-    } else {
-      flash('✓ لا جديد — كل شيء متزامن');
-    }
-  }
-  return ok;
+  if(_fbBusy)return false;if(!navigator.onLine){if(!silent)flash('⚠️ لا يوجد اتصال بالإنترنت');fbStatus('off','غير متصل بالإنترنت');return false;}_fbBusy=true;fbStatus('sync','جارٍ جلب ودمج السحابة…');let snap=null,fetchErr=null;try{await fbRefreshServerTimeOffset();snap=await fbFetchSnapshot();}catch(e){fetchErr=e;}if(fetchErr){_fbBusy=false;const msg=String(fetchErr.message||fetchErr);let hint='فشل الاتصال بالسحابة';if(/401|403|Permission|denied/i.test(msg))hint='⛔ مرفوض — تحقّق من تسجيل الدخول وقواعد Firebase';else hint='تعذّر الاتصال: '+msg;fbStatus('err',hint);if(!silent)flash(hint);return false;}const data=snap.data;_fbSynced=true;let stats=null;if(data&&data.machines){stats=mergeCloud(data);_fbSetTS(data.savedAt);if(data.contentHash)_fbSetHash(data.contentHash);}_fbBusy=false;const ok=await fbPush(true,snap);try{if(DB.active&&!DB.machines.some(x=>x.id===DB.active))DB.active=null;}catch(e){}try{if(!MEM_ONLY)localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}if(!ok){if(!silent)flash('⚠️ تعذّرت المزامنة الآمنة — لم تُطمس أي بيانات');return false;}const changed=!!(stats&&(stats.added||stats.updated||stats.deleted||stats.settings));if(changed)safeRender();if(!silent){if(changed){const parts=[];if(stats.added)parts.push('جديد: '+stats.added);if(stats.updated)parts.push('محدّث: '+stats.updated);if(stats.deleted)parts.push('محذوف: '+stats.deleted);if(stats.settings)parts.push('إعدادات: '+stats.settings);flash('🔔 تم الدمج — '+parts.join(' · '));}else flash('✓ لا جديد — كل شيء متزامن');}return true;
 }
 
 async function fbSyncNow(){ if(!navigator.onLine){ flash('لا يوجد اتصال'); return; } await fbSync(false); }
@@ -2281,7 +2248,7 @@ function flushDeferredRender(){ if(_deferRender&&!isUserBusy()){_deferRender=fal
 document.addEventListener('focusout',()=>{ setTimeout(flushDeferredRender,200); });
 
 async function fbAutoTick(){
-  if(!fbAuto()||!navigator.onLine||_fbBusy) return;
+  if(!fbAuto()||!navigator.onLine||_fbBusy)return;try{if(fbCurrentHash()!==fbLastHash())_fbDirty=true;}catch(e){}
   let remoteChanged=false;
   try{
     const r=await fetch(FB_URL+FB_BASE+'/savedAt.json'+FB_AUTH_PARAM(),{cache:'no-store'});
@@ -2299,22 +2266,8 @@ function fbStartLoop(){ clearInterval(_fbLoop); _fbLoop=setInterval(fbAutoTick,F
 // ── البثّ المباشر (SSE) الأذكى: يبثّ savedAt فقط (طابع خفيف)؛ عند تغيّره يجلب البيانات ──
 //    أخفّ بكثير على النت من بثّ المسار الكامل المضغوط في كل تغيير.
 let _sse=null, _sseRetry=null, _lastPushedSavedAt='';
-function fbStartStream(){
-  if(!('EventSource' in window)) return; // متصفّح قديم → الفحص الدوري يكفي
-  if(_sse){ try{ _sse.close(); }catch(e){} _sse=null; }
-  if(!navigator.onLine) return;
-  try{
-    _sse=new EventSource(FB_URL+FB_BASE+'/savedAt.json'+FB_AUTH_PARAM());
-    _sse.addEventListener('put', _sseOnChange);
-    _sse.addEventListener('patch', _sseOnChange);
-    _sse.onerror=()=>{
-      // انقطاع الاتصال → أغلق وأعد المحاولة بعد قليل (الفحص الدوري يعمل في الوسط)
-      try{ _sse.close(); }catch(e){} _sse=null;
-      if(_sseRetry) clearTimeout(_sseRetry);
-      _sseRetry=setTimeout(fbStartStream,8000);
-    };
-  }catch(e){ _sse=null; }
-}
+function fbRestartStream(delay,message){try{if(_sse)_sse.close();}catch(e){}_sse=null;if(message)fbStatus('err',message);if(_sseRetry)clearTimeout(_sseRetry);_sseRetry=setTimeout(()=>{fbStartStream();try{if(fbAuto()&&navigator.onLine&&!_fbBusy)fbAutoTick();}catch(e){}},delay||2500);}
+function fbStartStream(){if(!('EventSource' in window))return;if(_sse){try{_sse.close();}catch(e){}_sse=null;}if(!navigator.onLine)return;try{_sse=new EventSource(FB_URL+FB_BASE+'/savedAt.json'+FB_AUTH_PARAM());_sse.addEventListener('put',_sseOnChange);_sse.addEventListener('patch',_sseOnChange);_sse.addEventListener('cancel',()=>fbRestartStream(8000,'قراءة Firebase مرفوضة — راجع الصلاحيات'));_sse.addEventListener('auth_revoked',()=>fbRestartStream(1500,'انتهت جلسة المزامنة — جارٍ تجديد الدخول'));_sse.onopen=()=>{if(fbAuto())fbStatus('ok');};_sse.onerror=()=>fbRestartStream(5000,'انقطع البث اللحظي — الفحص الاحتياطي مستمر');}catch(e){_sse=null;fbRestartStream(5000);}}
 let _sseDeb=null;
 function _sseOnChange(ev){
   // تجميع أحداث متقاربة في نداء واحد (تفادي عدّة نداءات عند كتابة سريعة من الطرف الآخر)
@@ -2334,7 +2287,8 @@ function fbToggleAuto(chk){
 }
 
 async function fbStartupCheck(){
-  if(!navigator.onLine){ fbStatus('off','غير متصل بالإنترنت'); return; }
+  try{if(_dirtyMachines.size||fbCurrentHash()!==fbLastHash())_fbDirty=true;}catch(e){}
+  if(!navigator.onLine){fbStatus('off','غير متصل بالإنترنت');return;}
   fbStatus('sync','جارٍ فحص السحابة…');
   try{ await fbRefreshServerTimeOffset(); }catch(e){}
   try{
@@ -2414,6 +2368,13 @@ function maintenanceScheduleMessage(mc,it,status){
   const u=unit(mc), cur=currentReading(mc), due=status&&status.due;
   const label=maintenanceDashboardLabel(mc);
   let state='';
+  if(status&&status.calendar){
+    if(status.urgency==='late')state='متأخر بـ '+fmt(Math.abs(Number(status.remDays)||0))+' يوم';
+    else if(status.urgency==='now')state='مستحق اليوم';
+    else if(status.urgency==='soon')state='متبقٍ '+fmt(Math.max(0,Number(status.remDays)||0))+' يوم';
+    else state='لا يوجد استحقاق مفتوح';
+    return label+' — '+String(it&&it.ar||'صيانة')+'. '+state+(status.dueDate?' · الاستحقاق: '+status.dueDate:'')+(status.dueReading!=null?' · العداد التقديري عند الموعد: ≈ '+fmt(status.dueReading)+' '+u:'')+' · آخر عداد مسجل: '+fmt(cur)+' '+u+'.';
+  }
   if(status&&status.urgency==='late'){
     state='متأخر بـ '+fmt(Math.abs(Number(status.rem)||0))+' '+u;
   }else if(status&&status.urgency==='now'){
@@ -2427,6 +2388,7 @@ function maintenanceScheduleMessage(mc,it,status){
     (due!=null?' · الاستحقاق: '+fmt(due)+' '+u:'')+
     ' · العداد الحالي: '+fmt(cur)+' '+u+'.';
 }
+
 function maintenanceScheduleAlert(mc,it){
   const status=statusOf(mc,it);
   const open=['late','now','soon'].includes(status&&status.urgency);
@@ -2562,14 +2524,15 @@ window.addEventListener('message',function(event){
 // ── ترحيل لمرة واحدة للقاعدة الجديدة: امسح طابع المزامنة القديم حتى لا يُساء فهم «لا جديد» ──
 try{
   const dbTag=localStorage.getItem('egtph_parc_dbtag');
-  const tag=FB_URL+'|sync-v4';
+  const tag=FB_URL+'|sync-v5-etag-records';
   if(dbTag!==tag){ localStorage.removeItem('egtph_parc_fb_last'); localStorage.removeItem('egtph_parc_fb_hash'); try{_fbLastHash='';}catch(e){} localStorage.setItem('egtph_parc_dbtag',tag); }
 }catch(e){}
 
-load();renderGarage();
+load();initSyncSnapshots();try{if(_dirtyMachines.size||fbCurrentHash()!==fbLastHash())_fbDirty=true;}catch(e){}renderGarage();
 try{ if(!DB.deletedIds) DB.deletedIds=[]; }catch(e){}
 setTimeout(fbStartupCheck,1000);
 fbStartLoop();
+setInterval(()=>{try{if(navigator.onLine)fbRefreshServerTimeOffset();}catch(e){}},300000);
 setTimeout(fbStartStream,1500); // بثّ مباشر لحظي
 window.addEventListener('online', fbStartStream);
 document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible'){ fbStartStream(); try{ if(fbAuto()&&navigator.onLine&&!_fbBusy) fbAutoTick(); }catch(e){} } });
