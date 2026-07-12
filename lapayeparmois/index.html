@@ -224,7 +224,7 @@
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes" name="viewport"/>
-<title>EGTPH — سجل الأجور v187</title>
+<title>EGTPH — سجل الأجور v188</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -1135,7 +1135,7 @@ body{background:linear-gradient(145deg,#f2f7f4 0%,#fbfdfc 42%,#eef7f1 100%);}
 }
 @media screen and (max-width:900px){.twrap thead th,.sec table thead th{font-size:11.2px!important;padding:10px 8px!important}.twrap tbody td,.sec table tbody td{font-size:11px!important;padding:10px 8px!important;line-height:1.65!important}#page-settlement .twrap table{min-width:1120px!important}}
 </style>
-<meta content="v187-auto-advance-durable-sync-clean-dashboard" name="egtph-build"/>
+<meta content="v188-firebase-safe-undo-sync-fixed" name="egtph-build"/>
 <style id="egtph-v176-night-theme">
 /* v176 — ثيم ثانٍ فقط: ليلي أخضر متناسق. الأبيض يبقى الافتراضي. */
 body.egtph-theme-night{
@@ -1523,7 +1523,7 @@ body.egtph-theme-night .egtph-table-viewport::-webkit-scrollbar-thumb{
 <div class="" id="toast" style="">✅ تم تنزيل نسخة كاملة: ملف HTML يحتوي البرنامج وكل البيانات الحالية</div>
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div class="topbar">
-<div class="tlogo">EGTPH <span>| سجل الأجور v187</span></div>
+<div class="tlogo">EGTPH <span>| سجل الأجور v188</span></div>
 <div id="autoSv" style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--gray)">
 <span class="auto-save-dot" id="saveDot"></span>
 <span id="saveLabel">—</span>
@@ -9659,7 +9659,24 @@ async function saveOutbox(p){
     }
   }
 }
-function normalizeOutbox(p){if(!p||p.root!==ROOT||![170,171,VERSION].includes(Number(p.version)))return null;const n=clone(p);n.version=VERSION;if(!n.setOps)n.setOps={deletedIds:{add:[],remove:[]}};if(!n.setOps.deletedIds)n.setOps.deletedIds={add:[],remove:[]};if(n.setAdds&&Array.isArray(n.setAdds.deletedIds))n.setOps.deletedIds.add=Array.from(new Set([...(n.setOps.deletedIds.add||[]),...n.setAdds.deletedIds.map(String)]));delete n.setAdds;return n;}
+function normalizeOutbox(p){
+  if(!p||p.root!==ROOT||![170,171,VERSION].includes(Number(p.version)))return null;
+  let n=clone(p);
+  n.version=VERSION;
+  if(!n.setOps)n.setOps={deletedIds:{add:[],remove:[]}};
+  if(!n.setOps.deletedIds)n.setOps.deletedIds={add:[],remove:[]};
+  if(n.setAdds&&Array.isArray(n.setAdds.deletedIds)){
+    n.setOps.deletedIds.add=Array.from(new Set([
+      ...(n.setOps.deletedIds.add||[]),
+      ...n.setAdds.deletedIds.map(String)
+    ]));
+  }
+  delete n.setAdds;
+
+  // ترقية طابور v187 المعلّق: مسارات inverse القديمة كانت مفاتيح كائن تحتوي "/".
+  n=migrateUndoJournalOpsInsidePatch(n);
+  return n;
+}
 function loadOutbox(){
   return outboxMemory?clone(outboxMemory):null;
 }
@@ -9723,7 +9740,7 @@ async function atomicCommit(p){const t=await token();for(let attempt=0;attempt<M
   const plan=validateAndBuild(raw,p,!!p.force);if(plan.conflicts.length&&!p.force){await writeConflictRecords(plan.conflicts,t,p.txId);const e=new Error('تعارض مزامنة: نفس المعرّف عُدّل في جهازين. لم تُستبدل أي نسخة.');e.code='SYNC_CONFLICT';e.conflicts=plan.conflicts;throw e;}
   const now=new Date().toISOString(),receipt={txId:p.txId,status:'verified',deviceId:DEVICE,createdAt:p.createdAt,verifiedAt:now,recordCount:countPatch(p),paths:Object.keys(plan.updates),forcedByUser:!!p.force,commitMethod:'conditional-put-etag'};
   addUpdate(plan.updates,'syncReceipts/'+DEVICE+'/last',receipt);addUpdate(plan.updates,'syncMeta/lastVerified',receipt);addUpdate(plan.updates,'syncMeta/devices/'+DEVICE,{lastSeenAt:now,lastTxId:p.txId,userName:DB.settings&&DB.settings.userName||''});addUpdate(plan.updates,'syncedAt',now);
-  let nextRoot=materializeRoot(raw,plan.updates);receipt.dataCounts=countData(nextRoot);receipt.fingerprint=dataFingerprint(nextRoot);addUpdate(plan.updates,'syncReceipts/'+DEVICE+'/last',receipt);addUpdate(plan.updates,'syncMeta/lastVerified',receipt);addUpdate(plan.updates,'syncMeta/dataCounts',receipt.dataCounts);addUpdate(plan.updates,'syncMeta/dataFingerprint',receipt.fingerprint);nextRoot=materializeRoot(raw,plan.updates);
+  let nextRoot=materializeRoot(raw,plan.updates);receipt.dataCounts=countData(nextRoot);receipt.fingerprint=dataFingerprint(nextRoot);addUpdate(plan.updates,'syncReceipts/'+DEVICE+'/last',receipt);addUpdate(plan.updates,'syncMeta/lastVerified',receipt);addUpdate(plan.updates,'syncMeta/dataCounts',receipt.dataCounts);addUpdate(plan.updates,'syncMeta/dataFingerprint',receipt.fingerprint);nextRoot=materializeRoot(raw,plan.updates);assertFirebaseSafeTree(nextRoot);
   const w=await request(endpoint('',t),{method:'PUT',headers:{'Content-Type':'application/json','If-Match':etag},body:JSON.stringify(nextRoot)});
   if(w.status===412){await new Promise(r=>setTimeout(r,120*(attempt+1)));continue;}
   if(!w.ok){const d=await responseDetail(w);throw new Error('رفع مشروط HTTP '+w.status+(d?' — '+d:''));}
@@ -9778,6 +9795,115 @@ async function flush(){
   await ensureOutboxReady();if(running)return beginPromise();const p=loadOutbox();if(!p){queued=false;lastError=null;if(uiPending)releaseSuccess();setPanel('ok','🟢 كل التغييرات المحلية مرفوعة ومتحققة');settlePromise({ok:true,noChanges:true});return true;}if(!window.__EGTPH_DB_READY__||window.__EGTPH_DB_READY_SOURCE__!==SOURCE){queued=true;status('⏳ انتظار جلب Firebase المرجعي…','var(--amber)','saving');gate('saving','انتظار الاتصال بالمصدر المرجعي…');return beginPromise();}running=true;queued=false;uiPending=true;gate('saving','العملية قيد الرفع المشروط بـ ETag ثم القراءة الراجعة والتحقق…');status('⏳ رفع مشروط وتحقق — '+p.txId,'var(--teal)','saving');try{const result=await atomicCommit(p);_applyDBData(_v169SanitizeCloud(result.raw));window.__EGTPH_DB_READY__=true;window.__EGTPH_DB_READY_SOURCE__=SOURCE;baseline=clone(DB);rollbackSnapshot=null;await clearOutbox();lastError=null;lastSavedAt=result.receipt.verifiedAt;lastPullAt=lastSavedAt;diag.lastSavedAt=lastSavedAt;diag.lastPullAt=lastPullAt;diag.lastTxId=p.txId;diag.lastError='';diag.lastErrorAt='';diag.ownedConflicts=0;diag.counts=countData(DB);diag.cloudFingerprint=result.receipt.fingerprint||diag.cloudFingerprint;diag.localFingerprint=dataFingerprint(DB);diag.cloudMatch=diag.localFingerprint===diag.cloudFingerprint;currentConflicts=[];saveDiag(diag);try{markSaved();}catch(e){}status('🟢 رُفعت كل تغييرات العملية وتحقق منها — '+p.txId,'var(--green1)','ok');try{window.dispatchEvent(new CustomEvent('egtph-verified-saved',{detail:{txId:p.txId,source:SOURCE,writes:clone(writes)}}));}catch(e){}releaseSuccess();renderAll();settlePromise({ok:true,txId:p.txId,source:SOURCE});return true;}catch(e){lastError=String(e&&e.message||e);diag.lastError=lastError;saveDiag(diag);queued=true;console.error('[v172] verified sync failed',e);if(e&&e.code==='SYNC_CONFLICT'){status('⚠️ تعارض: لم تُستبدل أي نسخة تلقائياً','var(--amber)','conflict');gate('conflict',lastError);settlePromise({ok:false,conflict:true,error:lastError});return false;}status('🔴 لم يثبت الحفظ؛ العملية معلقة: '+lastError,'var(--red)','error');gate('failed',lastError);try{originalToast('❌ لم تُحفظ العملية بعد: '+lastError,true);}catch(x){}clearTimeout(retryTimer);retryTimer=setTimeout(()=>{if(queued&&navigator.onLine)flush();},RETRY_MS);settlePromise({ok:false,error:lastError});return false;}finally{running=false;}}
 
 function reversiblePath(path){return path==='workers'||/^(advances|bonuses|hours|absences|debts)\//.test(path);}
+
+const UNDO_PATCH_STORAGE_FORMAT='firebase-safe-undo-patch-v188';
+
+function encodeUndoInverseForFirebase(inverse){
+  if(!inverse)return null;
+  const p=decodeUndoInverseFromFirebase(inverse)||clone(inverse);
+  return {
+    storageFormat:UNDO_PATCH_STORAGE_FORMAT,
+    version:p.version,
+    root:p.root,
+    txId:p.txId,
+    createdAt:p.createdAt,
+    deviceId:p.deviceId,
+    force:!!p.force,
+    listOpsEntries:Object.keys(p.listOps||{}).map(path=>({
+      path:String(path),
+      ops:clone(p.listOps[path]||[])
+    })),
+    valueOpsEntries:Object.keys(p.valueOps||{}).map(path=>({
+      path:String(path),
+      op:clone(p.valueOps[path])
+    })),
+    setOps:clone(p.setOps||{deletedIds:{add:[],remove:[]}})
+  };
+}
+
+function decodeUndoInverseFromFirebase(stored){
+  if(!stored)return null;
+  if(stored.storageFormat===UNDO_PATCH_STORAGE_FORMAT||
+     Array.isArray(stored.listOpsEntries)||
+     Array.isArray(stored.valueOpsEntries)){
+    const p={
+      version:stored.version||VERSION,
+      root:stored.root||ROOT,
+      txId:stored.txId||'',
+      createdAt:stored.createdAt||'',
+      deviceId:stored.deviceId||DEVICE,
+      listOps:{},
+      valueOps:{},
+      setOps:clone(stored.setOps||{deletedIds:{add:[],remove:[]}}),
+      force:!!stored.force
+    };
+    (stored.listOpsEntries||[]).forEach(entry=>{
+      if(!entry||typeof entry.path!=='string'||!Array.isArray(entry.ops))return;
+      p.listOps[entry.path]=clone(entry.ops);
+    });
+    (stored.valueOpsEntries||[]).forEach(entry=>{
+      if(!entry||typeof entry.path!=='string'||!entry.op)return;
+      p.valueOps[entry.path]=clone(entry.op);
+    });
+    return p;
+  }
+  return clone(stored);
+}
+
+function normalizeUndoJournalRecordForFirebase(record){
+  if(!record||typeof record!=='object')return clone(record);
+  const out=clone(record);
+  if(out.inverse){
+    out.inverse=encodeUndoInverseForFirebase(out.inverse);
+  }
+  return out;
+}
+
+function migrateUndoJournalOpsInsidePatch(patch){
+  const p=clone(patch||{});
+  const ops=p.listOps&&p.listOps.undoJournal;
+  if(Array.isArray(ops)){
+    ops.forEach(op=>{
+      if(op&&op.before&&op.before.inverse){
+        op.before=normalizeUndoJournalRecordForFirebase(op.before);
+      }
+      if(op&&op.after&&op.after.inverse){
+        op.after=normalizeUndoJournalRecordForFirebase(op.after);
+      }
+    });
+  }
+  return p;
+}
+
+function normalizeUndoJournalStorageInDB(db){
+  if(!db||!Array.isArray(db.undoJournal))return db;
+  db.undoJournal=db.undoJournal.map(normalizeUndoJournalRecordForFirebase);
+  return db;
+}
+
+function findInvalidFirebaseKey(root){
+  const invalid=/[.#$\[\]\/\u0000-\u001F\u007F]/;
+  const walk=(value,path)=>{
+    if(!value||typeof value!=='object')return null;
+    for(const key of Object.keys(value)){
+      const nextPath=path?path+' > '+key:key;
+      if(invalid.test(key))return {key,path:nextPath};
+      const nested=walk(value[key],nextPath);
+      if(nested)return nested;
+    }
+    return null;
+  };
+  return walk(root,'');
+}
+
+function assertFirebaseSafeTree(root){
+  const bad=findInvalidFirebaseKey(root);
+  if(bad){
+    throw new Error('مفتاح Firebase غير صالح قبل الرفع: «'+bad.key+'» داخل '+bad.path);
+  }
+  return true;
+}
+
 function makeInversePatch(p){
   const inv={version:VERSION,root:ROOT,txId:'undo_'+p.txId,createdAt:new Date().toISOString(),deviceId:DEVICE,listOps:{},valueOps:{},setOps:{deletedIds:{add:[],remove:[]}},force:false};let count=0;
   const ds=p&&p.setOps&&p.setOps.deletedIds,hasDeleteMeta=(ds&&((ds.add&&ds.add.length)||(ds.remove&&ds.remove.length)))||Object.keys(p.valueOps||{}).some(k=>k.startsWith('deletedRecords/'))||Object.keys(p.listOps||{}).some(k=>k.startsWith('trash/'));
@@ -9786,53 +9912,141 @@ function makeInversePatch(p){
   return count?inv:null;
 }
 function undoActionLabel(){const a=list(DB&&DB.auditLog)[0];return String(a&&a.action||'عملية مالية');}
-function attachUndoEntry(p){const inverse=makeInversePatch(p);if(!inverse)return false;if(!Array.isArray(DB.undoJournal))DB.undoJournal=[];DB.undoJournal.unshift({id:'UJ_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),createdAt:new Date().toISOString(),action:undoActionLabel(),deviceId:DEVICE,status:'available',sourceTxId:p.txId,inverse:inverse});DB.undoJournal=DB.undoJournal.slice(0,UNDO_LIMIT);return true;}
+function attachUndoEntry(p){
+  const inverse=makeInversePatch(p);
+  if(!inverse)return false;
+  if(!Array.isArray(DB.undoJournal))DB.undoJournal=[];
+  DB.undoJournal.unshift({
+    id:'UJ_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),
+    createdAt:new Date().toISOString(),
+    action:undoActionLabel(),
+    deviceId:DEVICE,
+    status:'available',
+    sourceTxId:p.txId,
+    inverse:encodeUndoInverseForFirebase(inverse)
+  });
+  DB.undoJournal=DB.undoJournal.slice(0,UNDO_LIMIT);
+  return true;
+}
 function availableUndo(){return list(DB&&DB.undoJournal).filter(x=>x&&x.status==='available'&&x.inverse).sort((a,b)=>Date.parse(b.createdAt||0)-Date.parse(a.createdAt||0));}
 function refreshUndoButton(){const c=availableUndo().length,b=document.getElementById('undoBtn'),n=document.getElementById('undoCount');if(n)n.textContent=String(c);if(b){b.style.opacity=c?'1':'.65';b.title='تراجع عن آخر عملية مالية قابلة للتراجع — ليس رجوعاً بين الصفحات — المتاح: '+c;}}
-function inverseCanApply(inv){
-  for(const path of Object.keys(inv.listOps||{})){const m=listMap(getAt(DB,path),path);for(const op of inv.listOps[path]){const got=m[op.key]&&m[op.key].record;if(op.action==='delete'){if(!got||!same(got,op.before))return false;}else if(op.existsBefore){if(!got||!same(got,op.before))return false;}else if(got)return false;}}
+function inverseCanApply(storedInverse){
+  const inv=decodeUndoInverseFromFirebase(storedInverse);
+  if(!inv)return false;
+  for(const path of Object.keys(inv.listOps||{})){
+    const m=listMap(getAt(DB,path),path);
+    for(const op of inv.listOps[path]){
+      const got=m[op.key]&&m[op.key].record;
+      if(op.action==='delete'){
+        if(!got||!same(got,op.before))return false;
+      }else if(op.existsBefore){
+        if(!got||!same(got,op.before))return false;
+      }else if(got){
+        return false;
+      }
+    }
+  }
   return true;
 }
 async function undoOperation(id){
   await ensureOutboxReady();
-  if(running||loadOutbox()){originalToast('⏳ انتظر تثبيت العملية الحالية قبل التراجع',true);return false;}
-  const entry=list(DB&&DB.undoJournal).find(x=>x&&String(x.id)===String(id)&&x.status==='available');
-  if(!entry){originalToast('ℹ️ لا توجد عملية قابلة للتراجع',true);refreshUndoButton();return false;}
-  if(!inverseCanApply(entry.inverse)){originalToast('❌ تغير أحد قيود العملية بعد حفظها؛ أوقف التراجع الآمن حتى لا تُستبدل بيانات أحدث',true);return false;}
+  if(running||loadOutbox()){
+    originalToast('⏳ انتظر تثبيت العملية الحالية قبل التراجع',true);
+    return false;
+  }
+
+  const entry=list(DB&&DB.undoJournal).find(
+    x=>x&&String(x.id)===String(id)&&x.status==='available'
+  );
+  if(!entry){
+    originalToast('ℹ️ لا توجد عملية قابلة للتراجع',true);
+    refreshUndoButton();
+    return false;
+  }
+
+  const inverse=decodeUndoInverseFromFirebase(entry.inverse);
+  if(!inverse||!inverseCanApply(inverse)){
+    originalToast('❌ تغير أحد قيود العملية بعد حفظها؛ أوقف التراجع الآمن حتى لا تُستبدل بيانات أحدث',true);
+    return false;
+  }
+
   const base=clone(baseline||DB);
   try{
-    applyPatch(DB,entry.inverse);
-    const live=list(DB.undoJournal).find(x=>x&&String(x.id)===String(id));
-    if(live){live.status='undone';live.undoneAt=new Date().toISOString();live.undoneBy=DB.settings&&DB.settings.userName||'مستخدم';}
-    try{if(typeof audit==='function')audit('↩️ تراجع عن عملية سابقة: '+String(entry.action||'عملية مالية'));}catch(e){}
+    applyPatch(DB,inverse);
 
-    // buildPatch intentionally ignores physical deletes from core financial lists because normal deletion
-    // is protected by tombstones. Undo is different: it carries a verified inverse operation captured
-    // at the original save. Merge that exact inverse into the prepared patch so Firebase receives the
-    // delete/edit itself under ETag and same-record conflict checks.
+    const live=list(DB.undoJournal).find(x=>x&&String(x.id)===String(id));
+    if(live){
+      live.status='undone';
+      live.undoneAt=new Date().toISOString();
+      live.undoneBy=DB.settings&&DB.settings.userName||'مستخدم';
+    }
+
+    try{
+      if(typeof audit==='function'){
+        audit('↩️ تراجع عن عملية سابقة: '+String(entry.action||'عملية مالية'));
+      }
+    }catch(e){}
+
     const p=buildPatch(base,DB);
-    Object.keys(entry.inverse.listOps||{}).forEach(path=>{
-      const invOps=clone(entry.inverse.listOps[path]||[]);if(!invOps.length)return;
+    Object.keys(inverse.listOps||{}).forEach(path=>{
+      const invOps=clone(inverse.listOps[path]||[]);
+      if(!invOps.length)return;
       const invKeys=new Set(invOps.map(op=>String(op.key)));
       const metaOps=(p.listOps[path]||[]).filter(op=>!invKeys.has(String(op.key)));
       p.listOps[path]=metaOps.concat(invOps);
     });
-    p.txId='undo_tx_'+Date.now()+'_'+Math.random().toString(36).slice(2,9);
-    p.createdAt=new Date().toISOString();p.deviceId=DEVICE;p.force=false;
-    if(patchEmpty(p))throw new Error('لم ينتج عن التراجع أي قيد قابل للتثبيت');
 
-    rollbackSnapshot=clone(base);await saveOutbox(p);queued=true;uiPending=true;
+    p.txId='undo_tx_'+Date.now()+'_'+Math.random().toString(36).slice(2,9);
+    p.createdAt=new Date().toISOString();
+    p.deviceId=DEVICE;
+    p.force=false;
+
+    if(patchEmpty(p)){
+      throw new Error('لم ينتج عن التراجع أي قيد قابل للتثبيت');
+    }
+
+    rollbackSnapshot=clone(base);
+    await saveOutbox(p);
+    queued=true;
+    uiPending=true;
+
     try{markUnsaved();}catch(e){}
     gate('saving','تثبيت تراجع آمن عن '+String(entry.action||'عملية مالية')+' داخل '+ROOT+'…');
     setPanel('saving','⏳ جارٍ تثبيت التراجع المشروط والتحقق من القراءة الراجعة');
-    const promise=beginPromise();Promise.resolve().then(flush);
-    const res=await promise;refreshUndoButton();
-    if(res&&res.ok){originalToast('✅ تم التراجع عن العملية وتثبيته في Firebase: '+String(entry.action||'عملية مالية'));return true;}
-    originalToast('⚠️ التراجع ما زال قيد التثبيت أو توقف بسبب تعارض: '+String(res&&res.error||lastError||''),true);return false;
+
+    const promise=beginPromise();
+    Promise.resolve().then(flush);
+    const res=await promise;
+    refreshUndoButton();
+
+    if(res&&res.ok){
+      originalToast('✅ تم التراجع عن العملية وتثبيته في Firebase: '+String(entry.action||'عملية مالية'));
+      return true;
+    }
+
+    originalToast(
+      '⚠️ التراجع ما زال قيد التثبيت أو توقف بسبب تعارض: '+
+      String(res&&res.error||lastError||''),
+      true
+    );
+    return false;
   }catch(e){
-    window.DB=DB=clone(base);rollbackSnapshot=null;await clearOutbox();queued=false;uiPending=false;hideGate();renderAll();refreshUndoButton();
-    lastError=String(e&&e.message||e);diag.lastError=lastError;diag.lastErrorAt=new Date().toISOString();saveDiag(diag);
-    originalToast('❌ أُلغي التراجع قبل الرفع: '+lastError,true);return false;
+    window.DB=DB=clone(base);
+    rollbackSnapshot=null;
+    await clearOutbox();
+    queued=false;
+    uiPending=false;
+    hideGate();
+    renderAll();
+    refreshUndoButton();
+
+    lastError=String(e&&e.message||e);
+    diag.lastError=lastError;
+    diag.lastErrorAt=new Date().toISOString();
+    saveDiag(diag);
+
+    originalToast('❌ أُلغي التراجع قبل الرفع: '+lastError,true);
+    return false;
   }
 }
 async function openUndoLock(){
@@ -9878,6 +10092,7 @@ async function save(){
   }
 
   const base=clone(baseline||DB);
+  normalizeUndoJournalStorageInDB(DB);
   let target=clone(DB),patch;
   try{
     patch=buildPatch(base,target);
@@ -10282,8 +10497,8 @@ const EGTPH_SYNC_API={version:'175.0-surgical-sync-undo',source:SOURCE,root:ROOT
 (function(){
   'use strict';
   window.__EGTPH_V175_SURGICAL__=true;
-  window.__EGTPH_V175_BUILD__='v187-auto-advance-durable-sync-clean-dashboard';
-  try{document.title='EGTPH — سجل الأجور v187';}catch(e){}
+  window.__EGTPH_V175_BUILD__='v188-firebase-safe-undo-sync-fixed';
+  try{document.title='EGTPH — سجل الأجور v188';}catch(e){}
 })();
 </script>
 
