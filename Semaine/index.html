@@ -886,6 +886,9 @@ html,body{max-width:100%;overflow-x:hidden}
       </div>
     </div>
 
+    <!-- PENDING WAGE CARRY — عرض فقط، لا ينشئ حركة مالية -->
+    <div id="weekPendingCarry" style="display:none;margin-bottom:14px"></div>
+
     <!-- DATE EDITOR BAR -->
     <div id="weekDateBar" style="background:rgba(255,255,255,0.12);backdrop-filter:blur(12px);border:1px dashed rgba(255,255,255,0.3);border-radius:var(--radius);padding:12px 18px;margin-bottom:14px;display:flex;flex-wrap:wrap;align-items:center;gap:14px">
       <div style="font-size:13px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:7px"><i class="fas fa-calendar-edit" style="color:var(--primary)"></i> تاريخ الأسبوع</div>
@@ -1243,7 +1246,7 @@ html,body{max-width:100%;overflow-x:hidden}
 <div class="toast" id="toast"></div>
 
 <script>
-window.EGTPH_BUILD='v37-pending-wage-readonly-ledger';
+window.EGTPH_BUILD='v39-pending-ledger-accounting-repair';
 /* ====================================================
    EGTPH - سجل الأجرة الأسبوعي  |  المحرك الرئيسي
    ==================================================== */
@@ -1391,6 +1394,7 @@ function migrateDB(){
      (مثلاً بسبب مزامنة قديمة لم تكن تنقل pendingWages). */
   normalizePendingWageLedger(false);
   repairPendingWageLedger(false);
+  canonicalizePendingWageLedger(false);
   if(!DB.company) DB.company={name:'مؤسسة الأشغال العمومية الكبرى والري',short:'EGTPH',address:'وادي سلي، الشلف',nif:'19202010500199',phone:''};
 
   // توحيد النصوص القادمة من النسخ القديمة أو الاستيراد حتى لا تكسر قوالب HTML.
@@ -2299,6 +2303,7 @@ function loadWeekEditor(){
   const mhr=document.getElementById('globalManualHourlyRate');
   if(mhr) mhr.value=cw.manualHourlyRate||'';
   renderWeek();
+  renderWeekPendingCarry();
   lockArchivedFinanceControls();
   renderWeekExpenses();
   renderWeekSummary();
@@ -2858,7 +2863,8 @@ function getDebtDeductionLimit(entry){
 function recalculatePendingWagePaid(pw, stamp=true){
   if(!pw) return 0;
   pw.dates=Array.isArray(pw.dates)?pw.dates:[];
-  const paid=Math.max(0,pw.dates.filter(d=>d&&d.type==='pay').reduce((sum,d)=>sum+num(d.amount),0));
+  const rawPaid=Math.max(0,pw.dates.filter(d=>d&&d.type==='pay').reduce((sum,d)=>sum+Math.max(0,num(d.amount)),0));
+  const paid=Math.min(Math.max(0,num(pw.total)),rawPaid);
   if(num(pw.paid)!==paid) pw.paid=paid;
   if(stamp) pw._mod=nextMod();
   return pw.paid;
@@ -2888,8 +2894,8 @@ function updatePendingOriginRecord(record,weekId,entry,targetPending,weekStart,w
   const desired=Math.max(0,num(targetPending));
   if(!record && desired<=0) return null;
   if(!record){
-    record={id:generateId(),workerId:entry.workerId,weekId,sourceEntryId:entry.id,weekStart,weekEnd,projectId:projectId||null,total:desired,paid:0,dates:[],_mod:nextMod()};
-    record.dates.push({id:generateId(),date:new Date().toISOString(),amount:desired,note:`أجر أسبوع ${formatDateAR(weekStart)}`,type:'add',weekId,weekStart,sourceEntryId:entry.id});
+    record={id:'pending_'+entry.id,workerId:entry.workerId,weekId,sourceEntryId:entry.id,weekStart,weekEnd,projectId:projectId||null,total:desired,paid:0,dates:[],_mod:nextMod()};
+    record.dates.push({id:'pending_add_'+entry.id,date:new Date().toISOString(),amount:desired,note:`أجر أسبوع ${formatDateAR(weekStart)}`,type:'add',weekId,weekStart,sourceEntryId:entry.id});
     DB.pendingWages.push(record);
   }else{
     if(!record.sourceEntryId) record.sourceEntryId=entry.id;
@@ -2900,7 +2906,7 @@ function updatePendingOriginRecord(record,weekId,entry,targetPending,weekStart,w
     record.dates=Array.isArray(record.dates)?record.dates:[];
     let add=record.dates.find(d=>d.type==='add'&&(d.sourceEntryId===entry.id||(!d.sourceEntryId&&d.weekId===weekId)));
     if(!add){
-      add={id:generateId(),date:new Date().toISOString(),amount:desired,note:`تصحيح أجر معلّق لأسبوع ${formatDateAR(weekStart)}`,type:'add',weekId,weekStart,sourceEntryId:entry.id};
+      add={id:'pending_add_'+entry.id,date:new Date().toISOString(),amount:desired,note:`تصحيح أجر معلّق لأسبوع ${formatDateAR(weekStart)}`,type:'add',weekId,weekStart,sourceEntryId:entry.id};
       record.dates.unshift(add);
     }else{
       add.amount=desired;
@@ -3045,7 +3051,7 @@ function reconcileArchivedWeekFinancialEffects(weekId,entriesWithTotals,previous
     next.settlePending=applied;
   });
 
-  (DB.pendingWages||[]).forEach(recalculatePendingWagePaid);
+  (DB.pendingWages||[]).forEach(pw=>recalculatePendingWagePaid(pw));
   DB.pendingWages=(DB.pendingWages||[]).filter(pw=>num(pw.total)>0||num(pw.paid)>0);
   return {ok:true};
 }
@@ -3125,8 +3131,8 @@ function saveWeek(options={}){
     /* إنشاء الحركات لأول مرة مع مفاتيح مصدر ثابتة، كي يمكن تعديلها لاحقاً دون تكرار. */
     entriesWithTotals.forEach(e=>{
       if(e.pendingAmount>0){
-        const pw={id:generateId(),workerId:e.workerId,weekId,sourceEntryId:e.id,weekStart:cw.startDate,weekEnd:cw.endDate,projectId:cw.projectId||null,total:e.pendingAmount,paid:0,dates:[],_mod:nextMod()};
-        pw.dates.push({id:generateId(),date:new Date().toISOString(),amount:e.pendingAmount,note:`أجر أسبوع ${formatDateAR(cw.startDate)} (دُفع ${money(e.paidNow)} من ${money(e.parts.net)})`,type:'add',weekId,weekStart:cw.startDate,sourceEntryId:e.id});
+        const pw={id:'pending_'+e.id,workerId:e.workerId,weekId,sourceEntryId:e.id,weekStart:cw.startDate,weekEnd:cw.endDate,projectId:cw.projectId||null,total:e.pendingAmount,paid:0,dates:[],_mod:nextMod()};
+        pw.dates.push({id:'pending_add_'+e.id,date:new Date().toISOString(),amount:e.pendingAmount,note:`أجر أسبوع ${formatDateAR(cw.startDate)} (دُفع ${money(e.paidNow)} من ${money(e.parts.net)})`,type:'add',weekId,weekStart:cw.startDate,sourceEntryId:e.id});
         DB.pendingWages.push(pw);
       }
     });
@@ -3212,6 +3218,9 @@ function saveWeek(options={}){
 
   /* إذا تم الحفظ داخل مشروع أو تحويله، نربط كل آثار الأسبوع التابعة بنفس المكان. */
   setWeekProjectDeep(weekId,weekData.projectId||null);
+  /* حارس محاسبي: بعد اكتمال حفظ الأسبوع، نوحّد دفتر المعلّق إلى أصل واحد لكل صف
+     ونعيد ربط تسديداته من الأسابيع نفسها قبل أي حفظ/مزامنة. */
+  canonicalizePendingWageLedger(true);
 
   const oldRate=cw.overtimeRate;
   const oldManualRate=cw.manualHourlyRate||null;
@@ -3429,7 +3438,13 @@ function normalizePendingWageRecord(pw, stamp=false){
   let changed=false;
   if(!Array.isArray(pw.dates)){ pw.dates=[]; changed=true; }
   if(pw.total===undefined || pw.total===null){ pw.total=0; changed=true; }
-  const paid=Math.max(0,pw.dates.filter(d=>d&&d.type==='pay').reduce((sum,d)=>sum+num(d.amount),0));
+  pw.total=Math.max(0,num(pw.total));
+  const payRows=pw.dates.filter(d=>d&&d.type==='pay');
+  const rawPaid=Math.max(0,payRows.reduce((sum,d)=>sum+Math.max(0,num(d.amount)),0));
+  /* السجلات القديمة جداً قد تحفظ paid كمجموع فقط بلا حركات. نحافظ عليه كحد تاريخي
+     إلى أن يعاد بناء الدفتر، لكن لا نسمح أبداً بأن يتجاوز أصل المعلّق. */
+  const legacyPaidFloor=payRows.length?0:Math.max(0,num(pw.paid));
+  const paid=Math.min(pw.total,Math.max(rawPaid,legacyPaidFloor));
   if(num(pw.paid)!==paid){ pw.paid=paid; changed=true; }
   if(stamp && changed) pw._mod=nextMod();
   return changed;
@@ -3538,6 +3553,414 @@ function repairPendingWageLedger(stamp=true){
   }
   return recoveredIds.size;
 }
+
+/* ====================================================
+   سلامة دفتر الأجور المعلّقة — سجل أصل واحد لكل صف أسبوعي
+   ==================================================== */
+let _pendingLedgerRepairDirty=false;
+const _PENDING_LEDGER_CANONICAL_TAG='v39-canonical-origin-ledger';
+function pendingOriginCandidates(){
+  const out=[];
+  [...(DB.weeks||[])].sort((a,b)=>String(a?.startDate||'').localeCompare(String(b?.startDate||''))).forEach((week,weekIndex)=>{
+    (week?.entries||[]).forEach((entry,entryIndex)=>{
+      if(!entry?.id||!entry.workerId) return;
+      const total=archivedPendingAmount(week,entry);
+      if(total<=0) return;
+      out.push({
+        key:'entry:'+entry.id,
+        canonicalId:'pending_'+entry.id,
+        week,entry,total,
+        workerId:entry.workerId,
+        weekId:week.id,
+        weekStart:week.startDate||'',
+        weekEnd:week.endDate||'',
+        projectId:week.projectId||null,
+        weekIndex,entryIndex
+      });
+    });
+  });
+  return out;
+}
+function pendingRecordOriginHints(pw){
+  const adds=(Array.isArray(pw?.dates)?pw.dates:[]).filter(d=>d&&d.type==='add');
+  const sourceEntryIds=[];
+  const weekIds=[];
+  const weekStarts=[];
+  const pushUnique=(arr,v)=>{v=String(v||'');if(v&&arr.indexOf(v)<0)arr.push(v);};
+  pushUnique(sourceEntryIds,pw?.sourceEntryId);
+  pushUnique(weekIds,pw?.weekId);
+  pushUnique(weekStarts,pw?.weekStart);
+  adds.forEach(d=>{pushUnique(sourceEntryIds,d.sourceEntryId);pushUnique(weekIds,d.weekId);pushUnique(weekStarts,d.weekStart);});
+  return {sourceEntryIds,weekIds,weekStarts};
+}
+function resolvePendingCanonicalOrigin(pw,ctx){
+  if(!pw||!pw.workerId) return null;
+  const hints=pendingRecordOriginHints(pw);
+  for(const id of hints.sourceEntryIds){
+    const hit=ctx.byEntry.get(id);
+    if(hit&&hit.workerId===pw.workerId) return hit;
+  }
+  for(const weekId of hints.weekIds){
+    const list=ctx.byWeekWorker.get(String(weekId)+'|'+String(pw.workerId))||[];
+    if(list.length===1) return list[0];
+  }
+  for(const start of hints.weekStarts){
+    const list=ctx.byStartWorker.get(String(start)+'|'+String(pw.workerId))||[];
+    if(list.length===1) return list[0];
+  }
+  const workerOrigins=ctx.byWorker.get(pw.workerId)||[];
+  const sameAmount=workerOrigins.filter(o=>Math.abs(num(o.total)-num(pw.total))<0.0001);
+  if(sameAmount.length===1) return sameAmount[0];
+  /* النسخ القديمة لم تكن تحفظ مرجع الأسبوع في بعض سجلات المعلّق. إذا كان للعامل
+     أصل معلّق واحد فقط في الأرشيف، فربط السجل اليتيم به أدق من اعتباره ديناً جديداً. */
+  if(workerOrigins.length===1) return workerOrigins[0];
+  return null;
+}
+function pendingLegacyGroupKey(pw){
+  const wid=String(pw?.workerId||'');
+  const hints=pendingRecordOriginHints(pw);
+  if(hints.sourceEntryIds[0]) return 'legacy-entry|'+wid+'|'+hints.sourceEntryIds[0];
+  if(hints.weekIds[0]) return 'legacy-week|'+wid+'|'+hints.weekIds[0];
+  if(hints.weekStarts[0]) return 'legacy-start|'+wid+'|'+hints.weekStarts[0];
+  const movements=(Array.isArray(pw?.dates)?pw.dates:[]).map(d=>[
+    d?.type||'',d?.date||'',Math.max(0,num(d?.amount)),String(d?.note||''),d?.paidByWeekId||'',d?.paidByEntryId||''
+  ].join('~')).sort().join('||');
+  return 'legacy-orphan|'+wid+'|'+Math.max(0,num(pw?.total))+'|'+movements;
+}
+function pendingPaymentEventFingerprint(workerId,d){
+  return [
+    String(workerId||''),String(d?.date||''),Math.max(0,num(d?.amount)),String(d?.note||'').trim(),
+    String(d?.paidByWeekId||''),String(d?.paidByWeekStart||''),String(d?.paidByEntryId||'')
+  ].join('|');
+}
+function pendingStableKeyHash(value){
+  const s=String(value||'');
+  let h=2166136261;
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
+  return (h>>>0).toString(36);
+}
+function canonicalizePendingWageLedger(stamp=false){
+  if(!Array.isArray(DB.pendingWages)) DB.pendingWages=[];
+  if(!Array.isArray(DB.deletedIds)) DB.deletedIds=[];
+  const before=JSON.stringify(DB.pendingWages);
+  const oldRecords=DB.pendingWages.filter(pw=>pw&&pw.workerId).map(pw=>pw);
+  const origins=pendingOriginCandidates();
+  const ctx={byEntry:new Map(),byWeekWorker:new Map(),byStartWorker:new Map(),byWorker:new Map()};
+  const addMap=(map,key,value)=>{if(!map.has(key))map.set(key,[]);map.get(key).push(value);};
+  origins.forEach(o=>{
+    ctx.byEntry.set(String(o.entry.id),o);
+    addMap(ctx.byWeekWorker,String(o.weekId)+'|'+String(o.workerId),o);
+    addMap(ctx.byStartWorker,String(o.weekStart)+'|'+String(o.workerId),o);
+    addMap(ctx.byWorker,o.workerId,o);
+  });
+  const aliasesByOrigin=new Map(origins.map(o=>[o.key,[]]));
+  const unmatched=[];
+  oldRecords.forEach(pw=>{
+    const origin=resolvePendingCanonicalOrigin(pw,ctx);
+    if(origin) aliasesByOrigin.get(origin.key).push(pw);
+    else unmatched.push(pw);
+  });
+  const legacyGroups=new Map();
+  unmatched.forEach(pw=>{
+    const key=pendingLegacyGroupKey(pw);
+    if(!legacyGroups.has(key)) legacyGroups.set(key,[]);
+    legacyGroups.get(key).push(pw);
+  });
+
+  const metas=[];
+  const usedCanonicalIds=new Set();
+  const recordAliasIds=new Map();
+  const validDate=(v)=>Number.isFinite(Date.parse(v||''));
+  origins.forEach(o=>{
+    const aliases=aliasesByOrigin.get(o.key)||[];
+    const addRows=[];
+    aliases.forEach(pw=>(pw.dates||[]).forEach(d=>{if(d&&d.type==='add')addRows.push(d);}));
+    addRows.sort((a,b)=>(Date.parse(a?.date||'')||Number.MAX_SAFE_INTEGER)-(Date.parse(b?.date||'')||Number.MAX_SAFE_INTEGER));
+    const preferredAdd=addRows[0]||null;
+    const createdAt=(preferredAdd&&validDate(preferredAdd.date))?preferredAdd.date:(o.week.archivedAt||new Date(`${o.weekStart||'1970-01-01'}T12:00:00`).toISOString());
+    const maxMod=Math.max(Date.parse(createdAt)||1,...aliases.map(x=>+x._mod||0));
+    const record={
+      id:o.canonicalId,workerId:o.workerId,weekId:o.weekId,sourceEntryId:o.entry.id,
+      weekStart:o.weekStart,weekEnd:o.weekEnd,projectId:o.projectId,
+      total:Math.max(0,num(o.total)),paid:0,dates:[{
+        id:'pending_add_'+o.entry.id,date:createdAt,amount:Math.max(0,num(o.total)),
+        note:String(preferredAdd?.note||`أجر أسبوع ${formatDateAR(o.weekStart)}`),type:'add',
+        weekId:o.weekId,weekStart:o.weekStart,sourceEntryId:o.entry.id
+      }],_mod:maxMod
+    };
+    const aggregateOnlyPaid=aliases.filter(x=>!(Array.isArray(x?.dates)?x.dates:[]).some(d=>d&&d.type==='pay')).map(x=>Math.max(0,num(x?.paid)));
+    const legacyPaidFloor=Math.min(record.total,Math.max(0,...aggregateOnlyPaid));
+    metas.push({record,aliases,origin:o,legacyPaidFloor,remaining:record.total});
+    usedCanonicalIds.add(record.id);
+    recordAliasIds.set(record.id,new Set(aliases.map(x=>String(x?.id||'')).filter(Boolean)));
+  });
+  legacyGroups.forEach((aliases,key)=>{
+    const preferred=aliases.slice().sort((a,b)=>(+b._mod||0)-(+a._mod||0)||(b.dates||[]).length-(a.dates||[]).length)[0];
+    if(!preferred) return;
+    let id=String(preferred.id||generateId());
+    if(usedCanonicalIds.has(id)) id='legacy_pending_'+String(preferred.workerId||'worker')+'_'+String(metas.length+1);
+    usedCanonicalIds.add(id);
+    const addRows=[];
+    aliases.forEach(pw=>(pw.dates||[]).forEach(d=>{if(d&&d.type==='add')addRows.push(d);}));
+    addRows.sort((a,b)=>(Date.parse(a?.date||'')||Number.MAX_SAFE_INTEGER)-(Date.parse(b?.date||'')||Number.MAX_SAFE_INTEGER));
+    const total=Math.max(0,...aliases.map(x=>num(x?.total)));
+    const preferredAdd=addRows[0]||null;
+    const dates=[];
+    if(total>0){
+      dates.push({
+        id:String(preferredAdd?.id||('legacy_pending_add_'+id)),date:String(preferredAdd?.date||preferred.weekStart||''),amount:total,
+        note:String(preferredAdd?.note||'أجر معلّق قديم محفوظ من البيانات السابقة'),type:'add',
+        weekId:preferred.weekId||preferredAdd?.weekId||null,weekStart:preferred.weekStart||preferredAdd?.weekStart||'',sourceEntryId:preferred.sourceEntryId||preferredAdd?.sourceEntryId||null
+      });
+    }
+    const record={
+      ...preferred,id,workerId:preferred.workerId,total,paid:0,dates,
+      _mod:Math.max(1,...aliases.map(x=>+x._mod||0))
+    };
+    const aggregateOnlyPaid=aliases.filter(x=>!(Array.isArray(x?.dates)?x.dates:[]).some(d=>d&&d.type==='pay')).map(x=>Math.max(0,num(x?.paid)));
+    const legacyPaidFloor=Math.min(total,Math.max(0,...aggregateOnlyPaid));
+    metas.push({record,aliases,origin:null,legacyPaidFloor,remaining:total});
+    recordAliasIds.set(record.id,new Set(aliases.map(x=>String(x?.id||'')).filter(Boolean)));
+  });
+
+  /* أسابيع التسديد هي المصدر المحاسبي الأول: كل صف أسبوعي يملك حدث تسديد واحداً
+     بقيمته المحفوظة، ثم يوزع على أقدم معلّق مفتوح للعامل. */
+  const weeklyEvents=[];
+  [...(DB.weeks||[])].sort((a,b)=>String(a?.startDate||'').localeCompare(String(b?.startDate||''))).forEach(week=>{
+    (week?.entries||[]).forEach(entry=>{
+      if(!entry?.id||!entry.workerId) return;
+      const amount=archivedSettledPendingAmount(week,entry);
+      if(amount<=0) return;
+      weeklyEvents.push({
+        kind:'weekly',workerId:entry.workerId,amount,week,entry,
+        weekId:week.id,weekStart:week.startDate||'',
+        date:week.archivedAt||new Date(`${week.startDate||'1970-01-01'}T12:00:00`).toISOString(),
+        note:`تسديد مع أجر أسبوع ${formatDateAR(week.startDate)}`,
+        linkedRows:[]
+      });
+    });
+  });
+  const weeklyByEntry=new Map(weeklyEvents.map(ev=>[String(ev.entry.id),ev]));
+  const weeklyByWeekWorker=new Map();
+  weeklyEvents.forEach(ev=>addMap(weeklyByWeekWorker,String(ev.weekId)+'|'+String(ev.workerId),ev));
+  const legacyEvents=new Map();
+  const logicalLegacyGroups=new Map();
+  const paymentRowRank=(item)=>[
+    +item?.row?._mod||0,+item?.record?._mod||0,Date.parse(item?.row?.date||'')||0,String(item?.row?.id||'')
+  ];
+  const isPreferredPaymentRow=(candidate,current)=>{
+    if(!current) return true;
+    const a=paymentRowRank(candidate),b=paymentRowRank(current);
+    for(let i=0;i<a.length;i++){if(a[i]===b[i])continue;return a[i]>b[i];}
+    return false;
+  };
+  oldRecords.forEach(pw=>{
+    (Array.isArray(pw.dates)?pw.dates:[]).forEach(d=>{
+      if(!d||d.type!=='pay'||num(d.amount)<=0) return;
+      if(String(d.id||'').startsWith('pending_legacy_paid_floor_')) return;
+      const workerId=pw.workerId||d.payerWorkerId;
+      let linked=null;
+      if(d.paidByEntryId) linked=weeklyByEntry.get(String(d.paidByEntryId))||null;
+      if(!linked&&d.paidByWeekId){
+        const list=weeklyByWeekWorker.get(String(d.paidByWeekId)+'|'+String(workerId))||[];
+        if(list.length===1) linked=list[0];
+      }
+      if(linked){ linked.linkedRows.push(d); return; }
+
+      /* إذا تحمل الحركة مرجع صف/أسبوع التسديد فهي حدث مالي منطقي واحد. قد تصل
+         نسخة الجهازين بمعرّفين وتوقيتين مختلفين، أو تصل نسخة أحدث صححت المبلغ.
+         نجمع أجزاء الحدث حسب الأصل ونحتفظ بالأحدث لكل جزء، بدل جمع النسخ كدفعات جديدة. */
+      const logicalKey=d.paidByEntryId
+        ?('entry|'+String(workerId)+'|'+String(d.paidByEntryId))
+        :(d.paidByWeekId?('week|'+String(workerId)+'|'+String(d.paidByWeekId)):'');
+      if(logicalKey){
+        if(!logicalLegacyGroups.has(logicalKey)) logicalLegacyGroups.set(logicalKey,{workerId,logicalKey,rows:[]});
+        const origin=resolvePendingCanonicalOrigin(pw,ctx);
+        logicalLegacyGroups.get(logicalKey).rows.push({
+          row:d,record:pw,
+          targetKey:origin?.key||('legacy-target|'+String(d.sourceWeekId||pw.weekId||'')+'|'+String(pw.sourceEntryId||d.sourceEntryId||pw.id||''))
+        });
+        return;
+      }
+
+      /* دفعة يدوية بلا مرجع أسبوع: البصمة الكاملة تمنع استنساخ الحركة نفسها،
+         مع الإبقاء على دفعتين حقيقيتين منفصلتين إذا اختلف التاريخ أو المبلغ. */
+      const fp=pendingPaymentEventFingerprint(workerId,d);
+      if(!legacyEvents.has(fp)) legacyEvents.set(fp,{
+        kind:'legacy',workerId,amount:Math.max(0,num(d.amount)),date:String(d.date||''),note:String(d.note||'تسديد أجر معلّق قديم'),
+        paidByWeekId:null,paidByWeekStart:null,paidByEntryId:null,
+        payerWorkerId:d.payerWorkerId||workerId,sourceRow:d,eventKey:'manual|'+fp
+      });
+    });
+  });
+  logicalLegacyGroups.forEach(group=>{
+    const bestByTarget=new Map();
+    group.rows.forEach(item=>{
+      const current=bestByTarget.get(item.targetKey);
+      if(isPreferredPaymentRow(item,current)) bestByTarget.set(item.targetKey,item);
+    });
+    const selected=[...bestByTarget.values()];
+    const amount=selected.reduce((sum,item)=>sum+Math.max(0,num(item.row.amount)),0);
+    if(amount<=0) return;
+    let preferred=null;
+    selected.forEach(item=>{if(isPreferredPaymentRow(item,preferred))preferred=item;});
+    const d=preferred?.row||{};
+    legacyEvents.set(group.logicalKey,{
+      kind:'legacy',workerId:group.workerId,amount,date:String(d.date||''),note:String(d.note||'تسديد أجر معلّق قديم'),
+      paidByWeekId:d.paidByWeekId||null,paidByWeekStart:d.paidByWeekStart||null,paidByEntryId:d.paidByEntryId||null,
+      payerWorkerId:d.payerWorkerId||group.workerId,sourceRow:d,eventKey:group.logicalKey
+    });
+  });
+  weeklyEvents.forEach(ev=>{
+    const rows=ev.linkedRows.filter(r=>validDate(r?.date)).sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));
+    if(rows[0]) ev.date=rows[0].date;
+    const noteRow=ev.linkedRows.find(r=>String(r?.note||'').trim());
+    if(noteRow) ev.note=String(noteRow.note);
+  });
+  const events=weeklyEvents.concat([...legacyEvents.values()]);
+  events.sort((a,b)=>{
+    const ak=a.kind==='weekly'?String(a.weekStart||''):String(a.date||'');
+    const bk=b.kind==='weekly'?String(b.weekStart||''):String(b.date||'');
+    return ak.localeCompare(bk)||String(a.date||'').localeCompare(String(b.date||''))||String(a.kind).localeCompare(String(b.kind));
+  });
+  const metasByWorker=new Map();
+  metas.forEach(meta=>addMap(metasByWorker,meta.record.workerId,meta));
+  metasByWorker.forEach(list=>list.sort((a,b)=>{
+    const as=String(a.record.weekStart||a.origin?.weekStart||'');
+    const bs=String(b.record.weekStart||b.origin?.weekStart||'');
+    return as.localeCompare(bs)||String(a.record.id).localeCompare(String(b.record.id));
+  }));
+  events.forEach(ev=>{
+    let rest=Math.max(0,num(ev.amount));
+    const candidates=(metasByWorker.get(ev.workerId)||[]).filter(meta=>{
+      if(meta.remaining<=0) return false;
+      if(ev.kind==='weekly'){
+        if(meta.record.weekId&&meta.record.weekId===ev.weekId) return false;
+        const start=String(meta.record.weekStart||'');
+        if(start&&ev.weekStart&&start>String(ev.weekStart)) return false;
+      }else if(ev.date&&meta.record.weekStart){
+        const payDay=String(ev.date).slice(0,10);
+        if(payDay&&String(meta.record.weekStart)>payDay) return false;
+      }
+      return true;
+    });
+    candidates.forEach(meta=>{
+      if(rest<=0||meta.remaining<=0) return;
+      const pay=Math.min(rest,meta.remaining);
+      if(pay<=0) return;
+      const targetKey=String(meta.record.sourceEntryId||meta.record.id).replace(/[^a-zA-Z0-9_-]/g,'_');
+      let movementId;
+      if(ev.kind==='weekly') movementId='pending_pay_'+String(ev.entry.id).replace(/[^a-zA-Z0-9_-]/g,'_')+'_'+targetKey;
+      else {
+        const eventKey=String(ev.eventKey||pendingPaymentEventFingerprint(ev.workerId,ev.sourceRow||{}));
+        movementId='pending_legacy_pay_evt_'+pendingStableKeyHash(eventKey)+'_'+targetKey;
+      }
+      meta.record.dates.push({
+        id:movementId,date:ev.date||'',amount:pay,note:ev.note||'تسديد أجر معلّق',type:'pay',
+        sourceWeekId:meta.record.weekId||null,
+        paidByWeekId:ev.kind==='weekly'?ev.weekId:(ev.paidByWeekId||null),
+        paidByWeekStart:ev.kind==='weekly'?ev.weekStart:(ev.paidByWeekStart||null),
+        paidByEntryId:ev.kind==='weekly'?ev.entry.id:(ev.paidByEntryId||null),
+        payerWorkerId:ev.workerId
+      });
+      meta.remaining-=pay;
+      rest-=pay;
+    });
+  });
+  metas.forEach(meta=>{
+    let paid=Math.max(0,meta.record.dates.filter(d=>d?.type==='pay').reduce((sum,d)=>sum+num(d.amount),0));
+    const floor=Math.min(meta.record.total,Math.max(0,num(meta.legacyPaidFloor)));
+    if(paid<floor){
+      const diff=Math.min(meta.record.total-paid,floor-paid);
+      if(diff>0){
+        meta.record.dates.push({
+          id:'pending_legacy_paid_floor_'+String(meta.record.id),date:'',amount:diff,
+          note:'تسديد قديم محفوظ كمجموع دون تاريخ تفصيلي',type:'pay',sourceWeekId:meta.record.weekId||null,
+          paidByWeekId:null,paidByWeekStart:null,paidByEntryId:null,payerWorkerId:meta.record.workerId
+        });
+        paid+=diff;meta.remaining=Math.max(0,meta.record.total-paid);
+      }
+    }
+    meta.record.dates.sort((a,b)=>{
+      const ad=String(a?.date||''),bd=String(b?.date||'');
+      if(!ad&&!bd) return String(a?.type||'').localeCompare(String(b?.type||''));
+      if(!ad) return 1;if(!bd) return -1;
+      return ad.localeCompare(bd)||String(a?.id||'').localeCompare(String(b?.id||''));
+    });
+    normalizePendingWageRecord(meta.record,false);
+  });
+
+  const newRecords=metas.map(m=>m.record).filter(pw=>num(pw.total)>0||num(pw.paid)>0).sort((a,b)=>
+    String(a.weekStart||'').localeCompare(String(b.weekStart||''))||String(a.workerId||'').localeCompare(String(b.workerId||''))||String(a.id||'').localeCompare(String(b.id||''))
+  );
+  const keepIds=new Set(newRecords.map(x=>String(x.id)));
+  const obsoleteIds=new Set();
+  recordAliasIds.forEach((aliasIds,canonicalId)=>aliasIds.forEach(id=>{if(id&&id!==canonicalId&&!keepIds.has(id))obsoleteIds.add(id);}));
+  let deletionChanged=false;
+  obsoleteIds.forEach(id=>{
+    if(DB.deletedIds.indexOf(String(id))<0){DB.deletedIds.push(String(id));deletionChanged=true;}
+  });
+  /* الأصل المؤرشف الصحيح يغلب tombstone قديماً لسجل canonical كان قد حُذف يدوياً في نسخة سابقة. */
+  const beforeDeleted=DB.deletedIds.length;
+  DB.deletedIds=DB.deletedIds.filter(id=>!keepIds.has(String(id)));
+  if(DB.deletedIds.length!==beforeDeleted) deletionChanged=true;
+  if(DB.deletedIds.length>5000) DB.deletedIds=DB.deletedIds.slice(-5000);
+
+  const after=JSON.stringify(newRecords);
+  const changed=before!==after||deletionChanged;
+  if(changed){
+    if(stamp){
+      const mod=nextMod();
+      newRecords.forEach(pw=>{pw._mod=Math.max(+pw._mod||0,mod);});
+    }
+    DB.pendingWages=newRecords;
+    DB.settings=DB.settings||{};
+    DB.settings._pendingLedgerCanonicalTag=_PENDING_LEDGER_CANONICAL_TAG;
+    _pendingLedgerRepairDirty=true;
+  }
+  return changed;
+}
+function getPendingCarryForwardGroupsForWeek(weekLike=DB.currentWeek){
+  const currentWeekId=editingWeekId||weekLike?._editWeekId||null;
+  const currentStart=String(weekLike?.startDate||'');
+  const groups=new Map();
+  (DB.pendingWages||[]).forEach(pw=>{
+    const remaining=pendingWagesRemaining(pw);
+    if(remaining<=0||!pw?.workerId) return;
+    if(currentWeekId&&pw.weekId===currentWeekId) return;
+    const originStart=String(pw.weekStart||'');
+    if(currentStart&&originStart&&originStart>currentStart) return;
+    if(!groups.has(pw.workerId)) groups.set(pw.workerId,{workerId:pw.workerId,remaining:0,records:[]});
+    const group=groups.get(pw.workerId);
+    group.remaining+=remaining;
+    group.records.push(pw);
+  });
+  return [...groups.values()].sort((a,b)=>{
+    const aw=DB.workers.find(w=>w.id===a.workerId)?.name||'';
+    const bw=DB.workers.find(w=>w.id===b.workerId)?.name||'';
+    return aw.localeCompare(bw,'ar');
+  });
+}
+function renderWeekPendingCarry(){
+  const el=document.getElementById('weekPendingCarry');
+  if(!el) return;
+  /* بطاقة الترحيل مخصّصة للأسبوع الجديد. أثناء تعديل أسبوع مؤرشف تبقى
+     سعة التسديد الدقيقة داخل صف العامل نفسه حتى لا نعرض رصيداً حالياً في سياق تاريخي. */
+  if(editingWeekId){el.style.display='none';el.innerHTML='';return;}
+  const groups=getPendingCarryForwardGroupsForWeek(DB.currentWeek);
+  if(!groups.length){el.style.display='none';el.innerHTML='';return;}
+  el.style.display='block';
+  el.innerHTML=`<div class="card" style="margin:0;border:1.5px solid var(--warning);background:var(--warning-soft)">
+    <div class="card-header" style="margin-bottom:8px"><h3><i class="fas fa-clock-rotate-left" style="color:var(--warning)"></i> أجور معلّقة مرحلة من أسابيع سابقة</h3><span class="badge badge-warning">${groups.length} عامل</span></div>
+    <div>${groups.map(group=>{
+      const worker=DB.workers.find(w=>w.id===group.workerId);
+      const starts=group.records.map(pw=>String(pw.weekStart||'')).filter(Boolean).sort();
+      const firstStart=starts[0]||'';
+      return `<div class="today-worker-row"><span><b>${escapeHTML(worker?.name||'—')}</b>${firstStart?`<br><small class="text-muted">من معلّق أصله ${formatDateAR(firstStart)}</small>`:''}</span><span class="badge badge-warning">${money(group.remaining)} دج</span></div>`;
+    }).join('')}</div>
+    <div class="report-help-note" style="margin-top:10px">عرض فقط: فتح الأسبوع لا يسجل تسديداً. عند الدفع أضف العامل وأدخل المبلغ في «معلّق سابق قابل للتسديد»، ثم احفظ الأسبوع ليرتبط التسديد بأسبوعه الحقيقي.</div>
+  </div>`;
+}
 function getOpenPendingWagesForWorker(workerId){
   return (DB.pendingWages||[]).filter(pw=>pw.workerId===workerId && pendingWagesRemaining(pw)>0);
 }
@@ -3549,13 +3972,18 @@ function distributePendingWagePayment(workerId, amount, note, paidByWeekId=null,
   const excludedOriginWeekId=options.excludeOriginWeekId||null;
   const list=getOpenPendingWagesForWorker(workerId)
     .filter(pw=>!excludedOriginWeekId||pw.weekId!==excludedOriginWeekId)
-    .sort((a,b)=>new Date((a.dates?.[0]?.date)||a.createdAt||0)-new Date((b.dates?.[0]?.date)||b.createdAt||0));
+    .sort((a,b)=>String(a.weekStart||'').localeCompare(String(b.weekStart||''))||String(a.id||'').localeCompare(String(b.id||'')));
   list.forEach(pw=>{
     if(rest<=0)return;
     const pay=Math.min(rest,pendingWagesRemaining(pw));
     if(pay>0){
       pw.dates=Array.isArray(pw.dates)?pw.dates:[];
-      pw.dates.push({id:generateId(),date:new Date().toISOString(),amount:pay,note:note||'تسديد',type:'pay',sourceWeekId:pw.weekId||null,paidByWeekId,paidByWeekStart,paidByEntryId,payerWorkerId:workerId});
+      const cleanId=v=>String(v||'').replace(/[^a-zA-Z0-9_-]/g,'_');
+      const movementId=paidByEntryId?'pending_pay_'+cleanId(paidByEntryId)+'_'+cleanId(pw.sourceEntryId||pw.id):generateId();
+      const movement={id:movementId,date:new Date().toISOString(),amount:pay,note:note||'تسديد',type:'pay',sourceWeekId:pw.weekId||null,paidByWeekId,paidByWeekStart,paidByEntryId,payerWorkerId:workerId};
+      const existing=pw.dates.find(d=>d&&d.type==='pay'&&d.id===movementId);
+      if(existing) Object.assign(existing,movement);
+      else pw.dates.push(movement);
       recalculatePendingWagePaid(pw);
       rest-=pay;
     }
@@ -3666,18 +4094,28 @@ function buildPendingHistoryOperations(records){
     if(!movements.some(x=>x.entry.type==='add')&&num(pw.total)>0){
       movements.unshift({entry:{id:'virtual_'+pw.id,type:'add',amount:num(pw.total),date:pw.weekStart||'',note:'أجر معلّق محفوظ كمجموع من بيانات قديمة',weekId:pw.weekId,weekStart:pw.weekStart,sourceEntryId:pw.sourceEntryId,_virtual:true},sourceIndex:-1});
     }
+    movements.sort((a,b)=>{
+      const ad=String(a.entry?.date||''),bd=String(b.entry?.date||'');
+      if(!ad&&!bd) return a.sourceIndex-b.sourceIndex;
+      if(!ad) return 1;if(!bd) return -1;
+      return ad.localeCompare(bd)||a.sourceIndex-b.sourceIndex;
+    });
+    let running=0;
     movements.forEach((row,movementIndex)=>{
       const d=row.entry;
       const stamp=formatDebtHistoryStamp(d.date);
       const paidWeek=(DB.weeks||[]).find(w=>w.id===d.paidByWeekId)||null;
       const isPay=d.type==='pay';
+      const amount=Math.max(0,num(d.amount));
+      if(isPay) running=Math.max(0,running-amount);
+      else running=Math.max(running,amount);
       const paymentWeekLabel=isPay
         ?((d.paidByWeekId||d.paidByWeekStart)?pendingWeekLabel(d.paidByWeekId,d.paidByWeekStart,paidWeek?.endDate||''):'تسديد يدوي قديم غير مربوط بأسبوع')
         :'—';
       const parsed=Date.parse(d.date||'');
       all.push({
         record:pw,recordIndex,movementIndex,entry:d,
-        amount:Math.max(0,num(d.amount)),stamp,isPay,originLabel,paymentWeekLabel,
+        amount,stamp,isPay,originLabel,paymentWeekLabel,remainingAfter:Math.max(0,running),
         sort:Number.isFinite(parsed)?parsed:Number.MAX_SAFE_INTEGER
       });
     });
@@ -3705,6 +4143,7 @@ function openPendingWageHistory(workerId){
       <div class="debt-history-note">
         <div><b>الأسبوع الأصلي:</b> ${escapeHTML(op.originLabel)}</div>
         ${op.isPay?`<div><b>أسبوع التسديد:</b> ${escapeHTML(op.paymentWeekLabel)}</div>`:''}
+        <div><b>المتبقي بعد الحركة:</b> ${money(op.remainingAfter)} دج</div>
         <div style="margin-top:5px;color:var(--text3)">${escapeHTML(note)}</div>
       </div>
     </div>`;
@@ -3825,7 +4264,7 @@ function deleteWeek(id){
   confirmDelete(`أسبوع ${formatDateAR(w.startDate)}`,()=>{
     (DB.debts||[]).forEach(d=>{const before=(d.dates||[]).length;d.dates=(d.dates||[]).filter(x=>!(x.type==='pay'&&x.weekId===id));if(d.dates.length!==before)recalculateDebtPaid(d);});
     (DB.pendingWages||[]).forEach(pw=>{const removed=(pw.dates||[]).filter(x=>x.type==='pay'&&x.paidByWeekId===id);if(removed.length){pw.dates=pw.dates.filter(x=>!(x.type==='pay'&&x.paidByWeekId===id));recalculatePendingWagePaid(pw);}});
-    moveToTrash('week',w,`أسبوع ${formatDateAR(w.startDate)}`);_markDeleted(id);DB.pendingWages=(DB.pendingWages||[]).filter(pw=>pw.weekId!==id);DB.weeks=DB.weeks.filter(x=>x.id!==id);saveDB();renderArchive();renderProjectWeeks();renderDebts();renderPendingWages();loadDashboard();
+    moveToTrash('week',w,`أسبوع ${formatDateAR(w.startDate)}`);_markDeleted(id);DB.pendingWages=(DB.pendingWages||[]).filter(pw=>pw.weekId!==id);DB.weeks=DB.weeks.filter(x=>x.id!==id);canonicalizePendingWageLedger(true);saveDB();renderArchive();renderProjectWeeks();renderDebts();renderPendingWages();loadDashboard();
   });
 }
 
@@ -5152,6 +5591,7 @@ function _mergePendingWages(remoteArr,delSet){
     const after=JSON.stringify({total:local.total,paid:local.paid,dates:local.dates,sourceEntryId:local.sourceEntryId,_mod:local._mod});
     if(before!==after) changed++;
   });
+  if(canonicalizePendingWageLedger(false)) changed++;
   return changed;
 }
 function mergeRemote(d){
@@ -5231,14 +5671,20 @@ function applyRemote(remote){
   if(remote.writerId===WRITER_ID)return 0;                       // تجاهل صدى كتابتنا
   _cloudSynced=true;                                             // وصلنا نسخة سحابية صحيحة
   if(_lastPushStamp&&remote.syncedAt===_lastPushStamp)return 0;
-  let n=0;
+  let n=0,repairNeedsPush=false;
   _cloudApplying=true;
   try{
     n=mergeRemote(remote);
     if(remote.syncedAt)DB.settings.cloudRemoteStamp=remote.syncedAt;
     try{migrateDB();}catch(e){}
+    repairNeedsPush=!!_pendingLedgerRepairDirty;
     saveDB();                                                    // _cloudApplying=true ⇒ لا يجدول رفعاً
   }finally{_cloudApplying=false;}
+  if(repairNeedsPush){
+    _pendingLedgerRepairDirty=false;
+    _cloudDirty=true;
+    try{schedulePush();}catch(e){}
+  }
   if(n>0){ if(isEditingNow()){_cloudPendingRefresh=true;} else {try{initApp();}catch(e){}} }
   return n;
 }
@@ -5289,7 +5735,7 @@ async function cloudSync(manual){
     const stamp=new Date().toISOString();
     const up=await fetch(cfg.endpoint,{method:'PUT',headers:{'Content-Type':'application/json'},body:_cloudPayload(stamp)});
     if(!up.ok)throw new Error('رفع HTTP '+up.status);
-    _lastPushStamp=stamp;DB.settings.cloudRemoteStamp=stamp;_cloudDirty=false;
+    _lastPushStamp=stamp;DB.settings.cloudRemoteStamp=stamp;_cloudDirty=false;_pendingLedgerRepairDirty=false;
     const now=_fullStamp(new Date());
     DB.settings.cloudLastSync=now;
     _cloudApplying=true;saveDB();_cloudApplying=false;
@@ -5396,12 +5842,9 @@ function handleImport(ev){
         }
         // ضمان وجود currentWeek سليم
         migrateDB();  // ترحيل كامل بعد الاستيراد
-        /* ترحيل سجلات المعلّق: الحساب الحقيقي للمدفوع يُستخرج من الحركات، لا من رقم قابل للتكرار. */
-  (DB.pendingWages||[]).forEach(pw=>{
-    if(!Array.isArray(pw.dates)) pw.dates=[];
-    if(pw.total===undefined) pw.total=0;
-    pw.paid=Math.max(0,pw.dates.filter(d=>d.type==='pay').reduce((sum,d)=>sum+num(d.amount),0));
-  });
+        /* migrateDB أصلح وطبّع دفتر المعلّق. لا نعيد احتساب paid يدوياً هنا كي لا
+           نعيد تضخيم سجل قديم مكرر بعد الاستيراد. */
+        canonicalizePendingWageLedger(false);
   if(!DB.company) DB.company={name:'مؤسسة الأشغال العمومية الكبرى والري',short:'EGTPH',address:'وادي سلي، الشلف',nif:'19202010500199',phone:''};
         flushSave();
         setTimeout(()=>{ showToast('✅ تم الاستيراد بنجاح — '+d.workers.length+' عامل، '+d.weeks.length+' أسبوع'); }, 50);
