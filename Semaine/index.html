@@ -668,16 +668,16 @@ html,body{max-width:100%;overflow-x:hidden}
 }
 
 
-/* === WORKER QUICK CARD + TODAY + ASK PROGRAM === */
+/* === WORKER QUICK CARD + ASK PROGRAM + INFO LIST ROWS === */
 .worker-quick-info{margin-top:7px;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:5px;max-width:520px}
 .worker-quick-chip{display:inline-flex;align-items:center;gap:5px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:4px 8px;font-size:11.5px;color:var(--text2);line-height:1.35}
 .worker-quick-chip b{color:var(--text);font-weight:800}
-.today-grid,.ask-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
-.today-card,.ask-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:var(--shadow)}
-.today-card h4,.ask-card h4{font-size:14px;font-weight:900;margin-bottom:8px;color:var(--text);display:flex;align-items:center;gap:7px}
-.today-worker-row{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px dashed var(--border);padding:9px 0;font-size:13px}
-.today-worker-row:first-of-type{border-top:none}
-.today-worker-row input{width:20px;height:20px;accent-color:var(--primary)}
+.ask-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.ask-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:var(--shadow)}
+.ask-card h4{font-size:14px;font-weight:900;margin-bottom:8px;color:var(--text);display:flex;align-items:center;gap:7px}
+.info-list-row{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px dashed var(--border);padding:9px 0;font-size:13px}
+.info-list-row:first-of-type{border-top:none}
+.info-list-row input{width:20px;height:20px;accent-color:var(--primary)}
 .ask-question-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
 .ask-question-btn{white-space:normal!important;min-height:42px;justify-content:flex-start!important;text-align:right;line-height:1.45}
 .ask-result{margin-top:14px;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:14px;min-height:80px}
@@ -686,9 +686,40 @@ html,body{max-width:100%;overflow-x:hidden}
 @media(max-width:900px){
   .worker-quick-info{grid-template-columns:1fr 1fr;max-width:100%}
   .worker-quick-chip{font-size:11px;padding:4px 7px}
-  .today-grid,.ask-grid,.ask-question-list{grid-template-columns:1fr!important}
-  .today-card,.ask-card,.ask-result{padding:12px;border-radius:14px}
+  .ask-grid,.ask-question-list{grid-template-columns:1fr!important}
+  .ask-card,.ask-result{padding:12px;border-radius:14px}
   .ask-question-btn{width:100%;min-height:46px}
+}
+
+
+/* === MOBILE FINANCE ACTIONS — debt/pending controls remain visible under worker name === */
+.mobile-ledger-actions{display:none}
+@media(max-width:900px){
+  #page-debts .mobile-ledger-actions,
+  #page-pendingwages .mobile-ledger-actions{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-top:9px;
+    align-items:center;
+    min-width:230px;
+  }
+  #page-debts .mobile-ledger-actions .btn,
+  #page-pendingwages .mobile-ledger-actions .btn{
+    min-height:38px;
+    padding:7px 10px;
+    font-size:12px;
+  }
+  #page-debts .mobile-ledger-actions .badge,
+  #page-pendingwages .mobile-ledger-actions .badge{
+    min-height:34px;
+    padding:7px 10px;
+    border-radius:9px;
+  }
+  #page-debts td.desktop-ledger-actions,
+  #page-pendingwages td.desktop-ledger-actions{display:none!important}
+  #page-debts table,#page-pendingwages table{min-width:650px}
+  #page-debts table td:first-child,#page-pendingwages table td:first-child{min-width:250px;vertical-align:top}
 }
 
 </style>
@@ -719,7 +750,6 @@ html,body{max-width:100%;overflow-x:hidden}
   </div>
   <ul class="sidebar-nav">
     <li><a href="#dashboard" class="active" data-page="dashboard"><i class="fas fa-chart-pie"></i> لوحة القيادة</a></li>
-    <li><a href="#today" data-page="today"><i class="fas fa-clipboard-check"></i> متابعة اليوم</a></li>
     <li><a href="#ask" data-page="ask"><i class="fas fa-circle-question"></i> اسأل البرنامج</a></li>
     <li><a href="#workers" data-page="workers"><i class="fas fa-users"></i> العمال والموارد</a></li>
     <li><a href="#projects" data-page="projects"><i class="fas fa-folder-tree"></i> المشاريع</a></li>
@@ -760,25 +790,6 @@ html,body{max-width:100%;overflow-x:hidden}
       <div class="card">
         <div class="card-header"><h3><i class="fas fa-bell"></i> تنبيهات الديون</h3></div>
         <div id="debtAlerts"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- TODAY FOLLOW-UP -->
-  <div class="page" id="page-today">
-    <div class="card">
-      <div class="card-header"><h3><i class="fas fa-clipboard-check"></i> متابعة اليوم</h3></div>
-      <div id="todaySummary" class="summary-grid"></div>
-      <div class="report-help-note">هذه الصفحة للمتابعة اليومية فقط: لا تغيّر الأجور ولا تحفظ أسبوعاً ولا تضيف أثراً مالياً.</div>
-    </div>
-    <div class="today-grid">
-      <div class="today-card">
-        <h4><i class="fas fa-users"></i> مراجعة العمال اليوم</h4>
-        <div id="todayWorkersList"></div>
-      </div>
-      <div class="today-card">
-        <h4><i class="fas fa-triangle-exclamation"></i> تنبيهات سريعة</h4>
-        <div id="todayAlerts"></div>
       </div>
     </div>
   </div>
@@ -1250,7 +1261,7 @@ html,body{max-width:100%;overflow-x:hidden}
 <div class="toast" id="toast"></div>
 
 <script>
-window.EGTPH_BUILD='v42-stale-accumulation-guard';
+window.EGTPH_BUILD='v44-remove-today-page';
 /* ====================================================
    EGTPH - سجل الأجرة الأسبوعي  |  المحرك الرئيسي
    ==================================================== */
@@ -1324,6 +1335,8 @@ function idbDelete(key){
 function migrateDB(){
   if(!Array.isArray(DB.deletedIds))DB.deletedIds=[];
   if(!DB.settings)DB.settings={};
+  // v44: صفحة متابعة اليوم أزيلت نهائياً؛ نحذف تراكماتها المحلية القديمة عند كل تحميل.
+  delete DB.settings.todayReviewed;
   if(DB.settings._mod===undefined||DB.settings._mod===null)DB.settings._mod=0;
   const cw = DB.currentWeek;
   if(!cw) { DB.currentWeek={startDate:'',endDate:'',entries:[],expenses:[],projectId:null,overtimeRate:1.5,status:'idle',manualHourlyRate:null}; }
@@ -1494,6 +1507,7 @@ function _fullStamp(d){
 function stampCW(rec){ if(rec) rec._mod=nextMod(); if(DB.currentWeek) DB.currentWeek._mod=nextMod(); }
 /* مفاتيح إعدادات محلية لكل جهاز — لا تُزامَن */
 const _SETTINGS_LOCAL_KEYS=['cloudRemoteStamp','cloudLastSync','_seedTag','_cloudKeyTag'];
+const _REMOVED_SETTINGS_KEYS=['todayReviewed'];
 function stampSettings(){ if(!DB.settings)DB.settings={}; DB.settings._mod=nextMod(); }
 /* رفع وسم الحذف (عند الاستعادة من السلة) كي لا يُعاد حذف العنصر بالمزامنة */
 function _unmarkDeleted(id){ if(!id||!DB.deletedIds)return; const i=DB.deletedIds.indexOf(String(id)); if(i>=0)DB.deletedIds.splice(i,1); }
@@ -1763,12 +1777,12 @@ let currentPage='dashboard';
 let navigationHistory=[];
 
 const pageTitles={
-  dashboard:'لوحة القيادة',today:'متابعة اليوم',ask:'اسأل البرنامج',workers:'العمال والموارد',projects:'المشاريع',week:'الأسبوع الحالي',
+  dashboard:'لوحة القيادة',ask:'اسأل البرنامج',workers:'العمال والموارد',projects:'المشاريع',week:'الأسبوع الحالي',
   'project-weeks':'أسابيع المشروع',archive:'أرشيف الأسابيع',debts:'الديون والأقساط',
   pendingwages:'أجور معلّقة',reports:'التقارير',settings:'الإعدادات',log:'سجل النشاطات',trash:'سلة المهملات'
 };
 const pageIcons={
-  dashboard:'fa-chart-pie',today:'fa-clipboard-check',ask:'fa-circle-question',workers:'fa-users',projects:'fa-folder-tree',week:'fa-calendar-week',
+  dashboard:'fa-chart-pie',ask:'fa-circle-question',workers:'fa-users',projects:'fa-folder-tree',week:'fa-calendar-week',
   'project-weeks':'fa-calendar-alt',archive:'fa-archive',debts:'fa-hand-holding-usd',
   pendingwages:'fa-clock',reports:'fa-file-alt',settings:'fa-cog',log:'fa-history',trash:'fa-trash-can'
 };
@@ -1849,7 +1863,6 @@ function navigateTo(p,options={}){
 
   switch(pageName){
     case'dashboard':loadDashboard();break;
-    case'today':renderTodayPage();break;
     case'ask':renderAskProgram();break;
     case'workers':renderWorkers();break;
     case'projects':renderProjects();break;
@@ -2169,44 +2182,6 @@ function workerLastWeekInfo(workerId){
   const w=weeks[0];
   return `${formatDateAR(w.startDate)} → ${formatDateAR(w.endDate)}`;
 }
-function todayKey(){ return formatDate(new Date()); }
-function getTodayReviewStore(){
-  if(!DB.settings) DB.settings={};
-  if(!DB.settings.todayReviewed) DB.settings.todayReviewed={};
-  const k=todayKey();
-  if(!DB.settings.todayReviewed[k]) DB.settings.todayReviewed[k]={};
-  return DB.settings.todayReviewed[k];
-}
-function setTodayWorkerReviewed(workerId,checked){
-  const st=getTodayReviewStore();
-  st[workerId]=!!checked;
-  saveDB();
-  renderTodayPage();
-}
-function renderTodayPage(){
-  const sum=document.getElementById('todaySummary'), list=document.getElementById('todayWorkersList'), alerts=document.getElementById('todayAlerts');
-  if(!sum||!list||!alerts) return;
-  const workers=[...(DB.workers||[])].sort((a,b)=>num(a.number)-num(b.number));
-  const st=getTodayReviewStore();
-  const reviewed=workers.filter(w=>st[w.id]).length;
-  const cw=DB.currentWeek||{};
-  const hasDraft=cw.status==='open' && (((cw.entries||[]).length)||((cw.expenses||[]).length));
-  const pendingWorkerIds=new Set((DB.pendingWages||[]).filter(p=>pendingWagesRemaining(p)>0).map(p=>p.workerId).filter(Boolean));
-  const debts=(DB.debts||[]).filter(d=>num(d.total)-num(d.paid)>0);
-  sum.innerHTML=`
-    <div class="summary-box primary"><div class="lbl">اليوم</div><div class="val" style="font-size:14px">${formatDateAR(todayKey())}</div></div>
-    <div class="summary-box"><div class="lbl">العمال</div><div class="val">${workers.length}</div></div>
-    <div class="summary-box success"><div class="lbl">تمت المراجعة</div><div class="val">${reviewed}</div></div>
-    <div class="summary-box warning"><div class="lbl">باقي</div><div class="val">${Math.max(0,workers.length-reviewed)}</div></div>`;
-  list.innerHTML=workers.length?workers.map(w=>`<div class="today-worker-row"><span><b>#${w.number||''} ${escapeHTML(w.name||'')}</b><br><small class="text-muted">${escapeHTML(w.type||'')} · ${escapeHTML(DB.projects.find(p=>p.id===w.projectId)?.name||'عام')}</small></span><label style="display:flex;align-items:center;gap:6px"><span class="text-muted">تمت</span><input type="checkbox" ${st[w.id]?'checked':''} onchange="setTodayWorkerReviewed('${w.id}',this.checked)"></label></div>`).join(''):'<div class="empty-state" style="padding:20px"><i class="fas fa-users-slash"></i><p>لا يوجد عمال</p></div>';
-  const a=[];
-  if(hasDraft) a.push(['أسبوع مفتوح',`يوجد أسبوع مفتوح أو مسودة غير محفوظة (${(cw.entries||[]).length} عمال، ${(cw.expenses||[]).length} مصاريف)`,'warning']);
-  if(pendingWorkerIds.size) a.push(['أجور معلّقة',`${pendingWorkerIds.size} عامل لديه مبلغ معلّق متبقٍ`,'danger']);
-  if(debts.length) a.push(['ديون',`${debts.length} عامل لديه دين متبقٍ`,'warning']);
-  const unreviewed=workers.length-reviewed; if(unreviewed) a.push(['مراجعة العمال',`${unreviewed} عامل لم تتم مراجعته اليوم`,'primary']);
-  alerts.innerHTML=a.length?a.map(x=>`<div class="today-worker-row"><span><b>${escapeHTML(x[0])}</b><br><small class="text-muted">${escapeHTML(x[1])}</small></span><span class="badge badge-${x[2]}">تنبيه</span></div>`).join(''):'<div class="empty-state" style="padding:20px"><i class="fas fa-check-circle"></i><p>لا توجد تنبيهات مهمة الآن</p></div>';
-}
-
 /* ====================================================
    المشاريع
    ==================================================== */
@@ -3552,18 +3527,24 @@ function renderDebts(){
   if(!DB.debts.length){ tb.innerHTML='<tr><td colspan="7"><div class="empty-state"><i class="fas fa-circle-check"></i><h4>لا توجد ديون</h4><p>كل الحسابات مسددة 🎉</p></div></td></tr>'; return; }
   tb.innerHTML=DB.debts.map(d=>{
     const w=DB.workers.find(x=>x.id===d.workerId);
-    const rem=d.total-d.paid;
+    const rem=Math.max(0,num(d.total)-num(d.paid));
     const dates=Array.isArray(d.dates)?d.dates:[];
     const lastPay=dates.filter(x=>x&&x.type==='pay').slice(-1)[0];
     const weeksLeft=d.installment>0?Math.ceil(rem/d.installment):0;
+    const historyBtn=`<button class="btn btn-info btn-xs" onclick="openDebtHistory('${d.workerId}')"><i class="fas fa-clock-rotate-left"></i> السجل</button>`;
+    const manualBtn=rem>0
+      ?`<button class="btn btn-success btn-xs" onclick="openManualDebtPayment('${d.workerId}')"><i class="fas fa-hand-holding-dollar"></i> تسديد يدوي</button>`
+      :`<span class="badge badge-paid"><i class="fas fa-circle-check"></i> مغلق — المتبقي 0 دج</span>`;
+    const editBtn=`<button class="btn btn-outline btn-xs" onclick="editDebtPlan('${d.workerId}')" title="تعديل خطة التقسيط"><i class="fas fa-edit"></i></button>`;
+    const deleteBtn=`<button class="btn btn-danger btn-xs" onclick="deleteDebt('${d.workerId}')" title="حذف الدين"><i class="fas fa-trash"></i></button>`;
     return `<tr class="${rem>0?'debt-row':''}">
-      <td><b>${w?.name||'—'}</b></td>
+      <td><b>${escapeHTML(w?.name||'—')}</b><div class="mobile-ledger-actions">${manualBtn}${historyBtn}${editBtn}</div></td>
       <td>${money(d.total)} دج</td>
       <td>${money(d.paid)} دج</td>
       <td><span class="badge ${rem>0?'badge-debt':'badge-paid'}">${money(rem)} دج</span></td>
       <td>${d.installment>0?`<span class="badge badge-info">${money(d.installment)} دج/أسبوع</span>${rem>0?`<br><span class="text-muted">باقٍ ~${weeksLeft} أسبوع</span>`:''}`:'<span class="text-muted">بدون خطة</span>'}</td>
       <td>${lastPay?formatDateAR(lastPay.date):'—'}</td>
-      <td><button class="btn btn-info btn-xs" onclick="openDebtHistory('${d.workerId}')"><i class="fas fa-clock-rotate-left"></i> السجل</button> ${rem>0?`<button class="btn btn-success btn-xs" onclick="openManualDebtPayment('${d.workerId}')"><i class="fas fa-hand-holding-dollar"></i> تسديد يدوي</button>`:''} <button class="btn btn-outline btn-xs" onclick="editDebtPlan('${d.workerId}')"><i class="fas fa-edit"></i></button> <button class="btn btn-danger btn-xs" onclick="deleteDebt('${d.workerId}')"><i class="fas fa-trash"></i></button></td>
+      <td class="desktop-ledger-actions">${historyBtn} ${manualBtn} ${editBtn} ${deleteBtn}</td>
     </tr>`;
   }).join('');
 
@@ -4339,7 +4320,7 @@ function renderWeekPendingCarry(){
       const worker=DB.workers.find(w=>w.id===group.workerId);
       const starts=group.records.map(pw=>String(pw.weekStart||'')).filter(Boolean).sort();
       const firstStart=starts[0]||'';
-      return `<div class="today-worker-row"><span><b>${escapeHTML(worker?.name||'—')}</b>${firstStart?`<br><small class="text-muted">من معلّق أصله ${formatDateAR(firstStart)}</small>`:''}</span><span class="badge badge-warning">${money(group.remaining)} دج</span></div>`;
+      return `<div class="info-list-row"><span><b>${escapeHTML(worker?.name||'—')}</b>${firstStart?`<br><small class="text-muted">من معلّق أصله ${formatDateAR(firstStart)}</small>`:''}</span><span class="badge badge-warning">${money(group.remaining)} دج</span></div>`;
     }).join('')}</div>
     <div class="report-help-note" style="margin-top:10px">عرض فقط: فتح الأسبوع لا يسجل تسديداً. عند الدفع أضف العامل وأدخل المبلغ في «معلّق سابق قابل للتسديد»، ثم احفظ الأسبوع ليرتبط التسديد بأسبوعه الحقيقي.</div>
   </div>`;
@@ -4539,7 +4520,7 @@ function openPendingWageHistory(workerId){
     carryMap.get(key).remaining+=pendingWagesRemaining(pw);
   });
   const carryRows=[...carryMap.values()].sort((a,b)=>String(a.start).localeCompare(String(b.start))).map(row=>
-    `<div class="today-worker-row"><span><b>${escapeHTML(row.label)}</b><br><small class="text-muted">يبقى مرحّلاً ويظهر في الأسبوع اللاحق ضمن «معلّق سابق قابل للتسديد»</small></span><span class="badge badge-warning">${money(row.remaining)} دج</span></div>`
+    `<div class="info-list-row"><span><b>${escapeHTML(row.label)}</b><br><small class="text-muted">يبقى مرحّلاً ويظهر في الأسبوع اللاحق ضمن «معلّق سابق قابل للتسديد»</small></span><span class="badge badge-warning">${money(row.remaining)} دج</span></div>`
   ).join('');
   const html=`
     <div class="debt-history-summary">
@@ -4565,7 +4546,7 @@ function openManualPendingPayment(workerId){
   const remaining=getPendingRemainingForWorker(workerId);
   if(remaining<=0){ showToast('لا يوجد أجر معلّق متبقٍ لهذا العامل.','warning'); return; }
   const openRecords=getOpenPendingWagesForWorker(workerId).slice().sort((a,b)=>String(a.weekStart||'').localeCompare(String(b.weekStart||''))||String(a.id||'').localeCompare(String(b.id||'')));
-  const originPreview=openRecords.map(pw=>`<div class="today-worker-row"><span><b>${escapeHTML(pendingWeekLabel(pw.weekId,pw.weekStart,pw.weekEnd))}</b></span><span class="badge badge-warning">${money(pendingWagesRemaining(pw))} دج</span></div>`).join('');
+  const originPreview=openRecords.map(pw=>`<div class="info-list-row"><span><b>${escapeHTML(pendingWeekLabel(pw.weekId,pw.weekStart,pw.weekEnd))}</b></span><span class="badge badge-warning">${money(pendingWagesRemaining(pw))} دج</span></div>`).join('');
   openModal(`تسديد يدوي للأجر المعلّق: ${w?.name||''}`,`
     <div class="debt-history-summary">
       <div class="debt-history-summary-box"><span class="lbl">المتبقي المفتوح</span><span class="val">${money(remaining)} دج</span></div>
@@ -4613,14 +4594,18 @@ function renderPendingWages(){
       originHTML=`<span class="badge badge-info">${uniqueOrigins.length} أسابيع أصلية</span>`;
     }
     const lastLabel=g.lastRaw?formatDebtHistoryStamp(g.lastRaw).date:'—';
+    const historyBtn=`<button class="btn btn-outline btn-xs" onclick="openPendingWageHistory('${g.workerId}')"><i class="fas fa-clock-rotate-left"></i> السجل</button>`;
+    const manualBtn=g.remaining>0
+      ?`<button class="btn btn-success btn-xs" onclick="openManualPendingPayment('${g.workerId}')"><i class="fas fa-money-bill-transfer"></i> تسديد يدوي</button>`
+      :`<span class="badge badge-paid"><i class="fas fa-circle-check"></i> مغلق — المتبقي 0 دج</span>`;
     return `<tr class="${g.remaining>0?'debt-row':''}">
-      <td><b>${escapeHTML(w?.name||'—')}</b></td>
+      <td><b>${escapeHTML(w?.name||'—')}</b><div class="mobile-ledger-actions">${manualBtn}${historyBtn}</div></td>
       <td>${originHTML}</td>
       <td>${money(g.total)} دج</td>
       <td>${money(g.paid)} دج</td>
       <td><span class="badge ${g.remaining>0?'badge-debt':'badge-paid'}">${money(g.remaining)} دج</span></td>
       <td>${lastLabel}</td>
-      <td><button class="btn btn-outline btn-xs" onclick="openPendingWageHistory('${g.workerId}')"><i class="fas fa-clock-rotate-left"></i> السجل</button> ${g.remaining>0?`<button class="btn btn-success btn-xs" onclick="openManualPendingPayment('${g.workerId}')"><i class="fas fa-money-bill-transfer"></i> تسديد يدوي</button>`:''}</td>
+      <td class="desktop-ledger-actions">${historyBtn} ${manualBtn}</td>
     </tr>`;
   }).join('');
 }
@@ -5523,16 +5508,16 @@ function runAskQuestion(type){
   }
   if(type==='pending'){
     const rows=(DB.pendingWages||[]).filter(p=>num(p.total)-num(p.paid)>0 && (!wid||p.workerId===wid) && (!pid||(p.projectId||'')===pid));
-    out.innerHTML=title('الأجور المعلّقة')+(rows.length?rows.map(p=>`<div class="today-worker-row"><span><b>${escapeHTML(p.workerName||DB.workers.find(w=>w.id===p.workerId)?.name||'عامل')}</b></span><span class="badge badge-warning">${money(num(p.total)-num(p.paid))} دج</span></div>`).join(''):'لا يوجد معلّق مطابق'); return;
+    out.innerHTML=title('الأجور المعلّقة')+(rows.length?rows.map(p=>`<div class="info-list-row"><span><b>${escapeHTML(p.workerName||DB.workers.find(w=>w.id===p.workerId)?.name||'عامل')}</b></span><span class="badge badge-warning">${money(num(p.total)-num(p.paid))} دج</span></div>`).join(''):'لا يوجد معلّق مطابق'); return;
   }
   if(type==='debts'){
     const rows=(DB.debts||[]).filter(d=>num(d.total)-num(d.paid)>0 && (!wid||d.workerId===wid));
-    out.innerHTML=title('الديون')+(rows.length?rows.map(d=>`<div class="today-worker-row"><span><b>${escapeHTML(DB.workers.find(w=>w.id===d.workerId)?.name||'عامل')}</b></span><span class="badge badge-debt">${money(num(d.total)-num(d.paid))} دج</span></div>`).join(''):'لا توجد ديون مطابقة'); return;
+    out.innerHTML=title('الديون')+(rows.length?rows.map(d=>`<div class="info-list-row"><span><b>${escapeHTML(DB.workers.find(w=>w.id===d.workerId)?.name||'عامل')}</b></span><span class="badge badge-debt">${money(num(d.total)-num(d.paid))} دج</span></div>`).join(''):'لا توجد ديون مطابقة'); return;
   }
   if(type==='topCost'){
     const m=new Map(); weeks.forEach(w=>(w.entries||[]).forEach(e=>{ const ww=DB.workers.find(x=>x.id===e.workerId); const k=e.workerId||e.workerName; if(!m.has(k))m.set(k,{name:e.workerName||ww?.name||'غير معروف',amount:0}); m.get(k).amount+=entryNetForReport(e); }));
     const rows=[...m.values()].sort((a,b)=>b.amount-a.amount).slice(0,10);
-    out.innerHTML=title('أكثر العمال كلفة')+(rows.length?rows.map((r,i)=>`<div class="today-worker-row"><span><b>${i+1}. ${escapeHTML(r.name)}</b></span><span class="badge badge-primary">${money(r.amount)} دج</span></div>`).join(''):'لا توجد بيانات'); return;
+    out.innerHTML=title('أكثر العمال كلفة')+(rows.length?rows.map((r,i)=>`<div class="info-list-row"><span><b>${i+1}. ${escapeHTML(r.name)}</b></span><span class="badge badge-primary">${money(r.amount)} دج</span></div>`).join(''):'لا توجد بيانات'); return;
   }
   if(type==='openDraft'){
     const cw=DB.currentWeek||{}; const has=cw.status==='open' && (((cw.entries||[]).length)||((cw.expenses||[]).length));
@@ -6061,6 +6046,7 @@ function mergeRemote(d){
 function _sanitizedSettings(){
   const st=Object.assign({},DB.settings||{});
   _SETTINGS_LOCAL_KEYS.forEach(k=>{ delete st[k]; });
+  _REMOVED_SETTINGS_KEYS.forEach(k=>{ delete st[k]; });
   return st;
 }
 function _mergeSettings(r){
@@ -6068,8 +6054,9 @@ function _mergeSettings(r){
   const l=DB.settings||(DB.settings={});
   if((+r._mod||0)>(+l._mod||0)){
     const keep={}; _SETTINGS_LOCAL_KEYS.forEach(k=>{ if(l[k]!==undefined) keep[k]=l[k]; });
-    Object.keys(r).forEach(k=>{ if(_SETTINGS_LOCAL_KEYS.indexOf(k)<0) l[k]=r[k]; });
+    Object.keys(r).forEach(k=>{ if(_SETTINGS_LOCAL_KEYS.indexOf(k)<0&&_REMOVED_SETTINGS_KEYS.indexOf(k)<0) l[k]=r[k]; });
     Object.assign(l,keep);
+    _REMOVED_SETTINGS_KEYS.forEach(k=>{ delete l[k]; });
     return 1;
   }
   return 0;
