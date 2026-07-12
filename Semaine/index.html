@@ -318,6 +318,10 @@ table tbody tr:last-child td{border-bottom:none}
 .debt-history-item.pay .debt-history-amount{color:var(--success)}
 .debt-history-meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;color:var(--text2);font-size:11.5px;font-weight:700}
 .debt-history-note{margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);color:var(--text2);font-size:12px;line-height:1.6}
+.debt-history-week{margin-top:8px;padding:8px 10px;border-radius:9px;background:var(--accent-soft);border:1px solid var(--border);color:var(--text2);font-size:11.5px;line-height:1.65}
+.debt-history-week b{color:var(--text)}
+.debt-history-balance{margin-top:7px;font-size:11.5px;color:var(--text2);font-weight:700}
+.debt-history-balance b{color:var(--primary);font-size:12.5px}
 .debt-history-readonly-note{margin-top:12px;padding:9px 11px;border:1px dashed var(--border2);border-radius:10px;background:var(--primary-soft);color:var(--text2);font-size:11.5px;line-height:1.7}
 @media(max-width:560px){
   .debt-history-summary{grid-template-columns:1fr}
@@ -1246,7 +1250,7 @@ html,body{max-width:100%;overflow-x:hidden}
 <div class="toast" id="toast"></div>
 
 <script>
-window.EGTPH_BUILD='v39-pending-ledger-accounting-repair';
+window.EGTPH_BUILD='v40-debt-week-ledger-repair';
 /* ====================================================
    EGTPH - سجل الأجرة الأسبوعي  |  المحرك الرئيسي
    ==================================================== */
@@ -1346,8 +1350,8 @@ function migrateDB(){
   });
   if(!DB.weeks)    DB.weeks=[];
   if(!DB.debts)    DB.debts=[];
-  /* سجل حركات الدين قد يكون غائباً في بعض البيانات القديمة.
-     نهيئه كمصفوفة فقط من دون إعادة بناء تاريخ أو تغيير total/paid. */
+  /* سجل الدين دفتر حركات مستقل. نهيئ البنية هنا، ثم بعد تهيئة الأسابيع
+     نعيد مطابقة خصومات الدين الأسبوعية مع صفوف الأرشيف كمصدر محاسبي للحقيقة. */
   DB.debts.forEach(d=>{ if(d&&!Array.isArray(d.dates)) d.dates=[]; });
   if(!DB.pendingWages) DB.pendingWages=[]; // أجور مدفوعة جزئياً — تذكير بالمتبقي حتى يُسدَّد كاملاً
   if(!DB.workers)  DB.workers=[];
@@ -1392,6 +1396,8 @@ function migrateDB(){
   /* دفتر الأجور المعلّقة: الرصيد يُحسب حصراً من الحركات، ثم نسترجع
      القيود التاريخية التي كانت موجودة في الأسابيع المؤرشفة ولم تصل إلى دفتر المعلّق
      (مثلاً بسبب مزامنة قديمة لم تكن تنقل pendingWages). */
+  normalizeDebtLedger(false);
+  canonicalizeDebtLedger(false);
   normalizePendingWageLedger(false);
   repairPendingWageLedger(false);
   canonicalizePendingWageLedger(false);
@@ -3011,11 +3017,16 @@ function reconcileArchivedWeekFinancialEffects(weekId,entriesWithTotals,previous
     if(target>0){
       let payment=sourcePayments[0];
       if(!payment){
-        payment={date:new Date().toISOString(),amount:target,type:'pay',weekId,weekStart:DB.currentWeek.startDate,sourceEntryId:source.id,note:`تصحيح خصم دين أسبوع ${formatDateAR(DB.currentWeek.startDate)}`};
+        payment={id:'debt_pay_'+source.id,_mod:nextMod(),date:new Date().toISOString(),amount:target,type:'pay',weekId,weekStart:DB.currentWeek.startDate,weekEnd:DB.currentWeek.endDate,sourceEntryId:source.id,note:`تصحيح خصم دين أسبوع ${formatDateAR(DB.currentWeek.startDate)}`};
         debt.dates=Array.isArray(debt.dates)?debt.dates:[];
         debt.dates.push(payment);
       }else{
+        payment.id='debt_pay_'+source.id;
+        payment._mod=nextMod();
         payment.amount=target;
+        payment.weekId=weekId;
+        payment.weekStart=DB.currentWeek.startDate;
+        payment.weekEnd=DB.currentWeek.endDate;
         payment.sourceEntryId=source.id;
         payment.note=`تصحيح خصم دين أسبوع ${formatDateAR(DB.currentWeek.startDate)}`;
         sourcePayments.slice(1).forEach(extra=>{debt.dates.splice(debt.dates.indexOf(extra),1);});
@@ -3146,7 +3157,7 @@ function saveWeek(options={}){
             e.debtDeduction=actualPay;
             const source=cw.entries.find(x=>x.id===e.id); if(source) source.debtDeduction=actualPay;
             d.dates=Array.isArray(d.dates)?d.dates:[];
-            d.dates.push({date:new Date().toISOString(),amount:actualPay,type:'pay',weekId,weekStart:cw.startDate,sourceEntryId:e.id});
+            d.dates.push({id:'debt_pay_'+e.id,_mod:nextMod(),date:new Date().toISOString(),amount:actualPay,type:'pay',weekId,weekStart:cw.startDate,weekEnd:cw.endDate,sourceEntryId:e.id,note:`خصم دين ضمن أسبوع ${formatDateAR(cw.startDate)}`});
             recalculateDebtPaid(d);
           }
         }
@@ -3218,8 +3229,9 @@ function saveWeek(options={}){
 
   /* إذا تم الحفظ داخل مشروع أو تحويله، نربط كل آثار الأسبوع التابعة بنفس المكان. */
   setWeekProjectDeep(weekId,weekData.projectId||null);
-  /* حارس محاسبي: بعد اكتمال حفظ الأسبوع، نوحّد دفتر المعلّق إلى أصل واحد لكل صف
-     ونعيد ربط تسديداته من الأسابيع نفسها قبل أي حفظ/مزامنة. */
+  /* حارس محاسبي: بعد اكتمال حفظ الأسبوع، نعيد بناء خصومات الدين من صفوف الأرشيف
+     ونوحّد دفتر المعلّق قبل أي حفظ/مزامنة. */
+  canonicalizeDebtLedger(true);
   canonicalizePendingWageLedger(true);
 
   const oldRate=cw.overtimeRate;
@@ -3274,14 +3286,15 @@ function openDebtModal(){
     if(!wid||t<=0){ showToast('❌ بيانات ناقصة','error'); return false; }
     const note=document.getElementById('debtNote').value.trim();
     const existing=DB.debts.find(d=>d.workerId===wid);
+    const addMovement={id:'debt_add_'+generateId(),_mod:nextMod(),date:new Date().toISOString(),amount:t,note,type:'add'};
     if(existing){
       existing.total+=t;
       if(inst>0) existing.installment=inst;
       existing.dates=Array.isArray(existing.dates)?existing.dates:[];
-      existing.dates.push({date:new Date().toISOString(),amount:t,note,type:'add'});
+      existing.dates.push(addMovement);
       existing._mod=nextMod();
     } else {
-      DB.debts.push({id:generateId(),workerId:wid,total:t,paid:0,installment:inst,_mod:nextMod(),dates:[{date:new Date().toISOString(),amount:t,note,type:'add'}]});
+      DB.debts.push({id:generateId(),workerId:wid,total:t,paid:0,installment:inst,_mod:nextMod(),dates:[addMovement]});
     }
     saveDB(); renderDebts(); renderWorkers();
     showToast('✅ تم تسجيل الدين');
@@ -3311,8 +3324,9 @@ function addDebtFromWeek(workerId){
     if(amount<=0){ showToast('المبلغ غير صحيح','error'); return false; }
     const note=document.getElementById('newDebtNote').value;
     const existing=DB.debts.find(d=>d.workerId===workerId);
-    if(existing){ existing.total+=amount; if(inst>0)existing.installment=inst; existing.dates=Array.isArray(existing.dates)?existing.dates:[]; existing.dates.push({date:new Date().toISOString(),amount,note,type:'add'}); existing._mod=nextMod(); }
-    else DB.debts.push({id:generateId(),workerId,total:amount,paid:0,installment:inst,_mod:nextMod(),dates:[{date:new Date().toISOString(),amount,note,type:'add'}]});
+    const addMovement={id:'debt_add_'+generateId(),_mod:nextMod(),date:new Date().toISOString(),amount,note,type:'add'};
+    if(existing){ existing.total+=amount; if(inst>0)existing.installment=inst; existing.dates=Array.isArray(existing.dates)?existing.dates:[]; existing.dates.push(addMovement); existing._mod=nextMod(); }
+    else DB.debts.push({id:generateId(),workerId,total:amount,paid:0,installment:inst,_mod:nextMod(),dates:[addMovement]});
     saveDB(); renderWeek(); renderDebts();
     showToast('✅ تم تسجيل الدين');
   });
@@ -3331,7 +3345,7 @@ function editDebtPlan(wid){
     const actualPay=Math.min(pay,remaining);
     if(actualPay>0){
       d.dates=Array.isArray(d.dates)?d.dates:[];
-      d.dates.push({date:new Date().toISOString(),amount:actualPay,note:'تسديد يدوي',type:'pay'});
+      d.dates.push({id:'debt_manual_pay_'+generateId(),_mod:nextMod(),date:new Date().toISOString(),amount:actualPay,note:'تسديد يدوي',type:'pay'});
       recalculateDebtPaid(d);
     }
     d._mod=nextMod();
@@ -3366,19 +3380,43 @@ function getDebtHistoryOperations(debt){
     return {entry:safeEntry,sourceIndex,stamp:formatDebtHistoryStamp(safeEntry.date)};
   }).sort((a,b)=>a.stamp.sort-b.stamp.sort||a.sourceIndex-b.sourceIndex);
 }
+function resolveDebtMovementWeek(entry){
+  if(!entry) return null;
+  if(entry.weekId){
+    const byId=(DB.weeks||[]).find(w=>w.id===entry.weekId);
+    if(byId) return byId;
+  }
+  if(entry.sourceEntryId){
+    const byEntry=(DB.weeks||[]).find(w=>(w.entries||[]).some(e=>e.id===entry.sourceEntryId));
+    if(byEntry) return byEntry;
+  }
+  return null;
+}
 function openDebtHistory(wid){
   const d=(DB.debts||[]).find(x=>x.workerId===wid);
   if(!d){ showToast('سجل الدين غير موجود','error'); return; }
+  canonicalizeDebtLedger(false);
   const w=(DB.workers||[]).find(x=>x.id===wid);
   const rem=Math.max(0,num(d.total)-num(d.paid));
   const operations=getDebtHistoryOperations(d);
+  const addHistoryTotal=operations.filter(row=>row.entry?.type!=='pay').reduce((sum,row)=>sum+Math.max(0,num(row.entry?.amount)),0);
+  const canShowRunning=Math.abs(addHistoryTotal-Math.max(0,num(d.total)))<0.0001;
+  let running=0;
   const historyHTML=operations.length?operations.map((row,index)=>{
     const x=row.entry;
     const isPay=x.type==='pay';
     const amount=Math.max(0,num(x.amount));
+    if(canShowRunning) running=isPay?Math.max(0,running-amount):(running+amount);
     let note=String(x.note||'').trim();
     if(!note&&isPay&&x.weekStart) note=`خصم دين ضمن أسبوع ${formatDateAR(x.weekStart)}`;
     if(!note) note=isPay?'تسديد / قسط':'إضافة دين';
+    const paidWeek=isPay?resolveDebtMovementWeek(x):null;
+    const weekStart=paidWeek?.startDate||x.weekStart||'';
+    const weekEnd=paidWeek?.endDate||x.weekEnd||'';
+    const weekHTML=isPay?(weekStart?`
+      <div class="debt-history-week"><i class="fas fa-calendar-week"></i> <b>أسبوع التسديد:</b> ${formatDateAR(weekStart)}${weekEnd?` → ${formatDateAR(weekEnd)}`:''}</div>`:
+      `<div class="debt-history-week"><i class="fas fa-file-circle-question"></i> <b>التسديد:</b> حركة قديمة/يدوية غير مربوطة بأسبوع محفوظ.</div>`):'';
+    const balanceHTML=canShowRunning?`<div class="debt-history-balance">المتبقي بعد الحركة: <b>${money(running)} دج</b></div>`:'';
     return `<div class="debt-history-item ${isPay?'pay':'add'}">
       <div class="debt-history-head">
         <div class="debt-history-op"><span class="debt-history-seq">#${index+1}</span><span class="debt-history-type">${isPay?'تسديد / قسط':'دين مضاف'}</span></div>
@@ -3388,7 +3426,9 @@ function openDebtHistory(wid){
         <span><i class="fas fa-calendar-day"></i> ${row.stamp.date}</span>
         <span><i class="fas fa-clock"></i> ${row.stamp.time}</span>
       </div>
+      ${weekHTML}
       <div class="debt-history-note">${escapeHTML(note)}</div>
+      ${balanceHTML}
     </div>`;
   }).join(''):`<div class="empty-state" style="padding:24px 12px"><i class="fas fa-clock-rotate-left"></i><h4>لا يوجد تفصيل زمني قديم</h4><p>هذا الدين محفوظ كمجموع فقط، لذلك لن أخمّن تاريخاً أو ساعة غير موجودين في البيانات.</p></div>`;
   const html=`
@@ -3397,9 +3437,9 @@ function openDebtHistory(wid){
       <div class="debt-history-summary-box"><span class="lbl">المسدد</span><span class="val">${money(d.paid)} دج</span></div>
       <div class="debt-history-summary-box"><span class="lbl">المتبقي</span><span class="val">${money(rem)} دج</span></div>
     </div>
-    <div class="text-muted">الترتيب زمني من الأقدم إلى الأحدث.</div>
+    <div class="text-muted">الترتيب زمني من الأقدم إلى الأحدث. كل خصم أسبوعي يبقى مربوطاً بأسبوع التسديد الحقيقي.</div>
     <div class="debt-history-list">${historyHTML}</div>
-    <div class="debt-history-readonly-note"><i class="fas fa-eye"></i> هذا السجل للعرض والتدقيق فقط. الحساب المالي يبقى معتمداً على إجمالي الدين والمسدد والمتبقي الحاليين كما هو.</div>`;
+    <div class="debt-history-readonly-note"><i class="fas fa-eye"></i> هذا السجل للعرض والتدقيق فقط. الحساب المالي يبقى معتمداً على إجمالي الدين والمسدد والمتبقي الحاليين، بينما الأسابيع المؤرشفة تثبت حركات الخصم الأسبوعية.</div>`;
   openModal(`سجل دين العامل: ${escapeHTML(w?.name||'—')}`,html,null);
   const saveBtn=document.getElementById('modalSaveBtn');
   if(saveBtn) saveBtn.remove();
@@ -3427,6 +3467,250 @@ function renderDebts(){
       <td><button class="btn btn-info btn-xs" onclick="openDebtHistory('${d.workerId}')"><i class="fas fa-clock-rotate-left"></i> السجل</button> <button class="btn btn-outline btn-xs" onclick="editDebtPlan('${d.workerId}')"><i class="fas fa-edit"></i></button> <button class="btn btn-danger btn-xs" onclick="deleteDebt('${d.workerId}')"><i class="fas fa-trash"></i></button></td>
     </tr>`;
   }).join('');
+
+}
+
+/* ====================================================
+   سلامة دفتر الديون — خصم أسبوعي واحد لكل صف مؤرشف
+   ==================================================== */
+let _debtLedgerRepairDirty=false;
+const _DEBT_LEDGER_CANONICAL_TAG='v40-week-entry-ledger';
+
+function archivedDebtDeductionAmount(week,entry){
+  const f=week?.financialPosting?.entries?.[entry?.id]||{};
+  if(f.debtDeduction!==undefined) return Math.max(0,num(f.debtDeduction));
+  if(entry?.debtDeduction!==undefined) return Math.max(0,num(entry.debtDeduction));
+  return Math.max(0,num(entry?.parts?.deduction));
+}
+function debtStableKeyHash(value){
+  let h=2166136261;
+  const s=String(value||'');
+  for(let i=0;i<s.length;i++){
+    h^=s.charCodeAt(i);
+    h=Math.imul(h,16777619);
+  }
+  return (h>>>0).toString(36);
+}
+function debtCleanKey(value){ return String(value||'').replace(/[^a-zA-Z0-9_-]/g,'_'); }
+function debtMovementKey(d,workerId=''){
+  const wid=String(workerId||d?.workerId||'');
+  if(d?.type==='pay'){
+    if(d.sourceEntryId) return 'weekly-entry|'+wid+'|'+String(d.sourceEntryId);
+    if(d.weekId) return 'weekly-week|'+wid+'|'+String(d.weekId);
+  }
+  if(d?.id) return 'id|'+String(d.id);
+  return ['legacy',wid,d?.type||'',d?.date||'',Math.max(0,num(d?.amount)),d?.weekId||'',d?.sourceEntryId||'',d?.note||''].join('|');
+}
+function debtPreservedMovementKey(d,workerId=''){
+  const wid=String(workerId||d?.workerId||'');
+  return ['preserved',wid,d?.type||'',d?.date||'',Math.max(0,num(d?.amount)),d?.weekId||'',d?.sourceEntryId||'',d?.note||''].join('|');
+}
+function normalizeDebtRecord(debt,stamp=false){
+  if(!debt) return false;
+  let changed=false;
+  if(!Array.isArray(debt.dates)){ debt.dates=[]; changed=true; }
+  const total=Math.max(0,num(debt.total));
+  const installment=Math.max(0,num(debt.installment));
+  if(num(debt.total)!==total){ debt.total=total; changed=true; }
+  if(num(debt.installment)!==installment){ debt.installment=installment; changed=true; }
+  debt.dates=debt.dates.filter(d=>d&&typeof d==='object').map(d=>{
+    if(d.amount===undefined||d.amount===null||num(d.amount)<0){ d.amount=Math.max(0,num(d.amount)); changed=true; }
+    if(d.type!=='pay'&&d.type!=='add'){ d.type='add'; changed=true; }
+    return d;
+  });
+  const payRows=debt.dates.filter(d=>d.type==='pay');
+  const rawPaid=Math.max(0,payRows.reduce((sum,d)=>sum+Math.max(0,num(d.amount)),0));
+  const legacyPaidFloor=payRows.length?0:Math.max(0,num(debt.paid));
+  const paid=Math.min(total,Math.max(rawPaid,legacyPaidFloor));
+  if(num(debt.paid)!==paid){ debt.paid=paid; changed=true; }
+  if(stamp&&changed) debt._mod=nextMod();
+  return changed;
+}
+function normalizeDebtLedger(stamp=false){
+  let changed=false;
+  (DB.debts||[]).forEach(debt=>{ if(normalizeDebtRecord(debt,stamp)) changed=true; });
+  return changed;
+}
+function canonicalizeDebtLedger(stamp=true){
+  if(!Array.isArray(DB.debts)) DB.debts=[];
+  const validDate=(v)=>Number.isFinite(Date.parse(v||''));
+  const addMap=(map,key,value)=>{ if(!map.has(key)) map.set(key,[]); map.get(key).push(value); };
+  const weeklyByWorker=new Map();
+
+  [...(DB.weeks||[])].sort((a,b)=>String(a?.startDate||'').localeCompare(String(b?.startDate||''))||String(a?.id||'').localeCompare(String(b?.id||''))).forEach(week=>{
+    (week?.entries||[]).forEach((entry,entryIndex)=>{
+      if(!entry?.id||!entry.workerId) return;
+      const amount=archivedDebtDeductionAmount(week,entry);
+      if(amount<=0) return;
+      addMap(weeklyByWorker,entry.workerId,{
+        key:'entry|'+String(entry.workerId)+'|'+String(entry.id),
+        workerId:entry.workerId,amount,week,entry,entryIndex,
+        weekId:week.id,weekStart:week.startDate||'',weekEnd:week.endDate||''
+      });
+    });
+  });
+
+  let changedCount=0;
+  (DB.debts||[]).forEach(debt=>{
+    if(!debt||!debt.workerId) return;
+    if(!Array.isArray(debt.dates)) debt.dates=[];
+    const before=JSON.stringify({total:debt.total,paid:debt.paid,installment:debt.installment,dates:debt.dates});
+    const oldPaid=Math.min(Math.max(0,num(debt.total)),Math.max(0,num(debt.paid)));
+    const oldDates=debt.dates.filter(d=>d&&typeof d==='object');
+    const events=(weeklyByWorker.get(debt.workerId)||[]).slice().sort((a,b)=>
+      String(a.weekStart||'').localeCompare(String(b.weekStart||''))||
+      String(a.weekId||'').localeCompare(String(b.weekId||''))||
+      (a.entryIndex-b.entryIndex)||
+      String(a.entry.id).localeCompare(String(b.entry.id))
+    );
+    const byEntry=new Map(events.map(ev=>[String(ev.entry.id),ev]));
+    const byWeek=new Map();
+    events.forEach(ev=>addMap(byWeek,String(ev.weekId),ev));
+    const matchedRows=new Map();
+    const preservedMap=new Map();
+
+    oldDates.forEach(row=>{
+      if(String(row?.id||'').startsWith('debt_legacy_paid_floor_')) return;
+      let event=null;
+      if(row.type==='pay'&&row.sourceEntryId) event=byEntry.get(String(row.sourceEntryId))||null;
+      if(!event&&row.type==='pay'&&row.weekId){
+        const list=byWeek.get(String(row.weekId))||[];
+        if(list.length===1) event=list[0];
+      }
+      if(event){
+        addMap(matchedRows,event.key,row);
+        return;
+      }
+      const copy={...row,amount:Math.max(0,num(row.amount))};
+      const pkey=debtPreservedMovementKey(copy,debt.workerId);
+      const current=preservedMap.get(pkey);
+      const candidateRank=[+copy._mod||0,Date.parse(copy.date||'')||0,String(copy.id||'')];
+      const currentRank=current?[+current._mod||0,Date.parse(current.date||'')||0,String(current.id||'')]:null;
+      let prefer=!current;
+      if(currentRank){
+        for(let i=0;i<candidateRank.length;i++){
+          if(candidateRank[i]===currentRank[i]) continue;
+          prefer=candidateRank[i]>currentRank[i];
+          break;
+        }
+      }
+      if(prefer){
+        if(!copy.id){
+          const prefix=copy.type==='pay'?'debt_pay_legacy_':'debt_add_legacy_';
+          copy.id=prefix+debtStableKeyHash(pkey);
+        }
+        preservedMap.set(pkey,copy);
+      }
+    });
+
+    const nextDates=[...preservedMap.values()];
+    events.forEach(ev=>{
+      const rows=(matchedRows.get(ev.key)||[]).slice();
+      const dated=rows.filter(r=>validDate(r?.date)).sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));
+      const firstDate=dated[0]?.date;
+      const fallbackDay=ev.weekEnd||ev.weekStart||'1970-01-01';
+      const date=firstDate||(ev.week?.archivedAt)||new Date(`${fallbackDay}T12:00:00`).toISOString();
+      const noteRow=rows.find(r=>String(r?.note||'').trim());
+      const maxRowMod=Math.max(0,...rows.map(r=>+r?._mod||0),+ev.week?._mod||0);
+      nextDates.push({
+        id:'debt_pay_'+debtCleanKey(ev.entry.id),
+        _mod:maxRowMod,
+        date,
+        amount:Math.max(0,num(ev.amount)),
+        note:String(noteRow?.note||`خصم دين ضمن أسبوع ${formatDateAR(ev.weekStart)}`),
+        type:'pay',
+        weekId:ev.weekId,
+        weekStart:ev.weekStart,
+        weekEnd:ev.weekEnd,
+        sourceEntryId:ev.entry.id
+      });
+    });
+
+    let paidFromRows=Math.max(0,nextDates.filter(d=>d?.type==='pay').reduce((sum,d)=>sum+Math.max(0,num(d.amount)),0));
+    if(paidFromRows<oldPaid){
+      const diff=Math.min(Math.max(0,num(debt.total))-paidFromRows,oldPaid-paidFromRows);
+      if(diff>0){
+        nextDates.push({
+          id:'debt_legacy_paid_floor_'+debtCleanKey(debt.id),
+          _mod:+debt._mod||0,
+          date:'',
+          amount:diff,
+          note:'تسديد قديم محفوظ كمجموع دون أسبوع أو تاريخ تفصيلي',
+          type:'pay'
+        });
+        paidFromRows+=diff;
+      }
+    }
+
+    nextDates.sort((a,b)=>{
+      const ad=validDate(a?.date)?Date.parse(a.date):Number.MAX_SAFE_INTEGER;
+      const bd=validDate(b?.date)?Date.parse(b.date):Number.MAX_SAFE_INTEGER;
+      return ad-bd||String(a?.weekStart||'').localeCompare(String(b?.weekStart||''))||String(a?.id||'').localeCompare(String(b?.id||''));
+    });
+    debt.dates=nextDates;
+    debt.paid=Math.min(Math.max(0,num(debt.total)),Math.max(0,paidFromRows));
+    const after=JSON.stringify({total:debt.total,paid:debt.paid,installment:debt.installment,dates:debt.dates});
+    if(before!==after){
+      changedCount++;
+      if(stamp) debt._mod=nextMod();
+      _debtLedgerRepairDirty=true;
+    }
+  });
+  return changedCount;
+}
+
+function _mergeDebts(remoteArr,delSet){
+  let changed=0;
+  if(!Array.isArray(DB.debts)) DB.debts=[];
+  const byId={};
+  DB.debts.forEach(d=>{ if(d&&d.id) byId[d.id]=d; });
+
+  (remoteArr||[]).forEach(remote=>{
+    if(!remote||!remote.id||delSet.has(String(remote.id))) return;
+    const local=byId[remote.id];
+    if(!local){
+      DB.debts.push(remote);
+      byId[remote.id]=remote;
+      normalizeDebtRecord(remote,false);
+      changed++;
+      return;
+    }
+    const localMod=+local._mod||0;
+    const remoteMod=+remote._mod||0;
+    const preferred=remoteMod>localMod?remote:local;
+    const before=JSON.stringify({total:local.total,paid:local.paid,installment:local.installment,dates:local.dates,_mod:local._mod});
+    const movementMap=new Map();
+    const addRows=(rows,parentMod)=>{
+      (Array.isArray(rows)?rows:[]).forEach(row=>{
+        if(!row||typeof row!=='object') return;
+        const key=debtMovementKey(row,preferred.workerId||local.workerId||remote.workerId);
+        const candidate={row,parentMod:+parentMod||0};
+        const current=movementMap.get(key);
+        const rank=(item)=>[+item?.row?._mod||0,+item?.parentMod||0,Date.parse(item?.row?.date||'')||0,String(item?.row?.id||'')];
+        const a=rank(candidate),b=rank(current);
+        let prefer=!current;
+        if(current){
+          for(let i=0;i<a.length;i++){
+            if(a[i]===b[i]) continue;
+            prefer=a[i]>b[i];
+            break;
+          }
+        }
+        if(prefer) movementMap.set(key,candidate);
+      });
+    };
+    addRows(local.dates,localMod);
+    addRows(remote.dates,remoteMod);
+    Object.assign(local,preferred);
+    local.dates=[...movementMap.values()].map(x=>({...x.row}));
+    local._mod=Math.max(localMod,remoteMod);
+    normalizeDebtRecord(local,false);
+    const after=JSON.stringify({total:local.total,paid:local.paid,installment:local.installment,dates:local.dates,_mod:local._mod});
+    if(before!==after) changed++;
+  });
+
+  if(canonicalizeDebtLedger(false)) changed++;
+  return changed;
 }
 
 /* ====================================================
@@ -4254,7 +4538,14 @@ function renderArchive(){
     </tr>`;
   }).join('');
 }
-function recalculateDebtPaid(debt){const payments=(debt.dates||[]).filter(x=>x.type==='pay').reduce((s,x)=>s+num(x.amount),0);debt.paid=Math.min(num(debt.total),Math.max(0,payments));debt._mod=nextMod();}
+function recalculateDebtPaid(debt,stamp=true){
+  if(!debt) return 0;
+  debt.dates=Array.isArray(debt.dates)?debt.dates:[];
+  const payments=debt.dates.filter(x=>x&&x.type==='pay').reduce((s,x)=>s+Math.max(0,num(x.amount)),0);
+  debt.paid=Math.min(Math.max(0,num(debt.total)),Math.max(0,payments));
+  if(stamp) debt._mod=nextMod();
+  return debt.paid;
+}
 function deleteWeek(id){
   const w=DB.weeks.find(x=>x.id===id);if(!w)return;
   const createdPending=(DB.pendingWages||[]).filter(pw=>pw.weekId===id);
@@ -4264,7 +4555,7 @@ function deleteWeek(id){
   confirmDelete(`أسبوع ${formatDateAR(w.startDate)}`,()=>{
     (DB.debts||[]).forEach(d=>{const before=(d.dates||[]).length;d.dates=(d.dates||[]).filter(x=>!(x.type==='pay'&&x.weekId===id));if(d.dates.length!==before)recalculateDebtPaid(d);});
     (DB.pendingWages||[]).forEach(pw=>{const removed=(pw.dates||[]).filter(x=>x.type==='pay'&&x.paidByWeekId===id);if(removed.length){pw.dates=pw.dates.filter(x=>!(x.type==='pay'&&x.paidByWeekId===id));recalculatePendingWagePaid(pw);}});
-    moveToTrash('week',w,`أسبوع ${formatDateAR(w.startDate)}`);_markDeleted(id);DB.pendingWages=(DB.pendingWages||[]).filter(pw=>pw.weekId!==id);DB.weeks=DB.weeks.filter(x=>x.id!==id);canonicalizePendingWageLedger(true);saveDB();renderArchive();renderProjectWeeks();renderDebts();renderPendingWages();loadDashboard();
+    moveToTrash('week',w,`أسبوع ${formatDateAR(w.startDate)}`);_markDeleted(id);DB.pendingWages=(DB.pendingWages||[]).filter(pw=>pw.weekId!==id);DB.weeks=DB.weeks.filter(x=>x.id!==id);canonicalizeDebtLedger(true);canonicalizePendingWageLedger(true);saveDB();renderArchive();renderProjectWeeks();renderDebts();renderPendingWages();loadDashboard();
   });
 }
 
@@ -4876,6 +5167,8 @@ function restoreFromTrash(tid){
       if(!DB.users.find(u=>u.id===item.id)) DB.users.push(item);
       renderUsers(); break;
   }
+  if(t.type==='week'){ canonicalizeDebtLedger(true); canonicalizePendingWageLedger(true); }
+  else if(t.type==='debt'){ canonicalizeDebtLedger(true); }
   DB.trash=DB.trash.filter(x=>x.id!==tid);
   saveDB(); renderTrash();
   showToast('✅ تمت الاستعادة: '+t.displayName);
@@ -5607,15 +5900,8 @@ function mergeRemote(d){
   _applyDeletions(DB.deletedIds);
   // 3) السجلات المستقلة: الأحدث (_mod) يغلب والجديد يُضاف
   ['workers','projects','users','weeks'].forEach(k=>{added+=_mergeNewest(k,d[k],del);});
-  // 4) الديون: الأحدث يغلب، وإلا النسخة ذات الحركات الأكثر
-  if(!Array.isArray(DB.debts))DB.debts=[];
-  (d.debts||[]).forEach(x=>{
-    if(!x||!x.id||del.has(String(x.id)))return;
-    const loc=DB.debts.find(e=>e.id===x.id);
-    if(!loc){DB.debts.push(x);added++;}
-    else if((+x._mod||0)>(+loc._mod||0)){Object.assign(loc,x);added++;}
-    else if((x.dates||[]).length>(loc.dates||[]).length){loc.dates=x.dates;loc.total=x.total;loc.paid=x.paid;loc.installment=x.installment;added++;}
-  });
+  // 4) الديون: دمج حركات السجل ثم إعادة مطابقة الخصومات مع صفوف الأسابيع المؤرشفة.
+  added+=_mergeDebts(d.debts,del);
   // 5) دفتر الأجر المعلّق: السجل + حركات التسديد، لا يجوز إسقاطه عند المزامنة.
   added+=_mergePendingWages(d.pendingWages,del);
   // 6) الأسبوع الحالي: سجل واحد — "الأحدث يغلب بالكامل" (يمنع خلط الهاتف/الحاسوب)
@@ -5677,11 +5963,12 @@ function applyRemote(remote){
     n=mergeRemote(remote);
     if(remote.syncedAt)DB.settings.cloudRemoteStamp=remote.syncedAt;
     try{migrateDB();}catch(e){}
-    repairNeedsPush=!!_pendingLedgerRepairDirty;
+    repairNeedsPush=!!(_pendingLedgerRepairDirty||_debtLedgerRepairDirty);
     saveDB();                                                    // _cloudApplying=true ⇒ لا يجدول رفعاً
   }finally{_cloudApplying=false;}
   if(repairNeedsPush){
     _pendingLedgerRepairDirty=false;
+    _debtLedgerRepairDirty=false;
     _cloudDirty=true;
     try{schedulePush();}catch(e){}
   }
@@ -5735,7 +6022,7 @@ async function cloudSync(manual){
     const stamp=new Date().toISOString();
     const up=await fetch(cfg.endpoint,{method:'PUT',headers:{'Content-Type':'application/json'},body:_cloudPayload(stamp)});
     if(!up.ok)throw new Error('رفع HTTP '+up.status);
-    _lastPushStamp=stamp;DB.settings.cloudRemoteStamp=stamp;_cloudDirty=false;_pendingLedgerRepairDirty=false;
+    _lastPushStamp=stamp;DB.settings.cloudRemoteStamp=stamp;_cloudDirty=false;_pendingLedgerRepairDirty=false;_debtLedgerRepairDirty=false;
     const now=_fullStamp(new Date());
     DB.settings.cloudLastSync=now;
     _cloudApplying=true;saveDB();_cloudApplying=false;
