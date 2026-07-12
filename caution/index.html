@@ -152,6 +152,46 @@ header{
 .stat.closed b{color:var(--text-dim);}
 .stat.active.late b, .stat.active.soon b, .stat.active.ontime b, .stat.active.incomplete b, .stat.active.closed b, .stat.active b{color:#ffffff !important;}
 
+/* ===== Financial summary ===== */
+.financial-summary{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  padding:10px 12px 2px;
+}
+.money-stat{
+  background:var(--card2);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:12px 10px;
+  min-width:0;
+}
+.money-stat b{
+  display:block;
+  color:var(--text-dim);
+  font-size:12.5px;
+  font-weight:500;
+  line-height:1.45;
+  margin-bottom:7px;
+}
+.money-stat strong{
+  display:block;
+  color:var(--gold-soft);
+  font-family:'Cinzel','IBM Plex Sans Arabic',sans-serif;
+  font-size:17px;
+  line-height:1.45;
+  overflow-wrap:anywhere;
+}
+.money-stat small{
+  display:block;
+  color:var(--text-dim);
+  font-size:11.5px;
+  margin-top:5px;
+}
+@media(max-width:390px){
+  .financial-summary{grid-template-columns:1fr;}
+}
+
 /* ===== Filter pills ===== */
 .filters{
   display:flex;gap:6px;padding:14px 12px 4px;overflow-x:auto;
@@ -489,6 +529,8 @@ header{
 
 <div class="stats" id="statsBar"></div>
 
+<div class="financial-summary" id="financialSummary"></div>
+
 <div id="listRoot"></div>
 
 <button class="fab" id="fabAdd" aria-label="إضافة مشروع">+</button>
@@ -620,6 +662,7 @@ const FB_SAVEDAT_URL = `${FB_BASE}/${FB_PATH}/savedAt.json`;
 const FB_SSE_URL = `${FB_BASE}/${FB_PATH}/savedAt.json`;
 
 const LS_KEY = "egtph_kafala_istilam_v1";
+const GUARANTEE_RATE = 0.05;
 
 /* ---------- State ---------- */
 let DB = {
@@ -933,6 +976,7 @@ function getAllActiveProjects(){
 
 function render(){
   renderStats();
+  renderFinancialSummary();
   renderList();
   // عند فتح البرنامج من لوحة EGTPH، أرسل فقط ملخّص التنبيهات المشتقّة.
   try{ scheduleCautionDashboardAlerts(); }catch(e){}
@@ -971,6 +1015,34 @@ function renderStats(){
       renderList();
     });
   });
+}
+
+function renderFinancialSummary(){
+  const all = getAllActiveProjects();
+  const pendingFinalProjects = all.filter(p => !p.finallyReceived);
+  const outstandingGuarantees = all.filter(p => !p.guaranteeReturned);
+
+  const pendingFinalAmount = pendingFinalProjects.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  const outstandingGuaranteeAmount = outstandingGuarantees.reduce(
+    (sum, p) => sum + ((Number(p.amount) || 0) * GUARANTEE_RATE),
+    0
+  );
+
+  const container = document.getElementById('financialSummary');
+  if(!container) return;
+
+  container.innerHTML = `
+    <div class="money-stat">
+      <b>مجموع مبالغ المشاريع غير المستلمة نهائياً</b>
+      <strong>${fmtMoney(pendingFinalAmount)}</strong>
+      <small>${pendingFinalProjects.length} مشروع</small>
+    </div>
+    <div class="money-stat">
+      <b>مجموع الكفالات البنكية غير المسترجعة</b>
+      <strong>${fmtMoney(outstandingGuaranteeAmount)}</strong>
+      <small>${outstandingGuarantees.length} كفالة قائمة</small>
+    </div>
+  `;
 }
 
 function renderList(){
@@ -1061,7 +1133,7 @@ async function shareProject(id){
     p.commune ? `البلدية: ${p.commune}` : null,
     p.marketNum ? `رقم الصفقة: ${p.marketNum}` : null,
     `مبلغ الصفقة: ${fmtMoney(p.amount)}`,
-    `الكفالة البنكية (5%): ${fmtMoney((p.amount||0)*0.05)}`,
+    `الكفالة البنكية (5%): ${fmtMoney((p.amount||0)* GUARANTEE_RATE)}`,
     `تاريخ الاستلام المؤقت: ${fmtDate(p.dateProv)}`,
     `تاريخ الاستلام النهائي: ${fmtDate(p.dateFinal)}`,
     `الحالة: ${STATUS_LABEL[status]||''}`,
@@ -1121,7 +1193,7 @@ function renderCard(p){
     <table class="info-table">
       <tr>
         <td><b>مبلغ الصفقة</b><span>${fmtMoney(p.amount)}</span></td>
-        <td><b>الكفالة البنكية (5%)</b><span class="gold">${fmtMoney(p.amount*0.05)}</span></td>
+        <td><b>الكفالة البنكية (5%)</b><span class="gold">${fmtMoney(p.amount* GUARANTEE_RATE)}</span></td>
       </tr>
       <tr>
         <td><b>تاريخ الاستلام المؤقت</b><span>${fmtDate(p.dateProv)}</span></td>
@@ -1270,7 +1342,7 @@ document.getElementById('exportExcelBtn').addEventListener('click', ()=>{
     "البلدية": p.commune||'',
     "رقم الصفقة": p.marketNum||'',
     "مبلغ الصفقة (دج)": p.amount||0,
-    "الكفالة البنكية 5% (دج)": (p.amount||0)*0.05,
+    "الكفالة البنكية 5% (دج)": (p.amount||0)* GUARANTEE_RATE,
     "تاريخ الاستلام المؤقت": p.dateProv||'',
     "تاريخ الاستلام النهائي": p.dateFinal||'',
     "تم الاستلام النهائي": p.finallyReceived ? "نعم" : "لا",
@@ -1295,7 +1367,7 @@ document.getElementById('exportPdfBtn').addEventListener('click', ()=>{
       <td>${escapeHtml(p.commune||'')}</td>
       <td>${escapeHtml(p.marketNum||'')}</td>
       <td>${fmtMoney(p.amount)}</td>
-      <td>${fmtMoney((p.amount||0)*0.05)}</td>
+      <td>${fmtMoney((p.amount||0)* GUARANTEE_RATE)}</td>
       <td>${fmtDate(p.dateProv)}</td>
       <td>${fmtDate(p.dateFinal)}</td>
       <td>${STATUS_LABEL[computeStatus(p)] || ''}</td>
@@ -1518,7 +1590,7 @@ document.getElementById('f_dateProv').addEventListener('change', ()=>{
 });
 function updateGuaranteePreview(){
   const amount = parseFloat(document.getElementById('f_amount').value) || 0;
-  document.getElementById('guaranteePreview').textContent = fmtMoney(amount*0.05);
+  document.getElementById('guaranteePreview').textContent = fmtMoney(amount* GUARANTEE_RATE);
 }
 
 /* ---------- حفظ مشترك: يُستعمل عند الضغط على "حفظ المشروع" وأيضاً عند الخروج من أي خانة ---------- */
@@ -1907,7 +1979,7 @@ function cautionGuaranteeReturnAlert(project){
   const open = !!(due && due.open && project && !project.guaranteeReturned);
   let title = '', message = '';
   if(open){
-    const guarantee = fmtMoney((Number(project.amount) || 0) * 0.05);
+    const guarantee = fmtMoney((Number(project.amount) || 0) * GUARANTEE_RATE);
     title = due.remaining < 0 ? 'استرجاع كفالة بنكية متأخر' : 'استرجاع كفالة بنكية قريب';
     message = cautionProjectLabel(project) + ' — الكفالة: ' + guarantee + ' · تاريخ المتابعة: ' + fmtDate(due.date) + ' · ' + due.wording + '.';
   }
