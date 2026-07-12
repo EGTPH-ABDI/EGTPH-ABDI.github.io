@@ -224,7 +224,7 @@
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes" name="viewport"/>
-<title>EGTPH — سجل الأجور v189</title>
+<title>EGTPH — سجل الأجور v190</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -1135,7 +1135,7 @@ body{background:linear-gradient(145deg,#f2f7f4 0%,#fbfdfc 42%,#eef7f1 100%);}
 }
 @media screen and (max-width:900px){.twrap thead th,.sec table thead th{font-size:11.2px!important;padding:10px 8px!important}.twrap tbody td,.sec table tbody td{font-size:11px!important;padding:10px 8px!important;line-height:1.65!important}#page-settlement .twrap table{min-width:1120px!important}}
 </style>
-<meta content="v189-idempotent-replay-sync-final" name="egtph-build"/>
+<meta content="v190-stale-conflicts-auto-cleanup" name="egtph-build"/>
 <style id="egtph-v176-night-theme">
 /* v176 — ثيم ثانٍ فقط: ليلي أخضر متناسق. الأبيض يبقى الافتراضي. */
 body.egtph-theme-night{
@@ -1523,7 +1523,7 @@ body.egtph-theme-night .egtph-table-viewport::-webkit-scrollbar-thumb{
 <div class="" id="toast" style="">✅ تم تنزيل نسخة كاملة: ملف HTML يحتوي البرنامج وكل البيانات الحالية</div>
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div class="topbar">
-<div class="tlogo">EGTPH <span>| سجل الأجور v189</span></div>
+<div class="tlogo">EGTPH <span>| سجل الأجور v190</span></div>
 <div id="autoSv" style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--gray)">
 <span class="auto-save-dot" id="saveDot"></span>
 <span id="saveLabel">—</span>
@@ -9707,6 +9707,29 @@ async function request(url,opt){const o=Object.assign({},opt||{});o.cache='no-st
 function nextIndex(node){let max=-1;rawEntries(node).forEach(([k])=>{const n=Number(k);if(Number.isInteger(n)&&n>=0)max=Math.max(max,n);});return String(max+1);}
 function conflict(kind,path,key,op,remote){return {kind,path,recordKey:key||path,base:clone(op&&op.before),local:clone(op&&op.after),remote:clone(remote),message:kind==='id-collision'?'نفس المعرّف موجود بقيمة مختلفة في السحابة':'تم تعديل نفس القيد في جهاز آخر بعد آخر جلب'};}
 async function writeConflictRecords(items,t,txId){const now=new Date().toISOString(),ids=[];for(let i=0;i<items.length;i++){const base=txId+'|'+DEVICE+'|'+String(items[i].path||'')+'|'+String(items[i].recordKey||'');const id='cf_'+hash(base);const rec=Object.assign({id,status:'open',txId,deviceId:DEVICE,detectedAt:now,source:SOURCE},items[i]);const r=await request(endpoint('syncConflicts/'+id,t),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)});if(!r.ok)throw new Error('تعذر تسجيل التعارض '+id+' HTTP '+r.status);ids.push(id);}currentConflicts=items.map((x,i)=>Object.assign({id:ids[i],status:'open',txId,deviceId:DEVICE},x));return ids;}
+
+function conflictAlreadySatisfiedByCloud(item,cloudRaw){
+  if(!item||item.status!=='open'||!item.path)return false;
+  const path=String(item.path);
+  const local=item.local;
+
+  if(path==='undoJournal'||path.includes('/')){
+    const remoteMap=listMap(getAt(cloudRaw,path),path);
+    const got=remoteMap[String(item.recordKey||'')]&&
+      remoteMap[String(item.recordKey||'')].record;
+    return !!got&&local!==undefined&&equivalentListRecord(path,got,local);
+  }
+
+  return local!==undefined&&equivalent(getAt(cloudRaw,path),local);
+}
+
+async function closeCloudSatisfiedConflictWitnesses(cloudRaw,items){
+  const rows=(items||[]).filter(item=>conflictAlreadySatisfiedByCloud(item,cloudRaw));
+  if(!rows.length)return 0;
+  await markConflictResolution('cloud-already-satisfies-local',rows);
+  return rows.length;
+}
+
 async function markConflictResolution(mode,items){const rows=(items||currentConflicts).filter(c=>c&&c.id);if(!rows.length)return true;const t=await token();for(const c of rows){const rec=Object.assign({},c,{status:'resolved',resolution:{mode,resolvedAt:new Date().toISOString(),deviceId:DEVICE}});const r=await request(endpoint('syncConflicts/'+c.id,t),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)});if(!r.ok)throw new Error('تعذر تثبيت حل التعارض '+c.id+' HTTP '+r.status);}return true;}
 function addUpdate(updates,path,value){updates[String(path).replace(/^\/+/, '')]=clone(value);}
 
@@ -9932,15 +9955,229 @@ function pendingCount(){const p=loadOutbox();return p?countPatch(p):0;}
 function setPanel(mode,msg){const p=panel();if(!p)return;const h=document.getElementById('v170SyncHeadline'),b=document.getElementById('v170SyncBadge');if(h)h.textContent=msg||'';if(b){b.textContent=mode==='ok'?'متزامن':mode==='saving'?'جارٍ الحفظ':mode==='conflict'?'تعارض':mode==='error'?'خطأ':'انتظار';b.className='v170-badge '+mode;}const q=document.getElementById('v170Pending'),c=document.getElementById('v170Conflicts'),oc=document.getElementById('v172OwnedConflicts'),fp=document.getElementById('v172CloudFingerprint'),mt=document.getElementById('v172CloudMatch'),lv=document.getElementById('v170LastVerified'),lp=document.getElementById('v170LastPull'),le=document.getElementById('v170LastError');if(q)q.textContent=String(pendingCount());if(c)c.textContent=String(diag.openConflicts||allOpenConflicts.length||0);if(oc)oc.textContent=String(currentConflicts.length||0);if(fp)fp.textContent=String(diag.cloudFingerprint||'—');if(mt){mt.textContent=diag.cloudMatch===true?'✅ متطابق':diag.cloudMatch===false?'⚠️ غير متطابق':'جارٍ الفحص…';mt.style.color=diag.cloudMatch===true?'#166534':diag.cloudMatch===false?'#b45309':'';}if(lv)lv.textContent=fmtTime(lastSavedAt||diag.lastSavedAt);if(lp)lp.textContent=fmtTime(lastPullAt||diag.lastPullAt);if(le)le.textContent=lastError||diag.lastError||'لا يوجد';p.dataset.state=mode;}
 function status(msg,color,mode){try{if(typeof _cloudStatus==='function')_cloudStatus(msg,color);}catch(e){}setPanel(mode||'wait',msg);}
 async function refreshHealth(showToast){
-  await ensureOutboxReady();try{const t=await token();const [cr,meta,receipt,rootResp]=await Promise.all([request(endpoint('syncConflicts',t)),request(endpoint('syncMeta/lastVerified',t)),request(endpoint('syncReceipts/'+DEVICE+'/last',t)),request(endpoint('',t))]);if(!cr.ok)throw new Error('فحص التعارضات HTTP '+cr.status);if(!rootResp.ok)throw new Error('فحص النسخة السحابية HTTP '+rootResp.status);const all=await cr.json()||{};allOpenConflicts=Object.values(all).filter(x=>x&&x.status==='open');const pending=loadOutbox();currentConflicts=allOpenConflicts.filter(x=>x.deviceId===DEVICE&&(!pending||x.txId===pending.txId));diag.openConflicts=allOpenConflicts.length;diag.ownedConflicts=currentConflicts.length;const m=meta.ok?await meta.json():null,rr=receipt.ok?await receipt.json():null,cloudRaw=await rootResp.json();if(!cloudRaw||typeof cloudRaw!=='object')throw new Error('نسخة Firebase المرجعية غير مكتملة');if(m&&m.verifiedAt)lastSavedAt=m.verifiedAt;const cloudFp=dataFingerprint(cloudRaw),localFp=dataFingerprint(DB),baseFp=baseline?dataFingerprint(baseline):null,localDirty=!!baseline&&localFp!==baseFp;let received=false,match=cloudFp===localFp;
-  if(!pending&&!localDirty&&!match){_applyDBData(_v169SanitizeCloud(cloudRaw));window.__EGTPH_DB_READY__=true;window.__EGTPH_DB_READY_SOURCE__=SOURCE;baseline=clone(DB);lastPullAt=new Date().toISOString();diag.lastPullAt=lastPullAt;renderAll();received=true;match=dataFingerprint(DB)===cloudFp;}
-  diag.cloudFingerprint=cloudFp;diag.localFingerprint=dataFingerprint(DB);diag.cloudMatch=match;diag.localDirty=localDirty;diag.lastSavedAt=lastSavedAt||diag.lastSavedAt;diag.lastPullAt=lastPullAt||diag.lastPullAt;
-  if(!pending&&!localDirty&&match){lastError=null;diag.lastError='';}else if(localDirty&&!pending){lastError='توجد تغييرات محلية لم تمر بمحرك الحفظ؛ لم تُرفع ولم تُستبدل';diag.lastError=lastError;}else if(!pending&&!match){lastError='تعذر مطابقة بيانات الجهاز مع Firebase';diag.lastError=lastError;}
-  saveDiag(diag);const mode=currentConflicts.length?'conflict':lastError?'error':pendingCount()?'saving':'ok';const msg=currentConflicts.length?'⚠️ توجد تعارضات تخص العملية الحالية؛ لم تُستبدل أي نسخة تلقائياً':localDirty&&!pending?'🔴 تغييرات محلية غير موثقة؛ أُوقف الجلب لحمايتها':received&&match?'🟢 استُقبلت تغييرات الأجهزة الأخرى وأصبحت البيانات متطابقة':allOpenConflicts.length?'🟡 البيانات متطابقة لهذا الجهاز، وتوجد '+allOpenConflicts.length+' تعارضات مفتوحة لأجهزة أخرى':pendingCount()?'⏳ توجد تغييرات معلقة لم يثبت رفعها بعد':match?'🟢 Firebase والجهاز متطابقان بالكامل؛ لا تغييرات معلقة':'⚠️ بيانات الجهاز لا تطابق Firebase';setPanel(mode,msg);if(showToast)originalToast(msg,currentConflicts.length||lastError?true:undefined);return {ok:match&&!currentConflicts.length&&!lastError&&!pendingCount(),match,received,openConflicts:allOpenConflicts.length,ownedConflicts:currentConflicts.length,pending:pendingCount(),lastSavedAt,lastPullAt,lastError,cloudFingerprint:cloudFp,localFingerprint:diag.localFingerprint};}catch(e){lastError=String(e&&e.message||e);diag.lastError=lastError;diag.lastErrorAt=new Date().toISOString();diag.cloudMatch=false;saveDiag(diag);setPanel('error','🔴 فشل فحص المزامنة: '+lastError);if(showToast)originalToast('❌ فشل فحص المزامنة: '+lastError,true);return {ok:false,error:lastError};}}
+  await ensureOutboxReady();
+
+  try{
+    const t=await token();
+    const [cr,meta,receipt,rootResp]=await Promise.all([
+      request(endpoint('syncConflicts',t)),
+      request(endpoint('syncMeta/lastVerified',t)),
+      request(endpoint('syncReceipts/'+DEVICE+'/last',t)),
+      request(endpoint('',t))
+    ]);
+
+    if(!cr.ok)throw new Error('فحص التعارضات HTTP '+cr.status);
+    if(!rootResp.ok)throw new Error('فحص النسخة السحابية HTTP '+rootResp.status);
+
+    const all=await cr.json()||{};
+    allOpenConflicts=Object.values(all).filter(x=>x&&x.status==='open');
+
+    const pending=loadOutbox();
+    const m=meta.ok?await meta.json():null;
+    const rr=receipt.ok?await receipt.json():null;
+    const cloudRaw=await rootResp.json();
+
+    if(!cloudRaw||typeof cloudRaw!=='object'){
+      throw new Error('نسخة Firebase المرجعية غير مكتملة');
+    }
+
+    // الشاهد القديم ليس تعارضاً إذا كانت القيمة التي طلبها الجهاز موجودة بالفعل محاسبياً في السحابة.
+    // هذا يعالج حالة نفس التسبيق الموزع الذي ثبت ثم بقيت سجلات تعارض قديمة مفتوحة.
+    let autoClosedSatisfied=0;
+    if(allOpenConflicts.length){
+      autoClosedSatisfied=await closeCloudSatisfiedConflictWitnesses(
+        cloudRaw,
+        allOpenConflicts
+      );
+      if(autoClosedSatisfied){
+        allOpenConflicts=allOpenConflicts.filter(
+          item=>!conflictAlreadySatisfiedByCloud(item,cloudRaw)
+        );
+      }
+    }
+
+    currentConflicts=allOpenConflicts.filter(
+      x=>x.deviceId===DEVICE&&(!pending||x.txId===pending.txId)
+    );
+
+    diag.openConflicts=allOpenConflicts.length;
+    diag.ownedConflicts=currentConflicts.length;
+
+    if(m&&m.verifiedAt)lastSavedAt=m.verifiedAt;
+
+    const cloudFp=dataFingerprint(cloudRaw);
+    const localFp=dataFingerprint(DB);
+    const baseFp=baseline?dataFingerprint(baseline):null;
+    const localDirty=!!baseline&&localFp!==baseFp;
+    let received=false;
+    let match=cloudFp===localFp;
+
+    if(!pending&&!localDirty&&!match){
+      _applyDBData(_v169SanitizeCloud(cloudRaw));
+      window.__EGTPH_DB_READY__=true;
+      window.__EGTPH_DB_READY_SOURCE__=SOURCE;
+      baseline=clone(DB);
+      lastPullAt=new Date().toISOString();
+      diag.lastPullAt=lastPullAt;
+      renderAll();
+      received=true;
+      match=dataFingerprint(DB)===cloudFp;
+    }
+
+    diag.cloudFingerprint=cloudFp;
+    diag.localFingerprint=dataFingerprint(DB);
+    diag.cloudMatch=match;
+    diag.localDirty=localDirty;
+    diag.lastSavedAt=lastSavedAt||diag.lastSavedAt;
+    diag.lastPullAt=lastPullAt||diag.lastPullAt;
+
+    if(!pending&&!localDirty&&match){
+      lastError=null;
+      diag.lastError='';
+    }else if(localDirty&&!pending){
+      lastError='توجد تغييرات محلية لم تمر بمحرك الحفظ؛ لم تُرفع ولم تُستبدل';
+      diag.lastError=lastError;
+    }else if(!pending&&!match){
+      lastError='تعذر مطابقة بيانات الجهاز مع Firebase';
+      diag.lastError=lastError;
+    }
+
+    saveDiag(diag);
+
+    const mode=currentConflicts.length
+      ?'conflict'
+      :lastError
+        ?'error'
+        :pendingCount()
+          ?'saving'
+          :'ok';
+
+    const msg=currentConflicts.length
+      ?'⚠️ توجد تعارضات تخص العملية الحالية؛ لم تُستبدل أي نسخة تلقائياً'
+      :localDirty&&!pending
+        ?'🔴 تغييرات محلية غير موثقة؛ أُوقف الجلب لحمايتها'
+        :autoClosedSatisfied
+          ?'🟢 أُغلقت '+autoClosedSatisfied+' سجلات تعارض قديمة لأن نفس القيد المحاسبي موجود بالفعل في السحابة'
+          :received&&match
+            ?'🟢 استُقبلت تغييرات الأجهزة الأخرى وأصبحت البيانات متطابقة'
+            :allOpenConflicts.length
+              ?'🟡 توجد '+allOpenConflicts.length+' تعارضات مفتوحة لأجهزة أخرى'
+              :pendingCount()
+                ?'⏳ توجد تغييرات معلقة لم يثبت رفعها بعد'
+                :match
+                  ?'🟢 Firebase والجهاز متطابقان بالكامل؛ لا تغييرات معلقة'
+                  :'⚠️ بيانات الجهاز لا تطابق Firebase';
+
+    setPanel(mode,msg);
+
+    if(showToast){
+      originalToast(msg,currentConflicts.length||lastError?true:undefined);
+    }
+
+    return {
+      ok:match&&!currentConflicts.length&&!lastError&&!pendingCount(),
+      match,
+      received,
+      autoClosedSatisfied,
+      openConflicts:allOpenConflicts.length,
+      ownedConflicts:currentConflicts.length,
+      pending:pendingCount(),
+      lastSavedAt,
+      lastPullAt,
+      lastError,
+      cloudFingerprint:cloudFp,
+      localFingerprint:diag.localFingerprint
+    };
+  }catch(e){
+    lastError=String(e&&e.message||e);
+    diag.lastError=lastError;
+    diag.lastErrorAt=new Date().toISOString();
+    diag.cloudMatch=false;
+    saveDiag(diag);
+    setPanel('error','🔴 فشل فحص المزامنة: '+lastError);
+    if(showToast)originalToast('❌ فشل فحص المزامنة: '+lastError,true);
+    return {ok:false,error:lastError};
+  }
+}
 function ensureConflictModal(){let m=document.getElementById('v170ConflictModal');if(m)return m;m=document.createElement('div');m.id='v170ConflictModal';m.innerHTML='<div class="v170-conf-card"><h3>⚠️ تعارضات المزامنة</h3><div id="v170ConflictList"></div><div class="v170-conf-actions"><button data-act="remote">اعتماد نسخة السحابة وإلغاء التعديل المعلق</button><button data-act="local" class="warn">اعتماد نسخة هذا الجهاز بعد التأكيد</button><button data-act="close" class="plain">إغلاق</button></div></div>';document.body.appendChild(m);m.querySelector('[data-act="close"]').onclick=()=>m.style.display='none';m.querySelector('[data-act="remote"]').onclick=acceptRemote;m.querySelector('[data-act="local"]').onclick=forceLocal;return m;}
-function showConflicts(){const m=ensureConflictModal(),box=document.getElementById('v170ConflictList');const rows=currentConflicts.length?currentConflicts:(allOpenConflicts.length?allOpenConflicts:[{message:'لا توجد تعارضات مفتوحة.'}]);box.innerHTML=rows.map(c=>'<div class="v170-conf-row"><b>'+String(c.path||'')+' — '+String(c.recordKey||'')+'</b><p>'+String(c.message||'')+'</p><small>معرّف التعارض: '+String(c.id||'—')+'</small></div>').join('');m.style.display='flex';}
+async function showConflicts(){
+  await refreshHealth(false);
+
+  const modal=ensureConflictModal();
+  const box=document.getElementById('v170ConflictList');
+  const remoteButton=modal.querySelector('[data-act="remote"]');
+  const localButton=modal.querySelector('[data-act="local"]');
+
+  const hasCurrent=currentConflicts.length>0;
+  const rows=hasCurrent
+    ?currentConflicts
+    :(allOpenConflicts.length
+      ?allOpenConflicts
+      :[]);
+
+  if(remoteButton)remoteButton.style.display=hasCurrent?'':'none';
+  if(localButton)localButton.style.display=hasCurrent?'':'none';
+
+  if(!rows.length){
+    box.innerHTML=
+      '<div class="v170-conf-row">'+
+      '<b>✅ لا توجد تعارضات مفتوحة</b>'+
+      '<p>لا توجد عملية معلقة أو شاهد تعارض يحتاج قراراً من هذا الجهاز.</p>'+
+      '</div>';
+  }else{
+    const intro=hasCurrent
+      ?'<div class="v170-conf-row"><b>⚠️ تعارضات العملية الحالية</b><p>يمكن اعتماد السحابة أو نسخة هذا الجهاز بعد المراجعة.</p></div>'
+      :'<div class="v170-conf-row"><b>ℹ️ تعارضات تخص أجهزة أخرى</b><p>تُعرض للمراجعة فقط من هذا الجهاز؛ لا توجد عملية محلية معلقة مرتبطة بها.</p></div>';
+
+    box.innerHTML=intro+rows.map(c=>
+      '<div class="v170-conf-row">'+
+      '<b>'+String(c.path||'')+' — '+String(c.recordKey||'')+'</b>'+
+      '<p>'+String(c.message||'')+'</p>'+
+      '<small>معرّف التعارض: '+String(c.id||'—')+'</small>'+
+      '</div>'
+    ).join('');
+  }
+
+  modal.style.display='flex';
+}
 async function acceptRemote(){
-  await ensureOutboxReady();if(!currentConflicts.length){originalToast('لا توجد تعارضات تخص العملية الحالية',true);return;}if(!confirm('سيتم إلغاء التعديل المحلي المعلق واعتماد نسخة Firebase. هل أنت متأكد؟'))return;await markConflictResolution('remote',currentConflicts);await clearOutbox();queued=false;running=false;lastError=null;currentConflicts=[];rollbackSnapshot=null;uiPending=false;hideGate();const m=document.getElementById('v170ConflictModal');if(m)m.style.display='none';await pullRoot();originalToast('✅ تم اعتماد نسخة السحابة وإلغاء التعديل المتعارض');}
+  await ensureOutboxReady();
+
+  if(!currentConflicts.length){
+    const modal=document.getElementById('v170ConflictModal');
+    if(modal)modal.style.display='none';
+    const health=await refreshHealth(false);
+    originalToast(
+      health&&health.openConflicts
+        ?'ℹ️ لا توجد عملية محلية معلقة تخص هذه التعارضات؛ هي سجلات لأجهزة أخرى'
+        :'✅ لا توجد تعارضات تخص عملية معلقة، والجهاز متطابق مع Firebase'
+    );
+    return true;
+  }
+
+  if(!confirm(
+    'سيتم إلغاء التعديل المحلي المعلق واعتماد نسخة Firebase. هل أنت متأكد؟'
+  ))return false;
+
+  await markConflictResolution('remote',currentConflicts);
+  await clearOutbox();
+
+  queued=false;
+  running=false;
+  lastError=null;
+  currentConflicts=[];
+  rollbackSnapshot=null;
+  uiPending=false;
+  hideGate();
+
+  const modal=document.getElementById('v170ConflictModal');
+  if(modal)modal.style.display='none';
+
+  await pullRoot();
+  await refreshHealth(false);
+  originalToast('✅ تم اعتماد نسخة السحابة وإلغاء التعديل المتعارض');
+  return true;
+}
 async function forceLocal(){
   await ensureOutboxReady();if(!confirm('سيتم اعتماد تعديل هذا الجهاز يدوياً فوق النسخة المتعارضة. هذا ليس اختياراً تلقائياً. متابعة؟'))return;const p=loadOutbox();if(!p){originalToast('لا توجد عملية معلقة',true);return;}const resolving=clone(currentConflicts);p.force=true;await saveOutbox(p);const m=document.getElementById('v170ConflictModal');if(m)m.style.display='none';lastError=null;queued=true;const ok=await flush();if(ok&&resolving.length){try{await markConflictResolution('local-forced',resolving);await refreshHealth(false);}catch(e){lastError=String(e&&e.message||e);diag.lastError=lastError;saveDiag(diag);setPanel('error','🔴 تم حفظ القيد لكن تعذر إغلاق شاهد التعارض: '+lastError);originalToast('⚠️ حُفظ التعديل، لكن تعذر تحديث حالة التعارض: '+lastError,true);}}}
 const originalToast=window.toast,originalCloseModal=window.closeModal;
@@ -10823,8 +11060,8 @@ const EGTPH_SYNC_API={version:'175.0-surgical-sync-undo',source:SOURCE,root:ROOT
 (function(){
   'use strict';
   window.__EGTPH_V175_SURGICAL__=true;
-  window.__EGTPH_V175_BUILD__='v189-idempotent-replay-sync-final';
-  try{document.title='EGTPH — سجل الأجور v189';}catch(e){}
+  window.__EGTPH_V175_BUILD__='v190-stale-conflicts-auto-cleanup';
+  try{document.title='EGTPH — سجل الأجور v190';}catch(e){}
 })();
 </script>
 
