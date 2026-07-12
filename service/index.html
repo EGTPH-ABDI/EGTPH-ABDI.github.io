@@ -300,6 +300,12 @@ footer{text-align:center;font-size:10px;color:var(--muted);padding:16px 12px 4px
 .catalog-source{font-size:9.5px;color:var(--muted);line-height:1.35;margin-top:3px;}
 .catalog-total{font-family:'Saira';font-weight:800;color:var(--gold-dk);}
 .catalog-empty{padding:12px;text-align:center;color:var(--muted);font-size:12px;border:1px dashed var(--line);border-radius:10px;}
+.source-grid{display:grid;gap:8px;}
+.source-card{border:1px solid var(--line);border-radius:11px;padding:9px 10px;background:#fff;}
+.source-card .source-name{font-size:12.5px;font-weight:900;color:var(--ink);}
+.source-card .source-scope{font-size:10.5px;color:var(--muted);line-height:1.55;margin:3px 0 7px;}
+.source-card a{display:inline-block;border:1px solid var(--gold);border-radius:8px;padding:5px 9px;color:var(--gold-dk);font-size:10.5px;font-weight:800;text-decoration:none;}
+.source-badge{display:inline-block;font-size:9px;font-weight:800;border-radius:20px;padding:1px 7px;background:rgba(26,122,71,.1);color:var(--ok);margin-inline-start:5px;}
 .catalog-form .logrow{margin-bottom:10px;}
 .catalog-form textarea{width:100%;min-height:70px;resize:vertical;padding:9px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;box-sizing:border-box;font-family:inherit;background:#fff;color:var(--ink);-webkit-text-fill-color:var(--ink);}
 .catalog-form select{width:100%;padding:9px;border:1.5px solid var(--line);border-radius:10px;font-family:inherit;font-size:14px;background:#fff;color:var(--ink);}
@@ -398,7 +404,7 @@ footer{text-align:center;font-size:10px;color:var(--muted);padding:16px 12px 4px
         <div id="optBox"></div>
 
         <div class="card"><div class="card-h"><span class="ic">🛢️</span><div><h2>التغييرات والفلاتر</h2><div class="fr">Vidanges & filtres — suivi</div></div></div><div id="estBanner"></div><div id="items"></div>
-          <div style="text-align:center;padding:8px 0 4px"><button class="calcbtn" style="margin:0" onclick="openLog()">🧾 سجّل صيانة الآن · Enregistrer un entretien</button></div></div>
+          <div style="display:flex;gap:8px;padding:8px 10px 4px"><button class="calcbtn" style="margin:0;flex:1;width:auto" onclick="logReadingOnly()">📈 سجّل قراءة العدّاد</button><button class="calcbtn" style="margin:0;flex:1;width:auto" onclick="openLog()">🧾 سجّل صيانة الآن</button></div></div>
 
         <div class="card"><details class="acc"><summary><span>📋</span><div>تذكيرات دورية<div class="fr">Rappels périodiques</div></div><span class="arr">▾</span></summary><div class="card-b" id="remRef"></div></details></div>
       </div>
@@ -410,7 +416,7 @@ footer{text-align:center;font-size:10px;color:var(--muted);padding:16px 12px 4px
       </div>
 
       <div class="tabpane" data-pane="hist" style="display:none">
-        <div style="text-align:center;padding:4px 0 10px"><button class="calcbtn" style="margin:0" onclick="openLog()">🧾 سجّل صيانة الآن · Enregistrer un entretien</button></div>
+        <div style="display:flex;gap:8px;padding:4px 0 10px"><button class="calcbtn" style="margin:0;flex:1;width:auto" onclick="logReadingOnly()">📈 سجّل قراءة العدّاد</button><button class="calcbtn" style="margin:0;flex:1;width:auto" onclick="openLog()">🧾 سجّل صيانة الآن</button></div>
         <div class="card"><details class="acc" open><summary><span>📜</span><div>سجلّ الصيانة<div class="fr">Historique d'entretien</div></div><span class="arr">▾</span></summary><div class="card-b" style="padding:10px;"><div id="histRef"></div></div></details></div>
       </div>
 
@@ -437,6 +443,7 @@ footer{text-align:center;font-size:10px;color:var(--muted);padding:16px 12px 4px
       </div>
 
       <div class="tabpane" data-pane="ref" style="display:none">
+        <div class="card"><details class="acc" open><summary><span>🛡️</span><div>المصادر الرسمية الموثوقة<div class="fr">Sources constructeur · EPC / pièces</div></div><span class="arr">▾</span></summary><div class="card-b" style="padding:10px;"><div id="trustedSourcesRef"></div></div></details></div>
         <div class="card"><details class="acc" open><summary><span>🧰</span><div>الفلاتر — المراجع<div class="fr">Les filtres · réf.</div></div><span class="arr">▾</span></summary><div class="card-b" style="padding:10px;"><div id="filtersRef"></div></div></details></div>
         <div class="card"><details class="acc"><summary><span>⛽</span><div>الزيوت + البدائل<div class="fr">Lubrifiants · réf.</div></div><span class="arr">▾</span></summary><div class="card-b" style="padding:10px;"><div id="oilsRef"></div></div></details></div>
         <div class="card"><details class="acc"><summary><span>📖</span><div>شرح الزيوت والمواصفات<div class="fr">Comprendre les huiles · 15W-40, API…</div></div><span class="arr">▾</span></summary><div class="card-b" style="padding:10px;"><div id="oilGuide"></div></div></details></div>
@@ -502,7 +509,7 @@ const ENGINES={truck:'WP10.290E32 · 290 ch · Euro II',jmc:'JMC JX493ZQ4A · 68
 
 /* identité */
 const TRUCK_INFO=[['Marque','SHACMAN'],['Type','Dump Truck 6×4'],['Modèle','F2000 · SX3255JM384'],['Moteur','WP10.290E32 · 290 ch · Euro II'],['Boîte','Fast 9JS135 + QH50'],['Pont AV','MAN 7.5 T'],['Pont AR','STR16 · 2×16 T'],['Pneus','12R22.5 (10+1)'],['Pression','≈ 8.0–8.3 bar (max 830 kPa)'],['Réservoir','380 L'],['Benne','5200×2300×1350 mm'],['Année','2026'],['Origine','Chine']];
-function jmcInfo(i){return [['Marque','JMC / Jiangling Motors Corporation LTD'],['Type','JMC Dump Truck 4×2 · double cabine'],['Modèle certificat','CLW5042ZXJX2'],['Modèle commercial','JMC Carrying/Light dump 4×2'],['Moteur','JX493ZQ4A · 4 cylindres diesel · 2771 cc · 68 kW / 92 HP · Euro II'],['Transmission','Boîte manuelle 5F/1R'],['VIN',i.vin||'LEFYFCC23SHN09912'],['N° moteur',i.engno||'S2005638'],['Certificat No.','CK00007123 · issue 2025-02-13'],['PI fournisseur','24MQ1118MN037 · 2024-11-18 · Qingdao Transauto'],['Couleur','White'],['Pneus certificat','6.50R15 · 10PR · 6 roues'],['Pneus PI fournisseur','6.50R16 · à vérifier sur la roue avant achat'],['Empattement','2800 mm'],['Dimensions certificat','5460×2030×2315 mm'],['Dimensions PI','6000×2100×2300 mm'],['Benne PI','2800×1800×300 mm'],['GVW','4500 kg'],['Poids à vide','2900 kg'],['Places','5'],['Source','Certificat de conformité + Proforma Invoice + sources JMC/JX493ZQ4A publiques. Les références OEM filtres restent à confirmer par VIN/ancien filtre/agent JMC.']];}
+function jmcInfo(i){return [['Marque','JMC / Jiangling Motors Corporation LTD'],['Type','JMC Dump Truck 4×2 · double cabine'],['Modèle certificat','CLW5042ZXJX2'],['Modèle commercial','JMC Carrying/Light dump 4×2'],['Moteur','JX493ZQ4A · 4 cylindres diesel · 2771 cc · 68 kW / 92 HP · Euro II'],['Transmission','Boîte manuelle 5F/1R'],['VIN',i.vin||'غير مسجل'],['N° moteur',i.engno||'غير مسجل'],['Certificat No.','CK00007123 · issue 2025-02-13'],['PI fournisseur','24MQ1118MN037 · 2024-11-18 · Qingdao Transauto'],['Couleur','White'],['Pneus certificat','6.50R15 · 10PR · 6 roues'],['Pneus PI fournisseur','6.50R16 · à vérifier sur la roue avant achat'],['Empattement','2800 mm'],['Dimensions certificat','5460×2030×2315 mm'],['Dimensions PI','6000×2100×2300 mm'],['Benne PI','2800×1800×300 mm'],['GVW','4500 kg'],['Poids à vide','2900 kg'],['Places','5'],['Source','Certificat de conformité + Proforma Invoice + sources JMC/JX493ZQ4A publiques. Les références OEM filtres restent à confirmer par VIN/ancien filtre/agent JMC.']];}
 function excInfo(i){return [['Modèle','HX220HD'],['Type','Pelle sur chenilles'],['Moteur','Cummins 6BTAA-5.9 · 110 kW'],['PIN',i.pin],['N° moteur',i.engno],['Année',i.year],['Masse',i.mass],['Équipement','Godet 60 cm + brise-roche'],['Fournisseur','Jinan Kamac']];}
 function loadInfo(i,mc){const model=lovolLoaderVariant(mc)==='FL936F'?'FL936F':'FL936H';return [['Modèle',model],['Type','Chargeur sur pneus'],['Moteur',(mc&&mc.eng)||'Weichai WP6G125E22 · 92 kW'],['PIN',i.pin],['N° moteur',i.engno],['Année',i.year],['Masse',i.mass],['Charge nom.',i.charge],['Dimensions',i.dim],['Fournisseur','Jinan Kamac']];}
 function jcbInfo(i){return [['Marque','JCB'],['Type','Backhoe Loader'],['Modèle','3CX Sitemaster'],['N° série',i.serial],['Moteur','JCB Dieselmax 68 kW · Tier 3'],['Homologation','96R-010456'],['Année',i.year],['Masse',i.mass],['Réservoir','160 L'],['Hydraulique','130 L'],['Transmission','Syncro Shuttle (manuelle)'],['Frigorigène','R134a · 1.35 kg'],['Origine','Royaume-Uni']];}
@@ -731,6 +738,9 @@ function migrate(){let ch=false;
     });
     if(stageHx220hdBreatherOem(mc))ch=true;
     if(ensureMachineSyncMeta(mc))ch=true;
+    if(normalizeExplicitReadings(mc))ch=true;
+    const beforeDone=JSON.stringify(mc.done||{});recomputeDone(mc);if(beforeDone!==JSON.stringify(mc.done||{}))ch=true;
+    if(recomputeCurrentMeter(mc,false))ch=true;
   });
   if(ensureSettingsSyncMeta())ch=true;
   // لا تُعاد إضافة آلات محذوفة تلقائياً؛ ولا يُنشأ كتالوج مخصص قبل أول تعديل يدوي.
@@ -743,6 +753,17 @@ const DIRTY_MACHINES_KEY='egtph_parc_dirty_machines_v5';
 const DEVICE_ID_KEY='egtph_parc_device_id_v4';
 const MACHINE_META_KEYS=new Set(['history','readings','conditionHistory','done','catalog','_deletedHistory','_deletedReadings','_deletedAirf','_deletedCatalogPurchases','_fieldMods','_mod','_rev','_device','_dirty','_lastChange']);
 let _lastMod=0,_serverOffset=0,_serverOffsetAt=0;
+// لا نحسب التنبيهات التشغيلية من نسخة محلية قديمة عند بداية التشغيل.
+// أولاً تتم مصالحة السحابة (إن كانت المزامنة التلقائية والإنترنت متاحين)، ثم تظهر الحالات.
+let _initialCloudReconciled=false,_startupCheckBusy=false;
+function alertsCanCompute(){
+  try{return _initialCloudReconciled||!navigator.onLine||!fbAuto();}catch(e){return true;}
+}
+function finishInitialAlertReconcile(){
+  _initialCloudReconciled=true;
+  try{safeRender();}catch(e){}
+  try{scheduleMaintenanceDashboardAlerts();}catch(e){}
+}
 let _machineSnapshots=new Map(),_settingsSnapshot=new Map();
 function getDeviceId(){
   try{
@@ -832,6 +853,16 @@ function switchDiag(btn,which){
 
 /* ---- مكتبة احترافية مدمجة: قوالب عتاد + سيارات + شاحنات ---- */
 const TRUSTED_SOURCE_NOTE='OEM لا يُعتمد نهائياً إلا من دليل المصنع أو EPC بالـ VIN/Serial؛ البرنامج يمنع اختراع أرقام قطع غير مؤكدة.';
+const TRUSTED_PARTS_SOURCES=[
+  {id:'cummins',types:['exc'],name:'Cummins QuickServe / Genuine Parts',scope:'كتالوج قطع ودليل خدمة حسب Engine Serial Number لمحركات Cummins. استعمل رقم المحرك قبل اعتماد فلتر أو OEM.',url:'https://quickserve.cummins.com/'},
+  {id:'cummins_parts',types:['exc'],name:'Genuine Cummins Parts',scope:'كتالوج Cummins/Fleetguard الرسمي؛ البحث بالـ Engine Serial Number أو Part Number.',url:'https://parts.cummins.com/'},
+  {id:'jcb',types:['jcb'],name:'JCB Genuine Parts',scope:'متجر وكتالوج قطع JCB الأصلي. اختر الآلة/السيريال ثم Filters & Fluids؛ لا تعتمد تشابه الشكل.',url:'https://parts.jcb.com/'},
+  {id:'hyundai_parts',types:['exc'],name:'HD Hyundai CE — Genuine Parts',scope:'بوابة قطع Hyundai الأصلية وخدمة After Market الرسمية. للشراء النهائي طابق PIN/Serial عبر شبكة القطع أو الوكيل.',url:'https://www.hyundai-ce.com/en/overview/parts/contents'},
+  {id:'hyundai_hx220',types:['exc'],name:'HD Hyundai CE — HX220HD',scope:'صفحة المصنع الرسمية للموديل HX220HD ومواصفاته. مرجع للموديل؛ رقم OEM النهائي يثبت بالـPIN/شبكة القطع.',url:'https://www.hyundai-ce.com/en/products/view?productsSeq=531'},
+  {id:'shacman_parts',types:['truck'],name:'SHACMAN — Parts & Accessory',scope:'مصدر SHACMAN الرسمي لقطع الغيار والدعم. في الجزائر توجد شبكة خدمة وقطع رسمية؛ اطلب المطابقة برقم الشاسيه.',url:'https://www.shacman.com/services/part-accessory'},
+  {id:'shacman_dz',types:['truck'],name:'SHACMAN Algeria — Service & Parts',scope:'صفحة شبكة SHACMAN الرسمية في الجزائر: محطات الخدمة ومراكز/متاجر القطع.',url:'https://www.global.shacman.com/algeria'},
+  {id:'jmc',types:['jmc'],name:'JMCG Official',scope:'المصدر الرسمي لـJMCG. لم أعتمد EPC عامّاً للـVIN داخل البرنامج؛ أرقام JMC النهائية يجب تأكيدها عبر خدمة/موزع JMC أو الفلتر القديم.',url:'https://www.jmcg-global.com/'}
+];
 const GENERIC_CAR_ITEMS=[{id:'eng',engineOil:true,ar:'زيت المحرك + فلتر الزيت',fr:'Huile moteur + filtre',spec:'حسب دفتر السيارة / API-ACEA مناسب'},{id:'airf',interval:15000,ar:'فلتر الهواء',fr:'Filtre à air',cap:'غبار chantier: أبكر'},{id:'cabinf',interval:15000,ar:'فلتر المكيف / المقصورة',fr:'Filtre habitacle'},{id:'fuelf',interval:30000,ar:'فلتر الوقود إن وجد',fr:'Filtre carburant'},{id:'brakefluid',interval:24,months:true,ar:'سائل الفرامل',fr:'Liquide de frein',spec:'DOT4 غالباً'},{id:'coolant',interval:24,months:true,ar:'السائل المبرّد',fr:'Liquide refroidissement'},{id:'gearbox',interval:60000,ar:'زيت علبة السرعة',fr:'Huile boîte',spec:'حسب نوع العلبة فقط'}];
 const GENERIC_LIGHT_TRUCK_ITEMS=[{id:'eng',engineOil:true,ar:'زيت المحرك + فلتر الزيت',fr:'Huile moteur + filtre',spec:'ديزل 15W-40 أو حسب الدفتر'},{id:'fuelf',interval:10000,ar:'فلتر الوقود',fr:'Filtre gasoil'},{id:'airf',interval:10000,ar:'فلتر الهواء',fr:'Filtre à air'},{id:'gearbox',interval:40000,ar:'زيت علبة السرعة',fr:'Huile boîte'},{id:'axles',interval:40000,ar:'زيت الجسور',fr:'Huile ponts',spec:'GL-5 غالباً'},{id:'brakefluid',interval:24,months:true,ar:'سائل الفرامل',fr:'Liquide de frein'},{id:'coolant',interval:24,months:true,ar:'السائل المبرّد',fr:'Refroidissement'}];
 const GENERIC_MACHINE_ITEMS=[{id:'eng',engineOil:true,ar:'زيت المحرك + فلتر الزيت',fr:'Huile moteur + filtre',spec:'15W-40 CI-4 غالباً'},{id:'fuelf',interval:500,ar:'فلتر الوقود',fr:'Filtre gasoil'},{id:'airf',interval:500,ar:'فلتر الهواء',fr:'Filtre à air'},{id:'hydf',interval:1000,ar:'فلاتر الهيدروليك',fr:'Filtres hydrauliques'},{id:'hydoil',interval:2000,ar:'الزيت الهيدروليكي',fr:'Huile hydraulique',spec:'ISO VG 46/68'},{id:'gear',interval:1000,ar:'زيوت التروس/المخفضات',fr:'Réducteurs'},{id:'coolant',interval:2000,ar:'السائل المبرّد',fr:'Refroidissement'}];
@@ -883,7 +914,7 @@ async function loadFleetLibraryCloud(force){
   try{
     if(typeof FB_URL==='undefined'||typeof FB_BASE==='undefined'||!navigator.onLine)return false;
     const auth=(typeof EGTPHAuth!=='undefined'&&EGTPHAuth.authParam)?FB_AUTH_PARAM():'';
-    const r=await fetch(FB_URL+FB_BASE+'/fleetLibrary.json'+auth,{cache:'no-store'});
+    const r=await fetch(FB_URL+FB_LIBRARY_BASE+'.json'+auth,{cache:'no-store'});
     if(!r.ok)return false;
     const lib=await r.json();
     mergeFleetLibrary(lib);
@@ -955,13 +986,24 @@ function stageHx220hdBreatherOem(mc){
   return true;
 }
 function filtersFor(mc){return catalogRows(mc,'filters').map(r=>[r.ar||'',r.fr||'',r.oem||'',r.cross||'']);}
+function trustedSourcesFor(mc){
+  const type=mc&&mc.type;
+  return TRUSTED_PARTS_SOURCES.filter(x=>Array.isArray(x.types)&&x.types.includes(type));
+}
+function renderTrustedSources(mc){
+  const el=document.getElementById('trustedSourcesRef');if(!el)return;
+  const rows=trustedSourcesFor(mc);
+  if(!rows.length){el.innerHTML='<div class="note" style="margin:0">لا يوجد EPC عام موثوق مدمج لهذا القالب. اعتمد VIN/Serial ودليل المصنع أو الوكيل؛ البرنامج لن يولّد OEM بالتخمين.</div>';return;}
+  el.innerHTML='<div class="note" style="margin:0 0 8px"><b>قاعدة الاعتماد:</b> المصدر الرسمي بالـVIN/Serial أو Engine Serial Number يتقدم على أي cross-reference تجاري داخل البرنامج.</div><div class="source-grid">'+rows.map(x=>'<div class="source-card"><div class="source-name">'+esc(x.name)+'<span class="source-badge">رسمي</span></div><div class="source-scope">'+esc(x.scope)+'</div><a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">فتح المصدر الرسمي ↗</a></div>').join('')+'</div>';
+}
 function oilsFor(mc){return catalogRows(mc,'oils').map(r=>[r.ar||'',r.fr||'',r.spec||'',r.suggestions||'']);}
 function buysFor(mc){return catalogRows(mc,'purchases').map(r=>[r.ref||'',r.designation||'',r.qty||'',r.unitPrice||'',r.supplier||'']);}
 function recordSource(row){return textOnly(row&&row.source||'');}
+function filterTrust(row){const t=[row&&row.oem,row&&row.cross,row&&row.source].map(textOnly).join(' ');if(/🟢|مؤكّد|مؤكد|من فاتورتك|من العلبة الأصلية|دليل Lovol/i.test(t))return ['موثّق داخلياً','ok'];if(/🟡|مرجّح|مرجح|لم يثبت|حسب المركّب|اقرأ الرقم|أكّد|تأكد|قيد التحقق/i.test(t))return ['يحتاج تأكيد','warn'];return ['مرجع مسجّل','base'];}
 function rowButton(kind,id,label,extra){return '<button class="catalog-btn '+(extra||'')+'" onclick="openCatalogModal(\''+kind+'\',\'edit\',\''+id+'\')">'+label+'</button>';}
 function renderFiltersRef(mc){
   const rows=catalogRows(mc,'filters');
-  const body=rows.length?'<table class="otable"><thead><tr><th>القطعة</th><th>المرجع الأصلي (OEM)</th><th>المراجع التجارية</th><th>إجراء</th></tr></thead><tbody>'+rows.map(r=>'<tr><td class="fl">'+esc(r.ar)+'<div class="fr">'+esc(r.fr)+'</div>'+(recordSource(r)?'<div class="catalog-source">المصدر: '+esc(recordSource(r))+'</div>':'')+'</td><td class="ref ltr">'+esc(r.oem||'غير محدّد')+'</td><td class="sg">'+esc(r.cross||'—')+'</td><td><div class="catalog-actions">'+rowButton('filters',r.id,'✎ تعديل')+'</div></td></tr>').join('')+'</tbody></table>':'<div class="catalog-empty">لا مراجع مسجلة.</div>';
+  const body=rows.length?'<table class="otable"><thead><tr><th>القطعة</th><th>المرجع الأصلي (OEM)</th><th>المراجع التجارية</th><th>إجراء</th></tr></thead><tbody>'+rows.map(r=>{const tr=filterTrust(r);return '<tr><td class="fl">'+esc(r.ar)+'<div class="fr">'+esc(r.fr)+'</div><span class="hist-tag">'+esc(tr[0])+'</span>'+(recordSource(r)?'<div class="catalog-source">المصدر: '+esc(recordSource(r))+'</div>':'')+'</td><td class="ref ltr">'+esc(r.oem||'غير محدّد')+'</td><td class="sg">'+esc(r.cross||'—')+'</td><td><div class="catalog-actions">'+rowButton('filters',r.id,'✎ تعديل')+'</div></td></tr>';}).join('')+'</tbody></table>':'<div class="catalog-empty">لا مراجع مسجلة.</div>';
   const note='<div class="note">'+(mc.type==='loader'&&lovolLoaderVariant(mc)==='FL936F'?'⚠️ FL936F: لا تعتمد مراجع FL936H إلا إذا طابقت رقم القطعة القديمة أو EPC/Serial. ':'')+'المراجع التجارية معادلات فقط. قبل الشراء: طابق رقم OEM أو الدفتر/القطعة القديمة، والأبعاد، واللولب والحلقة. الإدخال اليدوي لا يصبح «مؤكداً» إلا عند تدوين مصدره.</div>';
   const box=document.getElementById('filtersRef');if(box)box.innerHTML='<div class="catalog-toolbar"><div class="note">يمكنك إضافة قطعة جديدة أو تعديل رقم OEM الموجود دون تغيير قاعدة بقية الآلات.</div><button class="catalog-btn primary" onclick="openCatalogModal(\'filters\',\'add\')">＋ إضافة OEM / قطعة</button></div>'+body+note;
 }
@@ -1066,12 +1108,22 @@ function renderOilGuide(){
 }
 function infoFor(mc){if(mc.profileInfo)return mc.profileInfo.concat(mc.info&&mc.info.vin?[['VIN',mc.info.vin]]:[]); return mc.type==='truck'?TRUCK_INFO:mc.type==='jmc'?jmcInfo(mc.info||{}):mc.type==='loader'?loadInfo(mc.info||{},mc):mc.type==='jcb'?jcbInfo(mc.info||{}):(mc.type==='car'||mc.type==='truck2'||mc.type==='exc2'?[['Type',mc.type],['Moteur',mc.engine||''],['Source',mc.sourceLevel||'VIN requis'],['Note',mc.sourceNote||'']].concat(mc.info&&mc.info.vin?[['VIN',mc.info.vin]]:[]):excInfo(mc.info||{}));}
 function unit(mc){return mc.unit||(isRoadType(mc.type)?'km':'h');}
-function todayISO(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function todayISO(){
+  const d=new Date(serverNow());
+  try{
+    const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Algiers',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);
+    const v={};parts.forEach(x=>{if(x.type!=='literal')v[x.type]=x.value;});
+    if(v.year&&v.month&&v.day)return v.year+'-'+v.month+'-'+v.day;
+  }catch(e){}
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 
 // ── تواريخ مساعدة (تُستعمل في محرّك التنبيهات التلقائي) ──
 function _parseISO(s){if(!/^\d{4}-\d{2}-\d{2}$/.test(String(s||'')))return null;const p=String(s).split('-').map(Number),y=p[0],m=p[1],d0=p[2];if(y<1900||m<1||m>12||d0<1||d0>31)return null;const d=new Date(y,m-1,d0);if(isNaN(d)||d.getFullYear()!==y||d.getMonth()!==m-1||d.getDate()!==d0)return null;return d;}
 function validISODate(s){return !!_parseISO(s);}
 function requireISODate(s){if(validISODate(s))return String(s);alert('التاريخ غير صالح. استعمل الصيغة YYYY-MM-DD، مثلاً 2026-07-11.');return null;}
+function requireOperationalDate(s){const d=requireISODate(s);if(!d)return null;if(d>todayISO()){alert('لا يمكن تسجيل قراءة أو صيانة منجزة بتاريخ مستقبلي. التاريخ الأقصى هو اليوم: '+todayISO());return null;}return d;}
+function isOperationalDate(s){return validISODate(s)&&String(s)<=todayISO();}
 function addMonthsISO(dateISO,months){const d=_parseISO(dateISO);if(!d)return null;const n=Math.trunc(Number(months)||0);const day=d.getDate();const first=new Date(d.getFullYear(),d.getMonth()+n,1);const lastDay=new Date(first.getFullYear(),first.getMonth()+1,0).getDate();first.setDate(Math.min(day,lastDay));return first.getFullYear()+'-'+String(first.getMonth()+1).padStart(2,'0')+'-'+String(first.getDate()).padStart(2,'0');}
 function calendarDaysDiff(fromISO,toISO){const a=_parseISO(fromISO),b=_parseISO(toISO);if(!a||!b)return null;const au=Date.UTC(a.getFullYear(),a.getMonth(),a.getDate()),bu=Date.UTC(b.getFullYear(),b.getMonth(),b.getDate());return Math.round((bu-au)/86400000);}
 function calendarIntervalLabel(it){const n=Math.max(1,Math.trunc(Number(it&&it.interval)||12));if(n===12)return 'كل 12 شهر (سنة)';if(n===24)return 'كل 24 شهر (سنتان)';return 'كل '+fmt(n)+' شهر';}
@@ -1114,28 +1166,119 @@ function scheduleLabel(mc,it){
 }
 function intervalOf(mc,it){if(isManualMaintenance(it)||Array.isArray(it&&it.milestones)||(it&&it.months))return null;if(it.engineOil){if(isRoadType(mc.type))return mc.engInt||5000;if(mc.type==='jcb')return mc.engInt||500;return mc.engInt||250;}return it.interval;}
 function capLabel(mc,it){if(it.engineOil){if(mc.type==='exc')return mc.engInt===500?'20 L':'14 L';if(mc.type==='truck')return mc.engine==='WP12'?'28 L':'24 L';if(mc.type==='jmc')return '≈6–7 L زيت محرك (مرجعي؛ تحقق بالعصا)';if(mc.type==='jcb')return '12–15 L';return mc.type==='loader'&&lovolLoaderVariant(mc)==='FL936F'?'تأكيد بالسيريال/دليل المحرك':'20 L (رسمي)';}return it.cap||'';}
-// العدّاد المعتمد للتحذيرات: آخر قراءة فعلية مسجّلة (من الصيانة أو من رِلڤيه)
-function currentReading(mc){return mc.reading||0;}
-
-// كل نقاط القراءة الفعلية لآلة (من سجل الصيانة + من قراءات Relevé) — تاريخ وعدّاد فعليين، بلا أي تخمين
-function historyPoints(mc){
+// ══════ خطّ زمني موحّد للعدّاد ══════
+// الترتيب والحساب يعتمدان على تاريخ القراءة، لا على وقت إدخالها في البرنامج.
+// القراءة الصريحة (Relevé) هي الأقوى في يومها. إذا لم توجد، نستعمل قراءة الصيانة/تنظيف الفلتر.
+function meterEventPoints(mc){
   const pts=[];
-  (mc.history||[]).forEach(e=>{if(e&&validISODate(e.d)&&typeof e.r==='number')pts.push({r:e.r,d:e.d});});
-  (mc.readings||[]).forEach(e=>{if(e&&validISODate(e.d)&&typeof e.r==='number')pts.push({r:e.r,d:e.d});});
-  pts.sort((a,b)=>(a.d||'').localeCompare(b.d||'')||(a.r-b.r));
+  const add=(rows,kind,priority)=>{(Array.isArray(rows)?rows:[]).forEach(e=>{
+    if(!e||!isOperationalDate(e.d)||!Number.isFinite(Number(e.r)))return;
+    pts.push({r:Number(e.r),d:String(e.d),kind,priority,mod:Number(e._mod)||0,id:String(e._id||'')});
+  });};
+  add(mc&&mc.history,'hist',2);
+  add(mc&&mc.readings,'read',3);
+  add(airFilterCleaningEntries(mc),'airf',1);
   return pts;
 }
-// المعدّل اليومي المُستنتَج تلقائياً من تاريخ الآلة الفعلي (وليس مُدخلاً يدوياً) — الجمعة مستثناة
-function deriveRate(mc){
-  const pts=historyPoints(mc);
-  if(pts.length<2)return null;
-  const first=pts[0],last=pts[pts.length-1];
-  const days=workDaysBetween(first.d,last.d);
-  if(days<=0)return null;
-  const delta=last.r-first.r;
-  if(delta<=0)return null;
-  return delta/days;
+function dailyMeterPoints(mc){
+  const byDay=new Map();
+  meterEventPoints(mc).forEach(p=>{
+    if(!byDay.has(p.d))byDay.set(p.d,[]);
+    byDay.get(p.d).push(p);
+  });
+  const out=[];
+  byDay.forEach((rows,d)=>{
+    const explicit=rows.filter(x=>x.kind==='read');
+    let chosen;
+    if(explicit.length){
+      // قراءة العداد الصريحة الأحدث تعديلاً في نفس التاريخ هي المرجع.
+      chosen=explicit.slice().sort((a,b)=>(b.mod-a.mod)||String(b.id).localeCompare(String(a.id))||(b.r-a.r))[0];
+    }else{
+      // سجلات الصيانة قد تكون متعددة في اليوم نفسه؛ أعلى قراءة هي نهاية اليوم الأكثر تحفظاً.
+      chosen=rows.slice().sort((a,b)=>(b.r-a.r)||(b.mod-a.mod)||String(b.id).localeCompare(String(a.id)))[0];
+    }
+    out.push(Object.assign({},chosen,{dateRows:rows.length}));
+  });
+  return out.sort((a,b)=>a.d.localeCompare(b.d)||(a.r-b.r));
 }
+function normalizeExplicitReadings(mc){
+  if(!mc||!Array.isArray(mc.readings))return false;
+  const byDay=new Map();mc.readings.forEach(e=>{if(e&&validISODate(e.d)){if(!byDay.has(e.d))byDay.set(e.d,[]);byDay.get(e.d).push(e);}});
+  let changed=false;const losers=new Set();
+  byDay.forEach(rows=>{
+    if(rows.length<2)return;
+    const keep=rows.slice().sort((a,b)=>(Number(b._mod||0)-Number(a._mod||0))||String(b._id||'').localeCompare(String(a._id||''))||(Number(b.r||0)-Number(a.r||0)))[0];
+    rows.forEach(e=>{if(e!==keep){recordTombstone(mc,'read',e);losers.add(e);changed=true;}});
+  });
+  if(changed)mc.readings=mc.readings.filter(e=>!losers.has(e));
+  return changed;
+}
+function latestDatedMeter(mc){const pts=dailyMeterPoints(mc);return pts.length?pts[pts.length-1]:null;}
+function recomputeCurrentMeter(mc,forceTimeline){
+  if(!mc)return false;
+  const latest=latestDatedMeter(mc),oldR=Number(mc.reading)||0,oldD=validISODate(mc.readingDate)&&String(mc.readingDate)<=todayISO()?String(mc.readingDate):null;
+  if(!latest){if(oldD){delete mc.readingDate;return true;}return false;}
+  // بيانات حديثة مؤرخة، أو عداد قديم يطابق الخط الزمني، أو إدخال اليوم: يصبح الخط الزمني هو المرجع.
+  const timelineOwns=!!forceTimeline||!!oldD||oldR===Number(latest.r)||oldR<=0||latest.d===todayISO();
+  if(!timelineOwns)return false; // نحافظ على عداد Legacy بلا تاريخ إلى أن يسجّل المستخدم قراءة مؤرخة حديثة.
+  const nr=Math.max(0,Number(latest.r)||0),nd=latest.d;
+  mc.reading=nr;mc.readingDate=nd;
+  return nr!==oldR||nd!==oldD;
+}
+// العدّاد المعتمد للتحذيرات: آخر قراءة مؤرخة إذا كان الخط الزمني مفعّلاً، وإلا عداد Legacy الحالي.
+function currentReading(mc){
+  const latest=latestDatedMeter(mc),rd=validISODate(mc&&mc.readingDate)&&String(mc.readingDate)<=todayISO()?String(mc.readingDate):null;
+  if(latest&&rd)return Number(latest.r)||0;
+  return Math.max(0,Number(mc&&mc.reading)||0);
+}
+function operationalRecordMax(mc){const vals=meterEventPoints(mc).map(x=>x.r);return vals.length?Math.max(...vals):null;}
+function meterTimelineConflict(mc){
+  const pts=dailyMeterPoints(mc);
+  for(let i=1;i<pts.length;i++)if(Number(pts[i].r)<Number(pts[i-1].r))return {type:'chronology_rollback',a:pts[i-1],b:pts[i]};
+  return null;
+}
+function meterAlertConflict(mc){
+  const timeline=meterTimelineConflict(mc);if(timeline)return timeline.type;
+  const latest=latestDatedMeter(mc),cur=Number(currentReading(mc));
+  if(latest&&validISODate(mc&&mc.readingDate)&&cur!==Number(latest.r))return 'current_mismatch';
+  const future=[...(mc&&mc.history||[]),...(mc&&mc.readings||[]),...airFilterCleaningEntries(mc)].filter(e=>e&&validISODate(e.d)&&e.d>todayISO()&&Number.isFinite(Number(e.r))).map(e=>Number(e.r));
+  if(latest&&future.includes(cur)&&cur>Number(latest.r))return 'current_matches_future';
+  return null;
+}
+function dataQualityIssues(mc){
+  const issues=[];
+  const future=[...(mc&&mc.history||[]),...(mc&&mc.readings||[]),...airFilterCleaningEntries(mc)].filter(e=>e&&validISODate(e.d)&&e.d>todayISO()).length;
+  if(future)issues.push('يوجد '+future+' سجل/قراءة بتاريخ مستقبلي؛ استُبعدت من التنبيهات حتى تُصحَّح.');
+  const timeline=meterTimelineConflict(mc);
+  if(timeline)issues.push('العداد تراجع زمنياً من '+fmt(timeline.a.r)+' في '+timeline.a.d+' إلى '+fmt(timeline.b.r)+' في '+timeline.b.d+'؛ أوقفت تنبيهات الكيلومتر/الساعات حتى تصحيح إحدى القراءتين.');
+  const pts=dailyMeterPoints(mc),lim=isRoadType(mc&&mc.type)?2000:24;
+  for(let i=1;i<pts.length;i++){const a=pts[i-1],b=pts[i],days=workDaysBetween(a.d,b.d),delta=b.r-a.r;if(days>0&&delta>lim*days){issues.push('قفزة عدّاد غير منطقية بين '+a.d+' و'+b.d+'؛ استُبعد هذا المقطع من حساب المعدّل.');break;}}
+  const latest=latestDatedMeter(mc),cur=Number(currentReading(mc)),conflict=meterAlertConflict(mc);
+  if(conflict==='current_mismatch'&&latest)issues.push('العداد الحالي لا يطابق أحدث قراءة مؤرخة '+fmt(latest.r)+' بتاريخ '+latest.d+'؛ أوقفت التنبيهات حتى تثبيت القراءة.');
+  if(conflict==='current_matches_future')issues.push('العداد الحالي يطابق سجلاً مستقبلياً أعلى من آخر قراءة صحيحة؛ أوقفت تنبيهات العداد حتى تصحيح التاريخ أو القراءة.');
+  if(!validISODate(mc&&mc.readingDate)&&cur>0&&latest&&cur!==Number(latest.r))issues.push('يوجد عداد حالي قديم بلا تاريخ ('+fmt(cur)+'). سجّل قراءة مؤرخة ليصبح ترتيب العداد والحساب محسومين.');
+  return issues;
+}
+
+// كل نقاط القراءة الفعلية لآلة (من سجل الصيانة + من قراءات Relevé) — تاريخ وعدّاد فعليين، بلا أي تخمين
+function historyPoints(mc){return dailyMeterPoints(mc).map(p=>({r:Number(p.r),d:p.d,kind:p.kind,mod:p.mod,id:p.id}));}
+function median(nums){const a=(nums||[]).filter(Number.isFinite).slice().sort((x,y)=>x-y);if(!a.length)return null;const m=Math.floor(a.length/2);return a.length%2?a[m]:(a[m-1]+a[m])/2;}
+function rateSegments(mc){
+  const pts=dailyMeterPoints(mc);
+  if(meterTimelineConflict(mc))return [];
+  const maxDaily=isRoadType(mc.type)?2000:24; // حاجز سلامة ضد القفزات الشاذة
+  const seg=[];
+  for(let i=1;i<pts.length;i++){
+    const a=pts[i-1],b=pts[i],days=workDaysBetween(a.d,b.d),delta=b.r-a.r;
+    if(days<=0||delta<=0)continue;
+    const perDay=delta/days;
+    if(!Number.isFinite(perDay)||perDay<=0||perDay>maxDaily)continue;
+    seg.push({a,b,days,delta,perDay});
+  }
+  return seg.slice(-12);
+}
+// المعدّل التلقائي: وسيط المقاطع الحديثة الصحيحة، وليس أول/آخر قراءة؛ مقاوم لقراءة شاذة واحدة.
+function deriveRate(mc){const seg=rateSegments(mc);return seg.length?median(seg.map(x=>x.perDay)):null;}
 // إضافة/طرح n يوم عمل (يستثني الجمعة) من تاريخ — n قد يكون سالباً (إلى الماضي)
 function addWorkdays(dateISO,n){
   const d=_parseISO(dateISO);if(!d)return dateISO;
@@ -1163,20 +1306,21 @@ function effectiveRate(mc){
 }
 // العدّاد التقريبي اليوم = آخر قراءة فعلية + (أيام العمل منذ تاريخها × المعدّل اليومي) — الجمعة مستثناة
 function estReadingToday(mc){
-  const base=mc.reading||0;
-  const pts=historyPoints(mc);
-  const lastDate=pts.length?pts[pts.length-1].d:null;
-  if(!lastDate)return{val:base,added:0,hasEst:false};
+  const base=Number(currentReading(mc))||0,pts=historyPoints(mc);
+  // لا نضيف أياماً فوق عدّاد أُدخل يدوياً بلا تاريخ: نُقدّر فقط عندما توجد نقطة مؤرخة تطابق العدّاد المعتمد.
+  const anchors=pts.filter(p=>Number(p.r)===base);const anchor=anchors.length?anchors[anchors.length-1]:null;
+  if(!anchor)return{val:base,added:0,hasEst:false};
   const rate=effectiveRate(mc);if(!rate||rate<=0)return{val:base,added:0,hasEst:false};
-  const days=workDaysBetween(lastDate,todayISO());
+  const days=workDaysBetween(anchor.d,todayISO());
   if(days<=0)return{val:base,added:0,hasEst:false};
   const added=Math.round(days*rate);
-  return{val:base+added,added,hasEst:added>0,days,rate,lastDate};
+  return{val:base+added,added,hasEst:added>0,days,rate,lastDate:anchor.d};
 }
 
 // تقدير العدّاد عند تاريخ صيانة زمني: يبدأ من أحدث قراءة فعلية بين آخر صيانة وتاريخ الاستحقاق،
 // ثم يضيف معدّل الاستعمال لكل يوم عمل (الجمعة مستثناة). النتيجة تقديرية وليست شرط استحقاق.
 function calendarDueReading(mc,dueDate,lastReading,lastDate){
+  if(meterAlertConflict(mc))return null;
   const rate=effectiveRate(mc);
   if(!dueDate||lastReading==null||!lastDate||!Number.isFinite(rate)||rate<=0)return null;
   let anchor={r:Number(lastReading)||0,d:lastDate};
@@ -1184,6 +1328,10 @@ function calendarDueReading(mc,dueDate,lastReading,lastDate){
     if(!p||!p.d||p.d<lastDate||p.d>dueDate)return;
     if(p.d>anchor.d||(p.d===anchor.d&&Number(p.r)>Number(anchor.r)))anchor={r:Number(p.r)||0,d:p.d};
   });
+  // mc.reading هو العداد الفعلي الحالي. إذا كنا بين آخر صيانة والموعد الزمني،
+  // فاليوم/العداد الحالي أقوى من نقطة تاريخية قديمة وصلت من جهاز آخر.
+  const today=todayISO(),cur=Number(currentReading(mc));
+  if(today>=lastDate&&today<=dueDate&&Number.isFinite(cur)&&cur>=Number(anchor.r))anchor={r:cur,d:today};
   const days=workDaysBetween(anchor.d,dueDate);
   return {val:Math.max(0,Math.round(anchor.r+(days*rate))),rate,days,anchorDate:anchor.d,anchorReading:anchor.r};
 }
@@ -1202,7 +1350,7 @@ function cleaningAfterReplacement(entry,last){
 }
 function airFilterCleanCount(mc){
   const last=(mc&&mc.done&&mc.done.airf&&typeof mc.done.airf==='object')?mc.done.airf:null;
-  return airFilterCleaningEntries(mc).filter(e=>cleaningAfterReplacement(e,last)).length;
+  return airFilterCleaningEntries(mc).filter(e=>e&&isOperationalDate(e.d)&&cleaningAfterReplacement(e,last)).length;
 }
 function statusOf(mc,it){
   const last=lastReadOf(mc,it.id);
@@ -1212,6 +1360,7 @@ function statusOf(mc,it){
     return {cls:'st-manual',label:replace?'بدّل الزوج':'حسب المؤشر',rem:null,due:null,urgency:null,condition:true,cleanCount:count,replace};
   }
   if(it&&it.manualOnly)return {cls:'st-manual',label:lovolLoaderVariant(mc)==='FL936F'?'دليل F مطلوب':'حسب الدليل',rem:null,due:null,urgency:null,manual:true};
+  if(!alertsCanCompute())return {cls:'st-none',label:'جارٍ التحقق',rem:null,due:null,urgency:null,pending:true};
   if(it&&it.months){
     const lastDate=lastDateOf(mc,it.id);
     if(last==null||!lastDate)return {cls:'st-none',label:'غير مسجّل',rem:null,due:null,urgency:null,calendar:true,dueDate:null,remDays:null};
@@ -1222,10 +1371,12 @@ function statusOf(mc,it){
     const dueReadingEst=calendarDueReading(mc,dueDate,last,lastDate);
     const base={calendar:true,rem:null,due:null,dueDate,estDate:dueDate,days,remDays:days,months,dueReading:dueReadingEst?dueReadingEst.val:null,dueRate:dueReadingEst?dueReadingEst.rate:null,dueReadingDays:dueReadingEst?dueReadingEst.days:null,dueReadingAnchorDate:dueReadingEst?dueReadingEst.anchorDate:null};
     if(days<0)return Object.assign(base,{cls:'st-late',label:'متأخّر',urgency:'late'});
-    if(days===0)return Object.assign(base,{cls:'st-soon',label:'في وقته',urgency:'now'});
+    if(days===0)return Object.assign(base,{cls:'st-soon',label:'مستحق',urgency:'now'});
     if(days<=alertDaysThreshold())return Object.assign(base,{cls:'st-soon',label:'قريب',urgency:'soon'});
     return Object.assign(base,{cls:'st-ok',label:'سليم',urgency:'ok'});
   }
+  const meterConflict=meterAlertConflict(mc);
+  if(meterConflict)return {cls:'st-manual',label:'راجع العداد',rem:null,due:null,urgency:null,dataIssue:true,meterConflict};
   const planned=Array.isArray(it&&it.milestones)?nextMilestoneAfter(last,it):null;
   if(last==null){
     return {cls:'st-none',label:'غير مسجّل',rem:null,due:null,planDue:planned};
@@ -1236,18 +1387,21 @@ function statusOf(mc,it){
   const cur=currentReading(mc);const rem=due-cur;
   const normalThr=Math.max(isRoadType(mc.type)?500:30,Math.round((intv||0)*0.1));
   const tolerance=toleranceFor(it,due);
-  const beforeWindow=tolerance||normalThr;
   let days=null,estDate=null;
   const rate=effectiveRate(mc);
-  if(rate){
-    const pts=historyPoints(mc);const lastPt=pts.length?pts[pts.length-1]:{r:cur,d:todayISO()};
-    const steps=(due-lastPt.r)/rate;
-    estDate=addWorkdays(lastPt.d,steps);
+  if(Number.isFinite(rate)&&rate>0){
+    // التوقع يبدأ دائماً من العداد الفعلي الحالي واليوم، لا من آخر نقطة تاريخية؛
+    // بذلك لا تقفز الحالة عند وصول قراءة قديمة من الجهاز الثاني.
+    const steps=rem/rate;
+    estDate=addWorkdays(todayISO(),steps);
     days=workDaysBetween(todayISO(),estDate)-workDaysBetween(estDate,todayISO());
   }
   if(rem<-(tolerance||0))return {cls:'st-late',label:'متأخّر',urgency:'late',rem,due,est:cur,days,estDate,tolerance};
-  if(rem<=beforeWindow)return {cls:'st-soon',label:'في وقته',urgency:'now',rem,due,est:cur,days,estDate,tolerance};
-  if(days!=null && days<=alertDaysThreshold())return {cls:'st-soon',label:'قريب',urgency:'soon',rem,due,est:cur,days,estDate,tolerance};
+  // «مستحق» فقط عندما وصل العداد فعلاً للموعد (أو دخل هامش المصنع الرسمي إن وُجد).
+  if(rem<=Math.max(0,tolerance||0))return {cls:'st-soon',label:'مستحق',urgency:'now',rem,due,est:cur,days,estDate,tolerance};
+  // نافذة 500 كم/30سا هي «قريب» وليست «مستحق الآن».
+  if(rem<=normalThr)return {cls:'st-soon',label:'قريب',urgency:'soon',rem,due,est:cur,days,estDate,tolerance};
+  if(days!=null&&days>=0&&days<=alertDaysThreshold())return {cls:'st-soon',label:'قريب',urgency:'soon',rem,due,est:cur,days,estDate,tolerance};
   return {cls:'st-ok',label:'سليم',urgency:'ok',rem,due,est:cur,days,estDate,tolerance};
 }
 
@@ -1255,24 +1409,24 @@ function recordAirFilterCleaning(){
   const mc=getActive();const it=mc&&itemsFor(mc).find(x=>x.id==='airf'&&x.conditionOnly==='airFilter');if(!mc||!it)return;
   const current=airFilterCleanCount(mc);
   if(current>=6){alert('تم بلوغ 6 تنظيفات منذ آخر تبديل. بدّل الفلتر الخارجي والداخلي معاً، ثم سجّل «بدّل الزوج».');return;}
-  const rv=prompt('عداد الساعات عند تنظيف فلتر الهواء الخارجي:',mc.reading||0);if(rv===null)return;
+  const rv=prompt('عداد الساعات عند تنظيف فلتر الهواء الخارجي:',currentReading(mc));if(rv===null)return;
   const r=Math.max(0,parseInt(rv,10)||0);
   const dv=prompt('تاريخ التنظيف (سنة-شهر-يوم):',todayISO());if(dv===null)return;
-  const d=requireISODate((dv&&dv.trim())?dv.trim():todayISO());if(!d)return;
+  const d=requireOperationalDate((dv&&dv.trim())?dv.trim():todayISO());if(!d)return;
   if(!mc.conditionHistory||typeof mc.conditionHistory!=='object')mc.conditionHistory={};
   if(!Array.isArray(mc.conditionHistory.airf))mc.conditionHistory.airf=[];
   mc.conditionHistory.airf.push(newSyncRecord('airf',{r,d}));
-  if(r>(mc.reading||0))mc.reading=r;
+  recomputeCurrentMeter(mc,validISODate(mc.readingDate)||d===todayISO());
   save();renderDetail();
 }
 function editAirFilterCleaning(i){
   const mc=getActive(),arr=airFilterCleaningEntries(mc),e=arr[i];if(!e)return;
   const rv=prompt('عداد الساعات عند التنظيف:',e.r!=null?e.r:'');if(rv===null)return;
-  const r=Math.max(0,parseInt(rv,10)||0);const dv=prompt('تاريخ التنظيف (سنة-شهر-يوم):',e.d||todayISO());if(dv===null)return;const d=requireISODate((dv&&dv.trim())?dv.trim():todayISO());if(!d)return;Object.assign(e,{r,d});touchSyncRecord('airf',e);if(r>(mc.reading||0))mc.reading=r;save();renderDetail();
+  const r=Math.max(0,parseInt(rv,10)||0);const oldDate=e.d;const dv=prompt('تاريخ التنظيف (سنة-شهر-يوم):',e.d||todayISO());if(dv===null)return;const d=requireOperationalDate((dv&&dv.trim())?dv.trim():todayISO());if(!d)return;Object.assign(e,{r,d});touchSyncRecord('airf',e);recomputeCurrentMeter(mc,validISODate(mc.readingDate)||d===todayISO()||oldDate===mc.readingDate);save();renderDetail();
 }
 function deleteAirFilterCleaning(i){
   const mc=getActive(),arr=airFilterCleaningEntries(mc);if(!arr[i])return;
-  if(!confirm('حذف تسجيل تنظيف فلتر الهواء؟'))return;recordTombstone(mc,'airf',arr[i]);arr.splice(i,1);save();renderDetail();
+  if(!confirm('حذف تسجيل تنظيف فلتر الهواء؟'))return;const wasDate=arr[i].d;recordTombstone(mc,'airf',arr[i]);arr.splice(i,1);recomputeCurrentMeter(mc,validISODate(mc.readingDate)&&wasDate===mc.readingDate);save();renderDetail();
 }
 
 function toggleRateLock(kind,on){
@@ -1315,8 +1469,14 @@ function renderRateTab(mc){
   const gVal=globalRateOf(mc.type);
   const gDate=isTruck?DB.settings.rateTruckSetAt:DB.settings.rateMachineSetAt;
   const cVal=customRateOf(mc);
+  const actual=usageRate(mc),latest=latestDatedMeter(mc),issues=dataQualityIssues(mc),used=effectiveRate(mc);
+  const usedSource=cVal!=null?'معدّل خاص بهذه الآلة':(rateLocked(mc.type)?'المعدّل العام المقفول':(actual?'المعدّل الفعلي المستنتج':'المعدّل العام الاحتياطي'));
+  const actualTxt=actual?('≈ <b>'+fmt(Math.round(actual.perDay*10)/10)+' '+u+'/يوم</b> · '+fmt(Math.round(actual.perMonth))+' '+u+'/شهر · '+actual.samples+' مقطع صحيح'):((dailyMeterPoints(mc).length<2)?'سجّل قراءتين مؤرختين على الأقل ليظهر المعدّل الفعلي.':'لا يمكن حساب معدل موثوق حتى تُصحَّح قراءات العداد المتعارضة.');
+  const issueHtml=issues.length?'<div class="note" style="margin-top:8px;border-inline-start-color:var(--late)">⚠️ '+issues.map(esc).join('<br>⚠️ ')+'</div>':'';
   box.innerHTML=
-    '<div class="card"><div class="card-h"><span class="ic">🌐</span><div><h2>المعدّل العام — يُطبَّق على الكل</h2><div class="fr">'+(isTruck?'كل الشاحنات':'كل الآلات')+'</div></div></div>'
+    '<div class="card"><div class="card-h"><span class="ic">📈</span><div><h2>قراءات العدّاد والحساب الفعلي</h2><div class="fr">الترتيب حسب تاريخ القراءة — وقت الإدخال لا يغيّر النتيجة</div></div></div>'
+    +'<div style="padding:11px"><div class="hentry"><div class="htop"><span>العداد الحالي: <b>'+fmt(currentReading(mc))+' '+u+'</b></span><span class="hdate">'+(latest?'📅 '+esc(latest.d):'بلا قراءة مؤرخة')+'</span></div><div class="hitems">المعدل الفعلي: '+actualTxt+'</div><div class="hitems">معدل التوقع المستخدم: <b>'+fmt(Math.round(used*10)/10)+' '+u+'/يوم</b> · '+esc(usedSource)+'</div></div>'+issueHtml+'<button class="est-btn" style="margin-top:8px" onclick="logReadingOnly()">📈 سجّل قراءة عدّاد بتاريخها</button><div class="note" style="margin-top:7px">مثال: إذا سجلت 35,000 بتاريخ 12/07 ثم أضفت لاحقاً 33,500 بتاريخ 01/07، يعيد البرنامج ترتيب التاريخ وحساب الفرق والمعدل تلقائياً. القراءة القديمة لا تصبح العداد الحالي.</div></div></div>'
+    +'<div class="card"><div class="card-h"><span class="ic">🌐</span><div><h2>المعدّل العام — يُطبَّق على الكل</h2><div class="fr">'+(isTruck?'كل الشاحنات':'كل الآلات')+'</div></div></div>'
     +'<div style="padding:11px;text-align:center">'
       +'<div class="ratein"><input type="number" id="gRateInput" min="0" value="'+gVal+'"><span class="u">'+u+'/يوم</span></div>'
       +'<button class="est-btn" style="margin-top:8px" onclick="setGlobalRate(\''+gKind+'\',document.getElementById(\'gRateInput\').value)">✓ تأكيد وتطبيق على الكل</button>'
@@ -1339,10 +1499,11 @@ function renderRateTab(mc){
     +'<div class="note" style="text-align:center;padding:0 14px">📌 هذا المعدّل مستقل تماماً عن العدّاد الفعلي — لا يُعدّله ولا يتأثر بتغييره. يُستعمل فقط لتقدير تاريخ التنبيهات.</div>';
   }catch(e){box.innerHTML='<div class="note" style="padding:14px">تعذّر عرض المعدّل. أعد فتح الآلة.</div>';}
 }
-function machineStat(mc){let late=0,soon=0;itemsFor(mc).forEach(it=>{const s=statusOf(mc,it);if(s.cls==='st-late')late++;else if(s.cls==='st-soon')soon++;});return{late,soon};}
+function machineStat(mc){if(!alertsCanCompute())return{late:0,soon:0,pending:true};let late=0,soon=0;itemsFor(mc).forEach(it=>{const s=statusOf(mc,it);if(s.cls==='st-late')late++;else if(s.cls==='st-soon')soon++;});return{late,soon};}
 
 // تجميع كل التنبيهات (متأخّر · في وقته · قريب) من كل العتاد لجدول الرئيسية
 function buildAlerts(){
+  if(!alertsCanCompute())return [];
   const rows=[];
   DB.machines.forEach(mc=>{
     const u=unit(mc);
@@ -1368,7 +1529,7 @@ function alertWhenTxt(s,u){
     if(s.days!=null)return 'منذ ~'+Math.abs(s.days)+' يوم عمل (تقدير) · '+esc(s.estDate||'');
     return 'بالعدّاد: تجاوز بـ'+fmt(Math.abs(s.rem));
   }
-  if(s.urgency==='now')return 'الآن — بالعدّاد (باقي '+fmt(s.rem)+')';
+  if(s.urgency==='now'){if(Number(s.tolerance)>0&&Number(s.rem)<0)return 'ضمن هامش المصنع · تجاوز الموعد الاسمي بـ '+fmt(Math.abs(s.rem))+' '+(u||'');if(Number(s.tolerance)>0&&Number(s.rem)>0)return 'ضمن هامش المصنع · باقي '+fmt(s.rem)+' '+(u||'')+' للموعد الاسمي';return 'مستحق الآن بالعدّاد';}
   if(s.days!=null)return 'بعد ~'+s.days+' يوم عمل (تقدير) · '+esc(s.estDate||'');
   return 'قريب بالعدّاد (باقي '+fmt(s.rem)+')';
 }
@@ -1402,10 +1563,15 @@ function saveDashRates(){
 }
 function renderAlertsCard(){
   const box=document.getElementById('alertsCard');if(!box)return;
+  if(!alertsCanCompute()){
+    box.innerHTML='<div class="card alerts-card"><div class="card-h"><span class="ic">🔔</span><div><h2>التنبيهات</h2><div class="fr">تثبيت الحالة قبل الحساب</div></div></div><div class="note" style="margin:12px;text-align:center">☁️ جارٍ جلب ودمج آخر بيانات الجهازين أولاً… لن أعرض تنبيهاً مؤقتاً من نسخة محلية قديمة.</div></div>';
+    return;
+  }
   const rows=buildAlerts();
   const late=rows.filter(r=>r.s.urgency==='late').length;
   const now_=rows.filter(r=>r.s.urgency==='now').length;
   const soon=rows.filter(r=>r.s.urgency==='soon').length;
+  const qualityMachines=DB.machines.filter(mc=>dataQualityIssues(mc).length).length;
   const icon=mc=>mc.type==='truck'?'🚛':mc.type==='jmc'?'🚚':mc.type==='loader'?'🚜':mc.type==='jcb'?'🛠️':mc.type==='car'?'🚗':(mc.type==='truck2'?'🚛':'🏗️');
   let body;
   if(!rows.length){
@@ -1418,7 +1584,7 @@ function renderAlertsCard(){
       +groups.map(g=>'<tr onclick="openDetailAlerts(\''+g.mc.id+'\')">'
         +'<td class="reg-nm">'+icon(g.mc)+' '+esc(g.mc.name)+'</td>'
         +'<td style="font-size:11.5px"><b>'+(g.items.length)+'</b> بند · '+(g.late?'🔴 '+g.late+' ':'')+(g.now?'🟡 '+g.now+' ':'')+(g.soon?'🟠 '+g.soon:'')+'</td>'
-        +'<td><span class="albadge '+g.top+'">'+(g.top==='late'?'متأخر':g.top==='now'?'في وقته':'قريب')+'</span></td>'
+        +'<td><span class="albadge '+g.top+'">'+(g.top==='late'?'متأخر':g.top==='now'?'مستحق':'قريب')+'</span></td>'
         +'<td style="font-size:10.5px;color:var(--muted)">'+esc(g.first.it.ar)+'<br>القادم: '+(g.first.s.calendar?('📅 '+esc(g.first.s.dueDate||'—')+(g.first.s.dueReading!=null?' · ≈ '+fmt(g.first.s.dueReading)+' '+g.first.u:'')):(fmt(g.first.s.due)+' '+g.first.u))+' · الحالي: '+fmt(currentReading(g.mc))+' '+g.first.u+'<br>'+alertWhenTxt(g.first.s,g.first.u)+'</td>'
       +'</tr>').join('')+'</tbody></table>';
   }
@@ -1426,11 +1592,12 @@ function renderAlertsCard(){
     +'<div class="card-h"><span class="ic">🔔</span><div><h2>التنبيهات</h2><div class="fr">تنبيه واحد لكل عتاد — التفاصيل داخل بطاقة العتاد</div></div></div>'
     +'<div class="alert-sum">'
       +'<span class="as late">🔴 متأخّر <b>'+late+'</b></span>'
-      +'<span class="as now">🟡 في وقته <b>'+now_+'</b></span>'
+      +'<span class="as now">🟡 مستحق <b>'+now_+'</b></span>'
       +'<span class="as soon">🟠 قريب <b>'+soon+'</b></span>'
       +'<span class="as cfg">تنبيه قبل <input type="number" min="1" value="'+alertDaysThreshold()+'" onchange="setAlertDays(this.value)"> يوم</span>'
     +'</div>'
     +body
+    +(qualityMachines?'<div class="note" style="margin:9px 12px">⚠️ توجد بيانات عدّاد/تاريخ تحتاج مراجعة في <b>'+qualityMachines+'</b> عتاد. افتح تنبيهات العتاد لرؤية السبب؛ هذه التحذيرات لا تُحسب كصيانة مستحقة.</div>':'')
     +'</div>';
 }
 function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
@@ -1458,8 +1625,8 @@ function renderGarage(){
     const icon=machineIcon(mc);
     const _e=estReadingToday(mc);
     const _meta=_e.hasEst
-      ? '<div class="mmeta">'+fmt(mc.reading||0)+' '+unit(mc)+'</div><div class="mest">≈ '+fmt(_e.val)+' '+unit(mc)+' اليوم</div>'
-      : '<div class="mmeta">'+fmt(mc.reading||0)+' '+unit(mc)+'</div>';
+      ? '<div class="mmeta">'+fmt(currentReading(mc))+' '+unit(mc)+'</div><div class="mest">≈ '+fmt(_e.val)+' '+unit(mc)+' اليوم</div>'
+      : '<div class="mmeta">'+fmt(currentReading(mc))+' '+unit(mc)+'</div>';
     return '<div class="mcard'+cardcls+'" onclick="openDetail(\''+mc.id+'\')"><span class="dotbadge '+cls+'">'+badge+'</span><div class="mic '+(mc.type==='truck'?'truck':'')+'">'+icon+'</div><div class="minfo"><div class="mname">'+esc(mc.name)+'</div>'+_meta+'<div class="meng">⚙️ '+esc(mc.eng||'')+'</div></div></div>';
   };
   // عرض مقسّم حسب النوع (في وضع "الكل") أو قائمة واحدة مرتّبة بالأولوية
@@ -1490,8 +1657,9 @@ function setDetailTab(t){
 
 function renderMachineAlerts(mc){
   const box=document.getElementById('machineAlertsRef'); if(!box||!mc)return;
-  const rows=buildAlerts().filter(r=>r.mc.id===mc.id);
-  if(!rows.length){box.innerHTML='<div class="note" style="text-align:center">✅ لا توجد تنبيهات لهذا العتاد حالياً.</div>';return;}
+  const rows=buildAlerts().filter(r=>r.mc.id===mc.id),issues=dataQualityIssues(mc);
+  const issueHtml=issues.length?'<div class="note" style="border-inline-start-color:var(--late);margin:0 0 9px"><b>⚠️ بيانات تحتاج مراجعة:</b><br>'+issues.map(esc).join('<br>')+'</div>':'';
+  if(!rows.length){box.innerHTML=issueHtml+'<div class="note" style="text-align:center">✅ لا توجد تنبيهات صيانة لهذا العتاد حالياً.</div>';return;}
   const rank={late:0,now:1,soon:2}; rows.sort((a,b)=>(rank[a.s.urgency]-rank[b.s.urgency]));
   const u=unit(mc), cur=currentReading(mc);
   function deltaTxt(r){
@@ -1502,10 +1670,16 @@ function renderMachineAlerts(mc){
       return '<span style="color:var(--ok);font-weight:800">باقي '+fmt(d)+' يوم</span>';
     }
     const d=(r.s.due||0)-cur;
+    if(r.s.urgency==='now'&&Number(r.s.tolerance)>0){
+      if(d<0)return '<span style="color:var(--soon);font-weight:800">ضمن هامش المصنع · تجاوز الاسمي بـ '+fmt(Math.abs(d))+' '+u+'</span>';
+      if(d>0)return '<span style="color:var(--soon);font-weight:800">ضمن هامش المصنع · باقي '+fmt(d)+' '+u+' للاسمي</span>';
+      return '<span style="color:var(--soon);font-weight:800">عند الموعد الاسمي</span>';
+    }
     if(d<0)return '<span style="color:var(--late);font-weight:800">متأخر بـ '+fmt(Math.abs(d))+' '+u+'</span>';
+    if(d===0)return '<span style="color:var(--soon);font-weight:800">مستحق الآن</span>';
     return '<span style="color:var(--ok);font-weight:800">باقي '+fmt(d)+' '+u+'</span>';
   }
-  box.innerHTML=
+  box.innerHTML=issueHtml+
     '<table class="alert-t"><thead><tr>'
     +'<th>الحالة</th><th>العنصر</th><th>آخر صيانة</th><th>التغيير القادم</th><th>الحالي/الفرق</th><th>تسجيل</th>'
     +'</tr></thead><tbody>'+
@@ -1516,13 +1690,13 @@ function renderMachineAlerts(mc){
         ? (r.s.dueReading!=null?('≈ '+fmt(r.s.dueReading)+' '+u+' عند الموعد'):'العداد التقديري غير متاح')
         : (r.s.estDate?('تاريخ تقديري · '+esc(r.s.estDate)):'تاريخ تقديري غير متاح');
       return '<tr onclick="setDetailTab(\'maint\')">'
-        +'<td><span class="albadge '+r.s.urgency+'">'+(r.s.urgency==='late'?'متأخر':r.s.urgency==='now'?'في وقته':'قريب')+'</span></td>'
+        +'<td><span class="albadge '+r.s.urgency+'">'+(r.s.urgency==='late'?'متأخر':r.s.urgency==='now'?'مستحق':'قريب')+'</span></td>'
         +'<td class="reg-nm">'+esc(r.it.ar)+'<div class="fr">'+esc(r.it.fr||'')+'</div></td>'
         +'<td style="font-size:10.5px;color:var(--muted)">'
           +(last!=null?('عند '+fmt(last)+' '+u):'غير مسجل')+'<br>'+(ld?esc(ld):'—')+'</td>'
         +'<td style="font-size:10.5px;color:var(--ink)"><b>'+due+'</b><br><span style="color:var(--muted)">'+est+'</span></td>'
         +'<td style="font-size:10.5px">الحالي: <b>'+fmt(cur)+' '+u+'</b><br>'+deltaTxt(r)+'</td>'
-        +'<td><button class="set-btn" onclick="event.stopPropagation();setDetailTab(\'log\')">تسجيل</button></td>'
+        +'<td><button class="set-btn" onclick="event.stopPropagation();openLog()">تسجيل</button></td>'
       +'</tr>';
     }).join('')+
     '</tbody></table>'
@@ -1533,7 +1707,7 @@ function renderMachineAlerts(mc){
 function fillLogForm(){
   const mc=getActive();if(!mc)return;const u=unit(mc);
   document.getElementById('logTitle').textContent='تسجيل صيانة';
-  document.getElementById('logReading').value=mc.reading||'';
+  document.getElementById('logReading').value=currentReading(mc)||'';
   document.getElementById('logDate').value=todayISO();
   document.getElementById('logNote').value='';
   document.getElementById('logHint').textContent='('+u+')';
@@ -1557,7 +1731,7 @@ function renderRegister(){
   const machines=DB.machines.filter(m=>!isRoadType(m.type));
   const rowsHtml=(arr,startIdx)=>arr.map((mc,i)=>{
     const u=unit(mc);
-    const cur=fmt(mc.reading||0);
+    const cur=fmt(currentReading(mc));
     return '<tr><td class="reg-no"><input value="'+esc(fleetNoOf(mc,startIdx+i))+'" onchange="setFleetNo(\''+mc.id+'\',this.value)"></td>'
       +'<td class="reg-nm" onclick="openFromReg(\''+mc.id+'\')">'+esc(mc.name)+'<div class="reg-eng">'+esc(mc.eng||'')+'</div></td>'
       +'<td class="reg-cur ltr">'+cur+' '+u+'</td></tr>';
@@ -1587,8 +1761,8 @@ function renderForecast(){
     const u=unit(mc);
     const e=estReadingToday(mc);
     const estLine=e.hasEst
-      ? '<span class="fc-est">≈ '+fmt(e.val)+' '+u+' اليوم</span> <span class="fc-sub">(آخر قراءة '+fmt(mc.reading||0)+' · +'+fmt(e.added)+' بمعدّل '+fmt(Math.round(e.rate))+'/يوم)</span>'
-      : '<span class="fc-sub">العدّاد الحالي '+fmt(mc.reading||0)+' '+u+' — سجّل قراءة بتاريخها ليظهر التقريب</span>';
+      ? '<span class="fc-est">≈ '+fmt(e.val)+' '+u+' اليوم</span> <span class="fc-sub">(آخر قراءة '+fmt(currentReading(mc))+' · +'+fmt(e.added)+' بمعدّل '+fmt(Math.round(e.rate))+'/يوم)</span>'
+      : '<span class="fc-sub">العدّاد الحالي '+fmt(currentReading(mc))+' '+u+' — سجّل قراءة بتاريخها ليظهر التقريب</span>';
     // صفوف الأصناف
     const rows=itemsFor(mc).map(it=>{
       const s=statusOf(mc,it);
@@ -1718,7 +1892,7 @@ function renderDetail(){
   const u=unit(mc);
   document.getElementById('readLbl').innerHTML=(u==='km'?'العدّاد (km) · <b>Compteur kilométrique</b>':'عدّاد الساعات · <b>Compteur horaire</b>');
   document.getElementById('readUnit').textContent=u==='km'?'km · كيلومتر':'heures · ساعة';
-  document.getElementById('readInput').value=mc.reading||0;
+  document.getElementById('readInput').value=currentReading(mc);
   renderRateTab(mc);
 
   const ob=document.getElementById('optBox');ob.innerHTML='';
@@ -1759,6 +1933,7 @@ function renderDetail(){
     wrap.appendChild(d);});
 
   renderHistory(mc);
+  renderTrustedSources(mc);
   // purchases (editable invoices / receipts)
   renderPurchasesRef(mc);
 
@@ -1790,7 +1965,7 @@ function calcSummary(){
   itemsFor(mc).forEach(it=>{const s=statusOf(mc,it);if(s.cls==='st-late')late.push([it,s]);else if(s.cls==='st-soon')soon.push([it,s]);else if(s.cls==='st-ok')ok.push([it,s]);else none.push([it,s]);});
   const rate=usageRate(mc);
   const proj=(rem)=>{if(!rate||rate.perDay<=0)return '';const days=Math.round(rem/rate.perDay);return ' <span style="color:var(--muted)">(≈ '+addWorkdays(todayISO(),days)+')</span>';};
-  let h='<div class="ch">📍 على '+fmt(mc.reading)+' '+u+' — '+esc(mc.name)+'</div>';
+  let h='<div class="ch">📍 على '+fmt(currentReading(mc))+' '+u+' — '+esc(mc.name)+'</div>';
   if(rate)h+='<div class="cg" style="background:rgba(10,125,58,.05)"><div class="ttl" style="color:#0a7d3a">📊 معدّل ≈ '+fmt(Math.round(rate.perMonth))+' '+u+'/شهر — التواريخ المقدّرة أدناه</div></div>';
   const calcLine=x=>{const it=x[0],s=x[1];if(s.calendar){const meter=s.dueReading!=null?' · ≈ '+fmt(s.dueReading)+' '+u:'';if(s.remDays<0)return it.ar+' — متأخّر بـ '+fmt(Math.abs(s.remDays))+' يوم · '+esc(s.dueDate||'')+meter;if(s.remDays===0)return it.ar+' — مستحق اليوم · '+esc(s.dueDate||'')+meter;return it.ar+' — باقي '+fmt(s.remDays)+' يوم · '+esc(s.dueDate||'')+meter;}return it.ar+' — باقي '+fmt(s.rem)+' '+u+proj(s.rem);};
   if(late.length)h+='<div class="cg late"><div class="ttl">🔴 بدّلها الآن ('+late.length+')</div><ul>'+late.map(x=>'<li>'+calcLine(x)+'</li>').join('')+'</ul></div>';
@@ -1800,27 +1975,44 @@ function calcSummary(){
   box.innerHTML=h;box.classList.add('show');
 }
 
-function bump(d){const mc=getActive();const step=isRoadType(mc.type)?1000:10;mc.reading=Math.max(0,(+mc.reading||0)+d*step);document.getElementById('readInput').value=mc.reading;document.getElementById('calcBox').classList.remove('show');save();renderDetail();}
-function onRead(){const mc=getActive();mc.reading=Math.max(0,+document.getElementById('readInput').value||0);document.getElementById('calcBox').classList.remove('show');save();renderDetail();}
+function upsertMeterReading(mc,r,d,askReplace){
+  if(!mc||!d)return {ok:false};if(!Array.isArray(mc.readings))mc.readings=[];
+  const same=mc.readings.map((e,i)=>({e,i})).filter(x=>x.e&&x.e.d===d);
+  const exact=same.find(x=>Number(x.e.r)===Number(r));
+  if(exact&&same.length===1)return {ok:true,duplicate:true,record:exact.e};
+  if(same.length&&askReplace){
+    const shown=same.slice().sort((a,b)=>(Number(b.e._mod||0)-Number(a.e._mod||0)))[0].e;
+    if(!confirm('يوجد قراءة '+fmt(shown.r)+' '+unit(mc)+' بتاريخ '+d+'.\nهل تستبدل قراءة هذا اليوم بـ '+fmt(r)+' '+unit(mc)+'؟'))return {ok:false,cancelled:true};
+  }
+  let keep=same.slice().sort((a,b)=>(Number(b.e._mod||0)-Number(a.e._mod||0))||String(b.e._id||'').localeCompare(String(a.e._id||'')))[0];
+  if(keep){Object.assign(keep.e,{r:Number(r),d});touchSyncRecord('read',keep.e);}
+  else{const e=newSyncRecord('read',{r:Number(r),d});mc.readings.push(e);keep={e,i:mc.readings.length-1};}
+  // قراءة صريحة واحدة فقط لكل تاريخ؛ الباقي يُحذف بشاهد حذف حتى لا يرجع من الجهاز الآخر.
+  same.forEach(x=>{if(x.e!==keep.e)recordTombstone(mc,'read',x.e);});
+  mc.readings=mc.readings.filter(e=>e===keep.e||e.d!==d);
+  const ownTimeline=validISODate(mc.readingDate)||d===todayISO();
+  recomputeCurrentMeter(mc,ownTimeline);
+  return {ok:true,duplicate:false,record:keep.e,replaced:same.length>0};
+}
+function bump(d){const mc=getActive();if(!mc)return;const step=isRoadType(mc.type)?1000:10,r=Math.max(0,currentReading(mc)+d*step);const res=upsertMeterReading(mc,r,todayISO(),false);if(!res.ok)return;document.getElementById('readInput').value=currentReading(mc);document.getElementById('calcBox').classList.remove('show');save();renderDetail();}
+function onRead(){const mc=getActive();if(!mc)return;const r=Math.max(0,+document.getElementById('readInput').value||0),res=upsertMeterReading(mc,r,todayISO(),true);if(!res.ok){document.getElementById('readInput').value=currentReading(mc);return;}document.getElementById('calcBox').classList.remove('show');save();renderDetail();}
 function setEngInt(v){getActive().engInt=v;save();renderDetail();}
 function setEngIntCustom(v){const n=Math.max(1,parseInt(v,10)||0);if(!n)return;getActive().engInt=n;save();renderDetail();flash('✓ دورية مخصّصة: '+fmt(n));}
 function setEngine(e){getActive().engine=e;save();renderDetail();}
-function logReadingOnly(){const mc=getActive();const u=unit(mc);
-  const v=prompt('قراءة العدّاد الحالية ('+u+'):',mc.reading||'');
+function logReadingOnly(){const mc=getActive();if(!mc)return;const u=unit(mc);
+  const v=prompt('قراءة العدّاد ('+u+'):',currentReading(mc)||'');
   if(v===null)return;const r=Math.max(0,parseInt(v,10)||0);
   const dv=prompt('تاريخ القراءة (سنة-شهر-يوم):',todayISO());if(dv===null)return;
-  const d=requireISODate((dv&&dv.trim())?dv.trim():todayISO());if(!d)return;
-  if(!mc.readings)mc.readings=[];
-  if(mc.readings.some(x=>x&&Number(x.r)===r&&x.d===d)){actionFeedback('✓ هذه القراءة مسجّلة بالفعل');return;}
-  mc.readings.push(newSyncRecord('read',{r:r,d:d}));
-  if(r>(mc.reading||0))mc.reading=r;
-  save();renderDetail();}
-function usageRate(mc){ // معدل العرض مبني على أيام العمل نفسها المستعملة في التوقعات (الجمعة مستثناة)
-  const pts=historyPoints(mc);if(pts.length<2)return null;const a=pts[0],b=pts[pts.length-1];const days=workDaysBetween(a.d,b.d);if(days<=0||b.r<=a.r)return null;const perDay=(b.r-a.r)/days;return {perMonth:perDay*26,perDay,from:a,to:b,workDays:days};}
+  const d=requireOperationalDate((dv&&dv.trim())?dv.trim():todayISO());if(!d)return;
+  const res=upsertMeterReading(mc,r,d,true);if(!res.ok)return;
+  if(res.duplicate){actionFeedback('✓ هذه القراءة مسجّلة بالفعل');return;}
+  save();renderDetail();actionFeedback((res.replaced?'✓ تم تصحيح قراءة ':'✓ تم تسجيل قراءة ')+fmt(r)+' '+u+' بتاريخ '+d+' — أُعيد حساب المعدّل والتنبيهات');}
+function usageRate(mc){ // نفس المحرك المقاوم للقيم الشاذة المستعمل في التوقعات
+  const seg=rateSegments(mc);if(!seg.length)return null;const perDay=median(seg.map(x=>x.perDay));if(!Number.isFinite(perDay)||perDay<=0)return null;return {perMonth:perDay*26,perDay,from:seg[0].a,to:seg[seg.length-1].b,workDays:seg.reduce((n,x)=>n+x.days,0),samples:seg.length};}
 let logEditIdx=null;  // null = new entry; number = editing mc.history[idx]
 function openLog(){const mc=getActive();if(!mc)return;const u=unit(mc);logEditIdx=null;
   document.getElementById('logTitle').textContent='تسجيل صيانة';
-  document.getElementById('logReading').value=mc.reading||'';
+  document.getElementById('logReading').value=currentReading(mc)||'';
   document.getElementById('logDate').value=todayISO();
   document.getElementById('logNote').value='';
   document.getElementById('logHint').textContent='('+u+')';
@@ -1840,7 +2032,7 @@ function cancelLogTab(){logEditIdx=null;setDetailTab('maint');}
 function logSelectAll(v){document.querySelectorAll('#logItems input[type=checkbox]').forEach(c=>c.checked=v);}
 function saveLog(){const mc=getActive();if(!mc)return;
   const r=Math.max(0,parseInt(document.getElementById('logReading').value,10)||0);
-  const d=requireISODate(document.getElementById('logDate').value||todayISO());if(!d)return;
+  const d=requireOperationalDate(document.getElementById('logDate').value||todayISO());if(!d)return;
   const note=document.getElementById('logNote').value.trim();
   const ids=[...document.querySelectorAll('#logItems input:checked')].map(c=>c.value);
   if(!ids.length){alert('اختر على الأقل عنصراً واحداً تم تبديله، أو اضغط «اختر الكل».');return;}
@@ -1849,14 +2041,13 @@ function saveLog(){const mc=getActive();if(!mc)return;
   if(wasEdit){const e=mc.history[logEditIdx];Object.assign(e,{r:r,d:d,ids:ids,note:note});touchSyncRecord('hist',e);}
   else{mc.history.push(newSyncRecord('hist',{r:r,d:d,ids:ids,note:note}));}
   recomputeDone(mc);
-  const maxr=Math.max(mc.reading||0,...(mc.history||[]).map(h=>h.r||0),...(mc.readings||[]).map(x=>x.r||0));
-  if(maxr>(mc.reading||0))mc.reading=maxr;
+  recomputeCurrentMeter(mc,validISODate(mc.readingDate)||d===todayISO());
   save();closeLog();renderDetail();setDetailTab('maint');actionFeedback((wasEdit?'✓ تم تعديل سجل الصيانة':'✓ تم تسجيل الصيانة')+' — '+ids.length+' بند');}
 function recomputeDone(mc){ // rebuild mc.done from valid history so edits/deletes stay consistent
-  const done={};(mc.history||[]).filter(h=>h&&validISODate(h.d)&&Number.isFinite(Number(h.r))).slice().sort((a,b)=>(a.d||'').localeCompare(b.d||'')||(Number(a._mod||0)-Number(b._mod||0))||(Number(a.r)-Number(b.r))||String(a._id||'').localeCompare(String(b._id||''))).forEach(h=>{(h.ids||[]).forEach(id=>{done[id]={r:Number(h.r),d:h.d};});});mc.done=done;}
+  const done={};(mc.history||[]).filter(h=>h&&isOperationalDate(h.d)&&Number.isFinite(Number(h.r))).slice().sort((a,b)=>(a.d||'').localeCompare(b.d||'')||(Number(a._mod||0)-Number(b._mod||0))||(Number(a.r)-Number(b.r))||String(a._id||'').localeCompare(String(b._id||''))).forEach(h=>{(h.ids||[]).forEach(id=>{done[id]={r:Number(h.r),d:h.d};});});mc.done=done;}
 function deleteHistory(i){const mc=getActive();if(!mc.history||!mc.history[i])return;
   if(!confirm('حذف هذا السجلّ؟'))return;
-  recordTombstone(mc,'hist',mc.history[i]);mc.history.splice(i,1);recomputeDone(mc);save();renderDetail();}
+  recordTombstone(mc,'hist',mc.history[i]);mc.history.splice(i,1);recomputeDone(mc);recomputeCurrentMeter(mc,validISODate(mc.readingDate));save();renderDetail();}
 function renderHistory(mc){const el=document.getElementById('histRef');if(!el)return;const u=unit(mc);
   // build a combined timeline: maintenance events + meter readings
   const ev=[];
@@ -1883,17 +2074,21 @@ function renderHistory(mc){const el=document.getElementById('histRef');if(!el)re
       '<div class="hitems">بُدّل: '+esc(names)+'</div>'+gap+
       (e.note?'<div class="hnote">📝 '+esc(e.note)+'</div>':'')+'</div>';
   }).join('');}
-function editReading(i){const mc=getActive();const e=(mc.readings||[])[i];if(!e)return;const u=unit(mc);
+function editReading(i){const mc=getActive();const e=(mc.readings||[])[i];if(!e)return;const u=unit(mc),oldDate=e.d;
   const v=prompt('تعديل قراءة العدّاد ('+u+'):',e.r!=null?e.r:'');
   if(v===null)return;const r=Math.max(0,parseInt(v,10)||0);
   const dv=prompt('تعديل التاريخ (سنة-شهر-يوم):',e.d||todayISO());if(dv===null)return;
-  const d=requireISODate((dv&&dv.trim())?dv.trim():e.d);if(!d)return;Object.assign(e,{r:r,d:d});touchSyncRecord('read',e);
-  const maxr=Math.max(0,...(mc.readings||[]).map(x=>x.r||0),...(mc.history||[]).map(h=>h.r||0));
-  if(maxr>(mc.reading||0))mc.reading=maxr;
-  save();renderDetail();}
-function deleteReading(i){const mc=getActive();if(!mc.readings||!mc.readings[i])return;if(!confirm('حذف هذه القراءة؟'))return;recordTombstone(mc,'read',mc.readings[i]);mc.readings.splice(i,1);save();renderDetail();}
-function markDone(id){const mc=getActive();if(!mc)return;const it=itemsFor(mc).find(x=>x.id===id);if(!mc.history)mc.history=[];const r=Number(mc.reading)||0,d=todayISO();const before=mc.history.length;removeHistoryWhere(mc,h=>h&&h.manual===true&&Array.isArray(h.ids)&&h.ids.length===1&&h.ids[0]===id);const removedManual=mc.history.length!==before;const same=mc.history.some(h=>h&&h.d===d&&Number(h.r)===r&&Array.isArray(h.ids)&&h.ids.includes(id));if(!same)mc.history.push(newSyncRecord('hist',{r:r,d:d,ids:[id],note:''}));recomputeDone(mc);if(!same||removedManual)save();renderDetail();actionFeedback(same?'✓ '+(it&&it.ar||'الصيانة')+' مسجّلة اليوم بالفعل':'✓ تم تسجيل '+(it&&it.ar||'الصيانة')+' عند '+fmt(r)+' '+unit(mc));}
-function setLast(id){const mc=getActive(),curR=lastReadOf(mc,id),curD=lastDateOf(mc,id),u=unit(mc);const v=prompt('آخر تغيير على أيّ '+(u==='km'?'كيلومتر':'ساعة')+'؟\n(فارغ = حذف التسجيل اليدوي)',curR!=null?curR:'');if(v===null)return;if(!mc.history)mc.history=[];if(v.trim()===''){removeHistoryWhere(mc,h=>h&&h.manual===true&&Array.isArray(h.ids)&&h.ids.length===1&&h.ids[0]===id);recomputeDone(mc);save();renderDetail();return;}const n=parseInt(v,10);if(isNaN(n)||n<0)return;const dv=prompt('تاريخ التغيير؟ (سنة-شهر-يوم)\nمثال: 2026-06-10 · فارغ = تاريخ اليوم',curD||todayISO());if(dv===null)return;const d=requireISODate((dv&&dv.trim()!=='')?dv.trim():todayISO());if(!d)return;removeHistoryWhere(mc,h=>h&&h.manual===true&&Array.isArray(h.ids)&&h.ids.length===1&&h.ids[0]===id);mc.history.push(newSyncRecord('hist',{r:n,d:d,ids:[id],note:'ضبط يدوي لآخر تغيير',manual:true}));recomputeDone(mc);if(n>(mc.reading||0))mc.reading=n;save();renderDetail();}
+  const d=requireOperationalDate((dv&&dv.trim())?dv.trim():e.d);if(!d)return;
+  const other=(mc.readings||[]).find((x,idx)=>idx!==i&&x&&x.d===d);
+  if(other&&!confirm('يوجد قراءة أخرى بتاريخ '+d+'. هل توحّد قراءة هذا اليوم على '+fmt(r)+' '+u+'؟'))return;
+  Object.assign(e,{r:r,d:d});touchSyncRecord('read',e);
+  (mc.readings||[]).slice().forEach((x,idx)=>{if(idx!==i&&x&&x.d===d){recordTombstone(mc,'read',x);}});
+  mc.readings=(mc.readings||[]).filter((x,idx)=>idx===i||!x||x.d!==d);
+  recomputeCurrentMeter(mc,validISODate(mc.readingDate)||d===todayISO()||oldDate===mc.readingDate);
+  save();renderDetail();actionFeedback('✓ تم تعديل القراءة وإعادة حساب المعدّل والتنبيهات');}
+function deleteReading(i){const mc=getActive();if(!mc.readings||!mc.readings[i])return;if(!confirm('حذف هذه القراءة؟'))return;const wasDate=mc.readings[i].d;recordTombstone(mc,'read',mc.readings[i]);mc.readings.splice(i,1);recomputeCurrentMeter(mc,validISODate(mc.readingDate)&&wasDate===mc.readingDate);save();renderDetail();actionFeedback('✓ حُذفت القراءة وأُعيد الحساب');}
+function markDone(id){const mc=getActive();if(!mc)return;const it=itemsFor(mc).find(x=>x.id===id);if(!mc.history)mc.history=[];const r=currentReading(mc),d=todayISO();const before=mc.history.length;removeHistoryWhere(mc,h=>h&&h.manual===true&&Array.isArray(h.ids)&&h.ids.length===1&&h.ids[0]===id);const removedManual=mc.history.length!==before;const same=mc.history.some(h=>h&&h.d===d&&Number(h.r)===r&&Array.isArray(h.ids)&&h.ids.includes(id));if(!same)mc.history.push(newSyncRecord('hist',{r:r,d:d,ids:[id],note:''}));recomputeDone(mc);recomputeCurrentMeter(mc,true);if(!same||removedManual)save();renderDetail();actionFeedback(same?'✓ '+(it&&it.ar||'الصيانة')+' مسجّلة اليوم بالفعل':'✓ تم تسجيل '+(it&&it.ar||'الصيانة')+' عند '+fmt(r)+' '+unit(mc));}
+function setLast(id){const mc=getActive(),curR=lastReadOf(mc,id),curD=lastDateOf(mc,id),u=unit(mc);const v=prompt('آخر تغيير على أيّ '+(u==='km'?'كيلومتر':'ساعة')+'؟\n(فارغ = حذف التسجيل اليدوي)',curR!=null?curR:'');if(v===null)return;if(!mc.history)mc.history=[];if(v.trim()===''){removeHistoryWhere(mc,h=>h&&h.manual===true&&Array.isArray(h.ids)&&h.ids.length===1&&h.ids[0]===id);recomputeDone(mc);recomputeCurrentMeter(mc,validISODate(mc.readingDate));save();renderDetail();return;}const n=parseInt(v,10);if(isNaN(n)||n<0)return;const dv=prompt('تاريخ التغيير؟ (سنة-شهر-يوم)\nمثال: 2026-06-10 · فارغ = تاريخ اليوم',curD||todayISO());if(dv===null)return;const d=requireOperationalDate((dv&&dv.trim()!=='')?dv.trim():todayISO());if(!d)return;removeHistoryWhere(mc,h=>h&&h.manual===true&&Array.isArray(h.ids)&&h.ids.length===1&&h.ids[0]===id);mc.history.push(newSyncRecord('hist',{r:n,d:d,ids:[id],note:'ضبط يدوي لآخر تغيير',manual:true}));recomputeDone(mc);recomputeCurrentMeter(mc,validISODate(mc.readingDate)||d===todayISO());save();renderDetail();}
 function renameMachine(){const mc=getActive();const v=prompt('اسم/رقم الآلة',mc.name);if(v&&v.trim()){mc.name=v.trim();save();renderDetail();}}
 function deleteMachine(){const mc=getActive();if(confirm('حذف "'+mc.name+'"؟')){_markDeleted(mc.id);DB.machines=DB.machines.filter(x=>x.id!==mc.id);DB.active=null;save(false);renderGarage();}}
 
@@ -1912,7 +2107,7 @@ function doPrint(){
     return '<tr><td>'+esc(it.ar)+'</td><td>'+esc((it.spec||'')+(cp?' · '+cp:''))+'</td><td>'+esc(scheduleLabel(mc,it))+'</td><td>'+(last!=null?fmt(last)+' '+u+(ldate?' ('+esc(ldate)+')':''):'—')+'</td><td>'+due+'</td><td>'+stt+delta+'</td></tr>';}).join('');
   const d=new Date().toLocaleDateString('fr-FR');
   document.getElementById('printArea').innerHTML=
-    '<div class="pa-head"><div class="lg">EGTPH</div><div><h2>'+esc(mc.name)+' — '+typeName+'</h2><div class="s">EGTPH ABDI YOUSSOUF ISLAM · Oued Sly, Chlef · ⚙️ '+esc(mc.eng)+' · العدّاد: '+fmt(mc.reading)+' '+u+'</div></div></div>'+
+    '<div class="pa-head"><div class="lg">EGTPH</div><div><h2>'+esc(mc.name)+' — '+typeName+'</h2><div class="s">EGTPH ABDI YOUSSOUF ISLAM · Oued Sly, Chlef · ⚙️ '+esc(mc.eng)+' · العدّاد: '+fmt(currentReading(mc))+' '+u+'</div></div></div>'+
     '<div class="pa-sec">بطاقة تعريفية · Fiche d\'identité</div><div class="pa-grid">'+id+'</div>'+
     '<div class="pa-sec">الفلاتر · Les filtres</div>'+filt+
     '<div class="pa-sec">الزيوت · Lubrifiants</div>'+oils+
@@ -1928,8 +2123,8 @@ function initAddLibrary(){const cat=document.getElementById('addCat');const curr
 function setAddCat(cat){const sel=document.getElementById('addTpl');const arr=Object.entries(FLEET_TEMPLATES).filter(([k,t])=>t.cat===cat);sel.innerHTML=arr.map(([k,t])=>'<option value="'+k+'">'+t.label+'</option>').join('');pickTemplate(sel.value);}
 function pickTemplate(key){addType=key;const t=FLEET_TEMPLATES[key]||FLEET_TEMPLATES.generic_truck;document.getElementById('addReadLbl').textContent=(t.unit==='h')?'عدّاد الساعات الحالي (h)':'العدّاد الحالي (km)';document.getElementById('tplNote').innerHTML='📌 '+esc(t.note||'')+'<br><b>درجة المصدر:</b> '+(t.sourceLevel==='official'?'موثّق/رسمي':t.sourceLevel==='vin_required'?'يلزم VIN/Serial لتأكيد OEM':'احتياطي آمن');}
 function pickType(t){const map={truck:'shacman_f2000',jmc:'jmc_4x2',exc:'hyundai_hx220',loader:'foton_fl936h',jcb:'jcb_3cx'};pickTemplate(map[t]||t);}
-async function decodeVinOnline(){const vin=(document.getElementById('addVin').value||'').trim().toUpperCase();const box=document.getElementById('vinResult');if(!vin){box.textContent='أدخل VIN أولاً';return;}box.textContent='جار البحث عبر الإنترنت...';const localJmc=()=>{if(vin==='LEFYFCC23SHN09912'||vin.startsWith('LEF')){document.getElementById('addTpl').value='jmc_4x2';pickTemplate('jmc_4x2');const txt=(vin==='LEFYFCC23SHN09912'?'مطابقة داخلية: JMC Dump Truck 4×2 CLW5042ZXJX2 · ':'JMC / Jiangling Motors محتمل · ')+'محرك JX493ZQ4A · 2771cc · 68kW/92HP · Euro II · بيانات من الشهادة و PI. ملاحظة: NHTSA قد لا يرجع تفاصيل للشاحنات الصينية غير المباعة في أمريكا.';box.textContent=txt;if(!document.getElementById('addName').value.trim())document.getElementById('addName').value='JMC 2025';return true;}return false;};try{const url='https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/'+encodeURIComponent(vin)+'?format=json';const r=await fetch(url,{cache:'no-store'});const j=await r.json();const v=(j.Results&&j.Results[0])||{};const make=v.Make||'';const model=v.Model||'';const year=v.ModelYear||'';const engine=[v.EngineModel,v.DisplacementL?v.DisplacementL+'L':'',v.FuelTypePrimary].filter(Boolean).join(' ');let txt=[year,make,model].filter(Boolean).join(' ');if(engine)txt+=' · '+engine;if(txt.trim()){box.textContent=txt;if(!document.getElementById('addName').value.trim())document.getElementById('addName').value=txt;}else if(!localJmc()){box.textContent='لم يرجع NHTSA معلومات كافية. جرّب كتابة الماركة/الموديل أو استعمل القالب المناسب، وسيبقى VIN محفوظاً داخل البطاقة.';}}catch(e){if(!localJmc())box.textContent='تعذّر البحث: تحقق من الإنترنت. تم حفظ VIN عند الإضافة ويمكن التأكيد لاحقاً من الوكيل/الكتالوج.';}}
-function confirmAdd(){const t=FLEET_TEMPLATES[addType]||FLEET_TEMPLATES.generic_truck;const name=document.getElementById('addName').value.trim()||t.label;const vin=(document.getElementById('addVin').value||'').trim();const read=Math.max(0,+document.getElementById('addRead').value||0);const mc={id:m(),name:name,type:t.type,templateKey:addType,unit:t.unit,eng:t.eng,engine:t.engine,engInt:t.engInt||250,reading:read,done:{},history:[],readings:[],conditionHistory:{airf:[]},info:{},sourceLevel:t.sourceLevel,sourceNote:t.note};if(vin)mc.info.vin=vin;if(addType==='jmc_4x2'){mc.info={vin:vin||'LEFYFCC23SHN09912',engno:'S2005638'};}if(t.info)mc.profileInfo=t.info;if(t.filters)mc.filters=t.filters;if(t.oils)mc.oils=t.oils;if(t.reminders)mc.reminders=t.reminders;DB.machines.push(mc);touchMachine(mc.id,'add');closeAdd();save(mc.id);renderGarage();}
+async function decodeVinOnline(){const vin=(document.getElementById('addVin').value||'').trim().toUpperCase();const box=document.getElementById('vinResult');if(!vin){box.textContent='أدخل VIN أولاً';return;}box.textContent='جار البحث عبر الإنترنت...';const localJmc=()=>{if(vin==='LEFYFCC23SHN09912'){document.getElementById('addTpl').value='jmc_4x2';pickTemplate('jmc_4x2');box.textContent='مطابقة داخلية للـVIN المعروف: JMC Dump Truck 4×2 CLW5042ZXJX2 · محرك JX493ZQ4A · 2771cc · 68kW/92HP · Euro II · من الشهادة وPI الموجودة في بيانات البرنامج.';if(!document.getElementById('addName').value.trim())document.getElementById('addName').value='JMC 2025';return true;}if(vin.startsWith('LEF')){box.textContent='بادئة VIN تشير إلى مركبة JMC/Jiangling محتملة، لكن لا أعيّن الموديل أو المحرك أو أرقام الفلاتر تلقائياً. أكّدها من الوكيل/المستند أو كتالوج VIN رسمي.';return true;}return false;};try{const url='https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/'+encodeURIComponent(vin)+'?format=json';const r=await fetch(url,{cache:'no-store'});const j=await r.json();const v=(j.Results&&j.Results[0])||{};const make=v.Make||'';const model=v.Model||'';const year=v.ModelYear||'';const engine=[v.EngineModel,v.DisplacementL?v.DisplacementL+'L':'',v.FuelTypePrimary].filter(Boolean).join(' ');let txt=[year,make,model].filter(Boolean).join(' ');if(engine)txt+=' · '+engine;if(txt.trim()){box.textContent=txt;if(!document.getElementById('addName').value.trim())document.getElementById('addName').value=txt;}else if(!localJmc()){box.textContent='لم يرجع NHTSA معلومات كافية. جرّب كتابة الماركة/الموديل أو استعمل القالب المناسب، وسيبقى VIN محفوظاً داخل البطاقة.';}}catch(e){if(!localJmc())box.textContent='تعذّر البحث: تحقق من الإنترنت. تم حفظ VIN عند الإضافة ويمكن التأكيد لاحقاً من الوكيل/الكتالوج.';}}
+function confirmAdd(){const t=FLEET_TEMPLATES[addType]||FLEET_TEMPLATES.generic_truck;const name=document.getElementById('addName').value.trim()||t.label;const vin=(document.getElementById('addVin').value||'').trim();const read=Math.max(0,+document.getElementById('addRead').value||0);const mc={id:m(),name:name,type:t.type,templateKey:addType,unit:t.unit,eng:t.eng,engine:t.engine,engInt:t.engInt||250,reading:read,done:{},history:[],readings:[],conditionHistory:{airf:[]},info:{},sourceLevel:t.sourceLevel,sourceNote:t.note};if(read>0){mc.readings.push(newSyncRecord('read',{r:read,d:todayISO()}));mc.readingDate=todayISO();}if(vin)mc.info.vin=vin;if(addType==='jmc_4x2'){mc.info={};if(vin)mc.info.vin=vin;}if(t.info)mc.profileInfo=t.info;if(t.filters)mc.filters=t.filters;if(t.oils)mc.oils=t.oils;if(t.reminders)mc.reminders=t.reminders;DB.machines.push(mc);touchMachine(mc.id,'add');closeAdd();save(mc.id);renderGarage();}
 function resetAll(){if(confirm('مسح كل البيانات وإرجاع الأسطول الأصلي؟')){try{localStorage.removeItem(KEY);}catch(e){}seed();migrate();save();renderGarage();}}
 
 // ══════ حذف الآلات المكرّرة (بنفس الاسم) مع اختيار النسخة المُبقاة ══════
@@ -1938,7 +2133,7 @@ function _normName(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,
 function _machineScore(mc){
   let n=0;
   try{ n+=Object.keys(mc.done||{}).length*100; }catch(e){}
-  try{ n+=(mc.reading||0)>0?10:0; }catch(e){}
+  try{ n+=currentReading(mc)>0?10:0; }catch(e){}
   try{ if(mc.info&&Object.keys(mc.info).length)n+=5; }catch(e){}
   return n;
 }
@@ -1966,7 +2161,7 @@ function openDedupe(){
         h+='<label style="display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;cursor:pointer">'
           +'<input type="radio" name="dedup_'+gi+'" value="'+i+'"'+(i===best?' checked':'')+' style="margin-top:3px;width:16px;height:16px;accent-color:var(--gold)">'
           +'<span style="font-size:12px;line-height:1.5"><b>'+esc(mc.name||'')+'</b>'
-          +'<br><span style="color:var(--gold-dk)">العدّاد: '+fmt(mc.reading||0)+' · عمليات صيانة مسجّلة: '+doneN+(i===best?' · <b>مقترَح للإبقاء</b>':'')+'</span></span></label>';
+          +'<br><span style="color:var(--gold-dk)">العدّاد: '+fmt(currentReading(mc))+' · عمليات صيانة مسجّلة: '+doneN+(i===best?' · <b>مقترَح للإبقاء</b>':'')+'</span></span></label>';
       });
       h+='</div>';
     });
@@ -2014,6 +2209,7 @@ const FB_URL    = 'https://egtph-service-default-rtdb.europe-west1.firebasedatab
 const FB_SECRET = 'EGTPH-svc2-2026-a3VF6JCQhvRTaYIemD9Lp9RR'; // مفتاح جديد — تم استبدال القديم
 // مسار مستقل تحت egtph/ — مغطّى أصلاً بقاعدة egtph/$key (لا تعديل في Firebase)
 const FB_BASE   = '/egtph/' + FB_SECRET; // البيانات في مسار سرّي — لا يصلها إلا من يملك المفتاح
+const FB_LIBRARY_BASE = '/egtph/' + FB_SECRET + '-fleet-library-v1'; // مكتبة منفصلة: لا يمسحها PUT قاعدة الأسطول
 function FB_AUTH_PARAM(){try{return (window.EGTPHAuth&&typeof window.EGTPHAuth.authParam==='function')?window.EGTPHAuth.authParam('service'):'';}catch(e){return '';}}
 function FB_NODE_FN(){ return FB_BASE + '.json' + FB_AUTH_PARAM(); }
 const FB_SYNC_INTERVAL = 15000; // SSE لحظي؛ وفحص احتياطي كل 15ث عند تعليق البث في iOS
@@ -2174,7 +2370,7 @@ function catalogRowsActual(mc,kind){return mc&&mc.catalog&&Array.isArray(mc.cata
 function mergeCatalogData(ex,inc){const kinds=['filters','oils','purchases'];let changed=false;if(!ex.catalog&&inc.catalog)ex.catalog={};kinds.forEach(kind=>{const a=catalogRowsActual(ex,kind),b=catalogRowsActual(inc,kind);if(!a&&!b)return;if(!ex.catalog)ex.catalog={};if(!a&&b){ex.catalog[kind]=deepClone(b);changed=true;return;}if(a&&!b)return;const localDel=kind==='purchases'?ex._deletedCatalogPurchases:[],remoteDel=kind==='purchases'?inc._deletedCatalogPurchases:[];const r=mergeSyncList(ex,a,b,localDel,remoteDel,'cat_'+kind);if(canonicalStringify(a)!==canonicalStringify(r.list)){ex.catalog[kind]=r.list;changed=true;}if(kind==='purchases'){const d=mergeTombstones(localDel,remoteDel);if(canonicalStringify(ex._deletedCatalogPurchases||[])!==canonicalStringify(d)){ex._deletedCatalogPurchases=d;changed=true;}}});return changed;}
 function fieldMod(mc,k){return Number(mc&&mc._fieldMods&&mc._fieldMods[k])||Number(mc&&mc._mod)||0;}
 function incomingFieldWins(ex,inc,k){const im=fieldMod(inc,k),em=fieldMod(ex,k);if(im!==em)return im>em;return String(inc&&inc._device||'')>String(ex&&ex._device||'');}
-function mergeMachineData(ex,inc){ensureMachineSyncMeta(ex);ensureMachineSyncMeta(inc);const before=canonicalStringify(ex),exMod=Number(ex._mod)||0,incMod=Number(inc._mod)||0;const keys=new Set([...machineFieldKeys(ex),...machineFieldKeys(inc),...Object.keys(ex._fieldMods||{}),...Object.keys(inc._fieldMods||{})]);keys.forEach(k=>{if(incomingFieldWins(ex,inc,k)){if(Object.prototype.hasOwnProperty.call(inc,k))ex[k]=deepClone(inc[k]);else delete ex[k];ex._fieldMods[k]=fieldMod(inc,k);}});let r=mergeSyncList(ex,ex.history,inc.history,ex._deletedHistory,inc._deletedHistory,'hist');ex.history=r.list;ex._deletedHistory=r.dels;r=mergeSyncList(ex,ex.readings,inc.readings,ex._deletedReadings,inc._deletedReadings,'read');ex.readings=r.list;ex._deletedReadings=r.dels;const ea=airFilterCleaningEntries(ex),ia=airFilterCleaningEntries(inc);r=mergeSyncList(ex,ea,ia,ex._deletedAirf,inc._deletedAirf,'airf');if(!ex.conditionHistory||typeof ex.conditionHistory!=='object')ex.conditionHistory={};ex.conditionHistory.airf=r.list;ex._deletedAirf=r.dels;mergeCatalogData(ex,inc);if(incMod>exMod)ex._device=inc._device;ex._mod=Math.max(exMod,incMod);ex._rev=Math.max(Number(ex._rev)||0,Number(inc._rev)||0);recomputeDone(ex);const maxMeter=Math.max(Number(ex.reading)||0,...(ex.history||[]).map(x=>Number(x.r)||0),...(ex.readings||[]).map(x=>Number(x.r)||0),...airFilterCleaningEntries(ex).map(x=>Number(x.r)||0));ex.reading=maxMeter;return before!==canonicalStringify(ex);}
+function mergeMachineData(ex,inc){ensureMachineSyncMeta(ex);ensureMachineSyncMeta(inc);const before=canonicalStringify(ex),exMod=Number(ex._mod)||0,incMod=Number(inc._mod)||0;const keys=new Set([...machineFieldKeys(ex),...machineFieldKeys(inc),...Object.keys(ex._fieldMods||{}),...Object.keys(inc._fieldMods||{})]);keys.forEach(k=>{if(incomingFieldWins(ex,inc,k)){if(Object.prototype.hasOwnProperty.call(inc,k))ex[k]=deepClone(inc[k]);else delete ex[k];ex._fieldMods[k]=fieldMod(inc,k);}});let r=mergeSyncList(ex,ex.history,inc.history,ex._deletedHistory,inc._deletedHistory,'hist');ex.history=r.list;ex._deletedHistory=r.dels;r=mergeSyncList(ex,ex.readings,inc.readings,ex._deletedReadings,inc._deletedReadings,'read');ex.readings=r.list;ex._deletedReadings=r.dels;normalizeExplicitReadings(ex);const ea=airFilterCleaningEntries(ex),ia=airFilterCleaningEntries(inc);r=mergeSyncList(ex,ea,ia,ex._deletedAirf,inc._deletedAirf,'airf');if(!ex.conditionHistory||typeof ex.conditionHistory!=='object')ex.conditionHistory={};ex.conditionHistory.airf=r.list;ex._deletedAirf=r.dels;mergeCatalogData(ex,inc);if(incMod>exMod)ex._device=inc._device;ex._mod=Math.max(exMod,incMod);ex._rev=Math.max(Number(ex._rev)||0,Number(inc._rev)||0);recomputeDone(ex);recomputeCurrentMeter(ex,validISODate(ex.readingDate));return before!==canonicalStringify(ex);}
 function mergeSettings(data){if(!data||!data.settings||typeof data.settings!=='object')return false;ensureSettingsSyncMeta();const remoteMods=(data._settingsMods&&typeof data._settingsMods==='object')?data._settingsMods:{};const keys=new Set([...Object.keys(DB.settings||{}),...Object.keys(data.settings||{}),...Object.keys(DB._settingsMods||{}),...Object.keys(remoteMods)]);let changed=false;keys.forEach(k=>{const em=Number(DB._settingsMods[k])||Number(DB._mod)||0,im=Number(remoteMods[k])||Number(data._mod)||0;if(im>em||(im===em&&String(data.deviceId||'')>String(DB._device||''))){const has=Object.prototype.hasOwnProperty.call(data.settings,k),before=canonicalStringify((DB.settings||{})[k]),after=has?canonicalStringify(data.settings[k]):undefined,oldMod=Number(DB._settingsMods[k])||0;if(has)DB.settings[k]=deepClone(data.settings[k]);else delete DB.settings[k];DB._settingsMods[k]=im;if(before!==after||oldMod!==im)changed=true;}});return changed;}
 function mergeCloud(data){
   const stats={added:0,updated:0,deleted:0,kept:0,conflictLocalKept:0,settings:0};if(!data||typeof data!=='object')return stats;const dirtyLocal=new Set(Array.from(_dirtyMachines||[]).map(String));
@@ -2283,32 +2479,38 @@ function _sseOnChange(ev){
 function fbToggleAuto(chk){
   try{ localStorage.setItem('egtph_parc_fb_auto',chk.checked?'1':'0'); }catch(e){}
   flash(chk.checked?'☁️ المزامنة التلقائية مفعّلة':'المزامنة التلقائية متوقفة');
-  if(chk.checked){ _fbDirty=true; fbAutoTick(); }
+  if(chk.checked){_initialCloudReconciled=false;_fbDirty=true;safeRender();fbStartupCheck();}
+  else{finishInitialAlertReconcile();}
 }
 
 async function fbStartupCheck(){
-  try{if(_dirtyMachines.size||fbCurrentHash()!==fbLastHash())_fbDirty=true;}catch(e){}
-  if(!navigator.onLine){fbStatus('off','غير متصل بالإنترنت');return;}
-  fbStatus('sync','جارٍ فحص السحابة…');
-  try{ await fbRefreshServerTimeOffset(); }catch(e){}
+  if(_startupCheckBusy)return;
+  _startupCheckBusy=true;
   try{
-    const r=await fetch(FB_URL+FB_BASE+'/savedAt.json'+FB_AUTH_PARAM(),{cache:'no-store'});
-    if(!r.ok){
-      let hint='تحقّق من قواعد Firebase (HTTP '+r.status+')';
-      if(r.status===401||r.status===403) hint='⛔ مرفوض — تحقّق من تسجيل الدخول وقواعد Firebase';
-      fbStatus('err',hint); return;
+    try{if(_dirtyMachines.size||fbCurrentHash()!==fbLastHash())_fbDirty=true;}catch(e){}
+    if(!navigator.onLine){fbStatus('off','غير متصل بالإنترنت — التنبيهات من النسخة المحلية');return;}
+    fbStatus('sync','جارٍ تثبيت بيانات الجهازين قبل حساب التنبيهات…');
+    try{await fbRefreshServerTimeOffset();}catch(e){}
+    if(fbAuto()){
+      const ok=await fbSync(true);
+      if(!ok)fbStatus('err','تعذّرت المصالحة السحابية — استعملت النسخة المحلية ولم أطمس السحابة');
+      return;
     }
-    const ts=await r.json(); const lt=fbLastTS(); _fbSynced=true;
-    let rh=''; try{ const hr=await fetch(FB_URL+FB_BASE+'/contentHash.json'+FB_AUTH_PARAM(),{cache:'no-store'}); if(hr.ok)rh=await hr.json(); }catch(e){}
-    const changed=!!((ts && ts!==lt) || (rh && rh!==fbLastHash()));
-    if(changed){
-      if(fbAuto()){ fbStatus('new','يوجد جديد — جارٍ المزامنة…'); fbAutoTick(); }
-      else { fbStatus('new','🔔 يوجد جديد في السحابة — اضغط للمزامنة'); }
-    }
-    else fbStatus('ok', ts?null:'السحابة فارغة — اضغط للرفع الأول');
-  }catch(e){ fbStatus('err','تعذّر الاتصال بالسحابة — تحقّق من الإنترنت'); }
+    // عند إيقاف التلقائي لا ندمج قسراً، لكن نتحقق هل توجد نسخة أحدث.
+    const snap=await fbFetchSnapshot();_fbSynced=true;const data=snap.data||{};
+    const changed=!!(data.contentHash&&data.contentHash!==fbCurrentHash());
+    if(changed)fbStatus('new','🔔 يوجد جديد في السحابة — اضغط للمزامنة');
+    else fbStatus('ok',data.savedAt?null:'السحابة فارغة — اضغط للرفع الأول');
+  }catch(e){
+    const msg=String(e&&e.message||e);
+    const hint=/401|403|Permission|denied/i.test(msg)?'⛔ مرفوض — تحقّق من تسجيل الدخول وقواعد Firebase':'تعذّر الاتصال بالسحابة — التنبيهات من النسخة المحلية';
+    fbStatus('err',hint);
+  }finally{
+    _startupCheckBusy=false;
+    finishInitialAlertReconcile();
+  }
 }
-window.addEventListener('online', ()=>{ fbStatus('ok','عاد الاتصال'); _fbDirty=true; });
+window.addEventListener('online', ()=>{ fbStatus('ok','عاد الاتصال'); _fbDirty=true; if(!_initialCloudReconciled)fbStartupCheck(); });
 window.addEventListener('offline',()=>fbStatus('off','غير متصل'));
 // تحذير قبل الخروج إذا كان هناك تغيير لم يُرفع للسحابة (الذاكرة معطّلة → السحابة هي المرجع)
 function _commitActiveField(){
@@ -2378,7 +2580,7 @@ function maintenanceScheduleMessage(mc,it,status){
   if(status&&status.urgency==='late'){
     state='متأخر بـ '+fmt(Math.abs(Number(status.rem)||0))+' '+u;
   }else if(status&&status.urgency==='now'){
-    state='مستحق الآن — المتبقي '+fmt(Math.max(0,Number(status.rem)||0))+' '+u;
+    state='مستحق الآن فعلاً — المتبقي '+fmt(Math.max(0,Number(status.rem)||0))+' '+u;
   }else if(status&&status.urgency==='soon'){
     state=(status.estDate?'متوقع حوالي '+status.estDate+' — ':'')+'متبقٍ '+fmt(Math.max(0,Number(status.rem)||0))+' '+u;
   }else{
@@ -2494,6 +2696,11 @@ function setMaintenanceDashboardStatus(message){
   if(el)el.textContent=message||'';
 }
 function emitMaintenanceDashboardAlerts(){
+  if(!alertsCanCompute()||_fbBusy){
+    setMaintenanceDashboardStatus('لوحة EGTPH: جارٍ تثبيت بيانات الجهازين قبل إرسال التنبيهات.');
+    if(_fbBusy)scheduleMaintenanceDashboardAlerts();
+    return;
+  }
   const alerts=buildMaintenanceDashboardAlerts();
   const count=maintenanceOpenAlertCount(alerts);
   if(!window.parent||window.parent===window){
