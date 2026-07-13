@@ -291,56 +291,196 @@ let LANG="fr";
 function t(k){return (T[LANG]&&T[LANG][k])||T.fr[k]||k;}
 
 /* ===== STORAGE =====
-   ⚠️ إصلاح حرج: window.storage هي واجهة معاينة Claude فقط — لا تخدم خارج Claude.ai.
-   لو نُشر هذا الملف على GitHub (كما يخدم فعلياً)، كانت البيانات ستُحفظ في MEM (ذاكرة
-   مؤقّتة تُمحى عند كل إغلاق) بلا أي تحذير حقيقي. الحلّ: localStorage كمرجع دائم حقيقي
-   يخدم في كل المتصفّحات، + Firebase للمزامنة بين الأجهزة. */
-const KEY="etphb_park_v3"; let MEM={}; let DATA=null; let saveWarned=false;
-const hasWS=false; // معطّلة عمداً — لم تكن تخدم خارج معاينة Claude
-async function loadAll(){
-  try{const raw=localStorage.getItem(KEY);if(raw)return JSON.parse(raw);}catch(e){}
-  return null;
-}
-async function saveAll(){
-  // ── طابع تعديل حقيقي فقط عند تعديل المستخدم (لا عند تطبيق بيانات من السحابة) ──
-  if(!window._cloudApplying){ try{ DATA._mod=nextMod(); }catch(e){} }
-  const s=JSON.stringify(DATA);
-  try{ localStorage.setItem(KEY,s); }
-  catch(e){
-    MEM[KEY]=s;
-    if(!saveWarned){saveWarned=true;alert("⚠️ Sauvegarde locale indisponible. Exportez pour garder une copie.");}
-  }
-  if(!window._cloudApplying){ try{ window._cloudDirty=true; schedulePush(); }catch(e){} }
-  // Envoie aussi les alertes documentaires réelles au tableau EGTPH lorsqu'il est ouvert dans l'iframe.
-  try{ scheduleParcDashboardAlerts(); }catch(e){}
-}
+   التخزين المحلي الرئيسي أصبح مزدوجاً:
+   1) IndexedDB لحالة البرنامج الكاملة (لا يتأثر بحد localStorage الصغير).
+   2) localStorage كمرآة توافق سريعة فقط.
+   الصور تبقى في IndexedDB المنفصل، وتُنقل مفاتيح img_* القديمة تلقائياً قبل أول حفظ.
+   لا يظهر تحذير فقدان الحفظ إلا إذا فشل IndexedDB وlocalStorage معاً فعلاً. */
+const KEY="etphb_park_v3";
 const IMG_DB_NAME="egtph_parc_images_v2",IMG_DB_STORE="images";
-let _imgDbPromise=null;
-function openImgDb(){
-  if(!("indexedDB" in window))return Promise.resolve(null);
-  if(_imgDbPromise)return _imgDbPromise;
-  _imgDbPromise=new Promise(resolve=>{
+const STATE_DB_NAME="egtph_parc_state_v1",STATE_DB_STORE="state";
+let MEM={},DATA=null,saveWarned=false,_imgDbPromise=null,_stateDbPromise=null,_storeRevLast=0;
+const hasWS=false;
+function _nextStoreRev(){
+  let t=Date.now();
+  try{t+=(performance.now()%1)/1000;}catch(e){}
+  if(t<=_storeRevLast)t=_storeRevLast+0.001;
+  _storeRevLast=t;
+  return t;
+}
+
+function _openKvDb(name,store,promiseKind){
+  const current=promiseKind==="img"?_imgDbPromise:_stateDbPromise;
+  if(current)return current;
+  const p=new Promise(resolve=>{
+    if(!("indexedDB" in window)){resolve(null);return;}
     let req;
-    try{req=indexedDB.open(IMG_DB_NAME,1);}catch(e){resolve(null);return;}
-    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(IMG_DB_STORE))db.createObjectStore(IMG_DB_STORE);};
-    req.onsuccess=()=>resolve(req.result);
+    try{req=indexedDB.open(name,1);}catch(e){resolve(null);return;}
+    req.onupgradeneeded=()=>{
+      try{const db=req.result;if(!db.objectStoreNames.contains(store))db.createObjectStore(store);}
+      catch(e){}
+    };
+    req.onsuccess=()=>{
+      const db=req.result;
+      try{db.onversionchange=()=>{try{db.close();}catch(e){}};}catch(e){}
+      resolve(db);
+    };
     req.onerror=()=>resolve(null);
     req.onblocked=()=>resolve(null);
   });
-  return _imgDbPromise;
+  if(promiseKind==="img")_imgDbPromise=p;else _stateDbPromise=p;
+  p.then(db=>{
+    if(db)return;
+    if(promiseKind==="img"&&_imgDbPromise===p)_imgDbPromise=null;
+    if(promiseKind!=="img"&&_stateDbPromise===p)_stateDbPromise=null;
+  });
+  return p;
 }
-async function idbGetImg(k){
-  const db=await openImgDb();if(!db)return null;
-  return await new Promise(resolve=>{try{const tx=db.transaction(IMG_DB_STORE,"readonly"),q=tx.objectStore(IMG_DB_STORE).get(String(k));q.onsuccess=()=>resolve(q.result==null?null:q.result);q.onerror=()=>resolve(null);}catch(e){resolve(null);}});
+function openImgDb(){return _openKvDb(IMG_DB_NAME,IMG_DB_STORE,"img");}
+function openStateDb(){return _openKvDb(STATE_DB_NAME,STATE_DB_STORE,"state");}
+
+async function _idbGet(dbPromise,store,k){
+  const db=await dbPromise;if(!db)return null;
+  return await new Promise(resolve=>{
+    try{
+      const tx=db.transaction(store,"readonly"),q=tx.objectStore(store).get(String(k));
+      q.onsuccess=()=>resolve(q.result==null?null:q.result);
+      q.onerror=()=>resolve(null);
+    }catch(e){resolve(null);}
+  });
 }
-async function idbSetImg(k,v){
-  const db=await openImgDb();if(!db)return false;
-  return await new Promise(resolve=>{try{const tx=db.transaction(IMG_DB_STORE,"readwrite");tx.objectStore(IMG_DB_STORE).put(v,String(k));tx.oncomplete=()=>resolve(true);tx.onerror=()=>resolve(false);tx.onabort=()=>resolve(false);}catch(e){resolve(false);}});
+async function _idbSet(dbPromise,store,k,v){
+  const db=await dbPromise;if(!db)return false;
+  return await new Promise(resolve=>{
+    try{
+      const tx=db.transaction(store,"readwrite");
+      tx.objectStore(store).put(v,String(k));
+      tx.oncomplete=()=>resolve(true);
+      tx.onerror=()=>resolve(false);
+      tx.onabort=()=>resolve(false);
+    }catch(e){resolve(false);}
+  });
 }
-async function idbDelImg(k){
-  const db=await openImgDb();if(!db)return false;
-  return await new Promise(resolve=>{try{const tx=db.transaction(IMG_DB_STORE,"readwrite");tx.objectStore(IMG_DB_STORE).delete(String(k));tx.oncomplete=()=>resolve(true);tx.onerror=()=>resolve(false);tx.onabort=()=>resolve(false);}catch(e){resolve(false);}});
+async function _idbDel(dbPromise,store,k){
+  const db=await dbPromise;if(!db)return false;
+  return await new Promise(resolve=>{
+    try{
+      const tx=db.transaction(store,"readwrite");
+      tx.objectStore(store).delete(String(k));
+      tx.oncomplete=()=>resolve(true);
+      tx.onerror=()=>resolve(false);
+      tx.onabort=()=>resolve(false);
+    }catch(e){resolve(false);}
+  });
 }
+
+async function idbGetImg(k){return _idbGet(openImgDb(),IMG_DB_STORE,k);}
+async function idbSetImg(k,v){return _idbSet(openImgDb(),IMG_DB_STORE,k,v);}
+async function idbDelImg(k){return _idbDel(openImgDb(),IMG_DB_STORE,k);}
+async function idbGetState(k){return _idbGet(openStateDb(),STATE_DB_STORE,k);}
+async function idbSetState(k,v){return _idbSet(openStateDb(),STATE_DB_STORE,k,v);}
+
+function _parseSavedState(raw){
+  if(raw==null)return null;
+  try{
+    const o=typeof raw==="string"?JSON.parse(raw):raw;
+    return o&&typeof o==="object"&&Array.isArray(o.equipment)?o:null;
+  }catch(e){return null;}
+}
+function _stateMod(o){return Number(o&&o._mod)||0;}
+function _stateStoreRev(o){return Number(o&&o._storeRev)||0;}
+function _stateIsNewer(a,b){
+  if(!a)return false;if(!b)return true;
+  const ar=_stateStoreRev(a),br=_stateStoreRev(b);
+  if(ar||br)return ar>br;
+  return _stateMod(a)>_stateMod(b);
+}
+
+async function loadAll(){
+  let idbState=null,localState=null;
+  try{idbState=_parseSavedState(await idbGetState(KEY));}catch(e){}
+  try{localState=_parseSavedState(localStorage.getItem(KEY));}catch(e){}
+  const memState=_parseSavedState(MEM[KEY]);
+  let chosen=null;
+  [idbState,localState,memState].forEach(o=>{
+    if(o&&_stateIsNewer(o,chosen))chosen=o;
+  });
+  return chosen;
+}
+
+async function mirrorState(data){
+  if(!data)return {idb:false,local:false};
+  let s;
+  try{s=JSON.stringify(data);}catch(e){return {idb:false,local:false};}
+  const idbOk=await idbSetState(KEY,s);
+  let localOk=false;
+  try{localStorage.setItem(KEY,s);localOk=true;}catch(e){}
+  if(idbOk||localOk)MEM[KEY]=s;
+  return {idb:idbOk,local:localOk};
+}
+
+async function migrateLegacyImagesToIndexedDB(){
+  const db=await openImgDb();
+  if(!db)return {moved:0,failed:0,total:0};
+  const keys=[];
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      if(k&&k.startsWith("img_"))keys.push(k);
+    }
+  }catch(e){return {moved:0,failed:0,total:0};}
+  let moved=0,failed=0;
+  for(const legacyKey of keys){
+    let value=null;
+    try{value=localStorage.getItem(legacyKey);}catch(e){failed++;continue;}
+    if(value==null)continue;
+    const imageKey=legacyKey.slice(4);
+    if(await idbSetImg(imageKey,value)){
+      try{localStorage.removeItem(legacyKey);}catch(e){}
+      delete MEM[legacyKey];
+      moved++;
+    }else failed++;
+  }
+  return {moved,failed,total:keys.length};
+}
+
+async function saveAll(){
+  if(!window._cloudApplying){try{DATA._mod=nextMod();}catch(e){}}
+  try{DATA._storeRev=_nextStoreRev();}catch(e){}
+  let s;
+  try{s=JSON.stringify(DATA);}
+  catch(e){
+    if(!saveWarned){saveWarned=true;alert("⚠️ Impossible de préparer la sauvegarde locale. Exportez une copie.");}
+    return false;
+  }
+
+  let idbOk=await idbSetState(KEY,s);
+  let localOk=false;
+  try{localStorage.setItem(KEY,s);localOk=true;}
+  catch(firstError){
+    // استرجاع تلقائي لمساحة localStorage القديمة ثم محاولة واحدة جديدة.
+    try{
+      const migrated=await migrateLegacyImagesToIndexedDB();
+      if(migrated.moved>0){localStorage.setItem(KEY,s);localOk=true;}
+    }catch(e){}
+  }
+
+  if(idbOk||localOk){
+    MEM[KEY]=s;
+    saveWarned=false;
+  }else{
+    MEM[KEY]=s;
+    if(!saveWarned){
+      saveWarned=true;
+      alert("⚠️ Sauvegarde locale indisponible sur ce navigateur. Les deux stockages persistants ont échoué. Exportez une copie.");
+    }
+  }
+
+  if(!window._cloudApplying){try{window._cloudDirty=true;schedulePush();}catch(e){}}
+  try{scheduleParcDashboardAlerts();}catch(e){}
+  return idbOk||localOk;
+}
+
 async function getImg(k){
   const modern=await idbGetImg(k);if(modern!=null)return modern;
   let legacy=null;
@@ -350,7 +490,6 @@ async function getImg(k){
     if(await idbSetImg(k,legacy)){try{localStorage.removeItem("img_"+k);}catch(e){}delete MEM["img_"+k];}
     return legacy;
   }
-  // جهاز جديد: جلب الصورة من السحابة ثم وضعها في IndexedDB بدل استهلاك localStorage.
   try{const v=await fbFetchImg(k);if(v){await idbSetImg(k,v);return v;}}catch(e){}
   return null;
 }
@@ -358,7 +497,7 @@ async function setImg(k,v){
   const ok=await idbSetImg(k,v);
   if(ok){try{localStorage.removeItem("img_"+k);}catch(e){}delete MEM["img_"+k];}
   else{try{localStorage.setItem("img_"+k,v);}catch(e){MEM["img_"+k]=v;}}
-  try{await fbPushImg(k,v);}catch(e){} // مسار مستقل للصورة نفسها؛ ننتظر محاولة الرفع قبل إغلاق نافذة الحفظ.
+  try{await fbPushImg(k,v);}catch(e){}
   return true;
 }
 async function delImg(k){
@@ -684,6 +823,8 @@ function applyDesign(){
 /* ===== INIT ===== */
 async function init(){
   DATA=await loadAll();
+  // تنظيف جميع صور localStorage القديمة قبل أي migration يستدعي saveAll.
+  await migrateLegacyImagesToIndexedDB();
   if(!DATA){ DATA=JSON.parse(JSON.stringify(SEED)); await saveAll(); }
   DATA.company=Object.assign({},SEED.company,DATA.company||{});
   DATA.print=Object.assign({},SEED.print,DATA.print||{});
@@ -691,6 +832,8 @@ async function init(){
   if(!DATA.lang)DATA.lang=SEED.lang;
   if(!Array.isArray(DATA.deletedIds))DATA.deletedIds=[];
   if(DATA._mod==null)DATA._mod=nextMod();
+  // إصلاح المرآتين بعد التطبيع ومن دون تغيير _mod أو اعتبار ذلك تعديلاً من المستخدم.
+  await mirrorState(DATA);
   // Migration OCR : conserve le texte extrait et les indications de confiance par document.
   if(!DATA._mig_ocr){DATA.equipment.forEach(e=>{if(!e.ocr||typeof e.ocr!=="object")e.ocr={};});DATA._mig_ocr=true;await saveAll();}
   if(!DATA._mig_jmc){ DATA.equipment=DATA.equipment.filter(e=>e.matricule!=="002683.225.02"); DATA._mig_jmc=true; await saveAll(); }
