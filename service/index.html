@@ -850,6 +850,73 @@ function runOneTimeLegacyCalculationRepair(){
 }
 function oneTimeRepairSummary(stats){stats=stats||{};const n=Number(stats.machinesChecked)||Number(stats.machines)||0,c=[];if(stats.currentMeters)c.push('عدادات '+stats.currentMeters);if(stats.doneRebuilt)c.push('حسابات صيانة '+stats.doneRebuilt);if(stats.oilIntervals)c.push('دوريات زيت '+stats.oilIntervals);if(stats.orphanReadings)c.push('قراءات يتيمة '+stats.orphanReadings);if(stats.duplicateMaintenance)c.push('تكرارات '+stats.duplicateMaintenance);if(stats.legacyDoneRecords)c.push('سجلات حساب قديم '+stats.legacyDoneRecords);if(stats.linkedActualReadings)c.push('ربط فعلي '+stats.linkedActualReadings);if(stats.jcbLegacyItems)c.push('JCB '+stats.jcbLegacyItems);return 'تم فحص وتصحيح البيانات القديمة مرة واحدة'+(n?' لـ '+n+' آلة':'')+(c.length?' · '+c.join(' · '):' · لم توجد أخطاء مخزنة تحتاج تغييراً');}
 
+const ONE_TIME_EST_ANCHOR_REPAIR_KEY='_repair_est_anchor_202607_v2';
+const ONE_TIME_EST_ANCHOR_MACHINE_FIELD='_repairEstAnchor202607_v2';
+function estimateAnchorRepairDone(){
+  const x=DB&&DB.settings&&DB.settings[ONE_TIME_EST_ANCHOR_REPAIR_KEY];
+  return !!(x&&typeof x==='object'&&Number(x.version)>=2&&x.done===true);
+}
+function estimateAnchorRepairStats(){return {machines:0,machinesChecked:0,anchorsCreated:0,kmAnchors:0,hAnchors:0,alreadyDated:0,noProvableDate:0};}
+function legacyActualAnchorCandidate(mc){
+  if(!mc||typeof mc!=='object')return null;
+  if(latestDatedMeter(mc))return null;
+  const r=Number(mc.reading);
+  if(!Number.isFinite(r)||r<0)return null;
+  if(isOperationalDate(mc.readingDate))return {r,d:String(mc.readingDate),source:'legacy-reading-date'};
+  const rows=(mc.history||[]).filter(h=>h&&isOperationalDate(h.d)&&Number.isFinite(Number(h.r))&&Number(h.r)===r);
+  if(!rows.length)return null;
+  rows.sort((a,b)=>String(a.d).localeCompare(String(b.d))||(Number(a._mod)||0)-(Number(b._mod)||0)||String(a._id||'').localeCompare(String(b._id||'')));
+  const h=rows[rows.length-1];
+  return {r,d:String(h.d),source:'legacy-current-history-exact-match',historyId:String(h._id||'')};
+}
+function runOneTimeEstimateAnchorRepair(){
+  if(!DB.settings||typeof DB.settings!=='object')DB.settings={};
+  const prior=DB.settings[ONE_TIME_EST_ANCHOR_REPAIR_KEY],stats=estimateAnchorRepairStats(),device=getDeviceId(),changedIds=new Set();
+  const targets=(DB.machines||[]).filter(mc=>mc&&typeof mc==='object'&&Number(mc[ONE_TIME_EST_ANCHOR_MACHINE_FIELD]||0)<2);
+  if(estimateAnchorRepairDone()&&!targets.length)return {ran:false,stats:(prior&&prior.stats)||estimateAnchorRepairStats()};
+  targets.forEach(mc=>{
+    ensureMachineSyncMeta(mc);stats.machinesChecked++;
+    let changed=false,created=false;
+    if(latestDatedMeter(mc)){stats.alreadyDated++;}
+    else{
+      const a=legacyActualAnchorCandidate(mc);
+      if(a){
+        const row=newSyncRecord('read',{r:Number(a.r),d:a.d,meterSource:'actual',_origin:'legacy-anchor-repair-v2',_legacyAnchor:true,_anchorSource:a.source});
+        if(a.historyId)row._anchorHistoryId=a.historyId;
+        mc.readings.push(row);
+        normalizeExplicitReadings(mc);
+        recomputeCurrentMeter(mc,true);
+        stats.anchorsCreated++;
+        if(unit(mc)==='km')stats.kmAnchors++;else stats.hAnchors++;
+        changed=true;created=true;
+      }else stats.noProvableDate++;
+    }
+    if(Number(mc[ONE_TIME_EST_ANCHOR_MACHINE_FIELD]||0)<2){mc[ONE_TIME_EST_ANCHOR_MACHINE_FIELD]=2;changed=true;}
+    if(changed){
+      const t=nextMod();ensureMachineSyncMeta(mc);
+      mc._fieldMods[ONE_TIME_EST_ANCHOR_MACHINE_FIELD]=t;
+      if(created){mc._fieldMods.reading=t;mc._fieldMods.readingDate=t;}
+      mc._mod=Math.max(Number(mc._mod)||0,t);mc._rev=(Number(mc._rev)||0)+1;mc._device=device;mc._lastChange='one-time-estimate-anchor-repair-v2';
+      DB._mod=Math.max(Number(DB._mod)||0,t);DB._device=device;markDirtyMachine(mc.id);changedIds.add(String(mc.id));stats.machines++;
+    }
+  });
+  const t=nextMod();
+  DB.settings[ONE_TIME_EST_ANCHOR_REPAIR_KEY]={version:2,done:true,doneAt:new Date(serverNow()).toISOString(),device,stats:deepClone(stats)};
+  if(!DB._settingsMods||typeof DB._settingsMods!=='object')DB._settingsMods={};
+  DB._settingsMods[ONE_TIME_EST_ANCHOR_REPAIR_KEY]=t;DB._mod=Math.max(Number(DB._mod)||0,t);DB._device=device;_fbDirty=true;
+  if(!MEM_ONLY){try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}}
+  _bootRepairNotice={ran:true,kind:'anchor-v2',stats:deepClone(stats)};
+  return {ran:true,stats,changedIds:Array.from(changedIds)};
+}
+function estimateAnchorRepairSummary(stats){
+  stats=stats||{};
+  return 'تم تثبيت مرساة التقدير مرة واحدة'
+    +' · مؤرخة سابقاً '+(Number(stats.alreadyDated)||0)
+    +' · أُنشئت '+(Number(stats.anchorsCreated)||0)
+    +' ('+(Number(stats.kmAnchors)||0)+' km / '+(Number(stats.hAnchors)||0)+' h)'
+    +(Number(stats.noProvableDate)?' · بلا تاريخ مؤكد '+Number(stats.noProvableDate):'');
+}
+
 function migrate(){let ch=false;
   if(!Array.isArray(DB.machines)){DB.machines=[];ch=true;}
   if(!DB.settings||typeof DB.settings!=='object'){DB.settings={};ch=true;}
@@ -896,6 +963,7 @@ function migrate(){let ch=false;
   });
   if(ensureSettingsSyncMeta())ch=true;
   const repairResult=runOneTimeLegacyCalculationRepair();if(repairResult&&repairResult.ran)ch=true;
+  const anchorRepairResult=runOneTimeEstimateAnchorRepair();if(anchorRepairResult&&anchorRepairResult.ran)ch=true;
   // لا تُعاد إضافة آلات محذوفة تلقائياً؛ ولا يُنشأ كتالوج مخصص قبل أول تعديل يدوي.
   if(ch&&!MEM_ONLY){try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}}
 }
@@ -1831,10 +1899,11 @@ function renderGarage(){
   const cardHTML=({mc,st})=>{
     let badge,cls,cardcls='';if(st.late>0){badge=st.late;cls='db-late';cardcls=' is-late';}else if(st.soon>0){badge=st.soon;cls='db-soon';cardcls=' is-soon';}else{badge='✓';cls='db-ok';}
     const icon=machineIcon(mc);
-    const _e=estReadingToday(mc);
+    const _e=estReadingToday(mc),_actual=latestDatedMeter(mc),_actualDate=_actual&&_actual.d?_actual.d:(validISODate(mc.readingDate)?mc.readingDate:'');
+    const _actualTxt='<div class="mmeta">فعلي '+fmt(currentReading(mc))+' '+unit(mc)+(_actualDate?' · '+esc(_actualDate):' · بلا تاريخ')+'</div>';
     const _meta=_e.hasEst
-      ? '<div class="mmeta">فعلي '+fmt(currentReading(mc))+' '+unit(mc)+'</div><div class="mest">≈ '+fmt(_e.val)+' '+unit(mc)+' اليوم'+'</div>'
-      : '<div class="mmeta">فعلي '+fmt(currentReading(mc))+' '+unit(mc)+'</div>';
+      ? _actualTxt+'<div class="mest">≈ '+fmt(_e.val)+' '+unit(mc)+' اليوم</div>'
+      : _actualTxt;
     return '<div class="mcard'+cardcls+'" onclick="openDetail(\''+mc.id+'\')"><span class="dotbadge '+cls+'">'+badge+'</span><div class="mic '+(mc.type==='truck'?'truck':'')+'">'+icon+'</div><div class="minfo"><div class="mname">'+esc(mc.name)+'</div>'+_meta+'<div class="meng">⚙️ '+esc(mc.eng||'')+'</div></div></div>';
   };
   // عرض مقسّم حسب النوع (في وضع "الكل") أو قائمة واحدة مرتّبة بالأولوية
@@ -3087,7 +3156,7 @@ try{
 }catch(e){}
 
 load();initSyncSnapshots();try{if(_dirtyMachines.size||fbCurrentHash()!==fbLastHash())_fbDirty=true;}catch(e){}renderGarage();
-try{if(_bootRepairNotice&&_bootRepairNotice.ran)setTimeout(function(){actionFeedback('🧮 '+oneTimeRepairSummary(_bootRepairNotice.stats));},700);}catch(e){}
+try{if(_bootRepairNotice&&_bootRepairNotice.ran)setTimeout(function(){actionFeedback('🧮 '+(_bootRepairNotice.kind==='anchor-v2'?estimateAnchorRepairSummary(_bootRepairNotice.stats):oneTimeRepairSummary(_bootRepairNotice.stats)));},700);}catch(e){}
 try{ if(!DB.deletedIds) DB.deletedIds=[]; }catch(e){}
 setTimeout(fbStartupCheck,1000);
 fbStartLoop();
