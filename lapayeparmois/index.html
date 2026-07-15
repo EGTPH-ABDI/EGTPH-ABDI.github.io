@@ -224,7 +224,7 @@
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes" name="viewport"/>
-<title>EGTPH — سجل الأجور v196</title>
+<title>EGTPH — سجل الأجور v197</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -1135,7 +1135,7 @@ body{background:linear-gradient(145deg,#f2f7f4 0%,#fbfdfc 42%,#eef7f1 100%);}
 }
 @media screen and (max-width:900px){.twrap thead th,.sec table thead th{font-size:11.2px!important;padding:10px 8px!important}.twrap tbody td,.sec table tbody td{font-size:11px!important;padding:10px 8px!important;line-height:1.65!important}#page-settlement .twrap table{min-width:1120px!important}}
 </style>
-<meta content="v196-livepull-write-barrier-final" name="egtph-build"/>
+<meta content="v197-pending-state-machine-final" name="egtph-build"/>
 <style id="egtph-v176-night-theme">
 /* v176 — ثيم ثانٍ فقط: ليلي أخضر متناسق. الأبيض يبقى الافتراضي. */
 body.egtph-theme-night{
@@ -1523,7 +1523,7 @@ body.egtph-theme-night .egtph-table-viewport::-webkit-scrollbar-thumb{
 <div class="" id="toast" style="">✅ تم تنزيل نسخة كاملة: ملف HTML يحتوي البرنامج وكل البيانات الحالية</div>
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div class="topbar">
-<div class="tlogo">EGTPH <span>| سجل الأجور v196</span></div>
+<div class="tlogo">EGTPH <span>| سجل الأجور v197</span></div>
 <div id="autoSv" style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--gray)">
 <span class="auto-save-dot" id="saveDot"></span>
 <span id="saveLabel">—</span>
@@ -10173,13 +10173,41 @@ async function refreshHealth(showToast){
     if(!rootResp.ok)throw new Error('فحص النسخة السحابية HTTP '+rootResp.status);
 
     const all=await cr.json()||{};
-    const pending=loadOutbox();
+    let pending=loadOutbox();
     const m=meta.ok?await meta.json():null;
     const rr=receipt.ok?await receipt.json():null;
     const cloudRaw=await rootResp.json();
 
     if(!cloudRaw||typeof cloudRaw!=='object'){
       throw new Error('نسخة Firebase المرجعية غير مكتملة');
+    }
+
+    // المصدر الوحيد لحقيقة العملية المعلقة:
+    // إذا كانت كامل العملية موجودة فعلاً في Firebase، فليست معلقة بعد الآن حتى لو بقي outbox محلياً.
+    let autoSettledPending=false;
+    if(pending&&!running&&patchAlreadySatisfiedByCloud(cloudRaw,pending)){
+      try{
+        await resolveTransactionConflicts(
+          pending.txId,
+          'pending-already-verified-in-cloud'
+        );
+      }catch(resolveError){
+        console.warn('[sync] pending operation verified in cloud but witness cleanup failed',resolveError);
+      }
+
+      await clearOutbox();
+      pending=null;
+      queued=false;
+      rollbackSnapshot=null;
+      currentConflicts=[];
+      uiPending=false;
+      autoSettledPending=true;
+
+      _applyDBData(_v169SanitizeCloud(cloudRaw));
+      window.__EGTPH_DB_READY__=true;
+      window.__EGTPH_DB_READY_SOURCE__=SOURCE;
+      baseline=clone(DB);
+      try{markSaved();}catch(e){}
     }
 
     const registry=await reconcileConflictRegistry(
@@ -10238,25 +10266,27 @@ async function refreshHealth(showToast){
       ?'conflict'
       :lastError
         ?'error'
-        :pendingCount()
+        :pending
           ?'saving'
           :'ok';
 
     const msg=currentConflicts.length
       ?'⚠️ توجد تعارضات حقيقية تخص العملية المعلقة الحالية فقط'
-      :localDirty&&!pending
-        ?'🔴 تغييرات محلية غير موثقة؛ أُوقف الجلب لحمايتها'
-        :registry.autoResolved
-          ?'🟢 أُغلقت '+registry.autoResolved+' سجلات تعارض قديمة لأن السحابة تحتوي نفس القيود بالفعل'
-          :received&&match
-            ?'🟢 استُقبلت تغييرات الأجهزة الأخرى وأصبحت البيانات متطابقة'
-            :allOpenConflicts.length
-              ?'🟡 توجد '+allOpenConflicts.length+' سجلات تعارض تاريخية لا تخص عملية معلقة حالية'
-              :pendingCount()
-                ?'⏳ توجد عملية معلقة لم يثبت رفعها بعد'
-                :match
-                  ?'🟢 Firebase والجهاز متطابقان بالكامل؛ لا تغييرات معلقة'
-                  :'⚠️ بيانات الجهاز لا تطابق Firebase';
+      :autoSettledPending
+        ?'🟢 العملية المعلقة كانت موجودة فعلاً في Firebase؛ أُغلقت تلقائياً'
+        :localDirty&&!pending
+          ?'🔴 تغييرات محلية غير موثقة؛ أُوقف الجلب لحمايتها'
+          :registry.autoResolved
+            ?'🟢 أُغلقت '+registry.autoResolved+' سجلات تعارض قديمة لأن السحابة تحتوي نفس القيود بالفعل'
+            :received&&match
+              ?'🟢 استُقبلت تغييرات الأجهزة الأخرى وأصبحت البيانات متطابقة'
+              :allOpenConflicts.length
+                ?'🟡 توجد '+allOpenConflicts.length+' سجلات تعارض تاريخية لا تخص عملية معلقة حالية'
+                :pending
+                  ?'⏳ توجد عملية معلقة بلا تعارض حالي؛ يمكن إعادة المحاولة أو إلغاؤها أو اعتماد نسخة الجهاز يدوياً'
+                  :match
+                    ?'🟢 Firebase والجهاز متطابقان بالكامل؛ لا تغييرات معلقة'
+                    :'⚠️ بيانات الجهاز لا تطابق Firebase';
 
     setPanel(mode,msg);
     reconcileSyncGate();
@@ -10266,13 +10296,14 @@ async function refreshHealth(showToast){
     }
 
     return {
-      ok:match&&!currentConflicts.length&&!lastError&&!pendingCount(),
+      ok:match&&!currentConflicts.length&&!lastError&&!pending,
       match,
       received,
+      autoSettledPending,
       autoClosedSatisfied:registry.autoResolved,
       openConflicts:allOpenConflicts.length,
       ownedConflicts:currentConflicts.length,
-      pending:pendingCount(),
+      pending:pending?countPatch(pending):0,
       lastSavedAt,
       lastPullAt,
       lastError,
@@ -10287,11 +10318,7 @@ async function refreshHealth(showToast){
     saveDiag(diag);
     setPanel('error','🔴 فشل فحص المزامنة: '+lastError);
 
-    if(!loadOutbox()){
-      currentConflicts=[];
-      hideGate();
-      uiPending=false;
-    }
+    reconcileSyncGate();
 
     if(showToast)originalToast('❌ فشل فحص المزامنة: '+lastError,true);
     return {ok:false,error:lastError};
@@ -10306,17 +10333,34 @@ async function showConflicts(){
   const remoteButton=modal.querySelector('[data-act="remote"]');
   const localButton=modal.querySelector('[data-act="local"]');
 
+  const pending=loadOutbox();
   const hasCurrent=currentConflicts.length>0;
+  const hasPending=!!pending;
   const rows=hasCurrent
     ?currentConflicts
     :(allOpenConflicts.length
       ?allOpenConflicts
       :[]);
 
-  if(remoteButton)remoteButton.style.display=hasCurrent?'':'none';
-  if(localButton)localButton.style.display=hasCurrent?'':'none';
+  // القرار يخص العملية المعلقة، لا مجرد وجود سجل تعارض في Firebase.
+  if(remoteButton)remoteButton.style.display=hasPending?'':'none';
+  if(localButton)localButton.style.display=hasPending?'':'none';
 
-  if(!rows.length){
+  if(hasPending&&!hasCurrent){
+    box.innerHTML=
+      '<div class="v170-conf-row">'+
+      '<b>⏳ توجد عملية معلقة بلا تعارض حالي مسجل</b>'+
+      '<p>يمكن إعادة المحاولة من النافذة الرئيسية، أو اعتماد السحابة لإلغاء العملية المعلقة، أو اعتماد نسخة هذا الجهاز بعد التأكيد.</p>'+
+      '<small>معرّف العملية: '+String(pending.txId||'—')+'</small>'+
+      '</div>'+
+      rows.map(c=>
+        '<div class="v170-conf-row">'+
+        '<b>'+String(c.path||'')+' — '+String(c.recordKey||'')+'</b>'+
+        '<p>'+String(c.message||'')+'</p>'+
+        '<small>معرّف التعارض: '+String(c.id||'—')+'</small>'+
+        '</div>'
+      ).join('');
+  }else if(!rows.length){
     reconcileSyncGate();
     box.innerHTML=
       '<div class="v170-conf-row">'+
@@ -10326,7 +10370,7 @@ async function showConflicts(){
   }else{
     const intro=hasCurrent
       ?'<div class="v170-conf-row"><b>⚠️ تعارضات العملية الحالية</b><p>يمكن اعتماد السحابة أو نسخة هذا الجهاز بعد المراجعة.</p></div>'
-      :'<div class="v170-conf-row"><b>ℹ️ تعارضات تخص أجهزة أخرى</b><p>تُعرض للمراجعة فقط من هذا الجهاز؛ لا توجد عملية محلية معلقة مرتبطة بها.</p></div>';
+      :'<div class="v170-conf-row"><b>ℹ️ تعارضات تاريخية أو تخص أجهزة أخرى</b><p>لا تمنع العمليات الجديدة من هذا الجهاز.</p></div>';
 
     box.innerHTML=intro+rows.map(c=>
       '<div class="v170-conf-row">'+
@@ -10342,31 +10386,37 @@ async function showConflicts(){
 async function acceptRemote(){
   await ensureOutboxReady();
 
-  if(!currentConflicts.length){
+  const pending=loadOutbox();
+  const resolving=clone(currentConflicts);
+
+  if(!pending){
     const modal=document.getElementById('v170ConflictModal');
     if(modal)modal.style.display='none';
-    const health=await refreshHealth(false);
-    originalToast(
-      health&&health.openConflicts
-        ?'ℹ️ لا توجد عملية محلية معلقة تخص هذه التعارضات؛ هي سجلات لأجهزة أخرى'
-        :'✅ لا توجد تعارضات تخص عملية معلقة، والجهاز متطابق مع Firebase'
-    );
+    currentConflicts=[];
+    reconcileSyncGate();
+    originalToast('✅ لا توجد عملية معلقة لإلغائها؛ الجهاز يعتمد نسخة Firebase الحالية');
     return true;
   }
 
   if(!confirm(
-    'سيتم إلغاء التعديل المحلي المعلق واعتماد نسخة Firebase. هل أنت متأكد؟'
+    'سيتم إلغاء العملية المحلية المعلقة واعتماد نسخة Firebase الحالية. هل أنت متأكد؟'
   ))return false;
 
-  await markConflictResolution('remote',currentConflicts);
-  await clearOutbox();
+  if(resolving.length){
+    try{await markConflictResolution('remote',resolving);}catch(e){console.warn(e);}
+  }else{
+    try{await resolveTransactionConflicts(pending.txId,'remote-without-current-witness');}catch(e){console.warn(e);}
+  }
 
+  await clearOutbox();
   queued=false;
   running=false;
   lastError=null;
   currentConflicts=[];
   rollbackSnapshot=null;
   uiPending=false;
+  deferredCloses=[];
+  deferredToasts=[];
   hideGate();
 
   const modal=document.getElementById('v170ConflictModal');
@@ -10374,7 +10424,7 @@ async function acceptRemote(){
 
   await pullRoot();
   await refreshHealth(false);
-  originalToast('✅ تم اعتماد نسخة السحابة وإلغاء التعديل المتعارض');
+  originalToast('✅ أُلغيت العملية المعلقة واعتمدت نسخة السحابة');
   return true;
 }
 async function forceLocal(){
@@ -10384,7 +10434,36 @@ function isErrorToast(arg,msg){return arg===true||(typeof arg==='string'&&(arg.i
 function wrappedToast(msg,arg){if(uiPending&&!isErrorToast(arg,msg)){deferredToasts.push([msg,arg]);return;}return originalToast(msg,arg);}
 function wrappedCloseModal(id){if(uiPending){if(!deferredCloses.includes(id))deferredCloses.push(id);return;}return originalCloseModal(id);}
 window.toast=wrappedToast;try{toast=wrappedToast;}catch(e){}window.closeModal=wrappedCloseModal;try{closeModal=wrappedCloseModal;}catch(e){}
-function ensureGate(){let g=document.getElementById('egtphV170SaveGate');if(g)return g;g=document.createElement('div');g.id='egtphV170SaveGate';g.innerHTML='<div class="v170-card"><div class="v170-spinner"></div><div class="v170-title">تثبيت العملية في Firebase…</div><div class="v170-msg">لا تغلق الصفحة حتى انتهاء التحقق.</div><div class="v170-actions error-actions"><button data-act="retry">إعادة المحاولة</button><button data-act="cancel" class="danger">إلغاء التغيير غير المحفوظ</button></div><div class="v170-actions conflict-actions"><button data-act="show">عرض التعارض</button><button data-act="remote">اعتماد السحابة</button><button data-act="local" class="warn">اعتماد هذا الجهاز</button></div></div>';document.body.appendChild(g);g.querySelector('[data-act="retry"]').onclick=()=>{g.className='';lastError=null;queued=true;flush();};g.querySelector('[data-act="cancel"]').onclick=cancelPending;g.querySelector('[data-act="show"]').onclick=showConflicts;g.querySelector('[data-act="remote"]').onclick=acceptRemote;g.querySelector('[data-act="local"]').onclick=forceLocal;return g;}
+function ensureGate(){
+  let g=document.getElementById('egtphV170SaveGate');
+  if(g)return g;
+  g=document.createElement('div');
+  g.id='egtphV170SaveGate';
+  g.innerHTML=
+    '<div class="v170-card">'+
+    '<div class="v170-spinner"></div>'+
+    '<div class="v170-title">تثبيت العملية في Firebase…</div>'+
+    '<div class="v170-msg">لا تغلق الصفحة حتى انتهاء التحقق.</div>'+
+    '<div class="v170-actions error-actions">'+
+      '<button data-act="retry">إعادة المحاولة</button>'+
+      '<button data-act="cancel" class="danger">إلغاء التغيير غير المحفوظ</button>'+
+    '</div>'+
+    '<div class="v170-actions conflict-actions">'+
+      '<button data-act="show">عرض التعارض</button>'+
+      '<button data-act="remote">اعتماد السحابة</button>'+
+      '<button data-act="local" class="warn">اعتماد هذا الجهاز</button>'+
+      '<button data-act="cancel-conflict" class="danger">إلغاء العملية المعلقة</button>'+
+    '</div>'+
+    '</div>';
+  document.body.appendChild(g);
+  g.querySelector('[data-act="retry"]').onclick=()=>{g.className='';lastError=null;queued=true;flush();};
+  g.querySelector('[data-act="cancel"]').onclick=cancelPending;
+  g.querySelector('[data-act="cancel-conflict"]').onclick=cancelPending;
+  g.querySelector('[data-act="show"]').onclick=showConflicts;
+  g.querySelector('[data-act="remote"]').onclick=acceptRemote;
+  g.querySelector('[data-act="local"]').onclick=forceLocal;
+  return g;
+}
 function gate(mode,msg){const g=ensureGate();g.style.display='flex';g.className=mode==='conflict'?'conflict':mode==='failed'?'failed':'';g.querySelector('.v170-title').textContent=mode==='conflict'?'تعارض مزامنة — لم تُستبدل أي نسخة':mode==='failed'?'فشل تثبيت العملية':'تثبيت العملية في Firebase…';g.querySelector('.v170-msg').textContent=msg||'';}
 function hideGate(){const g=document.getElementById('egtphV170SaveGate');if(g)g.style.display='none';}
 
@@ -10403,6 +10482,12 @@ function reconcileSyncGate(){
   }
 
   if(pending){
+    // لا نترك بوابة "تعارض" قديمة معلقة عندما لا توجد تعارضات حالية.
+    // العملية هنا معلقة فقط: إعادة المحاولة أو الإلغاء هما المساران الآمنان.
+    gate(
+      'failed',
+      'توجد عملية محلية معلقة لم تُثبت بعد، ولا يوجد تعارض حالي مسجل. أعد المحاولة أو ألغ التغيير غير المحفوظ.'
+    );
     return 'pending';
   }
 
@@ -11457,8 +11542,8 @@ const EGTPH_SYNC_API={version:'175.0-surgical-sync-undo',source:SOURCE,root:ROOT
 (function(){
   'use strict';
   window.__EGTPH_V175_SURGICAL__=true;
-  window.__EGTPH_V175_BUILD__='v196-livepull-write-barrier-final';
-  try{document.title='EGTPH — سجل الأجور v196';}catch(e){}
+  window.__EGTPH_V175_BUILD__='v197-pending-state-machine-final';
+  try{document.title='EGTPH — سجل الأجور v197';}catch(e){}
 })();
 </script>
 
