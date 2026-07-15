@@ -224,7 +224,7 @@
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes" name="viewport"/>
-<title>EGTPH — سجل الأجور v193</title>
+<title>EGTPH — سجل الأجور v195</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -1135,7 +1135,7 @@ body{background:linear-gradient(145deg,#f2f7f4 0%,#fbfdfc 42%,#eef7f1 100%);}
 }
 @media screen and (max-width:900px){.twrap thead th,.sec table thead th{font-size:11.2px!important;padding:10px 8px!important}.twrap tbody td,.sec table tbody td{font-size:11px!important;padding:10px 8px!important;line-height:1.65!important}#page-settlement .twrap table{min-width:1120px!important}}
 </style>
-<meta content="v193-sync-gate-state-reconciled" name="egtph-build"/>
+<meta content="v195-sync-conflict-single-source" name="egtph-build"/>
 <style id="egtph-v176-night-theme">
 /* v176 — ثيم ثانٍ فقط: ليلي أخضر متناسق. الأبيض يبقى الافتراضي. */
 body.egtph-theme-night{
@@ -1523,7 +1523,7 @@ body.egtph-theme-night .egtph-table-viewport::-webkit-scrollbar-thumb{
 <div class="" id="toast" style="">✅ تم تنزيل نسخة كاملة: ملف HTML يحتوي البرنامج وكل البيانات الحالية</div>
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div class="topbar">
-<div class="tlogo">EGTPH <span>| سجل الأجور v193</span></div>
+<div class="tlogo">EGTPH <span>| سجل الأجور v195</span></div>
 <div id="autoSv" style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--gray)">
 <span class="auto-save-dot" id="saveDot"></span>
 <span id="saveLabel">—</span>
@@ -9745,9 +9745,22 @@ function nextIndex(node){let max=-1;rawEntries(node).forEach(([k])=>{const n=Num
 function conflict(kind,path,key,op,remote){return {kind,path,recordKey:key||path,base:clone(op&&op.before),local:clone(op&&op.after),remote:clone(remote),message:kind==='id-collision'?'نفس المعرّف موجود بقيمة مختلفة في السحابة':'تم تعديل نفس القيد في جهاز آخر بعد آخر جلب'};}
 async function writeConflictRecords(items,t,txId){const now=new Date().toISOString(),ids=[];for(let i=0;i<items.length;i++){const base=txId+'|'+DEVICE+'|'+String(items[i].path||'')+'|'+String(items[i].recordKey||'');const id='cf_'+hash(base);const rec=Object.assign({id,status:'open',txId,deviceId:DEVICE,detectedAt:now,source:SOURCE},items[i]);const r=await request(endpoint('syncConflicts/'+id,t),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)});if(!r.ok)throw new Error('تعذر تسجيل التعارض '+id+' HTTP '+r.status);ids.push(id);}currentConflicts=items.map((x,i)=>Object.assign({id:ids[i],status:'open',txId,deviceId:DEVICE},x));return ids;}
 
-function conflictAlreadySatisfiedByCloud(item,cloudRaw){
-  if(!item||item.status!=='open'||!item.path)return false;
 
+
+async function markConflictResolution(mode,items){const rows=(items||currentConflicts).filter(c=>c&&c.id);if(!rows.length)return true;const t=await token();for(const c of rows){const rec=Object.assign({},c,{status:'resolved',resolution:{mode,resolvedAt:new Date().toISOString(),deviceId:DEVICE}});const r=await request(endpoint('syncConflicts/'+c.id,t),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)});if(!r.ok)throw new Error('تعذر تثبيت حل التعارض '+c.id+' HTTP '+r.status);}return true;}
+
+function currentConflictRows(items,pending){
+  if(!pending||!pending.txId)return [];
+  return (items||[]).filter(item=>
+    item&&
+    item.status==='open'&&
+    String(item.deviceId||'')===String(DEVICE)&&
+    String(item.txId||'')===String(pending.txId)
+  );
+}
+
+function conflictRecordSatisfiedByCloud(item,cloudRaw){
+  if(!item||item.status!=='open'||!item.path)return false;
   const path=String(item.path);
   const local=item.local;
 
@@ -9755,24 +9768,55 @@ function conflictAlreadySatisfiedByCloud(item,cloudRaw){
     const remoteMap=listMap(getAt(cloudRaw,path),path);
     const got=remoteMap[String(item.recordKey||'')]&&
       remoteMap[String(item.recordKey||'')].record;
-
-    return !!got&&
-      local!==undefined&&
-      equivalentListRecord(path,got,local);
+    return !!got&&local!==undefined&&equivalentListRecord(path,got,local);
   }
 
-  return local!==undefined&&
-    equivalent(getAt(cloudRaw,path),local);
+  return local!==undefined&&equivalent(getAt(cloudRaw,path),local);
 }
 
-async function closeCloudSatisfiedConflictWitnesses(cloudRaw,items){
-  const rows=(items||[]).filter(item=>conflictAlreadySatisfiedByCloud(item,cloudRaw));
+async function reconcileConflictRegistry(cloudRaw,allItems,pending){
+  const open=(allItems||[]).filter(item=>item&&item.status==='open');
+  const satisfied=open.filter(item=>conflictRecordSatisfiedByCloud(item,cloudRaw));
+
+  if(satisfied.length){
+    await markConflictResolution('cloud-already-satisfies-local',satisfied);
+  }
+
+  const satisfiedIds=new Set(satisfied.map(item=>String(item.id||'')));
+  const remaining=open.filter(item=>!satisfiedIds.has(String(item.id||'')));
+  return {
+    allOpen:remaining,
+    current:currentConflictRows(remaining,pending),
+    autoResolved:satisfied.length
+  };
+}
+
+async function resolveTransactionConflicts(txId,mode){
+  if(!txId)return 0;
+  const t=await token();
+  const r=await request(endpoint('syncConflicts',t));
+  if(!r.ok)throw new Error('فحص تعارضات العملية HTTP '+r.status);
+  const all=await r.json()||{};
+  const rows=Object.values(all).filter(item=>
+    item&&
+    item.status==='open'&&
+    String(item.txId||'')===String(txId)&&
+    String(item.deviceId||'')===String(DEVICE)
+  );
   if(!rows.length)return 0;
-  await markConflictResolution('cloud-already-satisfies-local',rows);
+  await markConflictResolution(mode||'transaction-verified',rows);
   return rows.length;
 }
 
-async function markConflictResolution(mode,items){const rows=(items||currentConflicts).filter(c=>c&&c.id);if(!rows.length)return true;const t=await token();for(const c of rows){const rec=Object.assign({},c,{status:'resolved',resolution:{mode,resolvedAt:new Date().toISOString(),deviceId:DEVICE}});const r=await request(endpoint('syncConflicts/'+c.id,t),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)});if(!r.ok)throw new Error('تعذر تثبيت حل التعارض '+c.id+' HTTP '+r.status);}return true;}
+function patchAlreadySatisfiedByCloud(raw,p){
+  try{
+    verifyPatch(raw,p);
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
 function addUpdate(updates,path,value){updates[String(path).replace(/^\/+/, '')]=clone(value);}
 
 const REPLAY_VOLATILE_FIELDS=new Set([
@@ -9839,22 +9883,6 @@ function equivalentListRecord(path,left,right){
   return false;
 }
 
-async function resolveOpenConflictsForTransaction(txId,mode){
-  if(!txId)return 0;
-  const t=await token();
-  const r=await request(endpoint('syncConflicts',t));
-  if(!r.ok)throw new Error('فحص تعارضات العملية HTTP '+r.status);
-  const all=await r.json()||{};
-  const rows=Object.values(all).filter(item=>
-    item&&
-    item.status==='open'&&
-    String(item.txId||'')===String(txId)&&
-    String(item.deviceId||'')===String(DEVICE)
-  );
-  if(!rows.length)return 0;
-  await markConflictResolution(mode||'idempotent-replay-verified',rows);
-  return rows.length;
-}
 
 function validateAndBuild(raw,p,force){
   const updates={},conflicts=[],replays=[];
@@ -9989,17 +10017,141 @@ function verifyPatch(raw,p){
 }
 function materializeRoot(raw,updates){const next=clone(raw);for(const path of Object.keys(updates||{}))setAt(next,path,clone(updates[path]));return next;}
 async function responseDetail(r){try{const x=await r.clone().text();return String(x||'').replace(/\s+/g,' ').slice(0,240);}catch(e){return '';}}
-async function atomicCommit(p){const t=await token();for(let attempt=0;attempt<MAX_RETRY;attempt++){
-  const g=await request(endpoint('',t),{headers:{'X-Firebase-ETag':'true'}});if(!g.ok)throw new Error('قراءة المصدر المرجعي HTTP '+g.status);const etag=g.headers.get('etag');if(!etag)throw new Error('لم يرجع Firebase رمز ETag للمصدر المرجعي');const raw=await g.json();if(!raw||typeof raw!=='object')throw new Error('نسخة Firebase المرجعية غير مكتملة');
-  const plan=validateAndBuild(raw,p,!!p.force);if(plan.conflicts.length&&!p.force){await writeConflictRecords(plan.conflicts,t,p.txId);const e=new Error('تعارض مزامنة: نفس المعرّف عُدّل في جهازين. لم تُستبدل أي نسخة.');e.code='SYNC_CONFLICT';e.conflicts=plan.conflicts;throw e;}
-  const now=new Date().toISOString(),receipt={txId:p.txId,status:'verified',deviceId:DEVICE,createdAt:p.createdAt,verifiedAt:now,recordCount:countPatch(p),paths:Object.keys(plan.updates),forcedByUser:!!p.force,idempotentReplayCount:(plan.replays||[]).length,commitMethod:'conditional-put-etag'};
-  addUpdate(plan.updates,'syncReceipts/'+DEVICE+'/last',receipt);addUpdate(plan.updates,'syncMeta/lastVerified',receipt);addUpdate(plan.updates,'syncMeta/devices/'+DEVICE,{lastSeenAt:now,lastTxId:p.txId,userName:DB.settings&&DB.settings.userName||''});addUpdate(plan.updates,'syncedAt',now);
-  let nextRoot=materializeRoot(raw,plan.updates);receipt.dataCounts=countData(nextRoot);receipt.fingerprint=dataFingerprint(nextRoot);addUpdate(plan.updates,'syncReceipts/'+DEVICE+'/last',receipt);addUpdate(plan.updates,'syncMeta/lastVerified',receipt);addUpdate(plan.updates,'syncMeta/dataCounts',receipt.dataCounts);addUpdate(plan.updates,'syncMeta/dataFingerprint',receipt.fingerprint);nextRoot=materializeRoot(raw,plan.updates);assertFirebaseSafeTree(nextRoot);
-  const w=await request(endpoint('',t),{method:'PUT',headers:{'Content-Type':'application/json','If-Match':etag},body:JSON.stringify(nextRoot)});
-  if(w.status===412){await new Promise(r=>setTimeout(r,120*(attempt+1)));continue;}
-  if(!w.ok){const d=await responseDetail(w);throw new Error('رفع مشروط HTTP '+w.status+(d?' — '+d:''));}
-  const v=await request(endpoint('',t));if(!v.ok)throw new Error('القراءة الراجعة HTTP '+v.status);const after=await v.json();verifyPatch(after,p);const savedReceipt=getAt(after,'syncReceipts/'+DEVICE+'/last');if(!savedReceipt||savedReceipt.status!=='verified'||savedReceipt.txId!==p.txId)throw new Error('إيصال المزامنة لم يثبت');const afterFp=dataFingerprint(after);if(afterFp!==receipt.fingerprint)throw new Error('فشلت مطابقة البصمة بعد القراءة الراجعة');writes.push({txId:p.txId,at:now,paths:Object.keys(plan.updates),count:countPatch(p),method:'conditional-put-etag',fingerprint:afterFp});return {raw:after,receipt};
- }throw new Error('تعارض ETag متكرر؛ لم تُكتب أي نسخة فوق الأخرى');}
+async function atomicCommit(p){
+  const t=await token();
+
+  for(let attempt=0;attempt<MAX_RETRY;attempt++){
+    const g=await request(endpoint('',t),{
+      headers:{'X-Firebase-ETag':'true'}
+    });
+    if(!g.ok)throw new Error('قراءة المصدر المرجعي HTTP '+g.status);
+
+    const etag=g.headers.get('etag');
+    if(!etag)throw new Error('لم يرجع Firebase رمز ETag للمصدر المرجعي');
+
+    const raw=await g.json();
+    if(!raw||typeof raw!=='object'){
+      throw new Error('نسخة Firebase المرجعية غير مكتملة');
+    }
+
+    // مصدر الحقيقة الأول: قد تكون نفس المعاملة ثبتت بالفعل ثم أعيد تشغيل الطابور.
+    // نتحقق قبل صناعة أي سجل تعارض. إذا كان أثر العملية كاملاً في Firebase،
+    // فهذه إعادة آمنة لنفس txId وليست تعارضاً.
+    if(patchAlreadySatisfiedByCloud(raw,p)){
+      const now=new Date().toISOString();
+      const existingReceipt=getAt(raw,'syncReceipts/'+DEVICE+'/last');
+      const receipt=(existingReceipt&&existingReceipt.txId===p.txId)
+        ?clone(existingReceipt)
+        :{
+            txId:p.txId,
+            status:'verified',
+            deviceId:DEVICE,
+            createdAt:p.createdAt,
+            verifiedAt:now,
+            recordCount:countPatch(p),
+            paths:[],
+            forcedByUser:!!p.force,
+            idempotentReplayCount:countPatch(p),
+            commitMethod:'already-satisfied-before-conflict-check',
+            dataCounts:countData(raw),
+            fingerprint:dataFingerprint(raw)
+          };
+      return {raw,receipt,alreadySatisfied:true};
+    }
+
+    const plan=validateAndBuild(raw,p,!!p.force);
+    if(plan.conflicts.length&&!p.force){
+      await writeConflictRecords(plan.conflicts,t,p.txId);
+      const e=new Error('تعارض مزامنة حقيقي: نفس المعرّف يحمل قيماً تشغيلية مختلفة بين الجهاز والسحابة. لم تُستبدل أي نسخة.');
+      e.code='SYNC_CONFLICT';
+      e.conflicts=plan.conflicts;
+      throw e;
+    }
+
+    const now=new Date().toISOString();
+    const receipt={
+      txId:p.txId,
+      status:'verified',
+      deviceId:DEVICE,
+      createdAt:p.createdAt,
+      verifiedAt:now,
+      recordCount:countPatch(p),
+      paths:Object.keys(plan.updates),
+      forcedByUser:!!p.force,
+      idempotentReplayCount:(plan.replays||[]).length,
+      commitMethod:'conditional-put-etag'
+    };
+
+    addUpdate(plan.updates,'syncReceipts/'+DEVICE+'/last',receipt);
+    addUpdate(plan.updates,'syncMeta/lastVerified',receipt);
+    addUpdate(plan.updates,'syncMeta/devices/'+DEVICE,{
+      lastSeenAt:now,
+      lastTxId:p.txId,
+      userName:DB.settings&&DB.settings.userName||''
+    });
+    addUpdate(plan.updates,'syncedAt',now);
+
+    let nextRoot=materializeRoot(raw,plan.updates);
+    receipt.dataCounts=countData(nextRoot);
+    receipt.fingerprint=dataFingerprint(nextRoot);
+
+    addUpdate(plan.updates,'syncReceipts/'+DEVICE+'/last',receipt);
+    addUpdate(plan.updates,'syncMeta/lastVerified',receipt);
+    addUpdate(plan.updates,'syncMeta/dataCounts',receipt.dataCounts);
+    addUpdate(plan.updates,'syncMeta/dataFingerprint',receipt.fingerprint);
+
+    nextRoot=materializeRoot(raw,plan.updates);
+    assertFirebaseSafeTree(nextRoot);
+
+    const w=await request(endpoint('',t),{
+      method:'PUT',
+      headers:{
+        'Content-Type':'application/json',
+        'If-Match':etag
+      },
+      body:JSON.stringify(nextRoot)
+    });
+
+    if(w.status===412){
+      await new Promise(r=>setTimeout(r,120*(attempt+1)));
+      continue;
+    }
+
+    if(!w.ok){
+      const d=await responseDetail(w);
+      throw new Error('رفع مشروط HTTP '+w.status+(d?' — '+d:''));
+    }
+
+    const v=await request(endpoint('',t));
+    if(!v.ok)throw new Error('القراءة الراجعة HTTP '+v.status);
+
+    const after=await v.json();
+    verifyPatch(after,p);
+
+    const savedReceipt=getAt(after,'syncReceipts/'+DEVICE+'/last');
+    if(!savedReceipt||savedReceipt.status!=='verified'||savedReceipt.txId!==p.txId){
+      throw new Error('إيصال المزامنة لم يثبت');
+    }
+
+    const afterFp=dataFingerprint(after);
+    if(afterFp!==receipt.fingerprint){
+      throw new Error('فشلت مطابقة البصمة بعد القراءة الراجعة');
+    }
+
+    writes.push({
+      txId:p.txId,
+      at:now,
+      paths:Object.keys(plan.updates),
+      count:countPatch(p),
+      method:'conditional-put-etag',
+      fingerprint:afterFp
+    });
+
+    return {raw:after,receipt,alreadySatisfied:false};
+  }
+
+  throw new Error('تعارض ETag متكرر؛ لم تُكتب أي نسخة فوق الأخرى');
+}
 function panel(){return document.getElementById('v170SyncHealth');}
 function fmtTime(x){if(!x)return '—';try{return new Date(x).toLocaleString('fr-DZ');}catch(e){return String(x);}}
 function pendingCount(){const p=loadOutbox();return p?countPatch(p):0;}
@@ -10021,8 +10173,6 @@ async function refreshHealth(showToast){
     if(!rootResp.ok)throw new Error('فحص النسخة السحابية HTTP '+rootResp.status);
 
     const all=await cr.json()||{};
-    allOpenConflicts=Object.values(all).filter(x=>x&&x.status==='open');
-
     const pending=loadOutbox();
     const m=meta.ok?await meta.json():null;
     const rr=receipt.ok?await receipt.json():null;
@@ -10032,22 +10182,13 @@ async function refreshHealth(showToast){
       throw new Error('نسخة Firebase المرجعية غير مكتملة');
     }
 
-    let autoClosedSatisfied=0;
-    if(allOpenConflicts.length){
-      autoClosedSatisfied=await closeCloudSatisfiedConflictWitnesses(
-        cloudRaw,
-        allOpenConflicts
-      );
-      if(autoClosedSatisfied){
-        allOpenConflicts=allOpenConflicts.filter(
-          item=>!conflictAlreadySatisfiedByCloud(item,cloudRaw)
-        );
-      }
-    }
-
-    currentConflicts=allOpenConflicts.filter(
-      x=>x.deviceId===DEVICE&&(!pending||x.txId===pending.txId)
+    const registry=await reconcileConflictRegistry(
+      cloudRaw,
+      Object.values(all),
+      pending
     );
+    allOpenConflicts=registry.allOpen;
+    currentConflicts=registry.current;
 
     diag.openConflicts=allOpenConflicts.length;
     diag.ownedConflicts=currentConflicts.length;
@@ -10102,25 +10243,22 @@ async function refreshHealth(showToast){
           :'ok';
 
     const msg=currentConflicts.length
-      ?'⚠️ توجد تعارضات تخص العملية الحالية؛ لم تُستبدل أي نسخة تلقائياً'
+      ?'⚠️ توجد تعارضات حقيقية تخص العملية المعلقة الحالية فقط'
       :localDirty&&!pending
         ?'🔴 تغييرات محلية غير موثقة؛ أُوقف الجلب لحمايتها'
-        :autoClosedSatisfied
-          ?'🟢 أُغلقت '+autoClosedSatisfied+' سجلات تعارض قديمة لأن نفس القيد المحاسبي موجود بالفعل في السحابة'
+        :registry.autoResolved
+          ?'🟢 أُغلقت '+registry.autoResolved+' سجلات تعارض قديمة لأن السحابة تحتوي نفس القيود بالفعل'
           :received&&match
             ?'🟢 استُقبلت تغييرات الأجهزة الأخرى وأصبحت البيانات متطابقة'
             :allOpenConflicts.length
-              ?'🟡 توجد '+allOpenConflicts.length+' تعارضات مفتوحة لأجهزة أخرى'
+              ?'🟡 توجد '+allOpenConflicts.length+' سجلات تعارض تاريخية لا تخص عملية معلقة حالية'
               :pendingCount()
-                ?'⏳ توجد تغييرات معلقة لم يثبت رفعها بعد'
+                ?'⏳ توجد عملية معلقة لم يثبت رفعها بعد'
                 :match
                   ?'🟢 Firebase والجهاز متطابقان بالكامل؛ لا تغييرات معلقة'
                   :'⚠️ بيانات الجهاز لا تطابق Firebase';
 
     setPanel(mode,msg);
-
-    // مصدر الحقيقة الوحيد للنافذة الكبيرة:
-    // إذا انتهت العملية المعلقة والتعارض الحالي، تُغلق فوراً مهما كان ما عُرض قبل ذلك.
     reconcileSyncGate();
 
     if(showToast){
@@ -10131,7 +10269,7 @@ async function refreshHealth(showToast){
       ok:match&&!currentConflicts.length&&!lastError&&!pendingCount(),
       match,
       received,
-      autoClosedSatisfied,
+      autoClosedSatisfied:registry.autoResolved,
       openConflicts:allOpenConflicts.length,
       ownedConflicts:currentConflicts.length,
       pending:pendingCount(),
@@ -10149,8 +10287,8 @@ async function refreshHealth(showToast){
     saveDiag(diag);
     setPanel('error','🔴 فشل فحص المزامنة: '+lastError);
 
-    // فشل الفحص وحده لا يسمح بإبقاء نافذة "تعارض" قديمة إذا لم تعد هناك عملية معلقة.
-    if(!loadOutbox()&&(!currentConflicts||!currentConflicts.length)){
+    if(!loadOutbox()){
+      currentConflicts=[];
       hideGate();
       uiPending=false;
     }
@@ -10251,23 +10389,24 @@ function gate(mode,msg){const g=ensureGate();g.style.display='flex';g.className=
 function hideGate(){const g=document.getElementById('egtphV170SaveGate');if(g)g.style.display='none';}
 
 function reconcileSyncGate(){
-  const pending=!!loadOutbox();
-  const hasCurrentConflict=Array.isArray(currentConflicts)&&currentConflicts.length>0;
+  const pending=loadOutbox();
+  const hasCurrentConflict=!!pending&&
+    Array.isArray(currentConflicts)&&
+    currentConflicts.length>0;
 
   if(hasCurrentConflict){
     gate(
       'conflict',
-      '⚠️ توجد تعارضات حقيقية تخص العملية الحالية؛ لم تُستبدل أي نسخة تلقائياً'
+      '⚠️ توجد تعارضات حقيقية تخص العملية المعلقة الحالية؛ لم تُستبدل أي نسخة تلقائياً'
     );
     return 'conflict';
   }
 
   if(pending){
-    // العملية المعلقة هي الحالة الوحيدة التي تبرر بقاء بوابة الحفظ ظاهرة.
     return 'pending';
   }
 
-  // لا عملية معلقة ولا تعارض حالي = لا توجد أي حالة صحيحة تسمح ببقاء النافذة.
+  currentConflicts=[];
   hideGate();
   uiPending=false;
   return 'clear';
@@ -10288,6 +10427,8 @@ function renderAll(){
   requestAnimationFrame(()=>{try{refreshTableViews(active||document);}catch(e){}});
 }
 function releaseSuccess(){uiPending=false;hideGate();const closes=deferredCloses.splice(0),toasts=deferredToasts.splice(0);closes.forEach(id=>{try{originalCloseModal(id);}catch(e){}});toasts.forEach(x=>{try{originalToast(x[0],x[1]);}catch(e){}});}
+
+
 async function cancelPending(){
   await ensureOutboxReady();clearTimeout(retryTimer);queued=false;running=false;lastError=null;diag.lastError='';diag.lastErrorAt='';saveDiag(diag);await clearOutbox();if(rollbackSnapshot){window.DB=DB=clone(rollbackSnapshot);baseline=clone(rollbackSnapshot);}rollbackSnapshot=null;uiPending=false;deferredCloses=[];deferredToasts=[];hideGate();try{markSaved();}catch(e){}renderAll();setPanel('ok','🟢 لا توجد عملية معلقة');try{originalToast('↩️ أُلغي التغيير لأنه لم يُحفظ في Firebase','#c0392b');}catch(e){}settlePromise({ok:false,cancelled:true});}
 function beginPromise(){if(activePromise)return activePromise;activePromise=new Promise(res=>{resolveActive=res;});return activePromise;}
@@ -10302,7 +10443,9 @@ async function flush(){
   if(!p){
     queued=false;
     lastError=null;
+    currentConflicts=[];
     if(uiPending)releaseSuccess();
+    else hideGate();
     setPanel('ok','🟢 كل التغييرات المحلية مرفوعة ومتحققة');
     settlePromise({ok:true,noChanges:true});
     return true;
@@ -10318,6 +10461,7 @@ async function flush(){
   running=true;
   queued=false;
   uiPending=true;
+  currentConflicts=[];
   gate('saving','العملية قيد الرفع المشروط بـ ETag ثم القراءة الراجعة والتحقق…');
   status('⏳ رفع مشروط وتحقق — '+p.txId,'var(--teal)','saving');
 
@@ -10334,16 +10478,18 @@ async function flush(){
 
     let autoResolvedConflicts=0;
     try{
-      autoResolvedConflicts=await resolveOpenConflictsForTransaction(
+      autoResolvedConflicts=await resolveTransactionConflicts(
         p.txId,
-        'idempotent-replay-verified'
+        result.alreadySatisfied
+          ?'already-satisfied-verified'
+          :'transaction-verified'
       );
     }catch(resolveError){
-      console.warn('[sync] transaction saved but stale conflict witnesses were not closed',resolveError);
+      console.warn('[sync] transaction verified but old conflict witnesses were not closed',resolveError);
     }
 
     lastError=null;
-    lastSavedAt=result.receipt.verifiedAt;
+    lastSavedAt=result.receipt.verifiedAt||new Date().toISOString();
     lastPullAt=lastSavedAt;
     diag.lastSavedAt=lastSavedAt;
     diag.lastPullAt=lastPullAt;
@@ -10352,30 +10498,31 @@ async function flush(){
     diag.lastErrorAt='';
     diag.ownedConflicts=0;
     diag.counts=countData(DB);
-    diag.cloudFingerprint=result.receipt.fingerprint||diag.cloudFingerprint;
+    diag.cloudFingerprint=result.receipt.fingerprint||dataFingerprint(result.raw);
     diag.localFingerprint=dataFingerprint(DB);
     diag.cloudMatch=diag.localFingerprint===diag.cloudFingerprint;
 
     currentConflicts=[];
-    if(autoResolvedConflicts){
-      allOpenConflicts=allOpenConflicts.filter(
-        item=>!(
-          item&&
-          item.status==='open'&&
-          String(item.txId||'')===String(p.txId)&&
-          String(item.deviceId||'')===String(DEVICE)
-        )
-      );
-    }
+    allOpenConflicts=allOpenConflicts.filter(
+      item=>!(
+        item&&
+        item.status==='open'&&
+        String(item.txId||'')===String(p.txId)&&
+        String(item.deviceId||'')===String(DEVICE)
+      )
+    );
+    diag.openConflicts=allOpenConflicts.length;
 
     saveDiag(diag);
     try{markSaved();}catch(e){}
 
     const replayCount=Number(result.receipt.idempotentReplayCount||0);
     status(
-      replayCount
-        ?'🟢 العملية كانت موجودة محاسبياً في السحابة؛ تم التحقق منها وإلغاء التكرار المعلق'
-        :'🟢 رُفعت كل تغييرات العملية وتحقق منها — '+p.txId,
+      result.alreadySatisfied
+        ?'🟢 العملية كانت مثبتة فعلاً في السحابة؛ أُزيلت إعادة الإرسال دون صناعة تعارض'
+        :replayCount
+          ?'🟢 العملية احتوت سجلات موجودة مسبقاً بنفس ID والمحتوى؛ تم التحقق دون تكرار'
+          :'🟢 رُفعت كل تغييرات العملية وتحقق منها — '+p.txId,
       'var(--green1)',
       'ok'
     );
@@ -10386,7 +10533,8 @@ async function flush(){
           txId:p.txId,
           source:SOURCE,
           writes:clone(writes),
-          idempotentReplayCount:replayCount
+          idempotentReplayCount:replayCount,
+          alreadySatisfied:!!result.alreadySatisfied
         }
       }));
     }catch(e){}
@@ -10399,19 +10547,29 @@ async function flush(){
       txId:p.txId,
       source:SOURCE,
       idempotentReplayCount:replayCount,
+      alreadySatisfied:!!result.alreadySatisfied,
       autoResolvedConflicts
     });
     return true;
   }catch(e){
     lastError=String(e&&e.message||e);
     diag.lastError=lastError;
+    diag.lastErrorAt=new Date().toISOString();
     saveDiag(diag);
     queued=true;
-    console.error('[v189] verified sync failed',e);
+    console.error('[v195] verified sync failed',e);
 
     if(e&&e.code==='SYNC_CONFLICT'){
+      currentConflicts=(e.conflicts||[]).map((x,i)=>
+        Object.assign({
+          id:'local_pending_'+i,
+          status:'open',
+          txId:p.txId,
+          deviceId:DEVICE
+        },x)
+      );
       status(
-        '⚠️ تعارض حقيقي: نفس القيد المالي مختلف فعلاً بين جهازين',
+        '⚠️ تعارض حقيقي: نفس ID يحمل قيماً تشغيلية مختلفة بين الجهاز والسحابة',
         'var(--amber)',
         'conflict'
       );
@@ -10420,6 +10578,7 @@ async function flush(){
       return false;
     }
 
+    currentConflicts=[];
     status(
       '🔴 لم يثبت الحفظ؛ العملية معلقة: '+lastError,
       'var(--red)',
@@ -11183,8 +11342,8 @@ const EGTPH_SYNC_API={version:'175.0-surgical-sync-undo',source:SOURCE,root:ROOT
 (function(){
   'use strict';
   window.__EGTPH_V175_SURGICAL__=true;
-  window.__EGTPH_V175_BUILD__='v193-sync-gate-state-reconciled';
-  try{document.title='EGTPH — سجل الأجور v193';}catch(e){}
+  window.__EGTPH_V175_BUILD__='v195-sync-conflict-single-source';
+  try{document.title='EGTPH — سجل الأجور v195';}catch(e){}
 })();
 </script>
 
