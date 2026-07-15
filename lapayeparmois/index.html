@@ -224,7 +224,7 @@
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes" name="viewport"/>
-<title>EGTPH — سجل الأجور v195</title>
+<title>EGTPH — سجل الأجور v196</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -1135,7 +1135,7 @@ body{background:linear-gradient(145deg,#f2f7f4 0%,#fbfdfc 42%,#eef7f1 100%);}
 }
 @media screen and (max-width:900px){.twrap thead th,.sec table thead th{font-size:11.2px!important;padding:10px 8px!important}.twrap tbody td,.sec table tbody td{font-size:11px!important;padding:10px 8px!important;line-height:1.65!important}#page-settlement .twrap table{min-width:1120px!important}}
 </style>
-<meta content="v195-sync-conflict-single-source" name="egtph-build"/>
+<meta content="v196-livepull-write-barrier-final" name="egtph-build"/>
 <style id="egtph-v176-night-theme">
 /* v176 — ثيم ثانٍ فقط: ليلي أخضر متناسق. الأبيض يبقى الافتراضي. */
 body.egtph-theme-night{
@@ -1523,7 +1523,7 @@ body.egtph-theme-night .egtph-table-viewport::-webkit-scrollbar-thumb{
 <div class="" id="toast" style="">✅ تم تنزيل نسخة كاملة: ملف HTML يحتوي البرنامج وكل البيانات الحالية</div>
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div class="topbar">
-<div class="tlogo">EGTPH <span>| سجل الأجور v195</span></div>
+<div class="tlogo">EGTPH <span>| سجل الأجور v196</span></div>
 <div id="autoSv" style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--gray)">
 <span class="auto-save-dot" id="saveDot"></span>
 <span id="saveLabel">—</span>
@@ -9456,7 +9456,7 @@ const MAX_RETRY=7, RETRY_MS=3000, LIVE_POLL_MS=5000, UNDO_LIMIT=30;
 const BASE_FETCH=window.fetch.bind(window);
 let baseline=null,rollbackSnapshot=null,running=false,queued=false,lastError=null,lastSavedAt=null,lastPullAt=null,lastLivePullAt=null,remoteEtag=null,suppressUndoJournal=false;
 let retryTimer=null,activePromise=null,resolveActive=null,writes=[],currentConflicts=[],allOpenConflicts=[],uiPending=false,deferredCloses=[],deferredToasts=[];
-let scheduleTimer=null,liveTimer=null,liveRunning=false;
+let scheduleTimer=null,liveTimer=null,liveRunning=false,localSavePreparing=false,livePullGeneration=0,livePullAbortController=null;
 let outboxMemory=null,outboxBackend=null,outboxReadyPromise=null;
 
 function deviceId(){try{let x=localStorage.getItem(DEVICE_KEY);if(!x){x='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9);localStorage.setItem(DEVICE_KEY,x);}return x;}catch(e){return 'dev_'+Math.random().toString(36).slice(2,10);}}
@@ -10863,16 +10863,127 @@ async function openUndoLock(){
   const entry=rows[0],ok=confirm('↩️ تراجع عن عملية مالية سابقة\n\nالعملية: '+String(entry.action||'عملية مالية')+'\n\nهذا لا يرجع إلى صفحة سابقة؛ سيعكس قيود آخر عملية قابلة للتراجع ثم يثبت النتيجة في Firebase.\n\nمتابعة؟');if(!ok)return false;
   return undoOperation(entry.id);
 }
+
+function cancelLivePullForLocalMutation(){
+  livePullGeneration++;
+  if(livePullAbortController){
+    try{livePullAbortController.abort();}catch(e){}
+  }
+  livePullAbortController=null;
+  return true;
+}
+
+function livePullStillSafe(seq,startLocalFp,startBaseFp){
+  if(seq!==livePullGeneration)return false;
+  if(localSavePreparing||running||loadOutbox())return false;
+  if(!baseline||!window.__EGTPH_DB_READY__||window.__EGTPH_DB_READY_SOURCE__!==SOURCE)return false;
+  if(dataFingerprint(DB)!==startLocalFp)return false;
+  if(dataFingerprint(baseline)!==startBaseFp)return false;
+  return true;
+}
+
 async function livePullTick(){
   await ensureOutboxReady();
-  if(liveRunning||document.hidden||running||loadOutbox()||!baseline||!window.__EGTPH_DB_READY__||window.__EGTPH_DB_READY_SOURCE__!==SOURCE)return false;
-  const localFp=dataFingerprint(DB),baseFp=dataFingerprint(baseline);if(localFp!==baseFp){setPanel('error','🔴 توجد تغييرات محلية غير موثقة؛ أُوقف الاستقبال التلقائي لحمايتها');return false;}
-  liveRunning=true;try{const t=await token(),r=await request(endpoint('',t),{headers:{'X-Firebase-ETag':'true'}});if(!r.ok)throw new Error('فحص تلقائي Firebase HTTP '+r.status);const etag=r.headers.get('etag')||null;if(etag&&remoteEtag&&etag===remoteEtag)return false;const raw=await r.json();if(!raw||typeof raw!=='object')throw new Error('نسخة Firebase المرجعية غير مكتملة');const cloudFp=dataFingerprint(raw);remoteEtag=etag||remoteEtag;if(cloudFp===localFp){diag.cloudFingerprint=cloudFp;diag.localFingerprint=localFp;diag.cloudMatch=true;saveDiag(diag);return false;}_applyDBData(_v169SanitizeCloud(raw));window.__EGTPH_DB_READY__=true;window.__EGTPH_DB_READY_SOURCE__=SOURCE;baseline=clone(DB);lastPullAt=lastLivePullAt=new Date().toISOString();diag.lastPullAt=lastPullAt;diag.cloudFingerprint=cloudFp;diag.localFingerprint=dataFingerprint(DB);diag.cloudMatch=diag.localFingerprint===cloudFp;diag.lastError='';saveDiag(diag);renderAll();setPanel('ok','🟢 استُقبلت تغييرات جهاز آخر تلقائياً وأصبحت البيانات متطابقة');return true;}catch(e){lastError=String(e&&e.message||e);diag.lastError=lastError;diag.lastErrorAt=new Date().toISOString();saveDiag(diag);setPanel('error','🔴 فشل الاستقبال التلقائي: '+lastError);return false;}finally{liveRunning=false;}
+
+  if(
+    liveRunning||
+    document.hidden||
+    localSavePreparing||
+    running||
+    loadOutbox()||
+    !baseline||
+    !window.__EGTPH_DB_READY__||
+    window.__EGTPH_DB_READY_SOURCE__!==SOURCE
+  )return false;
+
+  const startLocalFp=dataFingerprint(DB);
+  const startBaseFp=dataFingerprint(baseline);
+  if(startLocalFp!==startBaseFp){
+    setPanel('error','🔴 توجد تغييرات محلية غير موثقة؛ أُوقف الاستقبال التلقائي لحمايتها');
+    return false;
+  }
+
+  const seq=++livePullGeneration;
+  const controller=typeof AbortController==='function'?new AbortController():null;
+  livePullAbortController=controller;
+  liveRunning=true;
+
+  try{
+    const t=await token();
+    if(!livePullStillSafe(seq,startLocalFp,startBaseFp))return false;
+
+    const r=await request(endpoint('',t),{
+      headers:{'X-Firebase-ETag':'true'},
+      signal:controller?controller.signal:undefined
+    });
+    if(!r.ok)throw new Error('فحص تلقائي Firebase HTTP '+r.status);
+
+    // الحاجز الثاني بعد الشبكة: قد يكون المستخدم سجل عملية أثناء انتظار fetch.
+    if(!livePullStillSafe(seq,startLocalFp,startBaseFp))return false;
+
+    const etag=r.headers.get('etag')||null;
+    const raw=await r.json();
+    if(!raw||typeof raw!=='object')throw new Error('نسخة Firebase المرجعية غير مكتملة');
+
+    // الحاجز الثالث بعد JSON: ممنوع استبدال DB إذا تغيرت محلياً منذ بداية الجلب.
+    if(!livePullStillSafe(seq,startLocalFp,startBaseFp))return false;
+
+    if(etag&&remoteEtag&&etag===remoteEtag)return false;
+
+    const cloudFp=dataFingerprint(raw);
+    if(cloudFp===startLocalFp){
+      remoteEtag=etag||remoteEtag;
+      diag.cloudFingerprint=cloudFp;
+      diag.localFingerprint=startLocalFp;
+      diag.cloudMatch=true;
+      saveDiag(diag);
+      return false;
+    }
+
+    // آخر فحص ذري قبل الكتابة في الذاكرة.
+    if(!livePullStillSafe(seq,startLocalFp,startBaseFp))return false;
+
+    _applyDBData(_v169SanitizeCloud(raw));
+    window.__EGTPH_DB_READY__=true;
+    window.__EGTPH_DB_READY_SOURCE__=SOURCE;
+    baseline=clone(DB);
+    remoteEtag=etag||remoteEtag;
+    lastPullAt=lastLivePullAt=new Date().toISOString();
+    diag.lastPullAt=lastPullAt;
+    diag.cloudFingerprint=cloudFp;
+    diag.localFingerprint=dataFingerprint(DB);
+    diag.cloudMatch=diag.localFingerprint===cloudFp;
+    diag.lastError='';
+    saveDiag(diag);
+    renderAll();
+    setPanel('ok','🟢 استُقبلت تغييرات جهاز آخر تلقائياً وأصبحت البيانات متطابقة');
+    return true;
+  }catch(e){
+    if(e&&e.name==='AbortError')return false;
+    lastError=String(e&&e.message||e);
+    diag.lastError=lastError;
+    diag.lastErrorAt=new Date().toISOString();
+    saveDiag(diag);
+    setPanel('error','🔴 فشل الاستقبال التلقائي: '+lastError);
+    return false;
+  }finally{
+    if(seq===livePullGeneration){
+      livePullAbortController=null;
+    }
+    liveRunning=false;
+  }
 }
 function startLivePull(){clearInterval(liveTimer);liveTimer=setInterval(livePullTick,LIVE_POLL_MS);return true;}
 
 async function save(){
-  await ensureOutboxReady();
+  // مهم: هذا الحاجز يبدأ تزامنياً قبل أول await، لأن الواجهة تكون قد عدلت DB بالفعل.
+  // أي livePull كان ينتظر الشبكة يُلغى ولا يحق له تطبيق نسخة قديمة فوق العملية الجديدة.
+  localSavePreparing=true;
+  cancelLivePullForLocalMutation();
+
+  try{
+    await ensureOutboxReady();
+
 
   if(!window.__EGTPH_DB_READY__||window.__EGTPH_DB_READY_SOURCE__!==SOURCE){
     lastError='Firebase المرجعي غير جاهز';
@@ -10955,6 +11066,10 @@ async function save(){
   const promise=beginPromise();
   Promise.resolve().then(flush);
   return promise;
+
+  }finally{
+    localSavePreparing=false;
+  }
 }
 async function ready(){
   await ensureOutboxReady();
@@ -11342,8 +11457,8 @@ const EGTPH_SYNC_API={version:'175.0-surgical-sync-undo',source:SOURCE,root:ROOT
 (function(){
   'use strict';
   window.__EGTPH_V175_SURGICAL__=true;
-  window.__EGTPH_V175_BUILD__='v195-sync-conflict-single-source';
-  try{document.title='EGTPH — سجل الأجور v195';}catch(e){}
+  window.__EGTPH_V175_BUILD__='v196-livepull-write-barrier-final';
+  try{document.title='EGTPH — سجل الأجور v196';}catch(e){}
 })();
 </script>
 
