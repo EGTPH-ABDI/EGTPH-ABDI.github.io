@@ -224,7 +224,7 @@
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes" name="viewport"/>
-<title>EGTPH — سجل الأجور v192</title>
+<title>EGTPH — سجل الأجور v193</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -1135,7 +1135,7 @@ body{background:linear-gradient(145deg,#f2f7f4 0%,#fbfdfc 42%,#eef7f1 100%);}
 }
 @media screen and (max-width:900px){.twrap thead th,.sec table thead th{font-size:11.2px!important;padding:10px 8px!important}.twrap tbody td,.sec table tbody td{font-size:11px!important;padding:10px 8px!important;line-height:1.65!important}#page-settlement .twrap table{min-width:1120px!important}}
 </style>
-<meta content="v192-global-operation-id-sync-final" name="egtph-build"/>
+<meta content="v193-sync-gate-state-reconciled" name="egtph-build"/>
 <style id="egtph-v176-night-theme">
 /* v176 — ثيم ثانٍ فقط: ليلي أخضر متناسق. الأبيض يبقى الافتراضي. */
 body.egtph-theme-night{
@@ -1523,7 +1523,7 @@ body.egtph-theme-night .egtph-table-viewport::-webkit-scrollbar-thumb{
 <div class="" id="toast" style="">✅ تم تنزيل نسخة كاملة: ملف HTML يحتوي البرنامج وكل البيانات الحالية</div>
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div class="topbar">
-<div class="tlogo">EGTPH <span>| سجل الأجور v192</span></div>
+<div class="tlogo">EGTPH <span>| سجل الأجور v193</span></div>
 <div id="autoSv" style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--gray)">
 <span class="auto-save-dot" id="saveDot"></span>
 <span id="saveLabel">—</span>
@@ -10032,8 +10032,6 @@ async function refreshHealth(showToast){
       throw new Error('نسخة Firebase المرجعية غير مكتملة');
     }
 
-    // الشاهد القديم ليس تعارضاً إذا كانت القيمة التي طلبها الجهاز موجودة بالفعل محاسبياً في السحابة.
-    // هذا يعالج حالة نفس التسبيق الموزع الذي ثبت ثم بقيت سجلات تعارض قديمة مفتوحة.
     let autoClosedSatisfied=0;
     if(allOpenConflicts.length){
       autoClosedSatisfied=await closeCloudSatisfiedConflictWitnesses(
@@ -10121,6 +10119,10 @@ async function refreshHealth(showToast){
 
     setPanel(mode,msg);
 
+    // مصدر الحقيقة الوحيد للنافذة الكبيرة:
+    // إذا انتهت العملية المعلقة والتعارض الحالي، تُغلق فوراً مهما كان ما عُرض قبل ذلك.
+    reconcileSyncGate();
+
     if(showToast){
       originalToast(msg,currentConflicts.length||lastError?true:undefined);
     }
@@ -10146,6 +10148,13 @@ async function refreshHealth(showToast){
     diag.cloudMatch=false;
     saveDiag(diag);
     setPanel('error','🔴 فشل فحص المزامنة: '+lastError);
+
+    // فشل الفحص وحده لا يسمح بإبقاء نافذة "تعارض" قديمة إذا لم تعد هناك عملية معلقة.
+    if(!loadOutbox()&&(!currentConflicts||!currentConflicts.length)){
+      hideGate();
+      uiPending=false;
+    }
+
     if(showToast)originalToast('❌ فشل فحص المزامنة: '+lastError,true);
     return {ok:false,error:lastError};
   }
@@ -10170,6 +10179,7 @@ async function showConflicts(){
   if(localButton)localButton.style.display=hasCurrent?'':'none';
 
   if(!rows.length){
+    reconcileSyncGate();
     box.innerHTML=
       '<div class="v170-conf-row">'+
       '<b>✅ لا توجد تعارضات مفتوحة</b>'+
@@ -10239,6 +10249,30 @@ window.toast=wrappedToast;try{toast=wrappedToast;}catch(e){}window.closeModal=wr
 function ensureGate(){let g=document.getElementById('egtphV170SaveGate');if(g)return g;g=document.createElement('div');g.id='egtphV170SaveGate';g.innerHTML='<div class="v170-card"><div class="v170-spinner"></div><div class="v170-title">تثبيت العملية في Firebase…</div><div class="v170-msg">لا تغلق الصفحة حتى انتهاء التحقق.</div><div class="v170-actions error-actions"><button data-act="retry">إعادة المحاولة</button><button data-act="cancel" class="danger">إلغاء التغيير غير المحفوظ</button></div><div class="v170-actions conflict-actions"><button data-act="show">عرض التعارض</button><button data-act="remote">اعتماد السحابة</button><button data-act="local" class="warn">اعتماد هذا الجهاز</button></div></div>';document.body.appendChild(g);g.querySelector('[data-act="retry"]').onclick=()=>{g.className='';lastError=null;queued=true;flush();};g.querySelector('[data-act="cancel"]').onclick=cancelPending;g.querySelector('[data-act="show"]').onclick=showConflicts;g.querySelector('[data-act="remote"]').onclick=acceptRemote;g.querySelector('[data-act="local"]').onclick=forceLocal;return g;}
 function gate(mode,msg){const g=ensureGate();g.style.display='flex';g.className=mode==='conflict'?'conflict':mode==='failed'?'failed':'';g.querySelector('.v170-title').textContent=mode==='conflict'?'تعارض مزامنة — لم تُستبدل أي نسخة':mode==='failed'?'فشل تثبيت العملية':'تثبيت العملية في Firebase…';g.querySelector('.v170-msg').textContent=msg||'';}
 function hideGate(){const g=document.getElementById('egtphV170SaveGate');if(g)g.style.display='none';}
+
+function reconcileSyncGate(){
+  const pending=!!loadOutbox();
+  const hasCurrentConflict=Array.isArray(currentConflicts)&&currentConflicts.length>0;
+
+  if(hasCurrentConflict){
+    gate(
+      'conflict',
+      '⚠️ توجد تعارضات حقيقية تخص العملية الحالية؛ لم تُستبدل أي نسخة تلقائياً'
+    );
+    return 'conflict';
+  }
+
+  if(pending){
+    // العملية المعلقة هي الحالة الوحيدة التي تبرر بقاء بوابة الحفظ ظاهرة.
+    return 'pending';
+  }
+
+  // لا عملية معلقة ولا تعارض حالي = لا توجد أي حالة صحيحة تسمح ببقاء النافذة.
+  hideGate();
+  uiPending=false;
+  return 'clear';
+}
+
 function renderAll(){
   const call=n=>{try{if(typeof window[n]==='function')window[n]();}catch(e){console.warn('render '+n,e);}};
   ['renderDash','renderWorkers','renderSettlement','updateBadges'].forEach(call);
@@ -10764,7 +10798,45 @@ async function save(){
   return promise;
 }
 async function ready(){
-  await ensureOutboxReady();baseline=clone(DB);lastError=null;lastPullAt=new Date().toISOString();diag.lastPullAt=lastPullAt;diag.counts=countData(DB);saveDiag(diag);refreshUndoButton();startLivePull();const p=loadOutbox();if(p){rollbackSnapshot=clone(baseline);applyPatch(DB,p);window.DB=DB;queued=true;uiPending=true;gate('saving','استرجاع عملية غير مؤكدة ثم فحص التعارض قبل تثبيتها…');renderAll();flush();}else{queued=false;lastError=null;diag.lastError='';saveDiag(diag);status('🟢 المصدر الوحيد: Firebase '+ROOT+' — استقبال تلقائي كل 5 ثوانٍ','var(--green1)','ok');refreshHealth(false);}}
+  await ensureOutboxReady();
+
+  // لا نورث أي نافذة مرئية من حالة واجهة سابقة؛ الحالة الفعلية يعيد المحرك بناءها من outbox + Firebase.
+  hideGate();
+  uiPending=false;
+
+  baseline=clone(DB);
+  lastError=null;
+  lastPullAt=new Date().toISOString();
+  diag.lastPullAt=lastPullAt;
+  diag.counts=countData(DB);
+  saveDiag(diag);
+  refreshUndoButton();
+  startLivePull();
+
+  const p=loadOutbox();
+  if(p){
+    rollbackSnapshot=clone(baseline);
+    applyPatch(DB,p);
+    window.DB=DB;
+    queued=true;
+    uiPending=true;
+    gate('saving','استرجاع عملية غير مؤكدة ثم فحص التعارض قبل تثبيتها…');
+    renderAll();
+    flush();
+  }else{
+    queued=false;
+    lastError=null;
+    diag.lastError='';
+    saveDiag(diag);
+    status(
+      '🟢 المصدر الوحيد: Firebase '+ROOT+' — استقبال تلقائي كل 5 ثوانٍ',
+      'var(--green1)',
+      'ok'
+    );
+    await refreshHealth(false);
+    reconcileSyncGate();
+  }
+}
 function schedule(){clearTimeout(scheduleTimer);scheduleTimer=setTimeout(()=>{if(loadOutbox()&&!running)flush();},500);}
 async function sync(manual){
   await ensureOutboxReady();if(!loadOutbox()&&baseline&&dataFingerprint(DB)!==dataFingerprint(baseline)){const saved=await save();if(!saved||saved.ok===false)return {ok:false,error:lastError||'تعذر تثبيت التغييرات المحلية قبل الجلب'};}if(loadOutbox()){const ok=await flush();if(!ok)return {ok:false,error:lastError};}try{await pullRoot();const h=await refreshHealth(false);if(manual)originalToast(h&&h.match?'☁️ تم الجلب الكامل وتأكد تطابق الجهاز مع Firebase':'⚠️ تم الجلب لكن فحص المطابقة يحتاج مراجعة',h&&h.match?undefined:true);return {ok:!!(h&&h.match),health:h};}catch(e){lastError=String(e&&e.message||e);diag.lastError=lastError;saveDiag(diag);status('🔴 فشل المزامنة: '+lastError,'var(--red)','error');if(manual)originalToast('❌ فشلت المزامنة: '+lastError,true);return {ok:false,error:lastError};}}
@@ -11111,8 +11183,8 @@ const EGTPH_SYNC_API={version:'175.0-surgical-sync-undo',source:SOURCE,root:ROOT
 (function(){
   'use strict';
   window.__EGTPH_V175_SURGICAL__=true;
-  window.__EGTPH_V175_BUILD__='v192-global-operation-id-sync-final';
-  try{document.title='EGTPH — سجل الأجور v192';}catch(e){}
+  window.__EGTPH_V175_BUILD__='v193-sync-gate-state-reconciled';
+  try{document.title='EGTPH — سجل الأجور v193';}catch(e){}
 })();
 </script>
 
