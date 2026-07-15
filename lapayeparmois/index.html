@@ -224,7 +224,7 @@
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes" name="viewport"/>
-<title>EGTPH — سجل الأجور v190</title>
+<title>EGTPH — سجل الأجور v192</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -1135,7 +1135,7 @@ body{background:linear-gradient(145deg,#f2f7f4 0%,#fbfdfc 42%,#eef7f1 100%);}
 }
 @media screen and (max-width:900px){.twrap thead th,.sec table thead th{font-size:11.2px!important;padding:10px 8px!important}.twrap tbody td,.sec table tbody td{font-size:11px!important;padding:10px 8px!important;line-height:1.65!important}#page-settlement .twrap table{min-width:1120px!important}}
 </style>
-<meta content="v190-stale-conflicts-auto-cleanup" name="egtph-build"/>
+<meta content="v192-global-operation-id-sync-final" name="egtph-build"/>
 <style id="egtph-v176-night-theme">
 /* v176 — ثيم ثانٍ فقط: ليلي أخضر متناسق. الأبيض يبقى الافتراضي. */
 body.egtph-theme-night{
@@ -1523,7 +1523,7 @@ body.egtph-theme-night .egtph-table-viewport::-webkit-scrollbar-thumb{
 <div class="" id="toast" style="">✅ تم تنزيل نسخة كاملة: ملف HTML يحتوي البرنامج وكل البيانات الحالية</div>
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div class="topbar">
-<div class="tlogo">EGTPH <span>| سجل الأجور v190</span></div>
+<div class="tlogo">EGTPH <span>| سجل الأجور v192</span></div>
 <div id="autoSv" style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--gray)">
 <span class="auto-save-dot" id="saveDot"></span>
 <span id="saveLabel">—</span>
@@ -2522,7 +2522,17 @@ function toast(msg,colOrErr){
   clearTimeout(t._t);
   t._t=setTimeout(()=>{t.className='';t.style.background='';t.style.color='';},3200);
 }
-function audit(a){try{_cloudDirty=true;}catch(e){}DB.auditLog.unshift({user:(DB.settings.userName||'مستخدم'),action:a,time:nowStr()});if(DB.auditLog.length>500)DB.auditLog=DB.auditLog.slice(0,500);}
+function audit(a){
+  try{_cloudDirty=true;}catch(e){}
+  DB.auditLog.unshift({
+    id:'AUD_'+genId(),
+    user:(DB.settings.userName||'مستخدم'),
+    action:a,
+    time:nowStr(),
+    createdAt:new Date().toISOString()
+  });
+  if(DB.auditLog.length>500)DB.auditLog=DB.auditLog.slice(0,500);
+}
 // ═══════════════════════════════════════════════════
 //  _showConfirm — modal تأكيد مخصص بدل confirm() المُعطَّل
 //  يعمل في كل البيئات (موبايل، iframe، webview)
@@ -9474,10 +9484,37 @@ function countData(d){const c={workers:list(d&&d.workers).length,advances:0,hour
 function activeDeletedSet(d){const out=new Set(list(d&&d.deletedIds).map(String));for(const k of keys(d&&d.deletedRecords)){const r=d.deletedRecords[k];if(!r||typeof r!=='object')continue;const dt=Date.parse(r.deletedAt||'1970-01-01T00:00:00.000Z')||0,rt=Date.parse(r.restoredAt||'')||0;if((r.deleted===true||r.status==='deleted'||r.deletedAt)&&!(rt&&rt>=dt)){out.add(String(k).split('|').pop());if(r.id!=null)out.add(String(r.id));}}return out;}
 function businessProjection(d){d=d||{};const dead=activeDeletedSet(d),clean=(path,v)=>list(v).filter(x=>x&&typeof x==='object'&&!dead.has(String(x.id||''))&&!dead.has(String(x.transactionId||''))&&!dead.has(String(x.operationId||''))).map(x=>normalizeRecord(path,x)).sort((a,b)=>recKey(a).localeCompare(recKey(b)));const out={workers:clean('workers',d.workers),advances:{},hours:{},absences:{},bonuses:{},debts:{},trash:{},deletedIds:[...dead].sort(),deletedRecords:clone(d.deletedRecords||{}),cycleLocks:clone(d.cycleLocks||{}),settings:{},auditLog:clean('auditLog',d.auditLog),ledger:clean('ledger',d.ledger),txJournal:clean('txJournal',d.txJournal),repairLog:clean('repairLog',d.repairLog),undoJournal:clean('undoJournal',d.undoJournal)};for(const sec of ['advances','bonuses'])for(const wid of keys(d[sec])){const b={};for(const m of keys(d[sec][wid])){const a=clean(sec+'/'+wid+'/'+m,d[sec][wid][m]);if(a.length)b[m]=a;}if(keys(b).length)out[sec][wid]=b;}for(const sec of ['hours','absences','debts'])for(const wid of keys(d[sec])){const a=clean(sec+'/'+wid,d[sec][wid]);if(a.length)out[sec][wid]=a;}for(const sec of keys(d.trash)){const a=clean('trash/'+sec,d.trash[sec]);if(a.length)out.trash[sec]=a;}const st=d.settings||{};out.settings={mult:Number(st.mult==null?1.5:st.mult),hoursMultiplier:Number(st.hoursMultiplier==null?(st.mult==null?1.5:st.mult):st.hoursMultiplier),holidays:list(st.holidays).map(String).sort(),backupInterval:Number(st.backupInterval==null?7:st.backupInterval),paydayAlert:st.paydayAlert!==false,bonTax:Number(st.bonTax||0),userName:String(st.userName||'Youcef Abdi'),deletePass:String(st.deletePass||'admin123')};return out;}
 function dataFingerprint(d){return hash(stable(businessProjection(d)));}
+function isSynchronizedOperationList(path){
+  return path==='workers'||
+    /^(advances|bonuses)\/[^/]+\/[^/]+$/.test(path)||
+    /^(hours|absences|debts)\/[^/]+$/.test(path)||
+    ['auditLog','ledger','txJournal','repairLog','undoJournal'].includes(path);
+}
+
 function assertListIntegrity(path,v,changes){
-  const core=path==='workers'||/^(advances|bonuses|hours|absences|debts)\//.test(path),seen=new Set();
-  rawEntries(v).forEach(([storage,x],i)=>{if(!obj(x)||x.id==null||String(x.id).trim()==='')return;const k='id:'+String(x.id);if(seen.has(k))throw new Error('ID مكرر داخل '+path+': '+String(x.id));seen.add(k);});
-  if(core)(changes||[]).forEach(op=>{const x=op.after;if(!obj(x)||x.id==null||String(x.id).trim()==='')throw new Error('لا يمكن حفظ قيد جديد أو معدل بدون ID في '+path);});
+  const idRequired=isSynchronizedOperationList(path);
+  const seen=new Set();
+
+  rawEntries(v).forEach(([storage,x],i)=>{
+    if(!obj(x)||x.id==null||String(x.id).trim()==='')return;
+    const key='id:'+String(x.id);
+    if(seen.has(key)){
+      throw new Error('ID مكرر داخل '+path+': '+String(x.id));
+    }
+    seen.add(key);
+  });
+
+  if(!idRequired)return;
+
+  (changes||[]).forEach(op=>{
+    const record=op.action==='delete'?op.before:op.after;
+    if(!obj(record)||record.id==null||String(record.id).trim()===''){
+      throw new Error(
+        'لا يمكن مزامنة عملية بدون ID ثابت داخل '+path+
+        ' — نوع التغيير: '+String(op.action||'غير معروف')
+      );
+    }
+  });
 }
 function settingsDelta(b,a){const out={};const ignore=new Set(['cloudUrl','cloudKey','cloudAuto','v91CloudAuto','v169FirebaseOnly','v169AuthoritativePath','v169LastFullPull','v169AuthoritativeSource','v170FirebaseOnly','v170AuthoritativePath','v148AdvanceJournal','v148AdvanceJournalUpdatedAt']);Object.keys(a||{}).forEach(k=>{if(ignore.has(k))return;if(!same(b&&b[k],a[k])&&a[k]!==undefined)out['settings/'+k]={existsBefore:Object.prototype.hasOwnProperty.call(b||{},k),before:clone(b&&b[k]),after:clone(a[k])};});return out;}
 function buildPatch(base,target){
@@ -9710,17 +9747,22 @@ async function writeConflictRecords(items,t,txId){const now=new Date().toISOStri
 
 function conflictAlreadySatisfiedByCloud(item,cloudRaw){
   if(!item||item.status!=='open'||!item.path)return false;
+
   const path=String(item.path);
   const local=item.local;
 
-  if(path==='undoJournal'||path.includes('/')){
+  if(isSynchronizedOperationList(path)){
     const remoteMap=listMap(getAt(cloudRaw,path),path);
     const got=remoteMap[String(item.recordKey||'')]&&
       remoteMap[String(item.recordKey||'')].record;
-    return !!got&&local!==undefined&&equivalentListRecord(path,got,local);
+
+    return !!got&&
+      local!==undefined&&
+      equivalentListRecord(path,got,local);
   }
 
-  return local!==undefined&&equivalent(getAt(cloudRaw,path),local);
+  return local!==undefined&&
+    equivalent(getAt(cloudRaw,path),local);
 }
 
 async function closeCloudSatisfiedConflictWitnesses(cloudRaw,items){
@@ -9742,11 +9784,6 @@ function replayComparableRecord(path,record){
   if(!value||typeof value!=='object')return clone(value);
   const out=clone(value);
 
-  if(path.startsWith('advances/')){
-    REPLAY_VOLATILE_FIELDS.forEach(key=>delete out[key]);
-    return out;
-  }
-
   if(path==='undoJournal'){
     if(out.inverse){
       out.inverse=encodeUndoInverseForFirebase(
@@ -9756,35 +9793,49 @@ function replayComparableRecord(path,record){
     return out;
   }
 
+  if(isSynchronizedOperationList(path)&&out.id!=null&&String(out.id).trim()!==''){
+    REPLAY_VOLATILE_FIELDS.forEach(key=>delete out[key]);
+  }
+
   return out;
 }
 
 function equivalentListRecord(path,left,right){
   if(same(left,right))return true;
 
-  if(path.startsWith('advances/')){
-    return same(
-      replayComparableRecord(path,left),
-      replayComparableRecord(path,right)
-    );
-  }
+  const a=normalizeRecord(path,left);
+  const b=normalizeRecord(path,right);
 
   if(path==='undoJournal'){
-    const a=replayComparableRecord(path,left);
-    const b=replayComparableRecord(path,right);
+    const ca=replayComparableRecord(path,a);
+    const cb=replayComparableRecord(path,b);
 
-    // نفس معرف سجل التراجع ونفس العملية الأصلية = نفس حدث التراجع.
-    // اختلاف شكل تخزين inverse بين v187/v188 لا يُعتبر تعديلاً محاسبياً جديداً.
-    if(a&&b&&String(a.id||'')===String(b.id||'')&&
-       String(a.sourceTxId||'')===String(b.sourceTxId||'')&&
-       String(a.action||'')===String(b.action||'')&&
-       String(a.status||'available')===String(b.status||'available')){
+    if(ca&&cb&&
+       String(ca.id||'')!==''&&
+       String(ca.id||'')===String(cb.id||'')&&
+       String(ca.sourceTxId||'')===String(cb.sourceTxId||'')&&
+       String(ca.action||'')===String(cb.action||'')&&
+       String(ca.status||'available')===String(cb.status||'available')){
       return true;
     }
 
-    return same(a,b);
+    return same(ca,cb);
   }
 
+  // القاعدة الجذرية:
+  // كل عملية جديدة لها ID. إذا كان نفس ID موجوداً في السحابة،
+  // نقارن المحتوى التشغيلي بعد حذف بيانات النقل التقنية فقط.
+  // اختلاف مبلغ/تاريخ/عامل/دورة/حالة/خصم... يبقى تعارضاً حقيقياً.
+  if(isSynchronizedOperationList(path)&&a&&b&&
+     a.id!=null&&b.id!=null&&
+     String(a.id)!==''&&String(a.id)===String(b.id)){
+    return same(
+      replayComparableRecord(path,a),
+      replayComparableRecord(path,b)
+    );
+  }
+
+  // سجلات قديمة بلا ID: لا نعتبرها إعادة نفس العملية إلا إذا تطابقت حرفياً.
   return false;
 }
 
@@ -11060,8 +11111,8 @@ const EGTPH_SYNC_API={version:'175.0-surgical-sync-undo',source:SOURCE,root:ROOT
 (function(){
   'use strict';
   window.__EGTPH_V175_SURGICAL__=true;
-  window.__EGTPH_V175_BUILD__='v190-stale-conflicts-auto-cleanup';
-  try{document.title='EGTPH — سجل الأجور v190';}catch(e){}
+  window.__EGTPH_V175_BUILD__='v192-global-operation-id-sync-final';
+  try{document.title='EGTPH — سجل الأجور v192';}catch(e){}
 })();
 </script>
 
