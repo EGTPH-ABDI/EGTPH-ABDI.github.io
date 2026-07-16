@@ -224,7 +224,7 @@
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes" name="viewport"/>
-<title>EGTPH — سجل الأجور v200</title>
+<title>EGTPH — سجل الأجور v201</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -1135,7 +1135,7 @@ body{background:linear-gradient(145deg,#f2f7f4 0%,#fbfdfc 42%,#eef7f1 100%);}
 }
 @media screen and (max-width:900px){.twrap thead th,.sec table thead th{font-size:11.2px!important;padding:10px 8px!important}.twrap tbody td,.sec table tbody td{font-size:11px!important;padding:10px 8px!important;line-height:1.65!important}#page-settlement .twrap table{min-width:1120px!important}}
 </style>
-<meta content="v198-unified-advance-core-final" name="egtph-build"/>
+<meta content="v201-local-date-delete-daily-history-final" name="egtph-build"/>
 <style id="egtph-v176-night-theme">
 /* v176 — ثيم ثانٍ فقط: ليلي أخضر متناسق. الأبيض يبقى الافتراضي. */
 body.egtph-theme-night{
@@ -1857,6 +1857,12 @@ body.egtph-theme-night .egtph-table-viewport::-webkit-scrollbar-thumb{
 <div class="twrap" style="margin-bottom:14px">
 <div class="thdr"><h3>📅 تقارير اليوم</h3></div>
 <div class="secbody" style="display:flex;flex-wrap:wrap;gap:10px;padding:14px">
+<div id="egtphDailyReportControls" style="width:100%;display:flex;gap:10px;flex-wrap:wrap;align-items:end;padding:10px 12px;border:1px solid var(--border2);border-radius:14px;background:var(--surface2)">
+  <div class="fg" style="margin:0;min-width:170px;flex:1"><label>تاريخ السجل</label><input id="dailyReportDate" type="date"/></div>
+  <div class="fg" style="margin:0;min-width:220px;flex:1"><label>طريقة اختيار العمليات</label><select id="dailyReportBasis"><option value="operation">تاريخ العملية/الدفع الفعلي</option><option value="entry">تاريخ الإدخال الفعلي في البرنامج</option></select></div>
+  <button class="btn2" type="button" onclick="setDailyReportToday()" style="min-height:44px">📍 اليوم المحلي</button>
+  <div style="width:100%;font-size:11px;color:var(--gray)">يُستخدم التاريخ المحلي للجهاز، وليس تاريخ UTC. ويمكن طباعة أي تاريخ سابق، أو طباعة ما أُدخل فعلياً في يوم معين حتى لو كان تاريخه المحاسبي مختلفاً.</div>
+</div>
 <div class="v71-pdf-report"><button class="bsm" data-v71-pdf="1" onclick="printTodayOnly()" style="padding:14px 20px;border-radius:14px;font-size:13px;font-weight:700;flex:1;min-width:180px;text-align:center">
         💰 سجل اليوم الكامل<div style="font-size:10px;color:var(--gray);margin-top:4px">تسبيقات + ساعات + غيابات + مكافآت</div>
 </button><div class="v71-pdf-actions"><button class="v71-pdf-open" title="يُنشئ PDF للتقرير المحدد فقط" type="button">📄 تصدير PDF</button><button class="v71-pdf-share" title="يفتح PDF التقرير للمشاركة عبر WhatsApp" type="button">🟢 مشاركة PDF</button></div></div>
@@ -1870,6 +1876,14 @@ body.egtph-theme-night .egtph-table-viewport::-webkit-scrollbar-thumb{
         📅 غيابات اليوم<div style="font-size:10px;color:var(--gray);margin-top:4px">الغيابات المُسجّلة اليوم</div>
 </button><div class="v71-pdf-actions"><button class="v71-pdf-open" title="يُنشئ PDF للتقرير المحدد فقط" type="button">📄 تصدير PDF</button><button class="v71-pdf-share" title="يفتح PDF التقرير للمشاركة عبر WhatsApp" type="button">🟢 مشاركة PDF</button></div></div>
 </div>
+</div>
+<div class="twrap" id="historicalReportAuditPanel" style="margin-bottom:14px">
+  <div class="thdr"><h3>🧭 فحص السجلات التاريخية الموثقة</h3></div>
+  <div class="secbody" style="padding:14px">
+    <div style="font-size:12px;color:var(--gray);margin-bottom:10px">مقارنة بيانات Firebase مع تقارير سجل اليوم المؤرخة 25/06/2026 و01/07/2026 و09/07/2026. الفحص لا يغيّر البيانات.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn2" type="button" onclick="runHistoricalReportAudit(true)">🔎 فحص النواقص</button><button class="btn1" type="button" onclick="repairHistoricalReportGaps()">🧰 إصلاح النواقص المؤكدة بعد المعاينة</button></div>
+    <div id="historicalReportAuditResult" style="margin-top:10px"></div>
+  </div>
 </div>
 <div class="twrap" style="margin-bottom:14px">
 <div class="thdr"><h3>👷 وضعيات العمال</h3></div>
@@ -2486,10 +2500,39 @@ function genId(){return Date.now()+'_'+Math.random().toString(36).slice(2,9);}
 // ═══════════════════════════════════════════════════
 function fmt(n){return(+n||0).toLocaleString('fr-DZ',{minimumFractionDigits:2,maximumFractionDigits:2})+' دج';}
 function fmtN(n){return(+n||0).toLocaleString('fr-DZ',{minimumFractionDigits:2,maximumFractionDigits:2});}
-function todayISO(){return new Date().toISOString().slice(0,10);}
-function todayStr(){const d=new Date();return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear();}
+function todayISO(){return localISODate(new Date());}
+function todayStr(){return isoToD(todayISO());}
 function pad(n){return String(n).padStart(2,'0');}
 function isoToD(iso){if(!iso)return'';const p=iso.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:iso;}
+
+function localISODate(value){
+  const d=value instanceof Date?value:new Date(value==null?Date.now():value);
+  if(!d||isNaN(d.getTime()))return '';
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+}
+function localDateKey(value){
+  if(value==null||value==='')return '';
+  if(value instanceof Date)return localISODate(value);
+  const s=String(value).trim();
+  let m=s.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+  if(m)return m[1]+'-'+pad(m[2])+'-'+pad(m[3]);
+  m=s.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
+  if(m)return m[3]+'-'+pad(m[2])+'-'+pad(m[1]);
+  const d=new Date(s);
+  return isNaN(d.getTime())?'':localISODate(d);
+}
+function sameLocalDate(value,iso){return !!iso&&localDateKey(value)===String(iso);}
+function recordEntryDateISO(record){
+  if(!record||typeof record!=='object')return '';
+  let ts=0;
+  try{if(typeof _entryTimestamp==='function')ts=_entryTimestamp(record)||0;}catch(e){}
+  if(!ts){
+    const raw=record.enteredAt||record.createdAt||record._createdAt||record.addedAt||record.created_at||'';
+    const parsed=Date.parse(raw);if(!isNaN(parsed))ts=parsed;
+  }
+  return ts?localISODate(new Date(ts)):'';
+}
+
 // وقت الإدخال الفعلي: enteredAt أولاً، ثم تاريخ إنشاء غير قابل للتغيير، ثم طابع id القديم.
 // لا نعرض التاريخ المحاسبي أو تاريخ الدفع كأنه وقت إدخال.
 function advEntryStamp(e){
@@ -4222,7 +4265,7 @@ function delW(id){
 // ═══════════════════════════════════════════════════
 
 /* ═══════════════════════════════════════════════════════════════
-   ADVANCE CORE — مصدر واحد للتسبيقات (v200)
+   ADVANCE CORE — مصدر واحد للتسبيقات (v201)
    لا wrapper ولا window.saveAdv override ولا محرك باتش منفصل.
 ═══════════════════════════════════════════════════════════════ */
 let _advanceSaveInFlight=false;
@@ -7250,7 +7293,7 @@ function isHoliday(dateStr){
   if(dow===5)return{type:'weekend',name:'الجمعة'};
   const nat=NATIONAL_HOLIDAYS.find(h=>h.month===d.getMonth()&&h.day===d.getDate());
   if(nat)return{type:'national',name:nat.name};
-  const custom=(DB.settings.holidays||[]).find(h=>h===dateStr||h===d.toISOString().slice(0,10));
+  const custom=(DB.settings.holidays||[]).find(h=>h===dateStr||h===localISODate(d));
   if(custom)return{type:'custom',name:'عطلة مضافة'};
   return false;
 }
@@ -7757,113 +7800,133 @@ function printTodayAdvances(){
 
 </body></html>`);}
 
+
+function initDailyReportControls(){
+  const d=document.getElementById('dailyReportDate');
+  if(d&&!d.value)d.value=todayISO();
+  const b=document.getElementById('dailyReportBasis');
+  if(b&&!b.value)b.value='operation';
+}
+function setDailyReportToday(){const d=document.getElementById('dailyReportDate');if(d)d.value=todayISO();}
+function dailyReportContext(){
+  initDailyReportControls();
+  const input=document.getElementById('dailyReportDate');
+  const basisEl=document.getElementById('dailyReportBasis');
+  const iso=(input&&input.value)||todayISO();
+  const basis=(basisEl&&basisEl.value)==='entry'?'entry':'operation';
+  return {iso,display:isoToD(iso),basis,basisLabel:basis==='entry'?'حسب تاريخ الإدخال الفعلي':'حسب تاريخ العملية/الدفع'};
+}
+function dailyRecordMatches(record,kind,ctx){
+  if(!record||!ctx)return false;
+  if(ctx.basis==='entry'){
+    const entered=recordEntryDateISO(record);
+    // السجلات القديمة التي لا تملك enteredAt لا تختفي: نرجع لتاريخ العملية كحل تاريخي موثوق.
+    if(entered)return entered===ctx.iso;
+  }
+  let value='';
+  if(kind==='advance')value=record.realDate||record.paymentDate||record.date;
+  else if(kind==='absence')value=record.from||record.openSince||record.date;
+  else value=record.date||record.realDate;
+  return sameLocalDate(value,ctx.iso);
+}
+function dailyAdvanceGroups(w,ctx){
+  const groups={};
+  Object.entries(DB.advances[w.id]||{}).forEach(([bucket,rows])=>{
+    (rows||[]).forEach(a=>{
+      if(!a||_isInstAdv(a)||!dailyRecordMatches(a,'advance',ctx))return;
+      const key=String(a.operationId||a.transactionId||a.id);
+      if(!groups[key])groups[key]={id:key,rows:[],amount:0,net:0,months:new Set(),notes:[]};
+      const g=groups[key];g.rows.push(a);g.amount+=advGross(a);g.net+=advNetPaid(a);g.months.add(MN[+bucket]||'');
+      if(a.note&&!g.notes.includes(a.note))g.notes.push(a.note);
+    });
+  });
+  return Object.values(groups).map(g=>({
+    id:g.id,rows:g.rows,amount:g.amount,net:g.net,months:[...g.months].filter(Boolean),
+    note:g.notes.join(' | '),deductions:g.rows.flatMap(r=>Array.isArray(r.deductions)?r.deductions:[]),
+    by:(g.rows[0]&&g.rows[0].by)||''
+  }));
+}
+function dailyAuditEvents(ctx){
+  if(ctx.basis!=='entry')return [];
+  return (DB.auditLog||[]).filter(row=>{
+    if(!row)return false;
+    const action=String(row.action||'');
+    if(!/(حذف|استرجاع|تراجع|إلغاء)/.test(action))return false;
+    return recordEntryDateISO(row)===ctx.iso||sameLocalDate(row.time,ctx.iso);
+  });
+}
+setTimeout(initDailyReportControls,0);
+window.addEventListener('egtph-db-ready',()=>setTimeout(initDailyReportControls,0));
+
 // ══════════════════════════════════════════════════════
 //  printTodayOnly — طباعة عمليات اليوم فقط
 // ══════════════════════════════════════════════════════
 function printTodayOnly(){
-  const td=todayStr();
+  const ctx=dailyReportContext();
   const workers=sw();
   const wData=[];
+
   workers.forEach(w=>{
-    const n=wNum(w.id);
-    const rows=[];
+    const n=wNum(w.id),rows=[];
     let totAdv=0,totHrs=0,totBon=0,totAbs=0;
-    Object.entries(DB.advances[w.id]||{}).forEach(([m,arr])=>{
-      // a.realDate = التاريخ الفعلي للدفع (للقيود الموجَّهة للدورة السابقة)
-      arr.filter(a=>!_isInstAdv(a)&&(a.date===td||a.realDate===td)).forEach(a=>{
-        const gross=advGross(a);
-        totAdv+=gross;
-        rows.push({type:'تسبيق'+(a.realDate?' (دورة '+(MN[+m]||'')+')':''),amt:gross,note:(a.note||'')+(advDedNote(a)?' | '+advDedNote(a)+' | النقد المسلّم فعلياً: '+fmtN(advNetPaid(a)):''),sign:'+',col:'#1a7a4a'});
+
+    dailyAdvanceGroups(w,ctx).forEach(g=>{
+      totAdv+=g.amount;
+      const debt=(g.deductions||[]).filter(d=>d&&d.type==='debt').reduce((s,d)=>s+(+d.amount||0),0);
+      rows.push({
+        type:'تسبيق'+(g.months.length?' (دورة '+g.months.join(' / ')+')':''),
+        amt:g.amount,note:(g.note||'—')+(debt?' | قسط دين: '+fmtN(debt)+' | النقد المسلّم: '+fmtN(g.net):''),
+        sign:'+',col:'#1a7a4a'
       });
     });
-    (DB.hours[w.id]||[]).filter(h=>h.date===td).forEach(h=>{
+
+    (DB.hours[w.id]||[]).filter(h=>dailyRecordMatches(h,'hours',ctx)).forEach(h=>{
       totHrs+=+h.total||0;
       rows.push({type:'ساعات إضافية',amt:+h.total||0,note:(h.hours?h.hours+'سا':'')+(h.note?' — '+h.note:''),sign:'+',col:'#1a5276'});
     });
-    Object.values(DB.bonuses[w.id]||{}).forEach(arr=>arr.filter(b=>b.date===td).forEach(b=>{
+    Object.values(DB.bonuses[w.id]||{}).forEach(arr=>(arr||[]).filter(b=>dailyRecordMatches(b,'bonus',ctx)).forEach(b=>{
       totBon+=+b.net||+b.amount||0;
       rows.push({type:'مكافأة',amt:+b.net||+b.amount||0,note:b.reason||'',sign:'+',col:'#7c3aed'});
     }));
-    (DB.absences[w.id]||[]).filter(a=>a.date===td||(a.date||'').startsWith(td)).forEach(a=>{
+    (DB.absences[w.id]||[]).filter(a=>dailyRecordMatches(a,'absence',ctx)).forEach(a=>{
       totAbs+=+a.deduct||0;
       rows.push({type:'غياب (خصم)',amt:+a.deduct||0,note:(a.days?a.days+'ي':'')+(a.reason?' — '+a.reason:''),sign:'−',col:'#c0392b'});
     });
-    if(!rows.length)return;
-    const net=totAdv+totHrs+totBon-totAbs;
-    wData.push({w,n,rows,totAdv,totHrs,totBon,totAbs,net});
-  });
-  if(!wData.length){toast('📋 لا توجد عمليات اليوم','#e8a020');return;}
 
-  const gAdv=wData.reduce((s,d)=>s+d.totAdv,0);
-  const gHrs=wData.reduce((s,d)=>s+d.totHrs,0);
-  const gBon=wData.reduce((s,d)=>s+d.totBon,0);
-  const gAbs=wData.reduce((s,d)=>s+d.totAbs,0);
+    if(!rows.length)return;
+    wData.push({w,n,rows,totAdv,totHrs,totBon,totAbs,net:totAdv+totHrs+totBon-totAbs});
+  });
+
+  const admin=dailyAuditEvents(ctx);
+  const gAdv=wData.reduce((s,d)=>s+d.totAdv,0),gHrs=wData.reduce((s,d)=>s+d.totHrs,0);
+  const gBon=wData.reduce((s,d)=>s+d.totBon,0),gAbs=wData.reduce((s,d)=>s+d.totAbs,0);
   const gNet=wData.reduce((s,d)=>s+d.net,0);
 
-  // ── جدول مغلق لكل عامل (عمود واحد، عامل تحت عامل) ──
   let cards='';
   wData.forEach(d=>{
-    cards+=`<div class="wcard">
-      <div class="whd">#${d.n} — ${d.w.name}${d.w.type?' ('+d.w.type+')':''}</div>
-      <table class="wtbl">
-        <tr class="wsh"><th style="width:36%">النوع</th><th style="width:42%;text-align:right">ملاحظة</th><th style="width:22%">المبلغ</th></tr>
-        ${d.rows.map(r=>`<tr>
-          <td style="color:${r.col};font-weight:bold">${r.type}</td>
-          <td style="text-align:right;font-size:13px;color:var(--ui-muted)">${r.note||'—'}</td>
-          <td style="text-align:center;font-weight:bold;color:${r.col}">${r.sign}${fmtN(r.amt)}</td>
-        </tr>`).join('')}
-        <tr class="wnet"><td colspan="2" style="text-align:right">صافي مستحقات العامل</td><td style="text-align:center;color:${d.net<0?'var(--ui-red-text)':'var(--ui-teal-text)'}">${fmtN(d.net)}</td></tr>
-      </table>
-    </div>`;
+    cards+=`<div class="wcard"><div class="whd">#${d.n} — ${d.w.name}${d.w.type?' ('+d.w.type+')':''}</div><table class="wtbl">
+      <tr class="wsh"><th style="width:36%">النوع</th><th style="width:42%;text-align:right">ملاحظة</th><th style="width:22%">المبلغ</th></tr>
+      ${d.rows.map(r=>`<tr><td style="color:${r.col};font-weight:bold">${r.type}</td><td style="text-align:right;font-size:13px;color:var(--ui-muted)">${r.note||'—'}</td><td style="text-align:center;font-weight:bold;color:${r.col}">${r.sign}${fmtN(r.amt)}</td></tr>`).join('')}
+      <tr class="wnet"><td colspan="2" style="text-align:right">صافي عمليات العامل في السجل</td><td style="text-align:center;color:${d.net<0?'var(--ui-red-text)':'var(--ui-teal-text)'}">${fmtN(d.net)}</td></tr>
+    </table></div>`;
   });
 
+  if(!cards)cards='<div class="empty">لا توجد قيود مالية مطابقة لهذا التاريخ وطريقة الاختيار.</div>';
+  const adminHtml=admin.length?`<div class="admin"><h3>🧾 إجراءات إدارية أُدخلت في هذا اليوم</h3>${admin.map(a=>`<div><b>${a.user||'مستخدم'}</b> — ${a.action||'—'} <small>${a.time||a.createdAt||''}</small></div>`).join('')}</div>`:'';
+
   pWin(`<html dir="rtl"><head><meta charset="UTF-8"><style>
-    @page{size:A4;margin:8mm}
-    @media print{@page{margin:8mm}}
-    *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
-    html,body{width:100%}
-    body{font-family:Arial,Tahoma,sans-serif;font-size:14px;margin:0;padding:8px;color:#000;background:#fff}
-    h2{text-align:center;font-size:18px;margin:0 0 4px;color:#1a3a6b}
-    .sub{text-align:center;font-size:13px;color:#444;margin:0 0 10px;border-bottom:2px solid #1a3a6b;padding-bottom:6px}
-    /* البطاقات: عامل تحت عامل + خلفية فاتحة + خط واضح */
-    .wcard{width:100%;border:1.5px solid #1a3a6b;border-radius:4px;overflow:visible;page-break-inside:avoid;break-inside:avoid-page;-webkit-column-break-inside:avoid;margin:0 0 10px;background:#fff;box-shadow:none;transform:translateZ(0)}
-    .whd{background:#1a3a6b;color:#fff;padding:6px 10px;font-size:15px;font-weight:bold;text-align:right}
-    table.wtbl{width:100%;border-collapse:collapse;background:#fff}
-    table.wtbl .wsh th{background:#eef2f8;color:#1a3a6b;padding:5px 10px;font-size:13px;border-bottom:1px solid #1a3a6b;font-weight:bold}
-    table.wtbl td{padding:5px 10px;border-bottom:1px solid #e8e8e8;font-size:14px;background:#fff}
-    /* صافي العامل - خلفية فاتحة + خط سميك وكبير */
-    table.wtbl .wnet td{background:#eaf7ef;border-top:2px solid #1a7a4a;font-weight:bold;font-size:15px}
-    /* جدول المجاميع - خلفية فاتحة + خط كبير */
-    .gt{width:75%;margin:14px auto 0;border-collapse:collapse;border:2.5px solid #1a3a6b;page-break-inside:avoid;break-inside:avoid;background:#fff}
-    .gt .gh th{background:#1a3a6b;color:#fff;padding:9px;font-size:16px}
-    .gt td{padding:9px 18px;border-bottom:1px solid #ccc;font-size:15px;font-weight:bold;background:#fff;color:#000}
-    .gt .gtot td{background:#eef2f8;color:#1a3a6b;font-size:17px;font-weight:bold;border-top:2px solid #1a3a6b}
-    .gt .gtot td:first-child{text-align:right}
-    .sig{display:flex;justify-content:space-around;margin-top:22px;font-size:13px;text-align:center;page-break-inside:avoid}
-    @media print{body{padding:0}}
+    @page{size:A4;margin:8mm}@media print{@page{margin:8mm}}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
+    html,body{width:100%}body{font-family:Arial,Tahoma,sans-serif;font-size:14px;margin:0;padding:8px;color:#000;background:#fff}
+    h2{text-align:center;font-size:18px;margin:0 0 4px;color:#1a3a6b}.sub{text-align:center;font-size:13px;color:#444;margin:0 0 10px;border-bottom:2px solid #1a3a6b;padding-bottom:6px}
+    .wcard{width:100%;border:1.5px solid #1a3a6b;border-radius:4px;overflow:visible;page-break-inside:avoid;margin:0 0 10px;background:#fff}.whd{background:#1a3a6b;color:#fff;padding:6px 10px;font-size:15px;font-weight:bold;text-align:right}
+    table.wtbl{width:100%;border-collapse:collapse;background:#fff}table.wtbl .wsh th{background:#eef2f8;color:#1a3a6b;padding:5px 10px;font-size:13px;border-bottom:1px solid #1a3a6b}table.wtbl td{padding:5px 10px;border-bottom:1px solid #e8e8e8;font-size:14px}table.wtbl .wnet td{background:#eaf7ef;border-top:2px solid #1a7a4a;font-weight:bold;font-size:15px}
+    .gt{width:75%;margin:14px auto 0;border-collapse:collapse;border:2.5px solid #1a3a6b;page-break-inside:avoid}.gt .gh th{background:#1a3a6b;color:#fff;padding:9px;font-size:16px}.gt td{padding:9px 18px;border-bottom:1px solid #ccc;font-size:15px;font-weight:bold}.gt .gtot td{background:#eef2f8;color:#1a3a6b;font-size:17px;border-top:2px solid #1a3a6b}
+    .empty{padding:35px;text-align:center;border:2px dashed #9aa9b8;border-radius:8px;color:#555;font-size:15px}.admin{margin-top:14px;border:1px solid #d49b22;padding:10px;border-radius:6px;background:#fff9e8}.admin h3{margin:0 0 7px;color:#8a5a00}.admin div{padding:5px;border-top:1px solid #ead9ad}.admin small{color:#777}.sig{display:flex;justify-content:space-around;margin-top:22px;font-size:13px;text-align:center;page-break-inside:avoid}@media print{body{padding:0}}
   </style></head><body>
-    <h2>EGTPH — سجل اليوم الكامل</h2>
-    <p class="sub">${td} | ${wData.length} عامل | Youcef Abdi</p>
-    ${cards}
-    <table class="gt">
-      <tr class="gh"><th colspan="2">المجاميع الكلية — ${wData.length} عامل</th></tr>
-      <tr><td>مجموع التسبيقات</td><td style="text-align:center;color:var(--ui-teal-text)">+${fmtN(gAdv)}</td></tr>
-      <tr><td>مجموع الساعات الإضافية</td><td style="text-align:center;color:var(--ui-teal-text)">+${fmtN(gHrs)}</td></tr>
-      <tr><td>مجموع المكافآت</td><td style="text-align:center;color:var(--ui-purple-text)">+${fmtN(gBon)}</td></tr>
-      <tr><td>مجموع الغيابات (خصم)</td><td style="text-align:center;color:var(--ui-red-text)">−${fmtN(gAbs)}</td></tr>
-      <tr class="gtot"><td>الصافي الكلي المستحق</td><td style="text-align:center">${fmtN(gNet)} دج</td></tr>
-    </table>
-    <div class="sig">
-      <div>توقيع المدير<br>Youcef Abdi<br><br>____________</div>
-      <div>توقيع المحاسب<br><br><br>____________</div>
-      <div>الختم<br><br><br>____________</div>
-    </div>
-  
-
-
-
-
-</body></html>`);
+    <h2>EGTPH — سجل اليوم الكامل</h2><p class="sub">${ctx.display} | ${ctx.basisLabel} | ${wData.length} عامل | Youcef Abdi</p>${cards}
+    <table class="gt"><tr class="gh"><th colspan="2">المجاميع الكلية — ${wData.length} عامل</th></tr><tr><td>مجموع التسبيقات</td><td style="text-align:center;color:var(--ui-teal-text)">+${fmtN(gAdv)}</td></tr><tr><td>مجموع الساعات الإضافية</td><td style="text-align:center;color:var(--ui-teal-text)">+${fmtN(gHrs)}</td></tr><tr><td>مجموع المكافآت</td><td style="text-align:center;color:var(--ui-purple-text)">+${fmtN(gBon)}</td></tr><tr><td>مجموع الغيابات (خصم)</td><td style="text-align:center;color:var(--ui-red-text)">−${fmtN(gAbs)}</td></tr><tr class="gtot"><td>الصافي الكلي للسجل</td><td style="text-align:center">${fmtN(gNet)} دج</td></tr></table>
+    ${adminHtml}<div class="sig"><div>توقيع المدير<br>Youcef Abdi<br><br>____________</div><div>توقيع المحاسب<br><br><br>____________</div><div>الختم<br><br><br>____________</div></div>
+  </body></html>`);
 }
 function printDailyReport(){printTodayAdvances();}
 
@@ -8150,98 +8213,51 @@ function printAuditReport(){
 //  PRINT TODAY BY TYPE (ساعات / غيابات / مكافآت اليوم)
 // ═══════════════════════════════════════════════════
 function printTodayByType(type){
-  const td=todayStr();
-  const workers=sw();
-  const rows=[];
+  const ctx=dailyReportContext(),workers=sw(),rows=[];
   let title='',color='#1a3a6b';
   workers.forEach(w=>{
     const n=wNum(w.id);
     if(type==='advances'){
       title='💰 التسبيقات المصروفة';color='#1a7a4a';
-      const items=[];
-      Object.entries(DB.advances[w.id]||{}).forEach(([m,arr])=>arr.filter(a=>!_isInstAdv(a)&&(a.date===td||a.realDate===td)).forEach(a=>items.push({...a,_month:MN[+m]||''})));
-      if(items.length)rows.push({w,n,items,total:items.reduce((s,a)=>s+advGross(a),0)});
+      const items=dailyAdvanceGroups(w,ctx).map(g=>({
+        id:g.id,amount:g.amount,netPaid:g.net,deductions:g.deductions,note:g.note,
+        _month:g.months.join(' / '),by:g.by,enteredAt:g.rows[0]&&g.rows[0].enteredAt
+      }));
+      if(items.length)rows.push({w,n,items,total:items.reduce((s,a)=>s+(+a.amount||0),0)});
     }else if(type==='hours'){
       title='⏱️ الساعات الإضافية';color='#1a5276';
-      const items=(DB.hours[w.id]||[]).filter(h=>h.date===td);
+      const items=(DB.hours[w.id]||[]).filter(h=>dailyRecordMatches(h,'hours',ctx));
       if(items.length)rows.push({w,n,items,total:items.reduce((s,h)=>s+(+h.total||0),0)});
     }else if(type==='absences'){
       title='📅 الغيابات';color='#7b241c';
-      const items=(DB.absences[w.id]||[]).filter(a=>a.date.split('→')[0].trim()===td);
+      const items=(DB.absences[w.id]||[]).filter(a=>dailyRecordMatches(a,'absence',ctx));
       if(items.length)rows.push({w,n,items,total:items.reduce((s,a)=>s+(+a.deduct||0),0)});
     }else if(type==='bonuses'){
-      title='🎁 المكافآت';color='#4a235a';
-      const items=[];
-      Object.values(DB.bonuses[w.id]||{}).forEach(arr=>arr.forEach(b=>{if(b.date===td)items.push(b);}));
+      title='🎁 المكافآت';color='#4a235a';const items=[];
+      Object.values(DB.bonuses[w.id]||{}).forEach(arr=>(arr||[]).forEach(b=>{if(dailyRecordMatches(b,'bonus',ctx))items.push(b);}));
       if(items.length)rows.push({w,n,items,total:items.reduce((s,b)=>s+(+b.net||+b.amount||0),0)});
     }
   });
-  if(!rows.length){toast('لا توجد '+title+' اليوم','#e8a020');return;}
-  const grandTotal=rows.reduce((s,r)=>s+r.total,0);
-  const printSign=type==='absences'?'−':'+';
-  let bodyHtml=`
-  <div style="border-bottom:3px solid ${color};margin-bottom:12px;padding-bottom:8px;display:flex;justify-content:space-between;align-items:center">
-    <div>
-      <div style="font-size:18px;font-weight:900;color:${color}">${title} — اليوم</div>
-      <div style="font-size:11px;color:var(--ui-muted)">${td} | ${rows.length} عامل</div>
-    </div>
-    <div style="font-size:11px;font-weight:700;color:var(--ui-muted)">EGTPH — Youcef Abdi</div>
-  </div>
-  <table style="font-size:11px;width:100%;border-collapse:collapse;border:1px solid var(--ui-border-soft)">
-  <thead><tr style="background:${color};color:var(--ui-on-accent)">
-    <th style="padding:7px">#</th>
-    <th style="padding:7px;text-align:right">الاسم</th>
-    <th style="padding:7px">التفاصيل</th>
-    <th style="padding:7px;text-align:center">وقت الإدخال الفعلي</th>
-    <th style="padding:7px;text-align:center">المبلغ / الأيام</th>
-    <th style="padding:7px;text-align:center">الحالة</th>
-  </tr></thead><tbody>`;
-  rows.forEach((r,i)=>{
-    const bg=i%2===0?'#fff':'#f4f6f8';
-    r.items.forEach((item,j)=>{
-      let details='',val='',status='';
-      const entryT=_advEntryTime(item)||'—';
+  const grandTotal=rows.reduce((s,r)=>s+r.total,0),printSign=type==='absences'?'−':'+';
+  let bodyHtml=`<div style="border-bottom:3px solid ${color};margin-bottom:12px;padding-bottom:8px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:18px;font-weight:900;color:${color}">${title}</div><div style="font-size:11px;color:var(--ui-muted)">${ctx.display} | ${ctx.basisLabel} | ${rows.length} عامل</div></div><div style="font-size:11px;font-weight:700;color:var(--ui-muted)">EGTPH — Youcef Abdi</div></div>`;
+  if(!rows.length){
+    bodyHtml+=`<div style="padding:35px;text-align:center;border:2px dashed #9aa9b8;border-radius:8px;color:#555">لا توجد ${title||'عمليات'} مطابقة للتاريخ المحدد.</div>`;
+  }else{
+    bodyHtml+='<table style="font-size:11px;width:100%;border-collapse:collapse;border:1px solid var(--ui-border-soft)"><thead><tr style="background:'+color+';color:var(--ui-on-accent)"><th style="padding:7px">#</th><th style="padding:7px;text-align:right">الاسم</th><th style="padding:7px">التفاصيل</th><th style="padding:7px;text-align:center">وقت الإدخال الفعلي</th><th style="padding:7px;text-align:center">المبلغ / الأيام</th><th style="padding:7px;text-align:center">الحالة</th></tr></thead><tbody>';
+    rows.forEach((r,i)=>r.items.forEach((item,j)=>{
+      let details='',val='',status='',entryT=_advEntryTime(item)||'—';
       if(type==='advances'){
-        details=((item.note||'—')+(advDedNote(item)?' | '+advDedNote(item)+' | النقد المسلّم فعلياً: '+fmtN(advNetPaid(item)):'')+(item._month?' ('+item._month+')':''));
-        val='+'+fmtN(advGross(item));status=item.by||'—';
-      }else if(type==='hours'){
-        details=`${item.hours}سا × ${fmtN(item.hourly||0)}/سا`;
-        val='+'+fmtN(item.total);status=window.EGTPHPrintStatus.sourcePaid(item)?'✅ مسددة':'⏳ معلقة';
-      }else if(type==='absences'){
-        details=item.reason||'—';val='-'+fmtN(item.deduct);status=window.EGTPHPrintStatus.absence(item,r.w.id).label;
-      }else{
-        details=item.reason||'—';val='+'+fmtN(item.net||item.amount);status=window.EGTPHPrintStatus.sourcePaid(item)?'✅ مسددة':'⏳ معلقة';
-      }
-      bodyHtml+=`<tr style="background:${bg}">
-        ${j===0?`<td rowspan="${r.items.length}" style="font-weight:900;color:${color};text-align:center">${r.n}</td>
-        <td rowspan="${r.items.length}" style="font-weight:700;text-align:right">${r.w.name}</td>`:''}
-        <td style="font-size:10px;color:var(--ui-muted);padding:6px 8px">${details}</td>
-        <td style="font-size:10px;color:var(--ui-teal-text);text-align:center;white-space:nowrap">${entryT}</td>
-        <td style="font-weight:800;text-align:center;color:${type==='absences'?'var(--ui-red-text)':color}">${val}</td>
-        <td style="text-align:center;font-size:10px">${status}</td>
-      </tr>`;
-    });
-  });
-  bodyHtml+=`</tbody>
-  <tfoot><tr style="background:${color};color:var(--ui-on-accent);font-size:13px;font-weight:900">
-    <td colspan="4" style="padding:8px;text-align:right">المجموع — ${rows.length} عامل</td>
-    <td style="text-align:center">${printSign}${fmtN(grandTotal)} دج</td><td></td>
-  </tr></tfoot></table>
-  <div style="margin-top:16px;display:flex;justify-content:space-around;border-top:1px dashed var(--ui-border-soft);padding-top:12px;font-size:11px;text-align:center">
-    <div>توقيع المدير<br>Youcef Abdi<br><br>__________</div>
-    <div>توقيع المحاسب<br><br><br>__________</div>
-  </div>`;
-  pWin(`<html dir="rtl"><head><meta charset="UTF-8"><style>
-    @page{size:A4;margin:1cm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    body{font-family:Arial,Tahoma,sans-serif;font-size:11px;padding:10px}
-    table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:6px 8px}
-  </style></head><body>${bodyHtml}
-
-
-
-
-
-</body></html>`);
+        const debt=(item.deductions||[]).filter(d=>d&&d.type==='debt').reduce((s,d)=>s+(+d.amount||0),0);
+        details=(item.note||'—')+(item._month?' ('+item._month+')':'')+(debt?' | قسط '+fmtN(debt)+' | نقد '+fmtN(item.netPaid):'');val='+'+fmtN(item.amount);status=item.by||'—';
+      }else if(type==='hours'){details=`${item.hours}سا × ${fmtN(item.hourly||0)}/سا`;val='+'+fmtN(item.total);status=window.EGTPHPrintStatus.sourcePaid(item)?'✅ مسددة':'⏳ معلقة';}
+      else if(type==='absences'){details=item.reason||'—';val='-'+fmtN(item.deduct);status=window.EGTPHPrintStatus.absence(item,r.w.id).label;}
+      else{details=item.reason||'—';val='+'+fmtN(item.net||item.amount);status=window.EGTPHPrintStatus.sourcePaid(item)?'✅ مسددة':'⏳ معلقة';}
+      bodyHtml+=`<tr style="background:${i%2===0?'#fff':'#f4f6f8'}">${j===0?`<td rowspan="${r.items.length}" style="font-weight:900;color:${color};text-align:center">${r.n}</td><td rowspan="${r.items.length}" style="font-weight:700;text-align:right">${r.w.name}</td>`:''}<td style="font-size:10px;color:var(--ui-muted);padding:6px 8px">${details}</td><td style="font-size:10px;color:var(--ui-teal-text);text-align:center;white-space:nowrap">${entryT}</td><td style="font-weight:800;text-align:center;color:${type==='absences'?'var(--ui-red-text)':color}">${val}</td><td style="text-align:center;font-size:10px">${status}</td></tr>`;
+    }));
+    bodyHtml+=`</tbody><tfoot><tr style="background:${color};color:var(--ui-on-accent);font-size:13px;font-weight:900"><td colspan="4" style="padding:8px;text-align:right">المجموع — ${rows.length} عامل</td><td style="text-align:center">${printSign}${fmtN(grandTotal)} دج</td><td></td></tr></tfoot></table>`;
+  }
+  bodyHtml+='<div style="margin-top:16px;display:flex;justify-content:space-around;border-top:1px dashed var(--ui-border-soft);padding-top:12px;font-size:11px;text-align:center"><div>توقيع المدير<br>Youcef Abdi<br><br>__________</div><div>توقيع المحاسب<br><br><br>__________</div></div>';
+  pWin(`<html dir="rtl"><head><meta charset="UTF-8"><style>@page{size:A4;margin:1cm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{font-family:Arial,Tahoma,sans-serif;padding:12px;color:#000}@media print{body{padding:0}}</style></head><body>${bodyHtml}</body></html>`);
 }
 // ═══════════════════════════════════════════════════
 //  BACKUP & AUTO-BACKUP
@@ -8299,6 +8315,123 @@ function checkBackupReminder(){
     if(confirm(`⚠️ آخر نسخة احتياطية منذ ${days} يوم!\nهل تريد تصدير نسخة احتياطية الآن؟`))autoBackup(false);
   }
 }
+
+
+const EGTPH_HISTORICAL_REPORT_MANIFEST=[
+  // سجل 25/06/2026
+  {date:'2026-06-25',worker:['دق ملياني'],type:'advance',amount:10000,source:'25/06/2026'},
+  {date:'2026-06-25',worker:['دق ملياني'],type:'hours',hours:6,total:2400,source:'25/06/2026'},
+  {date:'2026-06-25',worker:['وهاب'],type:'hours',hours:4,total:1600,source:'25/06/2026'},
+  {date:'2026-06-25',worker:['مراد ثولال','مراد ثوالل'],type:'advance',amount:15000,source:'25/06/2026'},
+  {date:'2026-06-25',worker:['مراد ثولال','مراد ثوالل'],type:'hours',hours:4,total:1600,source:'25/06/2026'},
+  {date:'2026-06-25',worker:['مصطفى'],type:'advance',amount:10000,source:'25/06/2026'},
+  {date:'2026-06-25',worker:['غنام'],type:'hours',hours:4,total:1600,source:'25/06/2026'},
+  {date:'2026-06-25',worker:['احمد قيطون','أحمد قيطون'],type:'advance',amount:12000,source:'25/06/2026'},
+  {date:'2026-06-25',worker:['احمد قيطون','أحمد قيطون'],type:'hours',hours:6,total:2400,source:'25/06/2026'},
+  {date:'2026-06-25',worker:['غماري الميلود'],type:'advance',amount:10000,source:'25/06/2026'},
+  {date:'2026-06-25',worker:['غماري الميلود'],type:'hours',hours:6,total:2400,source:'25/06/2026'},
+  {date:'2026-06-25',worker:['حمودي'],type:'advance',amount:10000,source:'25/06/2026'},
+  {date:'2026-06-25',worker:['حمودي'],type:'hours',hours:6,total:2400,source:'25/06/2026'},
+  {date:'2026-06-25',worker:['احمد شارجور','أحمد شارجور','احمد شارجور 1'],type:'advance',amount:10000,cycleMonth:3,source:'25/06/2026'},
+  {date:'2026-06-25',worker:['راقب جلول'],type:'advance',amount:40000,source:'25/06/2026'},
+  {date:'2026-06-25',worker:['راقب جلول'],type:'hours',hours:6,total:2400,source:'25/06/2026'},
+  // سجل 01/07/2026
+  {date:'2026-07-01',worker:['دق ملياني'],type:'advance',amount:5000,cycleMonth:5,source:'01/07/2026'},
+  {date:'2026-07-01',worker:['دق ملياني'],type:'hours',hours:8,total:3200,source:'01/07/2026'},
+  {date:'2026-07-01',worker:['وهاب'],type:'hours',hours:10,total:4000,source:'01/07/2026'},
+  {date:'2026-07-01',worker:['مراد ثولال','مراد ثوالل'],type:'advance',amount:10000,cycleMonth:5,source:'01/07/2026'},
+  {date:'2026-07-01',worker:['مصطفى'],type:'advance',amount:10000,cycleMonth:5,source:'01/07/2026'},
+  {date:'2026-07-01',worker:['غنام'],type:'hours',hours:4,total:1600,source:'01/07/2026'},
+  {date:'2026-07-01',worker:['احمد قيطون','أحمد قيطون'],type:'advance',amount:12000,cycleMonth:5,source:'01/07/2026'},
+  {date:'2026-07-01',worker:['احمد قيطون','أحمد قيطون'],type:'hours',hours:10,total:4000,source:'01/07/2026'},
+  {date:'2026-07-01',worker:['غماري الميلود'],type:'advance',amount:10000,cycleMonth:5,source:'01/07/2026'},
+  {date:'2026-07-01',worker:['غماري الميلود'],type:'hours',hours:8,total:3200,source:'01/07/2026'},
+  {date:'2026-07-01',worker:['حمودي'],type:'advance',amount:5000,cycleMonth:5,source:'01/07/2026'},
+  {date:'2026-07-01',worker:['حمودي'],type:'hours',hours:8,total:3200,source:'01/07/2026'},
+  {date:'2026-07-01',worker:['امين','أمين'],type:'advance',amount:15000,cycleMonth:4,source:'01/07/2026',skipWhenWorkerMissing:true},
+  {date:'2026-07-01',worker:['احمد شارجور','أحمد شارجور','احمد شارجور 1'],type:'advance',amount:5000,cycleMonth:5,source:'01/07/2026'},
+  {date:'2026-07-01',worker:['احمد شارجور','أحمد شارجور','احمد شارجور 1'],type:'hours',hours:4,total:1600,source:'01/07/2026'},
+  {date:'2026-07-01',worker:['راقب جلول'],type:'hours',hours:8,total:3200,source:'01/07/2026'},
+  // سجل 09/07/2026
+  {date:'2026-07-09',worker:['وهاب'],type:'hours',hours:4,total:5600,source:'09/07/2026'},
+  {date:'2026-07-09',worker:['محمد ملياني','محمد الملياني'],type:'advance',amount:60000,cycleMonth:5,source:'09/07/2026'},
+  {date:'2026-07-09',worker:['مراد ثولال','مراد ثوالل'],type:'hours',hours:3,total:1200,source:'09/07/2026'},
+  {date:'2026-07-09',worker:['غنام'],type:'hours',hours:8,total:3200,source:'09/07/2026'},
+  {date:'2026-07-09',worker:['احمد قيطون','أحمد قيطون'],type:'advance',amount:12000,cycleMonth:5,source:'09/07/2026'},
+  {date:'2026-07-09',worker:['احمد قيطون','أحمد قيطون'],type:'hours',hours:12,total:4800,source:'09/07/2026'},
+  {date:'2026-07-09',worker:['غماري الميلود'],type:'advance',amount:10000,cycleMonth:5,source:'09/07/2026'},
+  {date:'2026-07-09',worker:['غماري الميلود'],type:'hours',hours:10,total:4000,source:'09/07/2026'},
+  {date:'2026-07-09',worker:['حمودي'],type:'advance',amount:10000,cycleMonth:5,source:'09/07/2026'},
+  {date:'2026-07-09',worker:['حمودي'],type:'hours',hours:8,total:3200,source:'09/07/2026'},
+  {date:'2026-07-09',worker:['احمد شارجور','أحمد شارجور','احمد شارجور 1'],type:'advance',amount:10000,cycleMonth:5,source:'09/07/2026'},
+  {date:'2026-07-09',worker:['راقب جلول'],type:'hours',hours:8,total:3200,source:'09/07/2026'},
+  {date:'2026-07-09',worker:['جعفر'],type:'hours',hours:4,total:1600,source:'09/07/2026'}
+];
+function normalizeHistoricalName(value){return String(value||'').normalize('NFKD').replace(/[\u064B-\u065F\u0670]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/[()（）\-—_]/g,' ').replace(/\bشاحنة\b/g,' ').replace(/\s+/g,' ').trim();}
+function findHistoricalWorker(item){
+  const aliases=(item.worker||[]).map(normalizeHistoricalName),candidates=sw();
+  let hit=candidates.find(w=>aliases.includes(normalizeHistoricalName(w.name)));
+  if(hit)return hit;
+  hit=candidates.find(w=>{
+    const name=normalizeHistoricalName(w.name),type=normalizeHistoricalName(w.type||'');
+    return aliases.some(a=>a.includes('شارجور')&&name==='احمد'&&type.includes('شارجور'));
+  });
+  if(hit)return hit;
+  return candidates.find(w=>{const name=normalizeHistoricalName(w.name);return aliases.some(a=>name.length>2&&(name.includes(a)||a.includes(name)));});
+}
+function historicalActual(item,w){
+  if(!w)return {amount:0,hours:0,total:0};
+  if(item.type==='advance'){
+    let amount=0;Object.values(DB.advances[w.id]||{}).forEach(rows=>(rows||[]).forEach(a=>{if(a&&!_isInstAdv(a)&&sameLocalDate(a.realDate||a.date,item.date))amount+=advGross(a);}));
+    return {amount:Math.round(amount),hours:0,total:0};
+  }
+  let hours=0,total=0;(DB.hours[w.id]||[]).forEach(h=>{if(h&&sameLocalDate(h.date,item.date)){hours+=+h.hours||0;total+=+h.total||0;}});
+  return {amount:0,hours:Math.round(hours*100)/100,total:Math.round(total)};
+}
+function historicalReportAudit(){
+  return EGTPH_HISTORICAL_REPORT_MANIFEST.map(item=>{
+    const w=findHistoricalWorker(item),actual=historicalActual(item,w);
+    const missingWorker=!w;
+    const diff=item.type==='advance'?Math.max(0,(+item.amount||0)-actual.amount):Math.max(0,(+item.total||0)-actual.total);
+    const hoursDiff=item.type==='hours'?Math.max(0,(+item.hours||0)-actual.hours):0;
+    return {item,w,actual,missingWorker,diff,hoursDiff,status:missingWorker?(item.skipWhenWorkerMissing?'excluded-worker':'worker-missing'):(diff>0?'missing':((item.type==='advance'?actual.amount>item.amount:actual.total>item.total)?'excess':'ok'))};
+  });
+}
+function renderHistoricalAudit(rows){
+  const el=document.getElementById('historicalReportAuditResult');if(!el)return;
+  const missing=rows.filter(r=>r.status==='missing'),missingWorkers=rows.filter(r=>r.status==='worker-missing'),excess=rows.filter(r=>r.status==='excess');
+  const summary=`<div class="abox ${missing.length||missingWorkers.length?'warn':'ok'}"><b>${missing.length||missingWorkers.length?'⚠️':'✅'} نتيجة الفحص:</b> مكتمل ${rows.filter(r=>r.status==='ok').length} — ناقص ${missing.length} — عامل غير موجود ${missingWorkers.length} — زيادات تحتاج مراجعة ${excess.length}.<br><small>العامل المحذوف عمداً لا يُعاد إنشاؤه تلقائياً.</small></div>`;
+  const detail=[...missing,...missingWorkers,...excess].map(r=>`<div style="padding:7px;border-bottom:1px solid var(--border)"><b>${r.item.source} — ${(r.item.worker||[])[0]}</b> — ${r.item.type==='advance'?'تسبيق '+fmtN(r.item.amount):'ساعات '+r.item.hours+'سا / '+fmtN(r.item.total)}<br><span style="color:${r.status==='excess'?'var(--amber)':'var(--red)'}">${r.status==='worker-missing'?'العامل غير موجود':r.status==='excess'?'الموجود أكثر من التقرير؛ لم يُحذف شيء':'الناقص: '+fmtN(r.diff)+(r.hoursDiff?' / '+r.hoursDiff+'سا':'')}</span></div>`).join('');
+  el.innerHTML=summary+(detail?'<div style="margin-top:8px;border:1px solid var(--border);border-radius:10px;overflow:hidden">'+detail+'</div>':'');
+}
+function runHistoricalReportAudit(showToast){const rows=historicalReportAudit();renderHistoricalAudit(rows);const missing=rows.filter(r=>r.status==='missing').length;if(showToast)toast(missing?'⚠️ وُجدت '+missing+' سجلات ناقصة مؤكدة':'✅ السجلات التاريخية الموثقة مكتملة',missing?true:undefined);return rows;}
+function historicalStableId(item,w,suffix){let s=[item.date,w&&w.id,(item.worker||[])[0],item.type,item.amount||0,item.hours||0,item.total||0,suffix||''].join('|'),h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return 'HIST_'+(h>>>0).toString(36).toUpperCase();}
+async function repairHistoricalReportGaps(){
+  const sync=window.EGTPH_SYNC;if(!sync||typeof sync.save!=='function'){toast('❌ محرك المزامنة غير جاهز',true);return false;}
+  const st=sync.status&&sync.status();if(st&&(st.running||st.outbox||(+st.pending||0)>0)){toast('⏳ توجد عملية معلقة؛ عالجها أولاً',true);return false;}
+  const rows=historicalReportAudit(),missing=rows.filter(r=>r.status==='missing'&&r.w);
+  renderHistoricalAudit(rows);if(!missing.length){toast('✅ لا توجد سجلات مؤكدة ناقصة قابلة للإصلاح');return true;}
+  if(!confirm('سيتم إنشاء '+missing.length+' قيداً ناقصاً فقط، اعتماداً على تقارير سجل اليوم الثلاثة. لن تُحذف أي زيادة ولن يُنشأ عامل مفقود. متابعة؟'))return false;
+  const before=JSON.parse(JSON.stringify(DB)),now=new Date().toISOString();
+  try{
+    missing.forEach(r=>{
+      const item=r.item,w=r.w;
+      if(item.type==='advance'){
+        const c=item.cycleMonth!=null?{m:+item.cycleMonth,yr:2026}:cycleAnchorForDate(w,item.date),win=cycleWindow(w,c.m,c.yr);
+        const operationId=historicalStableId(item,w,'ADVOP'),id=historicalStableId(item,w,'ADV');
+        ensureAdvanceBucket(w.id,c.m).push({id,transactionId:'TX_'+operationId,operationId,workerId:String(w.id),allocationIndex:1,allocationCount:1,amount:Math.round(r.diff),originalAmount:Math.round(r.diff),allocationAmount:Math.round(r.diff),date:advanceAllocationAccountingDate(w,c,item.date),realDate:isoToD(item.date),enteredAt:item.date+'T12:00:00+01:00',_createdAt:item.date+'T12:00:00+01:00',_updatedAt:now,_mod:nextMod(),month:c.m,cycleStart:localISODate(win.from),cycleEnd:localISODate(win.to),ownerCycleId:String(w.id)+'|'+localISODate(win.from)+'_'+localISODate(win.to),cycleKey:advanceCycleKey(w,c),cycleName:MN[c.m],note:'استعادة تاريخية موثقة من تقرير سجل اليوم '+item.source+' — الجزء الناقص فقط',by:(DB.settings.userName||'Youcef Abdi'),deductions:[],netPaid:Math.round(r.diff),_cycleOwnerAllocated:true,_historicalEvidence:item.source});
+      }else{
+        const hrs=r.hoursDiff>0?r.hoursDiff:(item.hours||0),total=Math.round(r.diff),hourly=hrs?Math.round((total/hrs)*100)/100:0;
+        if(!DB.hours[w.id])DB.hours[w.id]=[];
+        DB.hours[w.id].push({id:historicalStableId(item,w,'HRS'),hours:hrs,mult:1,hourly,total,date:isoToD(item.date),month:+item.date.slice(5,7)-1,note:'استعادة تاريخية موثقة من تقرير سجل اليوم '+item.source+' — مسددة تاريخياً دون إنشاء مستحق جديد',paid:true,rateType:'custom',by:(DB.settings.userName||'Youcef Abdi'),enteredAt:item.date+'T12:00:00+01:00',_createdAt:item.date+'T12:00:00+01:00',_updatedAt:now,_mod:nextMod(),_historicalEvidence:item.source});
+      }
+    });
+    audit('إصلاح سجلات تاريخية موثقة من تقارير 25/06 و01/07 و09/07 — '+missing.length+' قيد');
+    const verified=await sync.save();if(!verified||verified.ok!==true)throw new Error((verified&&verified.error)||'لم تثبت عملية الإصلاح');
+    renderAll();runHistoricalReportAudit(false);toast('✅ ثُبتت السجلات التاريخية الناقصة في Firebase دون تكرار');return true;
+  }catch(e){const state=sync.status&&sync.status();if(!(state&&state.outbox))window.DB=DB=before;renderAll();runHistoricalReportAudit(false);toast(state&&state.outbox?'⚠️ الإصلاح محفوظ في طابور الأمان؛ لا تبدأ عملية ثانية':'❌ فشل الإصلاح وأُعيدت البيانات كما كانت: '+String(e&&e.message||e),true);return false;}
+}
+window.addEventListener('egtph-db-ready',()=>setTimeout(()=>runHistoricalReportAudit(false),500));
 
 // ═══════════════════════════════════════════════════
 //  IMPORT / EXPORT
@@ -8867,6 +9000,8 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   function copy(v){try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}}
   function iso(){return new Date().toISOString();}
   function tid(prefix){return (prefix||'SAFE')+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9);}
+  function stableHash(s){var h=2166136261,sx=String(s||'');for(var i=0;i<sx.length;i++){h^=sx.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0).toString(36);}
+  function advanceArchiveId(wid,row){return 'TRASH_ADV_'+stableHash(String(wid)+'|'+String(row&& (row.operationId||row.transactionId||row.id)||''));}
   function money(v){try{return typeof fmtN==='function'?fmtN(+v||0):(+v||0).toLocaleString('fr-FR');}catch(e){return String(+v||0);}}
   function say(t,err){try{if(typeof toast==='function')toast(t,!!err);}catch(e){}}
   function worker(id){try{return typeof getW==='function'?getW(id):arr(live()&&live().workers).find(function(w){return String(w.id)===String(id);});}catch(e){return null;}}
@@ -8890,9 +9025,20 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
     return d.trash;
   }
   function archive(type,item,wid){
-    var d=live();if(!d)return null;var tr=ensureTrash(d);var row=copy(item)||{};
-    row._tid=row._tid||tid('TRASH');row._wid=wid!==undefined&&wid!==null?wid:row._wid;row._deletedAt=row._deletedAt||iso();tr[type].push(row);return row;
-  }
+  var d=live();if(!d)return null;var tr=ensureTrash(d),row=copy(item)||{};
+  row._tid=row._tid||tid('TRASH');row._wid=wid!==undefined&&wid!==null?wid:row._wid;row._deletedAt=row._deletedAt||iso();
+  var idx=tr[type].findIndex(function(old){
+    if(!old)return false;
+    if(row.id!=null&&old.id!=null&&String(old.id)===String(row.id))return true;
+    return type==='advances'&&row._operationId&&old._operationId&&String(row._wid)===String(old._wid)&&String(row._operationId)===String(old._operationId);
+  });
+  if(idx>=0){
+    row._tid=tr[type][idx]._tid||row._tid;
+    row._deletedAt=tr[type][idx]._deletedAt||row._deletedAt;
+    tr[type][idx]=row;
+  }else tr[type].push(row);
+  return row;
+}
   function childRowsForOperation(d,wid,row,bucket){
     var out=[], seen={};var op=String(row.operationId||row.transactionId||row.id);
     Object.keys((d.advances&&d.advances[wid])||{}).forEach(function(b){arr(d.advances[wid][b]).forEach(function(r){if(!r)return;var key=String(r.operationId||r.transactionId||r.id);if(key===op&&!seen[r.id]){seen[r.id]=1;out.push({bucket:String(b),row:r});}});});
@@ -9022,6 +9168,9 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   }
   async function deleteAdvanceSafe(wid,bucket,id){
   var d=live(),w=worker(wid);if(!d||!w)return false;
+  var syncState=window.EGTPH_SYNC&&window.EGTPH_SYNC.status&&window.EGTPH_SYNC.status();
+  if(syncState&&(syncState.running||syncState.outbox||(+syncState.pending||0)>0)){say('⏳ توجد عملية معلقة؛ ثبّتها أو ألغها قبل حذف عملية أخرى.',true);return false;}
+  var beforeDelete=copy(d);
   if(!window.EGTPH_SYNC||typeof window.EGTPH_SYNC.save!=='function'){
     say('❌ محرك Firebase غير جاهز؛ لم يُحذف أي قيد',true);return false;
   }
@@ -9062,7 +9211,7 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   }).map(function(r){if(r.debtId)affectedDebtIds.add(String(r.debtId));return copy(r);});
 
   var archiveItem={
-    id:tid('ADVOP'),_wid:w.id,_operationId:row.operationId||row.transactionId||row.id,
+    id:advanceArchiveId(w.id,row),_wid:w.id,_operationId:row.operationId||row.transactionId||row.id,
     _operationChildren:children.map(function(c){return{bucket:String(c.bucket),row:copy(c.row)};}),
     _linkedDebtReturns:linkedDebtReturns,
     _linkedAbsenceStates:linkedAbsenceStates,
@@ -9085,9 +9234,10 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   var verified=await window.EGTPH_SYNC.save();
   if(!verified||verified.ok!==true){
     var st=window.EGTPH_SYNC.status&&window.EGTPH_SYNC.status();
-    try{if(typeof renderSalContent==='function')renderSalContent();if(typeof renderDash==='function')renderDash();if(typeof renderTrash==='function')renderTrash();}catch(e){}
-    if(st&&st.outbox)say('⚠️ الحذف معلّق في محرك المزامنة ولم يُعلن نجاحه بعد. لا تبدأ عملية ثانية.',true);
-    else say('❌ لم يُثبت الحذف في Firebase؛ لم يُعلن نجاح العملية.',true);
+    if(!(st&&st.outbox)){window.DB=DB=beforeDelete;d=DB;}
+    try{if(typeof renderSalContent==='function')renderSalContent();if(typeof renderDash==='function')renderDash();if(typeof renderTrash==='function')renderTrash();if(typeof updateBadges==='function')updateBadges();}catch(e){}
+    if(st&&st.outbox)say('⚠️ حزمة الحذف محفوظة في طابور الأمان؛ لا تبدأ عملية ثانية حتى تُثبت أو تُلغى.',true);
+    else say('❌ لم يُثبت الحذف؛ أُعيدت العملية وكل آثارها محلياً دون حذف جزئي.',true);
     return false;
   }
 
@@ -9101,7 +9251,7 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
     window.delAdv=deleteAdvanceSafe;
     window.deleteAdv=deleteAdvanceSafe;
     window.EGTPH_DELETE_ENGINE={
-      version:'1.0',
+      version:'2.0-idempotent-atomic',
       restoreFromTrash:restoreFromTrashSafe,
       deleteAdvance:deleteAdvanceSafe,
       groupedAdvanceDelete:true,
@@ -9473,7 +9623,16 @@ function union(a,b){return [...new Set([...keys(a),...keys(b)])];}
 function normalizeRecord(path,x){if(!obj(x))return clone(x);const y=clone(x);if(path==='workers'){['exitDate','startDate','phone','idnum'].forEach(f=>{if(!Object.prototype.hasOwnProperty.call(y,f))y[f]='';});if(!Object.prototype.hasOwnProperty.call(y,'contract'))y.contract='';y.payday=+y.payday||+y.day||1;}if(path.startsWith('absences/')){if(!Object.prototype.hasOwnProperty.call(y,'deductOpt'))y.deductOpt='now';}if(path.startsWith('debts/')){if(y.installment!==undefined&&y.inst===undefined)y.inst=y.installment;}return y;}
 function listMatches(v,path,key){const out=[];rawEntries(v).forEach(([storage,x],i)=>{const n=normalizeRecord(path,x);if(recKey(n,i)===key)out.push({storage,index:i,record:n,raw:x});});return out;}
 function listMap(v,path){const m={};rawEntries(v).forEach(([storage,x],i)=>{const n=normalizeRecord(path,x);const key=recKey(n,i);if(!m[key])m[key]={storage,record:n,raw:x,index:i};});return m;}
-function listChanges(before,after,path,includeDeletes){const bm=listMap(before,path),tm=listMap(after,path),out=[];Object.keys(tm).forEach(k=>{const a=tm[k].record,b=bm[k]&&bm[k].record;if(!b)out.push({action:'upsert',key:k,existsBefore:false,after:clone(a)});else if(!same(b,a))out.push({action:'upsert',key:k,existsBefore:true,before:clone(b),after:clone(a)});});if(includeDeletes)Object.keys(bm).forEach(k=>{if(!tm[k])out.push({action:'delete',key:k,existsBefore:true,before:clone(bm[k].record)});});return out;}
+function listChanges(before,after,path,includeDeletes){
+  const bm=listMap(before,path),tm=listMap(after,path),out=[];
+  Object.keys(tm).forEach(k=>{
+    const a=tm[k].record,b=bm[k]&&bm[k].record;
+    if(!b)out.push({action:'upsert',key:k,existsBefore:false,after:clone(a)});
+    else if(!equivalentListRecord(path,b,a))out.push({action:'upsert',key:k,existsBefore:true,before:clone(b),after:clone(a)});
+  });
+  if(includeDeletes)Object.keys(bm).forEach(k=>{if(!tm[k])out.push({action:'delete',key:k,existsBefore:true,before:clone(bm[k].record)});});
+  return out;
+}
 function replaceMatchingListRows(cur,hits,newRecord,preferredIndex){
   const sorted=(hits||[]).slice().sort((a,b)=>a.index-b.index);
   const keySet=new Set(sorted.map(hit=>hit.index));
@@ -9512,6 +9671,7 @@ function isSynchronizedOperationList(path){
   return path==='workers'||
     /^(advances|bonuses)\/[^/]+\/[^/]+$/.test(path)||
     /^(hours|absences|debts)\/[^/]+$/.test(path)||
+    /^trash\/(workers|advances|hours|absences|bonuses|debts)$/.test(path)||
     ['auditLog','ledger','txJournal','repairLog','undoJournal'].includes(path);
 }
 
@@ -9519,12 +9679,15 @@ function assertListIntegrity(path,v,changes){
   const idRequired=isSynchronizedOperationList(path);
   const seen=new Set();
 
+  const identity=record=>{
+    if(!obj(record))return '';
+    if(record.id!=null&&String(record.id).trim()!=='')return 'id:'+String(record.id);
+    if(path.startsWith('trash/')&&record._tid!=null&&String(record._tid).trim()!=='')return 'trash:'+String(record._tid);
+    return '';
+  };
   rawEntries(v).forEach(([storage,x],i)=>{
-    if(!obj(x)||x.id==null||String(x.id).trim()==='')return;
-    const key='id:'+String(x.id);
-    if(seen.has(key)){
-      throw new Error('ID مكرر داخل '+path+': '+String(x.id));
-    }
+    const key=identity(x);if(!key)return;
+    if(seen.has(key))throw new Error('معرّف مكرر داخل '+path+': '+key);
     seen.add(key);
   });
 
@@ -9532,12 +9695,7 @@ function assertListIntegrity(path,v,changes){
 
   (changes||[]).forEach(op=>{
     const record=op.action==='delete'?op.before:op.after;
-    if(!obj(record)||record.id==null||String(record.id).trim()===''){
-      throw new Error(
-        'لا يمكن مزامنة عملية بدون ID ثابت داخل '+path+
-        ' — نوع التغيير: '+String(op.action||'غير معروف')
-      );
-    }
+    if(!identity(record))throw new Error('لا يمكن مزامنة عملية بدون معرّف ثابت داخل '+path+' — نوع التغيير: '+String(op.action||'غير معروف'));
   });
 }
 function settingsDelta(b,a){const out={};const ignore=new Set(['cloudUrl','cloudKey','cloudAuto','v91CloudAuto','v169FirebaseOnly','v169AuthoritativePath','v169LastFullPull','v169AuthoritativeSource','v170FirebaseOnly','v170AuthoritativePath','v148AdvanceJournal','v148AdvanceJournalUpdatedAt']);Object.keys(a||{}).forEach(k=>{if(ignore.has(k))return;if(!same(b&&b[k],a[k])&&a[k]!==undefined)out['settings/'+k]={existsBefore:Object.prototype.hasOwnProperty.call(b||{},k),before:clone(b&&b[k]),after:clone(a[k])};});return out;}
@@ -9858,10 +10016,36 @@ const REPLAY_VOLATILE_FIELDS=new Set([
   '_mod','_createdAt','_updatedAt','_syncHash','_deviceId','enteredAt'
 ]);
 
+
+function stripReplayVolatileDeep(value){
+  if(Array.isArray(value))return value.map(stripReplayVolatileDeep);
+  if(!obj(value))return clone(value);
+  const out={};
+  Object.keys(value).forEach(key=>{
+    if(REPLAY_VOLATILE_FIELDS.has(key)||['_tid','_deletedAt','_archiveLabel'].includes(key))return;
+    out[key]=stripReplayVolatileDeep(value[key]);
+  });
+  return out;
+}
+function trashComparableRecord(path,record){
+  const out=stripReplayVolatileDeep(normalizeRecord(path,record));
+  if(!out||typeof out!=='object')return out;
+  const sortRows=(rows,keyFn)=>list(rows).map(stripReplayVolatileDeep).sort((a,b)=>String(keyFn(a)).localeCompare(String(keyFn(b))));
+  if(path==='trash/advances'){
+    out._operationChildren=sortRows(out._operationChildren,x=>x&&x.row&&(x.row.id||x.row.operationId)||'');
+    out._linkedDebtReturns=sortRows(out._linkedDebtReturns,x=>x&&x.id||'');
+    out._linkedAbsenceStates=sortRows(out._linkedAbsenceStates,x=>x&&x.id||'');
+    out._affectedDebtIds=list(out._affectedDebtIds).map(String).sort();
+  }
+  return out;
+}
+
 function replayComparableRecord(path,record){
   const value=normalizeRecord(path,record);
   if(!value||typeof value!=='object')return clone(value);
   const out=clone(value);
+
+  if(path.startsWith('trash/'))return trashComparableRecord(path,out);
 
   if(path==='undoJournal'){
     if(out.inverse){
@@ -9884,6 +10068,13 @@ function equivalentListRecord(path,left,right){
 
   const a=normalizeRecord(path,left);
   const b=normalizeRecord(path,right);
+
+  if(path.startsWith('trash/')){
+    const ia=String((a&&a.id!=null?a.id:a&&a._tid)||'');
+    const ib=String((b&&b.id!=null?b.id:b&&b._tid)||'');
+    if(ia&&ia===ib)return firebaseSemanticSame(trashComparableRecord(path,a),trashComparableRecord(path,b));
+    return false;
+  }
 
   if(path==='undoJournal'){
     const ca=replayComparableRecord(path,a);
@@ -11603,7 +11794,7 @@ new MutationObserver(mutations=>{
   }
 }).observe(document.documentElement,{childList:true,subtree:true});
 
-const EGTPH_SYNC_API={version:'200.0-transaction-receipt-semantic-sync',source:SOURCE,root:ROOT,save,flush,sync,schedule,refreshHealth,livePullTick,startLivePull,showConflicts,acceptRemote,forceLocal,openUndoLock,undoOperation,refreshUndoButton,verifyPatchDetailed,patchCloudState,status:()=>({ready:!!baseline,running,queued,pending:pendingCount(),lastError,lastSavedAt,lastPullAt,lastLivePullAt,livePollMs:LIVE_POLL_MS,remoteEtag:remoteEtag||null,openConflicts:allOpenConflicts.length||0,ownedConflicts:currentConflicts.length||0,outbox:!!loadOutbox(),writes:clone(writes),source:SOURCE,fingerprint:diag.cloudFingerprint||null,localFingerprint:diag.localFingerprint||null,cloudMatch:diag.cloudMatch===true,undoAvailable:availableUndo().length}),noLatestWins:true,conflictPolicy:'same-id-difference-stops-and-records-conflict',conditionalRootPut:true,noAutomaticDelete:true,tombstoneGatedPhysicalDelete:true,nearLiveInbound:true,tableView:{min:TABLE_SCALE_MIN,max:TABLE_SCALE_MAX,step:TABLE_SCALE_STEP,scan:scanTableViews,refresh:refreshTableViews}};window.openUndoLock=openUndoLock;window.EGTPH_SYNC=EGTPH_SYNC_API;window.EGTPH_V200=EGTPH_SYNC_API;window.EGTPH_V199=EGTPH_SYNC_API;window.EGTPH_V175=EGTPH_SYNC_API;window.EGTPH_V172=EGTPH_SYNC_API;
+const EGTPH_SYNC_API={version:'201.0-local-date-delete-daily-history',source:SOURCE,root:ROOT,save,flush,sync,schedule,refreshHealth,livePullTick,startLivePull,showConflicts,acceptRemote,forceLocal,openUndoLock,undoOperation,refreshUndoButton,verifyPatchDetailed,patchCloudState,status:()=>({ready:!!baseline,running,queued,pending:pendingCount(),lastError,lastSavedAt,lastPullAt,lastLivePullAt,livePollMs:LIVE_POLL_MS,remoteEtag:remoteEtag||null,openConflicts:allOpenConflicts.length||0,ownedConflicts:currentConflicts.length||0,outbox:!!loadOutbox(),writes:clone(writes),source:SOURCE,fingerprint:diag.cloudFingerprint||null,localFingerprint:diag.localFingerprint||null,cloudMatch:diag.cloudMatch===true,undoAvailable:availableUndo().length}),noLatestWins:true,conflictPolicy:'same-id-difference-stops-and-records-conflict',conditionalRootPut:true,noAutomaticDelete:true,tombstoneGatedPhysicalDelete:true,nearLiveInbound:true,tableView:{min:TABLE_SCALE_MIN,max:TABLE_SCALE_MAX,step:TABLE_SCALE_STEP,scan:scanTableViews,refresh:refreshTableViews}};window.openUndoLock=openUndoLock;window.EGTPH_SYNC=EGTPH_SYNC_API;window.EGTPH_V201=EGTPH_SYNC_API;window.EGTPH_V200=EGTPH_SYNC_API;window.EGTPH_V199=EGTPH_SYNC_API;window.EGTPH_V175=EGTPH_SYNC_API;window.EGTPH_V172=EGTPH_SYNC_API;
 })();
 </script>
 <style id="egtph-v172-final-sync-style">
@@ -11624,8 +11815,8 @@ const EGTPH_SYNC_API={version:'200.0-transaction-receipt-semantic-sync',source:S
 (function(){
   'use strict';
   window.__EGTPH_V175_SURGICAL__=true;
-  window.__EGTPH_V175_BUILD__='v200-transaction-receipt-semantic-sync-final';
-  try{document.title='EGTPH — سجل الأجور v200';}catch(e){}
+  window.__EGTPH_V175_BUILD__='v201-local-date-delete-daily-history-final';
+  try{document.title='EGTPH — سجل الأجور v201';}catch(e){}
 })();
 </script>
 
