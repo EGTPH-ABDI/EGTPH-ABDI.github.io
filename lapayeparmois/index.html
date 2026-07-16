@@ -224,7 +224,7 @@
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes" name="viewport"/>
-<title>EGTPH — سجل الأجور v203</title>
+<title>EGTPH — سجل الأجور v207</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -1135,7 +1135,7 @@ body{background:linear-gradient(145deg,#f2f7f4 0%,#fbfdfc 42%,#eef7f1 100%);}
 }
 @media screen and (max-width:900px){.twrap thead th,.sec table thead th{font-size:11.2px!important;padding:10px 8px!important}.twrap tbody td,.sec table tbody td{font-size:11px!important;padding:10px 8px!important;line-height:1.65!important}#page-settlement .twrap table{min-width:1120px!important}}
 </style>
-<meta content="v203-trash-only-no-undo" name="egtph-build"/>
+<meta content="v207-auto-complete-installment-cycle" name="egtph-build"/>
 <style id="egtph-v176-night-theme">
 /* v176 — ثيم ثانٍ فقط: ليلي أخضر متناسق. الأبيض يبقى الافتراضي. */
 body.egtph-theme-night{
@@ -2846,9 +2846,76 @@ function cycleAnchorForDate(w,dateValue){
 function absenceDate(a){return (a&&((a.from)||a.date))||'';}
 function absenceEntriesInCycle(wid,m,yr){
   const w=getW(wid);if(!w)return[];
-  const win=cycleWindow(w,m,yr);
-  return (DB.absences[wid]||[]).filter(function(a){return _inCycle(absenceDate(a),win);});
+  const win=cycleWindow(w,m,yr),today=_toDate(todayISO())||new Date();
+  const out=[];
+  (DB.absences[wid]||[]).forEach(function(a){
+    if(!a)return;
+    if(a.openEnded){
+      const sourceStart=_toDate(a.openSince||a.from||a.date);
+      if(!sourceStart)return;
+      const overlapStart=new Date(Math.max(sourceStart.getTime(),win.from.getTime()));
+      const overlapEnd=new Date(Math.min(today.getTime(),win.to.getTime()-86400000));
+      if(overlapEnd<overlapStart)return;
+      const fromISO=_isoDate(overlapStart),toISO=_isoDate(overlapEnd);
+      const days=countAbsenceWorkDays(fromISO,toISO);
+      if(days<=0)return;
+      const projected=Object.assign({},a,{
+        _projectedOpen:true,_sourceId:a.id,
+        month:m,year:yr,days,
+        from:isoToD(fromISO),to:isoToD(toISO),
+        date:isoToD(fromISO)+' → '+isoToD(toISO)+' (مفتوح)',
+        deduct:a.deductOpt==='cancel'?0:Math.round(days*(w.salary/30))
+      });
+      out.push(projected);
+      return;
+    }
+    if(_inCycle(absenceDate(a),win)){out.push(a);return;}
+    // دعم السجلات القديمة التي تحمل month/year لكن تاريخها النصي غير قابل للتحليل.
+    if(!_toDate(absenceDate(a))&&+a.month===+m&&(+a.year||+yr)===+yr)out.push(a);
+  });
+  return out;
 }
+
+function absenceCycleTargetsForRecord(w,a){
+  if(!w||!a)return[];
+  if(!a.openEnded){
+    const d=_toDate(absenceDate(a));
+    if(d){const c=cycleAnchorForDate(w,d);return[{m:c.m,yr:c.yr}];}
+    if(Number.isInteger(+a.month)&&Number.isInteger(+a.year))return[{m:+a.month,yr:+a.year}];
+    return[];
+  }
+
+  const start=_toDate(a.openSince||a.from||a.date),today=_toDate(todayISO())||new Date();
+  if(!start||start>today)return[];
+  const first=cycleAnchorForDate(w,start),last=cycleAnchorForDate(w,today),out=[];
+  let cur={m:first.m,yr:first.yr},guard=0;
+  while(guard++<120){
+    out.push({m:cur.m,yr:cur.yr});
+    if(cur.m===last.m&&cur.yr===last.yr)break;
+    cur={m:(cur.m+1)%12,yr:cur.m===11?cur.yr+1:cur.yr};
+  }
+  return out;
+}
+function absenceAllCycleTargets(wid){
+  const w=getW(wid);if(!w)return[];
+  const map=new Map();
+  (DB.absences[wid]||[]).forEach(a=>absenceCycleTargetsForRecord(w,a).forEach(c=>map.set(c.yr+'_'+c.m,c)));
+  return[...map.values()].sort((a,b)=>a.yr-b.yr||a.m-b.m);
+}
+function absenceAllCycleEntries(wid){
+  const out=[],seen=new Set();
+  absenceAllCycleTargets(wid).forEach(c=>{
+    absenceEntriesInCycle(wid,c.m,c.yr).forEach(a=>{
+      const source=String(a._sourceId||a.id||'');
+      const key=source+'|'+c.yr+'|'+c.m;
+      if(seen.has(key))return;
+      seen.add(key);
+      out.push(Object.assign({},a,{_cycleMonth:c.m,_cycleYear:c.yr}));
+    });
+  });
+  return out;
+}
+
 function hourEntriesInCycle(wid,m,yr){
   const w=getW(wid);if(!w)return[];
   const win=cycleWindow(w,m,yr);
@@ -2865,8 +2932,9 @@ function bonusEntriesInCycle(wid,m,yr){
 //  ADVANCE DEDUCTION HELPERS (v33)
 //  القاعدة المحاسبية المتفق عليها:
 //  - amount يبقى هو مبلغ التسبيق المحتسب على دورة الراتب.
-//  - أي قسط دين/غياب لا يُنشأ كتسبيق مستقل.
-//  - الخصم يُحفظ داخل نفس التسبيق في deductions ويظهر كملاحظة.
+//  - القسط العادي يُحفظ داخل نفس التسبيق في deductions.
+//  - الاستثناء الوحيد: عند إغلاق الدورة تلقائياً يمكن إنشاء تسبيق محاسبي تلقائي
+//    بقيمة الراتب المتبقي، مخصوم بالكامل من القسط، دون تسليم نقدي إضافي.
 //  - الصافي النقدي = amount - مجموع الخصومات.
 // ══════════════════════════════════════════════════════
 function advGross(e){return (e&&e._isInstDeduction)?0:(+((e||{}).amount)||0);}
@@ -2892,6 +2960,21 @@ function advDedNote(e){
   }
   return parts.concat(other).join(' | ');
 }
+
+function advancePublicPrintNote(recordsInput){
+  const rows=(Array.isArray(recordsInput)?recordsInput:[recordsInput]).filter(Boolean);
+  const deductions=rows.flatMap(row=>Array.isArray(row.deductions)?row.deductions:[]);
+  const debt=deductions.filter(d=>d&&d.type==='debt').reduce((s,d)=>s+Math.max(0,+d.amount||0),0);
+  const absence=deductions.filter(d=>d&&d.type==='absence').reduce((s,d)=>s+Math.max(0,+d.amount||0),0);
+  const gross=rows.reduce((s,row)=>s+Math.max(0,advGross(row)),0);
+  const cash=rows.reduce((s,row)=>s+Math.max(0,advNetPaid(row)),0);
+  const parts=[];
+  if(absence)parts.push('خصم غياب: −'+fmtN(absence)+' دج');
+  if(debt)parts.push('قسط دين: −'+fmtN(debt)+' دج');
+  if((absence||debt)&&cash!==gross)parts.push('النقد المسلّم: '+fmtN(cash)+' دج');
+  return parts.join(' | ');
+}
+
 // المبلغ النقدي الحقيقي الذي سُلِّم للعامل. مبلغ amount يبقى مبلغاً محاسبياً من الراتب.
 function advDedCapacity(e){return Math.max(0,advGross(e)-advDedTotal(e));}
 function attachDeductionToAdvance(adv,ded){
@@ -2960,38 +3043,90 @@ function _instReturnSort(a,b){
   const ib=parseInt(String(b&&b.id||'').split('_')[0],10)||0;
   return ia-ib;
 }
+
+function installmentScheduleTargets(debt){
+  const total=Math.max(0,Math.round(+((debt||{}).amount)||0));
+  const regular=Math.max(0,Math.round(+((debt||{}).instAmt)||0));
+  let count=Math.max(1,+((debt||{}).instCount)||1);
+  if(regular>0)count=Math.max(count,Math.ceil(total/regular));
+  const targets=[];let left=total;
+  for(let i=0;i<count;i++){
+    const target=i===count-1?left:Math.min(regular||left,left);
+    targets.push(Math.max(0,target));left=Math.max(0,left-target);
+  }
+  return{total,regular,count,targets};
+}
+function installmentLedgerForDebt(wid,debt){
+  const schedule=installmentScheduleTargets(debt);
+  const returns=(DB.debts[wid]||[]).filter(r=>
+    r&&r.type==='return'&&String(r.debtId||'')===String(debt&&debt.id||'')&&_isInstallmentReturn(r)
+  ).sort(_instReturnSort);
+  const paid=schedule.targets.map(()=>0),allocations=[];
+  let slot=0,totalPaid=0;
+  returns.forEach(r=>{
+    let left=Math.max(0,Math.round(+r.amount||0));
+    const rowAllocs=[];
+    while(left>0&&slot<schedule.targets.length){
+      const room=Math.max(0,schedule.targets[slot]-paid[slot]);
+      if(room<=0){slot++;continue;}
+      const take=Math.min(left,room);
+      paid[slot]+=take;left-=take;totalPaid+=take;
+      rowAllocs.push({installmentNo:slot+1,amount:take,target:schedule.targets[slot]});
+      if(paid[slot]>=schedule.targets[slot])slot++;
+    }
+    allocations.push({record:r,parts:rowAllocs,unallocated:left});
+  });
+  let completeCount=0;
+  while(completeCount<schedule.targets.length&&paid[completeCount]>=schedule.targets[completeCount]&&schedule.targets[completeCount]>0)completeCount++;
+  const currentIndex=completeCount<schedule.targets.length?completeCount:-1;
+  const currentTarget=currentIndex>=0?schedule.targets[currentIndex]:0;
+  const currentPaid=currentIndex>=0?paid[currentIndex]:0;
+  const currentRemaining=Math.max(0,currentTarget-currentPaid);
+  const first=_ensureInstFirstDue(debt);
+  const nextDue=currentIndex>=0&&first?_shiftISO(first,currentIndex*_instDays(debt)):null;
+  return{schedule,returns,paid,allocations,totalPaid,completeCount,currentIndex,currentTarget,currentPaid,currentRemaining,first,nextDue};
+}
+
 function syncDebtInstallmentState(wid,debtOrId){
   const entries=DB.debts[wid]||[];
   const debt=typeof debtOrId==='object'?debtOrId:entries.find(x=>x&&x.type==='debt'&&String(x.id)===String(debtOrId));
   if(!debt||!debt.inst)return false;
-  const count=Math.max(1,+debt.instCount||1);
-  const before=JSON.stringify({paid:debt.instPaid,due:debt.nextDue,first:debt.instFirstDue});
-  const returns=entries.filter(function(r){
-    return r&&r.type==='return'&&String(r.debtId||'')===String(debt.id)&&_isInstallmentReturn(r);
-  }).sort(_instReturnSort).slice(0,count);
-  const first=_ensureInstFirstDue(debt);
+  const before=JSON.stringify({paid:debt.instPaid,partial:debt.instPartialPaid,current:debt.instCurrentNo,due:debt.nextDue,first:debt.instFirstDue});
+  const ledger=installmentLedgerForDebt(wid,debt);
 
-  // إذا حُذف قسط قديم تبقى الحركات اللاحقة موجودة. نعيد ترقيمها بالتسلسل الحقيقي
-  // ونحدّث وسم الخصم داخل التسبيق المرتبط بها كي لا يولّد النظام قسطاً مكرراً.
-  returns.forEach(function(r,index){
+  ledger.allocations.forEach(item=>{
+    const r=item.record,firstPart=item.parts[0];
+    if(!firstPart)return;
     const oldTag=String(r._instTag||'');
-    const newTag=String(debt.id)+'_'+(index+1);
-    r._instTag=newTag;r._instPayment=true;
-    Object.values(DB.advances[wid]||{}).forEach(function(arr){(arr||[]).forEach(function(a){
-      (a.deductions||[]).forEach(function(d){
-        const linkedByTag=oldTag&&String(d._instTag||'')===oldTag;
-        const linkedByAdvance=r._advanceId&&String(a.id||'')===String(r._advanceId)&&d.type==='debt'&&String(d.debtId||'')===String(debt.id);
-        if(linkedByTag||linkedByAdvance){
-          d._instTag=newTag;
-          if(d.type==='debt')d.note='قسط دين '+(index+1)+'/'+count;
+    const newTag=String(debt.id)+'_'+firstPart.installmentNo;
+    const paymentId=String(r._instPaymentId||('IP_'+String(r.id||genId())));
+    const linkedIds=new Set((Array.isArray(r._advanceIds)?r._advanceIds:[]).map(String));
+    if(r._advanceId!=null)linkedIds.add(String(r._advanceId));
+    r._instTag=newTag;r._instPayment=true;r._instPaymentId=paymentId;
+    r._installmentNo=firstPart.installmentNo;
+    r._installmentTarget=firstPart.target;
+    Object.values(DB.advances[wid]||{}).forEach(arr=>(arr||[]).forEach(a=>{
+      (a.deductions||[]).forEach(d=>{
+        if(!d||d.type!=='debt'||String(d.debtId||'')!==String(debt.id))return;
+        const byPayment=String(d._instPaymentId||'')===paymentId;
+        const byAdvance=linkedIds.has(String(a.id||''))&&(!d._instPaymentId||String(d._instPaymentId)===paymentId);
+        const legacy=!r._instPaymentId&&oldTag&&String(d._instTag||'')===oldTag&&linkedIds.has(String(a.id||''));
+        if(byPayment||byAdvance||legacy){
+          d._instTag=newTag;d._instPaymentId=paymentId;d._installmentNo=firstPart.installmentNo;
+          d.note='قسط دين '+firstPart.installmentNo+'/'+ledger.schedule.count;
         }
       });
       if(Array.isArray(a.deductions))a.netPaid=advNetPaid(a);
-    });});
+    }));
   });
-  debt.instPaid=returns.length;
-  debt.nextDue=debt.instPaid<count&&first?_shiftISO(first,debt.instPaid*_instDays(debt)):null;
-  return before!==JSON.stringify({paid:debt.instPaid,due:debt.nextDue,first:debt.instFirstDue});
+
+  debt.instCount=ledger.schedule.count;
+  debt.instPaid=ledger.completeCount;
+  debt.instPartialPaid=ledger.currentPaid;
+  debt.instCurrentNo=ledger.currentIndex>=0?ledger.currentIndex+1:null;
+  debt.instPaidAmount=ledger.totalPaid;
+  debt.nextDue=ledger.nextDue;
+  return before!==JSON.stringify({paid:debt.instPaid,partial:debt.instPartialPaid,current:debt.instCurrentNo,due:debt.nextDue,first:debt.instFirstDue});
 }
 // ══════════════════════════════════════════════════════
 //  ABSENCE FINANCIAL STATUS — single source of truth (v114)
@@ -3110,10 +3245,20 @@ function calcMonthStatus(wid,m,yr){
   let totAdv=0;allAdv.forEach(e=>{if(!_isInstAdv(e)&&belongs(e))totAdv+=advGross(e);});
   const totAbsNow=absenceEntriesInCycle(wid,m,_yr).filter(a=>a.deductOpt!=='cancel').reduce((s,a)=>s+(+a.deduct||0),0);
   // القسط الظاهر هو المدفوع/المخصوم فعلياً داخل عملية حقيقية فقط، وليس القسط المستقبلي.
-  const seenInst={};let totInst=0;
-  const addInst=(key,amt)=>{key=String(key||'');amt=Math.max(0,Math.round(+amt||0));if(!amt||seenInst[key])return;seenInst[key]=1;totInst+=amt;};
-  allAdv.filter(belongs).forEach(a=>{(a.deductions||[]).filter(x=>x&&x.type==='debt').forEach(x=>addInst(x._instTag||x.instTag||x.allocationId||x.id||('adv_'+String(a.id)+'_'+String(x.debtId)),x.amount));});
-  (DB.debts[String(wid)]||DB.debts[wid]||[]).filter(x=>x&&x.type==='return'&&belongs(x)).forEach(x=>addInst(x._instTag||x.instTag||x.allocationId||x.id,x.amount));
+  const instPayments={};
+  const allDebtReturns=(DB.debts[String(wid)]||DB.debts[wid]||[]).filter(x=>x&&x.type==='return');
+  const returnKeys=new Set(allDebtReturns.map(x=>String(x._instPaymentId||x._instTag||x.instTag||x.allocationId||x.id||'')));
+  const addInst=(key,amt,source)=>{
+    key=String(key||'');amt=Math.max(0,Math.round(+amt||0));if(!amt)return;
+    const row=instPayments[key]||(instPayments[key]={deductions:0,returns:0});
+    if(source==='return')row.returns=Math.max(row.returns,amt);else row.deductions+=amt;
+  };
+  allAdv.filter(belongs).forEach(a=>{(a.deductions||[]).filter(x=>x&&x.type==='debt').forEach(x=>{
+    const key=x._instPaymentId||x._instTag||x.instTag||x.allocationId||x.id||('adv_'+String(a.id)+'_'+String(x.debtId));
+    if(!returnKeys.has(String(key)))addInst(key,x.amount,'deduction');
+  });});
+  allDebtReturns.filter(belongs).forEach(x=>addInst(x._instPaymentId||x._instTag||x.instTag||x.allocationId||x.id,x.amount,'return'));
+  const totInst=Object.values(instPayments).reduce((sum,row)=>sum+Math.max(row.deductions,row.returns),0);
   const netDue=Math.max(0,baseSal-totAbsNow),netSal=netDue-totAdv,finalPayout=netSal,totalDeductions=totAbsNow+totInst;
   const salaryPaid=totAdv>=netDue,salaryPaidWithInst=salaryPaid;
   const hrsEntries=hourEntriesInCycle(wid,m,_yr),hrsTotal=hrsEntries.reduce((s,h)=>s+(+h.total||0),0),hrsPaid=hrsEntries.filter(h=>h.paid).reduce((s,h)=>s+(+h.total||0),0),hrsUnpaid=hrsTotal-hrsPaid;
@@ -3227,14 +3372,23 @@ function calcFinalSettlement(w){
 
   const debtRows=flatten(db.debts,wid).filter(x=>x&&!isDeleted(x));
   const debtOriginal=money(debtRows.filter(x=>x.type==='debt'&&(!date(x.date)||within(x.date))).reduce((s,x)=>s+Math.max(0,num(x.amount)),0));
-  const paidSeen={}; let debtPaid=0;
-  const addPaid=(key,amt)=>{amt=Math.max(0,num(amt));key=str(key)||('p'+Object.keys(paidSeen).length);if(!amt||paidSeen[key])return;paidSeen[key]=1;debtPaid+=amt;};
-  debtRows.filter(x=>x.type==='return'&&(!date(x.date)||within(x.date||x.realDate||x.enteredAt))).forEach(x=>addPaid(x._instTag||x.instTag||x.allocationId||x.id,x.amount));
+  const paymentMap={};
+  const allReturns=debtRows.filter(x=>x.type==='return');
+  const returnKeys=new Set(allReturns.map(x=>str(x._instPaymentId||x._instTag||x.instTag||x.allocationId||x.id)));
+  const addPaid=(key,amt,source)=>{
+    amt=Math.max(0,num(amt));key=str(key)||('p'+Object.keys(paymentMap).length);if(!amt)return;
+    const row=paymentMap[key]||(paymentMap[key]={deductions:0,returns:0});
+    if(source==='return')row.returns=Math.max(row.returns,amt);else row.deductions+=amt;
+  };
+  allReturns.filter(x=>(!date(x.date)||within(x.date||x.realDate||x.enteredAt))).forEach(x=>addPaid(x._instPaymentId||x._instTag||x.instTag||x.allocationId||x.id,x.amount,'return'));
   advRows.filter(a=>within(advDate(a))).forEach(a=>{
-    if(a._isInstDeduction)addPaid(a._instTag||a.instTag||a.id,a.amount);
-    arr(a.deductions).filter(x=>x&&x.type==='debt').forEach(x=>addPaid(x._instTag||x.instTag||x.allocationId||x.id||('adv_'+str(a.id)+'_'+str(x.debtId)),x.amount));
+    if(a._isInstDeduction){const key=a._instPaymentId||a._instTag||a.instTag||a.id;if(!returnKeys.has(str(key)))addPaid(key,a.amount,'deduction');}
+    arr(a.deductions).filter(x=>x&&x.type==='debt').forEach(x=>{
+      const key=x._instPaymentId||x._instTag||x.instTag||x.allocationId||x.id||('adv_'+str(a.id)+'_'+str(x.debtId));
+      if(!returnKeys.has(str(key)))addPaid(key,x.amount,'deduction');
+    });
   });
-  debtPaid=money(debtPaid);
+  const debtPaid=money(Object.values(paymentMap).reduce((sum,row)=>sum+Math.max(row.deductions,row.returns),0));
   const debtBalance=Math.max(0,money(debtOriginal-debtPaid));
   const netFinal=money(earnedSal+unpaidHrs+unpaidBon-totalAdv-totalAbs-debtBalance);
   const current=cycleRangeFor(ref);
@@ -3266,46 +3420,388 @@ function _dateOnOrBefore(a,b){
 function _advancePaymentDate(adv,fallback){
   return (adv&&adv.realDate)||fallback||((adv&&adv.date)||todayStr());
 }
-function autoSettleOnAdvance(wid, m, yr, targetAdvance, paidDate){
-  const w=getW(wid);
-  if(!w||!targetAdvance||_isInstAdv(targetAdvance))return false;
-  const effectiveDate=_advancePaymentDate(targetAdvance,paidDate);
-  const win=cycleWindow(w,m,yr);
-  if(!_inCycle(targetAdvance.date,win))return false;
-  let changed=false;
-
-  // v114: الغياب الفوري خصم خارجي من راتب الدورة (absenceExternal).
-  // لا نربطه داخل تسبيق، لأن مبلغ التسبيق يكون أصلاً صافي الراتب بعد الغياب.
-  // ربطه هنا يحوّل نفس الخصم إلى خصم ثانٍ ويشوّه مبلغ الإغلاق.
-  // الدين: القسط المستحق يخصم من نفس التسبيق فقط عند توفر رصيد نقدي فيه.
-  // إذا كان مبلغ التسبيق أصغر من القسط، يبقى القسط مستحقاً للتسبيق التالي؛ لا نقسمه خفيةً.
-  (DB.debts[wid]||[]).filter(d=>d&&d.type==='debt'&&d.inst&&!d.instDisabled).forEach(d=>{
-    let guard=0;
-    while(guard++<60 && (+d.instPaid||0)<(+d.instCount||1) && d.nextDue){
-      const dueISO=d.nextDue;
-      if(!_inCycle(dueISO,win)||!_dateOnOrBefore(dueISO,effectiveDate))break;
-      const paid=+d.instPaid||0, count=+d.instCount||1;
-      const fullAmt=Math.round(+d.instAmt||0);
-      const debtRemaining=Math.max(0,(+d.amount||0)-(DB.debts[wid]||[])
-        .filter(r=>r.type==='return'&&String(r.debtId||'')===String(d.id))
-        .reduce((sum,r)=>sum+(+r.amount||0),0));
-      const amount=Math.min(fullAmt,debtRemaining);
-      if(!amount||!attachDeductionToAdvance(targetAdvance,{
-        type:'debt',amount,date:effectiveDate,debtId:d.id,_instTag:d.id+'_'+(paid+1),
-        note:'قسط دين تلقائي '+(paid+1)+'/'+count
-      }))break;
-      const tag=d.id+'_'+(paid+1);
-      DB.debts[wid].push({
-        id:genId(),type:'return',amount,date:effectiveDate,debtId:d.id,
-        note:'قسط '+(paid+1)+'/'+count+' — خُصم من تسبيق '+fmtN(+targetAdvance.amount||0),
-        by:'النظام',_instTag:tag,_auto:true,_instPayment:true,_advanceId:targetAdvance.id
-      });
-      syncDebtInstallmentState(wid,d);
-      changed=true;
-      audit('قسط دين من تسبيق: '+fmtN(amount)+' ('+(paid+1)+'/'+count+') — '+w.name);
-    }
+function advanceOperationIdentity(record){
+  if(!record)return'';
+  return String(record.operationId||record.transactionId||record.id||'');
+}
+function advanceOperationRecords(wid,recordOrIdentity){
+  const key=typeof recordOrIdentity==='object'?advanceOperationIdentity(recordOrIdentity):String(recordOrIdentity||'');
+  const out=[];
+  Object.values((DB.advances&&DB.advances[wid])||{}).forEach(function(rows){
+    (rows||[]).forEach(function(row){if(row&&!_isInstAdv(row)&&advanceOperationIdentity(row)===key)out.push(row);});
   });
-  return changed;
+  out.sort(function(a,b){
+    const ai=+a.allocationIndex||0,bi=+b.allocationIndex||0;
+    if(ai!==bi)return ai-bi;
+    return String(a.id||'').localeCompare(String(b.id||''));
+  });
+  return out;
+}
+function advanceOperationSummary(records){
+  const rows=(Array.isArray(records)?records:[records]).filter(Boolean);
+  const gross=rows.reduce((s,row)=>s+Math.max(0,advGross(row)),0);
+  const deductions=rows.flatMap(row=>Array.isArray(row.deductions)?row.deductions:[]);
+  const debt=deductions.filter(d=>d&&d.type==='debt').reduce((s,d)=>s+Math.max(0,+d.amount||0),0);
+  const other=deductions.filter(d=>d&&d.type!=='debt').reduce((s,d)=>s+Math.max(0,+d.amount||0),0);
+  return{rows,gross,debt,other,totalDeductions:debt+other,cash:Math.max(0,gross-debt-other)};
+}
+function advanceOperationPaymentDate(records,fallback){
+  const rows=(Array.isArray(records)?records:[records]).filter(Boolean);
+  for(const row of rows){const value=_advancePaymentDate(row,'');if(value)return value;}
+  return fallback||todayStr();
+}
+function advanceOperationInstallmentTagSet(records){
+  const set=new Set();
+  (Array.isArray(records)?records:[records]).filter(Boolean).forEach(row=>(row.deductions||[]).forEach(d=>{
+    if(d&&d.type==='debt'&&d._instTag)set.add(String(d._instTag));
+  }));
+  return set;
+}
+function distributeDebtDeductionAcrossAdvanceOperation(records,deduction){
+  const rows=(Array.isArray(records)?records:[records]).filter(Boolean);
+  const amount=Math.max(0,Math.round(+deduction.amount||0));
+  if(!rows.length||!amount)return{ok:false,parts:[],reason:'empty'};
+  const available=rows.reduce((s,row)=>s+advDedCapacity(row),0);
+  if(available<amount)return{ok:false,parts:[],reason:'insufficient-cash',available};
+
+  const paymentId=String(deduction._instPaymentId||deduction._instTag||'');
+  const candidates=rows.map((row,index)=>({row,index,capacity:advDedCapacity(row)})).filter(x=>x.capacity>0);
+  const single=candidates.filter(x=>x.capacity>=amount).sort((a,b)=>a.capacity-b.capacity||b.index-a.index)[0];
+  const parts=[];
+  if(single){
+    const part=Object.assign({},deduction,{amount,_instPart:1,_instParts:1,_instPaymentId:paymentId});
+    if(!attachDeductionToAdvance(single.row,part))return{ok:false,parts:[],reason:'attach-failed'};
+    parts.push({advanceId:single.row.id,amount});
+    return{ok:true,parts,available};
+  }
+
+  let left=amount;
+  candidates.sort((a,b)=>b.capacity-a.capacity||b.index-a.index);
+  const rawParts=[];
+  for(const item of candidates){
+    if(left<=0)break;
+    const take=Math.min(left,item.capacity);
+    if(take>0){rawParts.push({row:item.row,amount:take});left-=take;}
+  }
+  if(left>0)return{ok:false,parts:[],reason:'split-failed',available};
+  rawParts.forEach((item,index)=>{
+    const part=Object.assign({},deduction,{amount:item.amount,_instPart:index+1,_instParts:rawParts.length,_instPaymentId:paymentId});
+    if(!attachDeductionToAdvance(item.row,part))throw new Error('تعذر ربط جزء القسط بالتسبيق');
+    parts.push({advanceId:item.row.id,amount:item.amount});
+  });
+  return{ok:true,parts,available};
+}
+
+function installmentSnapshotForAdvance(wid,debt){
+  if(!debt||debt.type!=='debt'||!debt.inst||debt.instDisabled)return null;
+  const ledger=installmentLedgerForDebt(wid,debt);
+  if(ledger.currentIndex<0)return null;
+  const allReturned=(DB.debts[wid]||[]).filter(r=>r&&r.type==='return'&&String(r.debtId||'')===String(debt.id)).reduce((s,r)=>s+Math.max(0,+r.amount||0),0);
+  const remaining=Math.max(0,(+debt.amount||0)-allReturned);
+  const amount=Math.min(Math.max(0,ledger.currentRemaining),remaining);
+  if(!amount)return null;
+  return{
+    debt,count:ledger.schedule.count,paid:ledger.completeCount,partialPaid:ledger.currentPaid,
+    installmentNo:ledger.currentIndex+1,installmentTarget:ledger.currentTarget,
+    first:ledger.first,nextDue:ledger.nextDue,remaining,amount,returns:ledger.returns,ledger
+  };
+}
+function advanceOperationCycleCloseState(wid,records,paidDate){
+  const w=getW(wid),rows=(Array.isArray(records)?records:[records]).filter(Boolean);
+  if(!w||!rows.length)return{closes:false,reason:'missing'};
+  const effectiveDate=advanceOperationPaymentDate(rows,paidDate),cycle=cycleAnchorForDate(w,effectiveDate),status=advanceCycleStatus(wid,cycle);
+  const operationGross=rows.filter(row=>advanceBelongsToCycle(row,w,cycle.m,cycle.yr)).reduce((s,row)=>s+Math.max(0,advGross(row)),0);
+  const paidBefore=Math.max(0,status.paid-operationGross);
+  const remainingBefore=Math.max(0,status.due-paidBefore);
+  const closes=operationGross>0&&remainingBefore>0&&status.remaining<=0;
+  return{closes,effectiveDate,cycle,status,operationGross,paidBefore,remainingBefore};
+}
+function nextAutomaticInstallmentCandidate(wid,records,paidDate){
+  const w=getW(wid),rows=(Array.isArray(records)?records:[records]).filter(Boolean);
+  const summary=advanceOperationSummary(rows);
+  if(!w||!rows.length||summary.debt>0)return null;
+  const effectiveDate=advanceOperationPaymentDate(rows,paidDate);
+  const capacity=rows.reduce((s,row)=>s+advDedCapacity(row),0);
+  if(capacity<=0)return null;
+  const closeState=advanceOperationCycleCloseState(wid,rows,effectiveDate);
+  const candidates=[];
+
+  (DB.debts[wid]||[]).filter(d=>d&&d.type==='debt'&&d.inst&&!d.instDisabled).forEach(d=>{
+    const snap=installmentSnapshotForAdvance(wid,d);
+    if(!snap||!snap.amount)return;
+    const dueNow=!!(snap.nextDue&&_dateOnOrBefore(snap.nextDue,effectiveDate));
+    const remainingAfter=Math.max(0,+((closeState&&closeState.status&&closeState.status.remaining)||0));
+    const closes=!!(closeState&&closeState.closes);
+
+    // v207 — إغلاق ذكي وفوري للدورة:
+    // إذا بقي من راتب الدورة مبلغ لا يتجاوز باقي القسط، وكان التسبيق الحالي يستطيع
+    // تغطية الفرق بين القسط وهذا المتبقي، نعتبر المتبقي نفسه تسبيقاً محاسبياً تلقائياً
+    // مخصوماً بالكامل للدين. هكذا تُغلق الدورة فوراً دون انتظار دفع نقدي لاحق.
+    const actualPartNeeded=Math.max(0,snap.amount-remainingAfter);
+    const autoCloseEligible=!!(
+      closeState&&closeState.operationGross>0&&closeState.remainingBefore>0&&
+      remainingAfter>0&&remainingAfter<=snap.amount&&capacity>=actualPartNeeded
+    );
+
+    let collectAmount=0,trigger='',collectFromOperation=0,autoAdvanceAmount=0;
+    if(autoCloseEligible){
+      collectFromOperation=actualPartNeeded;
+      autoAdvanceAmount=remainingAfter;
+      collectAmount=collectFromOperation+autoAdvanceAmount;
+      trigger='near-close-auto-settle';
+    }else if(dueNow){
+      collectAmount=Math.min(snap.amount,capacity);
+      collectFromOperation=collectAmount;
+      trigger='due';
+    }else if(closes){
+      collectAmount=Math.min(snap.amount,capacity);
+      collectFromOperation=collectAmount;
+      trigger='cycle-close';
+    }
+    if(collectAmount<=0)return;
+    candidates.push(Object.assign({},snap,{
+      effectiveDate,capacity,closeState,remainingAfter,collectAmount,trigger,
+      collectFromOperation,autoAdvanceAmount,
+      scheduledDue:snap.nextDue||'',willComplete:collectAmount>=snap.amount
+    }));
+  });
+
+  const priority={'near-close-auto-settle':0,due:1,'cycle-close':2};
+  candidates.sort((a,b)=>{
+    const ap=priority[a.trigger]??9,bp=priority[b.trigger]??9;if(ap!==bp)return ap-bp;
+    const ad=_toDate(a.scheduledDue),bd=_toDate(b.scheduledDue);
+    const at=ad?ad.getTime():Number.MAX_SAFE_INTEGER,bt=bd?bd.getTime():Number.MAX_SAFE_INTEGER;
+    if(at!==bt)return at-bt;
+    const da=_toDate(a.debt.date),db=_toDate(b.debt.date);
+    const dat=da?da.getTime():0,dbt=db?db.getTime():0;
+    if(dat!==dbt)return dat-dbt;
+    return String(a.debt.id||'').localeCompare(String(b.debt.id||''));
+  });
+  return candidates[0]||null;
+}
+function dueInstallmentPreviewForAdvanceOperation(wid,records,paidDate){
+  return nextAutomaticInstallmentCandidate(wid,records,paidDate);
+}
+function isPrimaryAdvanceOperationRecord(wid,record){
+  const rows=advanceOperationRecords(wid,record);
+  return !!(rows.length&&String(rows[0].id||'')===String(record&&record.id||''));
+}
+function advanceOperationNeedsInstallmentRepair(wid,record){
+  const rows=advanceOperationRecords(wid,record);
+  if(!rows.length||advanceOperationSummary(rows).debt>0)return false;
+  return !!nextAutomaticInstallmentCandidate(wid,rows,advanceOperationPaymentDate(rows,''));
+}
+function automaticInstallmentAdvanceId(wid,records,candidate){
+  return 'AUTOADV_'+hash([
+    String(wid),advanceOperationIdentity(records&&records[0]),String(candidate&&candidate.debt&&candidate.debt.id||''),
+    String(candidate&&candidate.installmentNo||''),String(candidate&&candidate.closeState&&candidate.closeState.cycle&&candidate.closeState.cycle.yr||''),
+    String(candidate&&candidate.closeState&&candidate.closeState.cycle&&candidate.closeState.cycle.m||'')
+  ].join('|'));
+}
+function ensureAutomaticInstallmentAdvance(wid,records,candidate){
+  const rows=Array.isArray(records)?records:[records],w=getW(wid);
+  const amount=Math.max(0,Math.round(+candidate.autoAdvanceAmount||0));
+  const cycle=candidate&&candidate.closeState&&candidate.closeState.cycle;
+  if(!w||!rows.length||!cycle||!amount)return null;
+  const id=automaticInstallmentAdvanceId(wid,rows,candidate);
+  let existing=null;
+  Object.values((DB.advances&&DB.advances[wid])||{}).some(list=>(list||[]).some(row=>{
+    if(String(row&&row.id||'')===id){existing=row;return true;}return false;
+  }));
+  if(existing){if(!rows.some(row=>String(row.id||'')===id))rows.push(existing);return existing;}
+
+  const operationId=advanceOperationIdentity(rows[0]),base=rows[0],range=cycleWindow(w,cycle.m,cycle.yr);
+  const enteredAt=new Date().toISOString(),realDate=candidate.effectiveDate||todayStr();
+  const maxIndex=rows.reduce((m,row)=>Math.max(m,+row.allocationIndex||0),0);
+  const record={
+    id,
+    transactionId:base.transactionId||('TX_'+operationId),
+    operationId,
+    workerId:String(wid),
+    allocationIndex:maxIndex+1,
+    allocationCount:Math.max(rows.length+1,+base.allocationCount||1),
+    amount,
+    originalAmount:Math.max(0,Math.round(+base.originalAmount||0)),
+    allocationAmount:amount,
+    date:advanceAllocationAccountingDate(w,cycle,realDate),
+    realDate,
+    enteredAt,
+    _createdAt:enteredAt,
+    _updatedAt:enteredAt,
+    _mod:nextMod(),
+    _deviceId:advanceDeviceId(),
+    month:cycle.m,
+    cycleStart:advanceCycleISO(range.from),
+    cycleEnd:advanceCycleISO(range.to),
+    ownerCycleId:String(wid)+'|'+advanceCycleISO(range.from)+'_'+advanceCycleISO(range.to),
+    cycleKey:advanceCycleKey(w,cycle),
+    cycleName:MN[cycle.m],
+    cycleLocked:false,
+    note:'تسبيق محاسبي تلقائي لإغلاق الدورة؛ مخصوم بالكامل من القسط الجاري.',
+    by:'النظام',
+    deductions:[],
+    netPaid:amount,
+    _cycleOwnerAllocated:true,
+    _autoInstallmentSettlement:true,
+    _cashDisbursed:false,
+    _sourceAdvanceOperationId:operationId,
+    _syncHash:'AUTOINST_'+id
+  };
+  ensureAdvanceBucket(wid,cycle.m).push(record);
+  rows.push(record);
+  return record;
+}
+function autoSettleOnAdvance(wid,recordsInput,paidDate){
+  const w=getW(wid),records=(Array.isArray(recordsInput)?recordsInput:[recordsInput]).filter(Boolean);
+  const initial=advanceOperationSummary(records);
+  if(!w||!records.length)return{changed:false,totalDebt:0,totalCash:initial.cash,summary:initial,reason:'missing'};
+  if(initial.debt>0)return{changed:false,totalDebt:initial.debt,totalCash:initial.cash,summary:initial,reason:'already-linked'};
+
+  // عملية تسبيق واحدة لا تمس إلا القسط الجاري الواحد، لكنها تستطيع تحصيله جزئياً.
+  // الغياب يُخصم أولاً من استحقاق الدورة خارج التسبيق؛ لذلك remainingAfter المستخدم هنا صافي بعد الغياب.
+  const candidate=nextAutomaticInstallmentCandidate(wid,records,paidDate);
+  if(!candidate)return{changed:false,totalDebt:0,totalCash:initial.cash,summary:initial,reason:'no-trigger'};
+
+  const d=candidate.debt,installmentNo=candidate.installmentNo,count=candidate.count;
+  const tag=String(d.id)+'_'+installmentNo;
+  const operationId=advanceOperationIdentity(records[0]);
+  const paymentId=tag+'|'+operationId;
+  const existingReturn=(DB.debts[wid]||[]).find(r=>r&&r.type==='return'&&String(r.debtId||'')===String(d.id)&&(
+    String(r._instPaymentId||'')===paymentId||String(r.operationId||'')===String(operationId)
+  ));
+  if(existingReturn){syncDebtInstallmentState(wid,d);return{changed:false,totalDebt:0,totalCash:initial.cash,summary:initial,reason:'already-paid-by-operation'};}
+
+  const reasonText=candidate.trigger==='cycle-close'
+    ?'قسط تلقائي عند إغلاق الدورة'
+    :candidate.trigger==='near-close-auto-settle'
+      ?'قسط تلقائي مع تسبيق محاسبي لإغلاق الدورة'
+      :'قسط دين مستحق تلقائياً';
+
+  const baseDeduction={
+    type:'debt',date:candidate.effectiveDate,debtId:d.id,
+    _instTag:tag,_instPaymentId:paymentId,_trigger:candidate.trigger,_scheduledDue:candidate.scheduledDue,
+    _installmentNo:installmentNo,_installmentTarget:candidate.installmentTarget,
+    _installmentPaidBefore:candidate.partialPaid||0,
+    note:reasonText+' '+installmentNo+'/'+count
+  };
+  const allParts=[];
+
+  if(candidate.trigger==='near-close-auto-settle'){
+    const actualAmount=Math.max(0,Math.round(+candidate.collectFromOperation||0));
+    if(actualAmount>0){
+      const actualDistribution=distributeDebtDeductionAcrossAdvanceOperation(records,Object.assign({},baseDeduction,{amount:actualAmount}));
+      if(!actualDistribution.ok){
+        return{changed:false,totalDebt:0,totalCash:initial.cash,summary:initial,reason:actualDistribution.reason||'attach-failed'};
+      }
+      allParts.push(...actualDistribution.parts);
+    }
+    const automaticAdvance=ensureAutomaticInstallmentAdvance(wid,records,candidate);
+    if(!automaticAdvance)throw new Error('تعذر إنشاء التسبيق المحاسبي التلقائي لإغلاق الدورة');
+    const autoAmount=Math.max(0,Math.round(+candidate.autoAdvanceAmount||0));
+    if(!attachDeductionToAdvance(automaticAdvance,Object.assign({},baseDeduction,{
+      amount:autoAmount,_instPart:allParts.length+1,_instParts:allParts.length+1,
+      _autoInstallmentSettlement:true
+    })))throw new Error('تعذر خصم القسط من التسبيق المحاسبي التلقائي');
+    allParts.push({advanceId:automaticAdvance.id,amount:autoAmount});
+  }else{
+    const distribution=distributeDebtDeductionAcrossAdvanceOperation(records,Object.assign({},baseDeduction,{amount:candidate.collectAmount}));
+    if(!distribution.ok){
+      return{changed:false,totalDebt:0,totalCash:initial.cash,summary:initial,reason:distribution.reason||'attach-failed'};
+    }
+    allParts.push(...distribution.parts);
+  }
+
+  const afterAttach=advanceOperationSummary(records);
+  DB.debts[wid].push({
+    id:'INSTRET_'+genId(),type:'return',amount:candidate.collectAmount,date:candidate.effectiveDate,debtId:d.id,
+    note:reasonText+' '+installmentNo+'/'+count+' — تسبيق محاسبي '+fmtN(afterAttach.gross)+' — نقد '+fmtN(afterAttach.cash),
+    by:'النظام',_instTag:tag,_instPaymentId:paymentId,_auto:true,_instPayment:true,
+    _trigger:candidate.trigger,_scheduledDue:candidate.scheduledDue,
+    _installmentNo:installmentNo,_installmentTarget:candidate.installmentTarget,
+    _installmentPaidBefore:candidate.partialPaid||0,
+    _installmentRemainingAfter:Math.max(0,candidate.amount-candidate.collectAmount),
+    _automaticAdvanceAmount:Math.max(0,Math.round(+candidate.autoAdvanceAmount||0)),
+    _advanceId:allParts[0]&&allParts[0].advanceId,
+    _advanceIds:allParts.map(part=>part.advanceId),
+    operationId,enteredAt:new Date().toISOString()
+  });
+  syncDebtInstallmentState(wid,d);
+  const summary=advanceOperationSummary(records);
+  audit(reasonText+': '+fmtN(candidate.collectAmount)+' ('+installmentNo+'/'+count+') — '+w.name+
+    (candidate.autoAdvanceAmount>0?' — تسبيق محاسبي تلقائي '+fmtN(candidate.autoAdvanceAmount):'')+
+    ' — نقد '+fmtN(summary.cash));
+  return{
+    changed:true,totalDebt:candidate.collectAmount,summary,totalCash:summary.cash,
+    effectiveDate:candidate.effectiveDate,trigger:candidate.trigger,scheduledDue:candidate.scheduledDue,
+    installmentNo,installmentTarget:candidate.installmentTarget,
+    automaticAdvanceAmount:Math.max(0,Math.round(+candidate.autoAdvanceAmount||0)),
+    installmentRemainingAfter:Math.max(0,candidate.amount-candidate.collectAmount)
+  };
+}
+function cleanupAdvanceOperationLinkedReturns(wid,recordsInput){
+  const records=(Array.isArray(recordsInput)?recordsInput:[recordsInput]).filter(Boolean);
+  const ids=new Set(records.map(r=>String(r.id||'')));
+  const paymentIds=new Set(),legacyTags=new Set(),debtIds=new Set();
+  records.forEach(row=>(row.deductions||[]).forEach(d=>{
+    if(d&&d.type==='debt'){
+      if(d._instPaymentId)paymentIds.add(String(d._instPaymentId));
+      else if(d._instTag)legacyTags.add(String(d._instTag));
+      if(d.debtId)debtIds.add(String(d.debtId));
+    }
+  }));
+  const debts=DB.debts[wid]||[];
+  for(let i=debts.length-1;i>=0;i--){
+    const r=debts[i];if(!r||r.type!=='return')continue;
+    const linkedIds=new Set((Array.isArray(r._advanceIds)?r._advanceIds:[]).map(String));
+    if(r._advanceId!=null)linkedIds.add(String(r._advanceId));
+    const byAdvance=[...ids].some(id=>linkedIds.has(id));
+    const byPayment=!!(r._instPaymentId&&paymentIds.has(String(r._instPaymentId)));
+    const legacy=!r._instPaymentId&&!linkedIds.size&&r._instTag&&legacyTags.has(String(r._instTag));
+    if(!byAdvance&&!byPayment&&!legacy)continue;
+    if(r.debtId)debtIds.add(String(r.debtId));
+    if(r.id)_markDeleted(r.id);
+    debts.splice(i,1);
+  }
+  records.forEach(row=>{
+    row.deductions=(row.deductions||[]).filter(d=>!(d&&d.type==='debt'));
+    row.netPaid=advNetPaid(row);
+  });
+  debtIds.forEach(id=>syncDebtInstallmentState(wid,id));
+  return true;
+}
+async function repairAdvanceInstallment(wid,eid){
+  const sync=window.EGTPH_SYNC;
+  if(!sync||typeof sync.save!=='function'){toast('❌ محرك Firebase غير جاهز',true);return false;}
+  let state=typeof sync.status==='function'?sync.status():null;
+  if(state&&state.running){toast('⏳ توجد عملية قيد التثبيت',true);return false;}
+  if(state&&(state.outbox||(+state.pending||0)>0)){
+    const flushed=await sync.flush();state=typeof sync.status==='function'?sync.status():null;
+    if(!flushed||(state&&(state.outbox||(+state.pending||0)>0))){toast('⏳ ثبّت أو ألغ العملية المعلقة أولاً',true);return false;}
+  }
+  let record=null;
+  Object.values((DB.advances&&DB.advances[wid])||{}).some(rows=>(rows||[]).some(row=>{if(String(row&&row.id||'')===String(eid)){record=row;return true;}return false;}));
+  if(!record){toast('❌ لم يُعثر على التسبيق',true);return false;}
+  const records=advanceOperationRecords(wid,record);
+  if(advanceOperationSummary(records).debt>0){toast('✅ القسط مرتبط بالفعل بهذه العملية');return true;}
+  const preview=nextAutomaticInstallmentCandidate(wid,records,advanceOperationPaymentDate(records,''));
+  if(!preview){toast('ℹ️ العملية ليست تسبيقاً أخيراً يغلق الدورة، ولم يحِن موعد القسط، أو مبلغها لا يكفي للقسط',true);return false;}
+  const before=JSON.parse(JSON.stringify(DB));
+  try{
+    const result=autoSettleOnAdvance(wid,records,preview.effectiveDate);
+    if(!result.changed)throw new Error('لم يتم إنشاء خصم القسط');
+    audit('تصحيح صريح: ربط قسط '+fmtN(result.totalDebt)+' بالتسبيق '+advanceOperationIdentity(record)+' — '+(getW(wid)?.name||'')+' — '+(result.trigger==='cycle-close'?'آخر تسبيق للدورة':'موعد القسط'));
+    const saved=await sync.save();
+    if(!saved||saved.ok!==true)throw new Error((saved&&saved.error)||'لم يثبت التصحيح في Firebase');
+    refreshAdvanceViews();renderDbt();
+    toast('✅ تم ربط القسط: تسبيق '+fmtN(result.summary.gross)+' — قسط '+fmtN(result.totalDebt)+' — نقد '+fmtN(result.summary.cash));
+    return true;
+  }catch(e){
+    state=typeof sync.status==='function'?sync.status():null;
+    if(!(state&&state.outbox))window.DB=DB=before;
+    refreshAdvanceViews();renderDbt();
+    toast('❌ تعذر ربط القسط: '+String(e&&e.message||e),true);
+    return false;
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -4262,6 +4758,7 @@ function delW(id){
 ═══════════════════════════════════════════════════════════════ */
 let _advanceSaveInFlight=false;
 let _hoursSaveInFlight=false;
+let _absenceSaveInFlight=false;
 
 function advanceCycleNext(c){return {m:(c.m+1)%12,yr:c.m===11?c.yr+1:c.yr};}
 function advanceCyclePrevious(c){return {m:(c.m+11)%12,yr:c.m===0?c.yr-1:c.yr};}
@@ -4491,6 +4988,20 @@ function refreshHoursViews(){
   try{if(S.sw===_wid)renderSalContent();}catch(e){}
   try{updateBadges();}catch(e){}
 }
+function setAbsenceSaveBusy(busy){
+  const button=document.querySelector('#mAbs button[onclick="saveAbs()"]');
+  if(!button)return;
+  if(busy){button.dataset.oldText=button.textContent;button.disabled=true;button.textContent='⏳ جارٍ الحفظ والتحقق…';}
+  else{button.disabled=false;button.textContent=button.dataset.oldText||'💾 حفظ';delete button.dataset.oldText;}
+}
+function refreshAbsenceViews(wid){
+  try{renderDash();}catch(e){}
+  try{renderAbsContent();}catch(e){}
+  try{renderAbsSummary();}catch(e){}
+  try{if(S.sw===wid)renderSalContent();}catch(e){}
+  try{updateBadges();}catch(e){}
+}
+
 
 function openAdvModal(wid){
   _wid=wid;const w=getW(wid);if(!w)return;
@@ -4502,7 +5013,7 @@ function openAdvModal(wid){
   // ── استخدام calcMonthStatus الذي يجمع حسب نافذة الدورة (يحل مشكلة الشهرين) ──
   const _ms=calcMonthStatus(wid,m,yr);
   const totAdv=_ms.totAdv;
-  const actInst=_ms.totInst;
+  const actInst=payrollPendingInstallmentsForPayout(w,todayISO(),Number.MAX_SAFE_INTEGER).total;
   const totAbs=_ms.totAbsNow;
   const ps=_ms.baseSal;
   const calRes=_ms.calRes;
@@ -4593,7 +5104,7 @@ function openAdvModal(wid){
             <td style="padding:3px 6px;color:var(--teal);font-size:10px;white-space:nowrap">${advEntryStamp(e)||'—'}</td>
             <td style="padding:3px 6px;font-weight:700;color:var(--green1)">${fmt(e.amount)}${advDedTotal(e)>0?`<div style="color:var(--red);font-size:10px">صافي: ${fmt(advNetPaid(e))}</div>`:''}${advanceExternalAbsenceHtml(advProjection,e)}</td>
             <td style="padding:3px 6px;color:var(--gray);font-size:10px">${(e.note||'—')}${advDedNote(e)?'<br><span style="color:var(--red)">'+advDedNote(e)+'</span>':''}</td>
-            <td style="padding:3px 6px"><button onclick="deleteAdv(${wid},${m},'${e.id}')" style="background:var(--ui-red-fill-2);border:none;color:var(--red);border-radius:4px;padding:2px 7px;cursor:pointer;font-size:10px">حذف</button></td>
+            <td style="padding:3px 6px;white-space:nowrap">${advanceOperationNeedsInstallmentRepair(wid,e)?`<button onclick="repairAdvanceInstallment('${wid}','${e.id}')" style="background:var(--ui-amber-fill);border:1px solid var(--ui-amber-border);color:var(--amber);border-radius:4px;padding:2px 7px;cursor:pointer;font-size:10px" title="ربط القسط المستحق أو قسط آخر تسبيق يغلق الدورة">💳 ربط القسط</button> `:''}<button onclick="deleteAdv(${wid},${m},'${e.id}')" style="background:var(--ui-red-fill-2);border:none;color:var(--red);border-radius:4px;padding:2px 7px;cursor:pointer;font-size:10px">حذف</button></td>
           </tr>`).join('')}
         </tbody>
       </table>
@@ -4667,11 +5178,12 @@ async function saveAdv(){
     allocations.forEach((allocation,index)=>{
       const record=buildAdvanceAllocationRecord(wid,w,operationId,index,allocations,realISO,realDate,userNote,by,createdAt);
       ensureAdvanceBucket(wid,allocation.c.m).push(record);
-      // لا ابتلاع للأخطاء: القسط جزء من نفس العملية الذرية، وأي خطأ يعيد snapshot كاملاً.
-      autoSettleOnAdvance(wid,allocation.c.m,allocation.c.yr,record,realDate);
       records.push(record);
     });
 
+    // القسط يُخطط مرة واحدة على كامل عملية التسبيق، لا على كل جزء دورة منفرداً.
+    // تاريخ استحقاق الدين يُقارن بتاريخ الدفع الفعلي، وليس بشهر الدورة المحاسبية.
+    const installmentResult=autoSettleOnAdvance(wid,records,realDate);
     audit(advanceAuditText(w,amount,allocations,records,operationId));
 
     const verified=await sync.save();
@@ -4681,7 +5193,12 @@ async function saveAdv(){
 
     closeModal('mAdv');
     refreshAdvanceViews();
-    toast('✅ حُفظ التسبيق وتحقق Firebase: '+allocations.map(item=>fmtN(item.amount)+' دج → '+MN[item.c.m]).join('، '));
+    const installmentMessage=installmentResult&&installmentResult.changed
+      ?' | قسط '+fmtN(installmentResult.totalDebt)+' دج'+
+        (installmentResult.automaticAdvanceAmount>0?' | تسبيق محاسبي تلقائي '+fmtN(installmentResult.automaticAdvanceAmount)+' دج لإغلاق الدورة':'')+
+        ' | نقد فعلي '+fmtN(installmentResult.summary.cash)+' دج'
+      :'';
+    toast('✅ حُفظ التسبيق وتحقق Firebase: '+allocations.map(item=>fmtN(item.amount)+' دج → '+MN[item.c.m]).join('، ')+installmentMessage);
     return true;
   }catch(err){
     const state=typeof sync.status==='function'?sync.status():null;
@@ -4694,7 +5211,7 @@ async function saveAdv(){
     }else{
       toast('❌ لم يُحفظ التسبيق: '+String(err&&err.message||err),true);
     }
-    console.error('[advance-core-v200]',err);
+    console.error('[advance-core-v207]',err);
     return false;
   }finally{
     _advanceSaveInFlight=false;
@@ -4887,9 +5404,9 @@ function renderSalContent(){
       }
       ${ms.totInst>0?`
       <div class="scell" style="background:var(--ui-amber-fill);border-color:var(--ui-amber-border)">
-        <div class="sclbl" style="color:var(--amber)">🔒 قسط دين مستحق</div>
+        <div class="sclbl" style="color:var(--amber)">🔒 قسط دين مخصوم فعلياً</div>
         <div class="scval" style="color:var(--amber)">${fmt(ms.totInst)}</div>
-        <div class="scsub" style="color:var(--gray)">يُربط بأول تسبيق مناسب كملاحظة خصم، ولا يضاف إلى مجموع التسبيقات</div>
+        <div class="scsub" style="color:var(--gray)">تم خصمه داخل تسبيق فعلي، ولا يمثل حركة نقدية ثانية</div>
       </div>`:''
       }
       <div class="scell ${ms.netSal>0?'sr':ms.salaryPaid?'sv':'sr'}">
@@ -4911,7 +5428,7 @@ function renderSalContent(){
       if(remSal>0)parts.push(`متبقي الراتب ${fmt(remSal)}`);
       if(ms.hrsUnpaid>0)parts.push(`+ ساعات ${fmt(ms.hrsUnpaid)}`);
       if(ms.bonUnpaid>0)parts.push(`+ مكافآت ${fmt(ms.bonUnpaid)}`);
-      if(ms.totInst>0)parts.push(`قسط مستحق ${fmt(ms.totInst)} يخصم داخل التسبيق عند إدخاله`);
+      if(ms.totInst>0)parts.push(`قسط دين مخصوم فعلياً ${fmt(ms.totInst)} داخل التسبيق`);
       const col=finalDue>0?'var(--teal)':finalDue<0?'var(--red)':'var(--gray)';
       const bg=finalDue>0?'rgba(0,255,204,.06)':finalDue<0?'rgba(255,68,102,.06)':'rgba(255,255,255,.03)';
       const bd=finalDue>0?'rgba(0,255,204,.3)':finalDue<0?'rgba(255,68,102,.3)':'var(--border)';
@@ -4961,7 +5478,8 @@ function renderSalContent(){
           <td style="color:var(--green1);font-weight:700">${fmt(e.amount)}${advDedTotal(e)>0?`<br><span style="color:var(--red);font-size:10px">صافي ${fmt(advNetPaid(e))}</span>`:''}${advanceExternalAbsenceHtml(advProjection,e)}</td>
           <td style="color:var(--gray);font-size:11px">${e.note||(!advDedNote(e)?'—':'')}${advDedNote(e)?`<br><span style="color:var(--red)">${advDedNote(e)}</span>`:''}</td>
           <td style="white-space:nowrap">
-            <button class="eb" onclick="editAdv('${w.id}','${e._bucket}','${e.id}')" title="تعديل">✏️</button>
+            ${advanceOperationNeedsInstallmentRepair(w.id,e)?`<button class="eb" onclick="repairAdvanceInstallment('${w.id}','${e.id}')" title="ربط القسط المستحق أو قسط آخر تسبيق">💳</button>`:''}
+            ${advanceOperationRecords(w.id,e).some(r=>r&&r._autoInstallmentSettlement)?'<span title="عملية إغلاق دورة تلقائية؛ تُحذف كعملية كاملة ولا تُعدّل جزئياً" style="font-size:11px;color:var(--amber)">🔒</span>':`<button class="eb" onclick="editAdv('${w.id}','${e._bucket}','${e.id}')" title="تعديل">✏️</button>`}
             <button class="db" onclick="delAdv('${w.id}','${e._bucket}','${e.id}')">🗑</button>
           </td>
         </tr>`).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--gray);padding:20px">لا توجد تسبيقات في '+MN[m]+'</td></tr>'}
@@ -4983,16 +5501,18 @@ function editAdv(wid,bucket,eid){
   if(newAmount<=0){toast('❌ مبلغ غير صالح',true);return;}
   const newDate=dt.includes('-')&&dt.length===10?isoToD(dt):dt;
   if(!ensureWorkerEmploymentDate(w,newDate,'التسبيق'))return;
-  const oldCycle=_cycleFromAdvance(w,e);
   const wasRouted=!!(e.realDate&&e.date&&String(e.realDate)!==String(e.date));
-  // Effects are rebuilt only on this same edited advance.
-  cleanupAdvanceLinkedReturns(_w,e);
+  const operationRows=advanceOperationRecords(_w,e);
+  if(operationRows.some(row=>row&&row._autoInstallmentSettlement)){
+    toast('ℹ️ هذه العملية أغلقت الدورة بتسبيق محاسبي تلقائي. احذف العملية كاملة ثم أعد إدخالها بدلاً من تعديل جزء منها.',true);
+    return;
+  }
+  cleanupAdvanceOperationLinkedReturns(_w,operationRows);
   e.amount=newAmount;
   e.date=newDate;
   if(!wasRouted)e.realDate=newDate;
-  e.note=nt;e.deductions=[];e.netPaid=newAmount;e._mod=nextMod();
-  const newCycle=_cycleFromAdvance(w,e);
-  if(w)autoSettleOnAdvance(_w,newCycle.m,newCycle.yr,e,_advancePaymentDate(e,newDate));
+  e.note=nt;e.netPaid=newAmount;e._mod=nextMod();
+  if(w)autoSettleOnAdvance(_w,operationRows,_advancePaymentDate(e,newDate));
   audit(`تعديل تسبيق — ${getW(wid)?.name} — ${fmt(newAmount)}`);
   saveDB();renderSalContent();renderDash();toast('✅ تم تعديل التسبيق');
 }
@@ -5351,17 +5871,21 @@ function absenceCycleSegments(w,fromValue,toValue){
   if(cursor<=to)return[];
   return segments;
 }
-function appendAbsenceSegments(w,wid,segments,reason,deductOpt){
+function appendAbsenceSegments(w,wid,segments,reason,deductOpt,operationId,createdAt){
   if(!DB.absences[wid])DB.absences[wid]=[];
-  const by=(DB.settings.userName||'مستخدم');
-  segments.forEach(seg=>{
+  const by=(DB.settings.userName||'مستخدم'),op=operationId||('ABSOP_'+genId()),stamp=createdAt||new Date().toISOString(),records=[];
+  segments.forEach((seg,index)=>{
     const deduct=deductOpt==='cancel'?0:Math.round(seg.workDays*(w.salary/30));
-    DB.absences[wid].push({
-      id:genId(),days:seg.workDays,date:isoToD(seg.fromISO)+' → '+isoToD(seg.toISO),
-      deduct,reason,month:seg.m,from:isoToD(seg.fromISO),to:isoToD(seg.toISO),
-      deductOpt,settled:deductOpt==='cancel',by,openEnded:false,openSince:null,lastUpdated:null
-    });
+    const row={
+      id:op+'_'+(index+1),operationId:op,segmentIndex:index+1,segmentCount:segments.length,
+      days:seg.workDays,date:isoToD(seg.fromISO)+' → '+isoToD(seg.toISO),
+      deduct,reason,month:seg.m,year:seg.yr,from:isoToD(seg.fromISO),to:isoToD(seg.toISO),
+      deductOpt,settled:deductOpt==='cancel',by,openEnded:false,openSince:null,lastUpdated:null,
+      enteredAt:stamp,_createdAt:stamp,_updatedAt:stamp,_mod:nextMod()
+    };
+    DB.absences[wid].push(row);records.push(row);
   });
+  return records;
 }
 
 
@@ -5395,73 +5919,81 @@ function calcAbsRange(){
   const w=getW(_wid),deduct=w?Math.round(days*(w.salary/30)):0;
   document.getElementById('absRTxt').innerHTML=`<b style="color:var(--amber)">${days}</b> يوم عمل غياب من ${calendarDays} يوم تقويمي — الجمعة مدفوعة ومستثناة — خصم: <b style="color:var(--red)">${fmt(deduct)}</b>`;
 }
-function saveAbs(){
-  const w=getW(_wid);if(!w)return;
-  const t=document.getElementById('abs_type').value;
-  const reason=document.getElementById('abs_reason').value.trim();
-  const deductOpt=document.getElementById('abs_deduct_opt').value;
-  let days,date,from=null,to=null,m,openEnded=false,openSince=null;
-
-  if(t==='single'){
-    days=+document.getElementById('abs_days').value||0;
-    const di=document.getElementById('abs_date').value||todayISO(),dd=_toDate(di);
-    if(days<=0){toast('❌ أدخل عدد أيام صحيح',true);return;}
-    if(days>30){toast('❌ عدد أيام الغياب لا يمكن أن يتجاوز 30 يوم في دورة واحدة',true);return;}
-    if(!ensureWorkerEmploymentDate(w,di,'الغياب'))return;
-    if(days===1&&dd&&dd.getDay()===5){toast('✅ الجمعة راحة أسبوعية مدفوعة الأجر ولا تسجل كغياب مخصوم',true);return;}
-    date=isoToD(di);m=cycleAnchorForDate(w,di).m;
-  }else if(t==='range'){
-    const fi=document.getElementById('abs_from').value,ti=document.getElementById('abs_to').value;
-    if(!fi||!ti){toast('❌ أدخل التاريخين',true);return;}
-    const d1=_toDate(fi),d2=_toDate(ti);
-    if(!d1||!d2||d2<d1){toast('❌ النهاية قبل البداية',true);return;}
-    if(!ensureWorkerEmploymentDate(w,fi,'بداية الغياب'))return;
-    if(!ensureWorkerEmploymentDate(w,ti,'نهاية الغياب'))return;
-    const calendarDays=Math.floor((d2-d1)/86400000)+1;
-    if(calendarDays>62){toast('❌ مدة الغياب طويلة جداً؛ قسّمها إلى فترات لا تتجاوز 62 يوماً',true);return;}
-
-    const totalDays=countAbsenceWorkDays(fi,ti);
-    if(totalDays<=0){toast('✅ المدة تحتوي فقط على راحة الجمعة المدفوعة؛ لا يوجد غياب مخصوم',true);return;}
-
-    const segments=absenceCycleSegments(w,fi,ti);
-    if(!segments.length){toast('❌ تعذر تقسيم الغياب على الدورات بأمان',true);return;}
-    appendAbsenceSegments(w,_wid,segments,reason,deductOpt);
-    audit(`غياب ${totalDays} يوم عمل (الجمعة مستثناة، موزع على ${segments.length} دورة) — ${w.name}`);
-    saveDB();closeModal('mAbs');renderDash();
-    if(S.aw===_wid)renderAbsContent();
-    if(S.sw===_wid)renderSalContent();
-    updateBadges();
-    toast(`✅ ${totalDays} يوم عمل غياب — الجمعة لم تُخصم — ${segments.length} دورة`);
-    return;
-  }else if(t==='open'){
-    const si=document.getElementById('abs_open_since').value;
-    if(!si){toast('❌ أدخل تاريخ البداية',true);return;}
-    const d1=_toDate(si),now=_toDate(todayISO());
-    if(!d1||!now||d1>now){toast('❌ التاريخ في المستقبل أو غير صالح',true);return;}
-    if(!ensureWorkerEmploymentDate(w,si,'بداية الغياب المفتوح'))return;
-    if(!ensureWorkerEmploymentDate(w,todayISO(),'الغياب المفتوح'))return;
-    const calendarDays=Math.floor((now-d1)/86400000)+1;
-    if(calendarDays>35){toast('❌ الغياب المفتوح تجاوز دورة طويلة؛ أغلقه وسجله كفترة منفصلة',true);return;}
-    days=countAbsenceWorkDays(si,todayISO());
-    if(days<=0){toast('✅ لا يوجد يوم عمل غياب بعد؛ الجمعة راحة مدفوعة',true);return;}
-    openEnded=true;openSince=isoToD(si);date=openSince+' → ⏳ جارٍ...';m=cycleAnchorForDate(w,si).m;
-  }else{
-    toast('❌ نوع الغياب غير معروف',true);return;
+async function saveAbs(){
+  if(_absenceSaveInFlight){toast('⏳ عملية الغياب الحالية ما زالت قيد المعالجة',true);return false;}
+  const sync=window.EGTPH_SYNC;
+  if(!sync||typeof sync.save!=='function'){toast('❌ محرك Firebase الموثق غير جاهز',true);return false;}
+  let state=typeof sync.status==='function'?sync.status():null;
+  if(state&&state.running){toast('⏳ توجد عملية سابقة قيد التثبيت',true);return false;}
+  if(state&&(state.outbox||(+state.pending||0)>0)){
+    const flushed=await sync.flush();state=typeof sync.status==='function'?sync.status():null;
+    if(!flushed||(state&&(state.outbox||(+state.pending||0)>0))){toast('⏳ العملية السابقة ما زالت معلقة. ثبّتها أو ألغها أولاً.',true);return false;}
   }
 
-  const deduct=deductOpt==='cancel'?0:Math.round(days*(w.salary/30));
-  if(!DB.absences[_wid])DB.absences[_wid]=[];
-  DB.absences[_wid].push({
-    id:genId(),days,date,deduct,reason,month:m,from,to,deductOpt,
-    settled:deductOpt==='cancel',by:(DB.settings.userName||'مستخدم'),
-    openEnded,openSince,lastUpdated:openEnded?todayStr():null
-  });
-  audit(`غياب ${days} يوم عمل — ${w.name} (${deductOpt}${openEnded?' مفتوح':''})`);
-  saveDB();closeModal('mAbs');renderDash();
-  if(S.aw===_wid)renderAbsContent();
-  if(S.sw===_wid)renderSalContent();
-  updateBadges();
-  toast(`✅ ${days} يوم عمل غياب${deduct?` — خصم: ${fmt(deduct)}`:' (بدون خصم)'}${openEnded?' — الجمعة تُتخطى تلقائياً':''}`);
+  _absenceSaveInFlight=true;setAbsenceSaveBusy(true);
+  const before=JSON.parse(JSON.stringify(DB)),wid=_wid;
+  try{
+    const w=getW(wid);if(!w)throw new Error('العامل غير موجود');
+    const t=document.getElementById('abs_type').value,reason=document.getElementById('abs_reason').value.trim(),deductOpt=document.getElementById('abs_deduct_opt').value;
+    const op='ABSOP_'+genId(),stamp=new Date().toISOString();
+    let message='';
+
+    if(t==='range'){
+      const fi=document.getElementById('abs_from').value,ti=document.getElementById('abs_to').value;
+      if(!fi||!ti)throw new Error('أدخل التاريخين');
+      const d1=_toDate(fi),d2=_toDate(ti);
+      if(!d1||!d2||d2<d1)throw new Error('النهاية قبل البداية');
+      if(!ensureWorkerEmploymentDate(w,fi,'بداية الغياب')||!ensureWorkerEmploymentDate(w,ti,'نهاية الغياب'))return false;
+      const calendarDays=Math.floor((d2-d1)/86400000)+1;
+      if(calendarDays>62)throw new Error('مدة الغياب طويلة جداً؛ قسّمها إلى فترات لا تتجاوز 62 يوماً');
+      const totalDays=countAbsenceWorkDays(fi,ti);if(totalDays<=0)throw new Error('المدة تحتوي فقط على راحة الجمعة المدفوعة؛ لا يوجد غياب مخصوم');
+      const segments=absenceCycleSegments(w,fi,ti);if(!segments.length)throw new Error('تعذر تقسيم الغياب على الدورات بأمان');
+      appendAbsenceSegments(w,wid,segments,reason,deductOpt,op,stamp);
+      audit('غياب '+totalDays+' يوم عمل (الجمعة مستثناة، موزع على '+segments.length+' دورة) — '+w.name+' — operationId: '+op);
+      message='✅ '+totalDays+' يوم عمل غياب — الجمعة لم تُخصم — '+segments.length+' دورة';
+    }else{
+      let days,date,from=null,to=null,m,yr,openEnded=false,openSince=null;
+      if(t==='single'){
+        days=+document.getElementById('abs_days').value||0;
+        const di=document.getElementById('abs_date').value||todayISO(),dd=_toDate(di);
+        if(days<=0)throw new Error('أدخل عدد أيام صحيح');
+        if(days>30)throw new Error('عدد أيام الغياب لا يمكن أن يتجاوز 30 يوم في دورة واحدة');
+        if(!ensureWorkerEmploymentDate(w,di,'الغياب'))return false;
+        if(days===1&&dd&&dd.getDay()===5)throw new Error('الجمعة راحة أسبوعية مدفوعة ولا تسجل كغياب مخصوم');
+        date=isoToD(di);const anchor=cycleAnchorForDate(w,di);m=anchor.m;yr=anchor.yr;
+      }else if(t==='open'){
+        const si=document.getElementById('abs_open_since').value;
+        if(!si)throw new Error('أدخل تاريخ البداية');
+        const d1=_toDate(si),now=_toDate(todayISO());
+        if(!d1||!now||d1>now)throw new Error('التاريخ في المستقبل أو غير صالح');
+        if(!ensureWorkerEmploymentDate(w,si,'بداية الغياب المفتوح')||!ensureWorkerEmploymentDate(w,todayISO(),'الغياب المفتوح'))return false;
+        const calendarDays=Math.floor((now-d1)/86400000)+1;
+        if(calendarDays>35)throw new Error('الغياب المفتوح تجاوز دورة طويلة؛ أغلقه وسجله كفترة منفصلة');
+        days=countAbsenceWorkDays(si,todayISO());if(days<=0)throw new Error('لا يوجد يوم عمل غياب بعد؛ الجمعة راحة مدفوعة');
+        openEnded=true;openSince=isoToD(si);date=openSince+' → ⏳ جارٍ...';const anchor=cycleAnchorForDate(w,si);m=anchor.m;yr=anchor.yr;
+      }else throw new Error('نوع الغياب غير معروف');
+
+      const deduct=deductOpt==='cancel'?0:Math.round(days*(w.salary/30));
+      if(!DB.absences[wid])DB.absences[wid]=[];
+      DB.absences[wid].push({
+        id:op+'_1',operationId:op,days,date,deduct,reason,month:m,year:yr,from,to,deductOpt,
+        settled:deductOpt==='cancel',by:(DB.settings.userName||'مستخدم'),openEnded,openSince,lastUpdated:openEnded?todayStr():null,
+        enteredAt:stamp,_createdAt:stamp,_updatedAt:stamp,_mod:nextMod()
+      });
+      audit('غياب '+days+' يوم عمل — '+w.name+' ('+deductOpt+(openEnded?' مفتوح':'')+') — operationId: '+op);
+      message='✅ '+days+' يوم عمل غياب'+(deduct?' — خصم: '+fmt(deduct):' (بدون خصم)')+(openEnded?' — الجمعة تُتخطى تلقائياً':'');
+    }
+
+    const saved=await sync.save();if(!saved||saved.ok!==true)throw new Error((saved&&saved.error)||'لم يثبت الغياب في Firebase');
+    closeModal('mAbs');refreshAbsenceViews(wid);toast(message);return true;
+  }catch(e){
+    state=typeof sync.status==='function'?sync.status():null;
+    if(!(state&&state.outbox))window.DB=DB=before;
+    refreshAbsenceViews(wid);
+    if(state&&state.outbox)toast('⚠️ الغياب معلّق في طابور الأمان. لا تسجل عملية ثانية حتى يثبت أو يُلغى.',true);
+    else toast('❌ لم يُحفظ الغياب: '+String(e&&e.message||e),true);
+    return false;
+  }finally{_absenceSaveInFlight=false;setAbsenceSaveBusy(false);}
 }
 function renderAbs(){mkWt('absWt','aw','renderAbsContent');mkMt('absMt','am','renderAbsContent');renderAbsContent();renderAbsSummary();}
 
@@ -5479,33 +6011,22 @@ function renderAbsSummary(){
     const {m:cm,yr:cyr}=getActiveCycle(w.id);
     const prevM=cm===0?11:cm-1;
     const prevY=cm===0?cyr-1:cyr;
-    const cyc=cycleLabelForWorker(w,cm,cyr);
-    const allAbs=DB.absences[w.id]||[];
-
-    // تحديد الأشهر حسب الفلتر
     let targetMonths=[];
-    if(filter==='cur') targetMonths=[{m:cm,y:cyr,lbl:'حالية'}];
-    else if(filter==='prev') targetMonths=[{m:prevM,y:prevY,lbl:'قديمة'}];
-    else {
-      // كل الأشهر التي فيها غيابات
-      const mSet=new Set(allAbs.map(a=>a.month+'_'+(a.year||cyr)));
-      mSet.forEach(k=>{const[m,y]=k.split('_');targetMonths.push({m:+m,y:+y,lbl:'—'});});
-      if(!targetMonths.length)return;
-    }
 
+    if(filter==='cur')targetMonths=[{m:cm,y:cyr,lbl:'حالية'}];
+    else if(filter==='prev')targetMonths=[{m:prevM,y:prevY,lbl:'سابقة'}];
+    else targetMonths=absenceAllCycleTargets(w.id).map(c=>({m:c.m,y:c.yr,lbl:'—'}));
+
+    if(!targetMonths.length)return;
     targetMonths.forEach(({m,y,lbl})=>{
-      const mAbs=allAbs.filter(a=>a.month===m);
-      if(!mAbs.length&&filter!=='all')return;
-      // حساب تسمية الدورة للشهر المحدد
+      const mAbs=absenceEntriesInCycle(w.id,m,y);
+      if(!mAbs.length&&filter==='all')return;
       const cycLabel=cycleLabelForWorker(w,m,y);
-
-      mAbs.forEach((a,ai)=>{
-        rows.push({w,wi,n:wi+1,m,y,cycLabel,a,isFirst:ai===0,rowCount:mAbs.length});
-      });
-      // إذا لا توجد غيابات في هذا الشهر
       if(!mAbs.length){
         rows.push({w,wi,n:wi+1,m,y,cycLabel,a:null,isFirst:true,rowCount:0});
+        return;
       }
+      mAbs.forEach((a,ai)=>rows.push({w,wi,n:wi+1,m,y,cycLabel,a,isFirst:ai===0,rowCount:mAbs.length}));
     });
   });
 
@@ -5514,22 +6035,19 @@ function renderAbsSummary(){
     return;
   }
 
-  // بناء الجدول مع خط فاصل بين كل عامل
-  let html='';
-  let lastWid=null;
+  let html='',lastGroup='';
   rows.forEach((r,ri)=>{
-    const isNewWorker=r.w.id!==lastWid;
-    lastWid=r.w.id;
+    const group=String(r.w.id)+'|'+r.y+'|'+r.m;
+    const isNewGroup=group!==lastGroup;lastGroup=group;
     const bg=r.wi%2===0?'transparent':'rgba(0,255,136,.02)';
-    const borderTop=isNewWorker&&ri>0?'border-top:2px solid var(--border2);':'';
+    const borderTop=isNewGroup&&ri>0?'border-top:2px solid var(--border2);':'';
 
     if(!r.a){
-      // لا توجد غيابات في هذا الشهر
       html+=`<tr style="background:${bg};${borderTop}">
         <td style="text-align:center;padding:6px"><span class="wn">${r.n}</span></td>
         <td style="padding:6px 10px;font-weight:700">${r.w.name}</td>
         <td style="text-align:center;font-size:10px;color:${r.cycLabel.col}">${r.cycLabel.lbl.replace(/[🔄📁⏭]/,'').trim()}</td>
-        <td style="text-align:center;font-size:11px;color:var(--gray)">${MN[r.m]}</td>
+        <td style="text-align:center;font-size:11px;color:var(--gray)">${MN[r.m]} ${r.y}</td>
         <td colspan="4" style="text-align:center;color:var(--gray);font-size:11px">لا غيابات</td>
       </tr>`;
       return;
@@ -5537,34 +6055,30 @@ function renderAbsSummary(){
 
     const absStatus=absenceFinancialStatus(r.w.id,r.a);
     const statusHtml='<span style="color:'+absStatus.color+';font-size:10px;font-weight:700">'+absStatus.label+'</span>';
-
     html+=`<tr style="background:${bg};${borderTop}">
       ${r.isFirst
         ?`<td style="text-align:center;padding:6px;vertical-align:middle" rowspan="${Math.max(1,r.rowCount)}"><span class="wn">${r.n}</span></td>
            <td style="padding:6px 10px;font-weight:700;vertical-align:middle" rowspan="${Math.max(1,r.rowCount)}">${r.w.name}<div style="font-size:9px;color:${r.cycLabel.col}">${r.cycLabel.lbl}</div></td>`
         :''}
       <td style="text-align:center;font-size:10px;color:${r.cycLabel.col}">${r.cycLabel.lbl.replace(/[🔄📁⏭]/,'').trim()}</td>
-      <td style="text-align:center;font-size:11px;color:var(--gray)">${MN[r.m]}</td>
-      <td style="text-align:center;font-size:10px;color:var(--gray);white-space:nowrap">${r.a.date||'—'}${r.a.openEnded?'<br><span style="color:var(--red);font-size:9px">مفتوح</span>':''}</td>
+      <td style="text-align:center;font-size:11px;color:var(--gray)">${MN[r.m]} ${r.y}</td>
+      <td style="text-align:center;font-size:10px;color:var(--gray);white-space:nowrap">${r.a.date||'—'}${r.a._projectedOpen?'<br><span style="color:var(--red);font-size:9px">مفتوح — محسوب حتى اليوم</span>':''}</td>
       <td style="text-align:center;font-weight:700"><b>${r.a.days}</b>ي</td>
-      <td style="text-align:center;font-weight:700;color:${r.a.deductOpt==='cancel'?'var(--gray)':'var(--red)'}">
-        ${r.a.deductOpt==='cancel'?'—':'-'+fmt(r.a.deduct)}
-      </td>
+      <td style="text-align:center;font-weight:700;color:${r.a.deductOpt==='cancel'?'var(--gray)':'var(--red)'}">${r.a.deductOpt==='cancel'?'—':'-'+fmt(r.a.deduct)}</td>
       <td style="text-align:center">${statusHtml}</td>
     </tr>`;
   });
 
-  // صف المجاميع
-  const totDays=rows.filter(r=>r.a).reduce((s,r)=>s+(+r.a.days||0),0);
-  const totDeduct=rows.filter(r=>r.a&&r.a.deductOpt!=='cancel').reduce((s,r)=>s+(+r.a.deduct||0),0);
-  const pendCount=rows.filter(function(r){return r.a&&absenceFinancialStatus(r.w.id,r.a).pending;}).length;
+  const activeRows=rows.filter(r=>r.a);
+  const totDays=activeRows.reduce((s,r)=>s+(+r.a.days||0),0);
+  const totDeduct=activeRows.filter(r=>r.a.deductOpt!=='cancel').reduce((s,r)=>s+(+r.a.deduct||0),0);
+  const pendCount=activeRows.filter(r=>absenceFinancialStatus(r.w.id,r.a).pending).length;
   html+=`<tr style="background:var(--ui-red-fill);border-top:2px solid var(--red)">
-    <td colspan="5" style="padding:8px 10px;font-weight:800;color:var(--red)">المجموع — ${workers.length} عامل</td>
+    <td colspan="5" style="padding:8px 10px;font-weight:800;color:var(--red)">المجموع</td>
     <td style="text-align:center;font-weight:800;color:var(--red)"><b>${totDays}</b>ي</td>
     <td style="text-align:center;font-weight:800;color:var(--red)">-${fmt(totDeduct)}</td>
     <td style="text-align:center;font-size:10px;color:var(--amber)">معلق: ${pendCount}</td>
   </tr>`;
-
   tbody.innerHTML=html;
 }
 
@@ -5577,7 +6091,7 @@ function printAbsReport(){
   let gDays=0,gDeduct=0,gPend=0;
 
   workers.forEach((w,wi)=>{
-    const allAbs=DB.absences[w.id]||[];
+    const allAbs=absenceAllCycleEntries(w.id);
     if(!allAbs.length)return;
     const n=wi+1;
     const {m:cm,yr:cyr}=getActiveCycle(w.id);
@@ -5603,7 +6117,7 @@ function printAbsReport(){
       const statusTxt=printAbsStatus.label;
       const statusCol=printAbsStatus.color;
       bodyHtml+=`<tr style="background:${ai%2===0?'var(--ui-panel)':'var(--ui-panel)'}">
-        <td style="padding:5px 8px;font-size:10px;color:var(--ui-muted)">${MN[a.month||cm]}</td>
+        <td style="padding:5px 8px;font-size:10px;color:var(--ui-muted)">${MN[a._cycleMonth!=null?a._cycleMonth:(a.month||cm)]} ${(a._cycleYear||a.year||cyr)}</td>
         <td style="padding:5px 8px;font-size:10px;color:var(--ui-muted);white-space:nowrap">${a.date||'—'}${a.openEnded?'<br><small style="color:var(--ui-red-text)">مفتوح</small>':''}</td>
         <td style="padding:5px 8px;text-align:center;font-weight:700">${a.days}ي</td>
         <td style="padding:5px 8px;text-align:center;color:var(--ui-red-text);font-weight:700">${a.deductOpt==='cancel'?'—':'-'+fmtN(a.deduct)}</td>
@@ -5670,10 +6184,10 @@ function renderAbsContent(){
   refreshWt('absWt','aw');refreshMt('absMt','am');
   const w=getW(S.aw);if(!w){document.getElementById('absContent').innerHTML='';return;}
   const yr_abs=S.ayr||new Date().getFullYear();
-  const entries=(DB.absences[w.id]||[]).filter(a=>a.month===S.am);
+  const entries=absenceEntriesInCycle(w.id,S.am,yr_abs);
   const totD=entries.reduce((s,a)=>s+(+a.days||0),0);
   const totAmt=entries.filter(a=>a.deductOpt!=='cancel').reduce((s,a)=>s+(+a.deduct||0),0);
-  const pendD=entries.filter(function(a){return absenceFinancialStatus(w.id,a).pending;}).reduce((s,a)=>s+(+a.days||0),0);
+  const pendD=entries.filter(a=>absenceFinancialStatus(w.id,a).pending).reduce((s,a)=>s+(+a.days||0),0);
   const n=wNum(w.id);
   const optLabel={now:'فوري',next_week:'أسبوع',next_month:'شهر',cancel:'ملغى'};
   document.getElementById('absContent').innerHTML=`
@@ -5684,88 +6198,79 @@ function renderAbsContent(){
       <div class="scell sr"><div class="sclbl">المجموع</div><div class="scval">${fmt(totAmt)}</div></div>
     </div>
     <div class="twrap">
-      <div class="thdr"><h3>📅 <span class="wn">${n}</span> ${w.name} ${wDateInfo(w)} — ${MN[S.am]}</h3>
+      <div class="thdr"><h3>📅 <span class="wn">${n}</span> ${w.name} ${wDateInfo(w)} — ${MN[S.am]} ${yr_abs}</h3>
         <div style="display:flex;gap:6px">
-          <button class="btn2" onclick="quickSettle(${w.id})">✅ تسوية</button>
+          <button class="btn2" onclick="quickSettle(${w.id})">✅ توضيح الخصم</button>
           <button class="btn1" onclick="openAbsModal(${w.id})">+ غياب</button>
         </div></div>
       <div style="overflow-x:auto"><table>
         <thead><tr><th>التاريخ</th><th>الأيام</th><th style="color:var(--red)">الخصم</th><th>خيار</th><th>السبب</th><th>الحالة</th><th></th></tr></thead>
         <tbody>${entries.length?entries.map(a=>`<tr${a.openEnded?' style="background:var(--ui-red-fill)"':''}>
-          <td style="font-size:11px">${a.date}${a.openEnded?'<br><span style="font-size:9px;color:var(--red);font-weight:700">⏳ مفتوح</span>':''}</td>
+          <td style="font-size:11px">${a.date}${a._projectedOpen?'<br><span style="font-size:9px;color:var(--red);font-weight:700">⏳ مفتوح — محسوب لهذه الدورة حتى اليوم</span>':''}</td>
           <td style="text-align:center"><b>${a.days}ي</b></td>
-          <td style="color:${a.deductOpt==='cancel'?'var(--gray)':'var(--red)'};font-weight:700;text-align:center">
-            ${a.deductOpt==='cancel'?'—':'-'+fmt(a.deduct)}
-          </td>
+          <td style="color:${a.deductOpt==='cancel'?'var(--gray)':'var(--red)'};font-weight:700;text-align:center">${a.deductOpt==='cancel'?'—':'-'+fmt(a.deduct)}</td>
           <td style="text-align:center"><span class="badge ${a.deductOpt==='now'?'br':a.deductOpt==='cancel'?'bg':'bb2'}">${optLabel[a.deductOpt]||'—'}</span></td>
           <td style="font-size:11px;color:var(--gray)">${a.reason||'—'}</td>
-          <td style="text-align:center">
-            ${(()=>{const st=absenceFinancialStatus(w.id,a);return '<span class="badge '+st.badge+'" title="'+st.label+'">'+st.label+'</span>';})()}
-          </td>
+          <td style="text-align:center">${(()=>{const st=absenceFinancialStatus(w.id,a);return '<span class="badge '+st.badge+'" title="'+st.label+'">'+st.label+'</span>';})()}</td>
           <td style="white-space:nowrap">
-            ${a.openEnded?`<button class="btn2" style="font-size:10px;padding:3px 8px;border-radius:12px;margin-bottom:3px" onclick="closeOpenAbs(${w.id},'${a.id}')">✅ إغلاق</button><br>`:''}
-            <button class="eb" onclick="editAbs(${w.id},'${a.id}')">✏️</button>
-            <button class="db" onclick="delAbs(${w.id},'${a.id}')">🗑</button>
+            ${a.openEnded?`<button class="btn2" style="font-size:10px;padding:3px 8px;border-radius:12px;margin-bottom:3px" onclick="closeOpenAbs(${w.id},'${a._sourceId||a.id}')">✅ إغلاق</button><br>`:''}
+            <button class="eb" onclick="editAbs(${w.id},'${a._sourceId||a.id}')">✏️</button>
+            <button class="db" onclick="delAbs(${w.id},'${a._sourceId||a.id}')">🗑</button>
           </td>
-        </tr>`).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--gray);padding:20px">لا توجد غيابات في '+MN[S.am]+'</td></tr>'}
+        </tr>`).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--gray);padding:20px">لا توجد غيابات في '+MN[S.am]+' '+yr_abs+'</td></tr>'}
         </tbody>
       </table></div>
     </div>`;
 }
-function delAbs(wid,aid){
-  if(!confirm('حذف هذا الغياب؟'))return;
-  DB.absences[wid]=(DB.absences[wid]||[]).filter(a=>a.id!==aid);
-  _markDeleted(aid);
-  audit('حذف غياب');saveDB();renderAbsContent();renderDash();updateBadges();
-  if(S.sw===wid)renderSalContent();
-  toast('🗑️ تم');
+async function delAbs(wid,aid){
+  if(!confirm('حذف هذا الغياب؟'))return false;
+  const sync=window.EGTPH_SYNC;if(!sync||typeof sync.save!=='function'){toast('❌ محرك Firebase غير جاهز',true);return false;}
+  let state=sync.status?sync.status():null;if(state&&state.running){toast('⏳ توجد عملية قيد التثبيت',true);return false;}
+  if(state&&(state.outbox||(+state.pending||0)>0)){const ok=await sync.flush();state=sync.status?sync.status():null;if(!ok||(state&&(state.outbox||(+state.pending||0)>0))){toast('⏳ ثبّت أو ألغ العملية المعلقة أولاً',true);return false;}}
+  const before=JSON.parse(JSON.stringify(DB));
+  try{
+    const list=DB.absences[wid]||[],idx=list.findIndex(a=>String(a&&a.id)===String(aid));if(idx<0)throw new Error('الغياب غير موجود');
+    const row=list[idx];moveToTrash('absences',row,wid);list.splice(idx,1);_markDeleted(row.id);
+    audit('حذف غياب — '+(getW(wid)?.name||'')+' — '+(row.date||'')+' — '+fmtN(row.deduct||0));
+    const saved=await sync.save();if(!saved||saved.ok!==true)throw new Error((saved&&saved.error)||'لم يثبت حذف الغياب');
+    refreshAbsenceViews(wid);renderTrash();toast('🗑️ تم نقل الغياب إلى السلة');return true;
+  }catch(e){state=sync.status?sync.status():null;if(!(state&&state.outbox))window.DB=DB=before;refreshAbsenceViews(wid);toast('❌ تعذر حذف الغياب: '+String(e&&e.message||e),true);return false;}
 }
-function editAbs(wid,aid){
-  const a=(DB.absences[wid]||[]).find(x=>x.id===aid);if(!a)return;
-  const reason=prompt('تعديل السبب:',a.reason||'');if(reason===null)return;
-  const w=getW(wid);if(!w)return;
-  const opDate=a.openEnded?a.openSince:(a.from||a.date);
-  if(!ensureWorkerEmploymentDate(w,opDate,'الغياب'))return;
-  a.reason=reason;
-  if(a.openEnded){
-    a.days=countAbsenceWorkDays(a.openSince,todayISO());
-    if(a.deductOpt!=='cancel')a.deduct=Math.round(a.days*(w.salary/30));
-  }else if(a.from&&a.to){
-    const f=dToISO(a.from),tt=dToISO(a.to);
-    a.days=countAbsenceWorkDays(f,tt);
-    if(a.deductOpt!=='cancel')a.deduct=Math.round(a.days*(w.salary/30));
-  }else{
-    const days=prompt('تعديل عدد أيام العمل الغائبة:',a.days);if(days===null)return;
-    if(+days<=0){toast('❌ عدد أيام غير صالح',true);return;}
-    a.days=+days;
-    if(a.deductOpt!=='cancel')a.deduct=Math.round(+days*(w.salary/30));
-  }
-  a._mod=nextMod();audit(`تعديل غياب — ${w.name}`);saveDB();renderAbsContent();renderDash();updateBadges();
-  if(S.sw===wid)renderSalContent();
-  toast('✅ تم تعديل الغياب وإعادة حساب الأيام وفق استثناء الجمعة');
+async function editAbs(wid,aid){
+  const sync=window.EGTPH_SYNC;if(!sync||typeof sync.save!=='function'){toast('❌ محرك Firebase غير جاهز',true);return false;}
+  let state=sync.status?sync.status():null;if(state&&(state.running||state.outbox||(+state.pending||0)>0)){toast('⏳ ثبّت أو ألغ العملية المعلقة أولاً',true);return false;}
+  const a=(DB.absences[wid]||[]).find(x=>String(x&&x.id)===String(aid));if(!a)return false;
+  const reason=prompt('تعديل السبب:',a.reason||'');if(reason===null)return false;
+  const w=getW(wid);if(!w)return false;const before=JSON.parse(JSON.stringify(DB));
+  try{
+    const opDate=a.openEnded?a.openSince:(a.from||a.date);if(!ensureWorkerEmploymentDate(w,opDate,'الغياب'))return false;
+    a.reason=reason;
+    if(a.openEnded){a.days=countAbsenceWorkDays(a.openSince,todayISO());if(a.deductOpt!=='cancel')a.deduct=Math.round(a.days*(w.salary/30));}
+    else if(a.from&&a.to){const f=dToISO(a.from),tt=dToISO(a.to);a.days=countAbsenceWorkDays(f,tt);if(a.deductOpt!=='cancel')a.deduct=Math.round(a.days*(w.salary/30));}
+    else{const days=prompt('تعديل عدد أيام العمل الغائبة:',a.days);if(days===null)return false;if(+days<=0)throw new Error('عدد أيام غير صالح');a.days=+days;if(a.deductOpt!=='cancel')a.deduct=Math.round(+days*(w.salary/30));}
+    const anchor=cycleAnchorForDate(w,opDate);a.month=anchor.m;a.year=anchor.yr;a._mod=nextMod();a._updatedAt=new Date().toISOString();
+    audit('تعديل غياب — '+w.name+' — '+(a.date||''));
+    const saved=await sync.save();if(!saved||saved.ok!==true)throw new Error((saved&&saved.error)||'لم يثبت تعديل الغياب');
+    refreshAbsenceViews(wid);toast('✅ تم تعديل الغياب وإعادة حسابه');return true;
+  }catch(e){state=sync.status?sync.status():null;if(!(state&&state.outbox))window.DB=DB=before;refreshAbsenceViews(wid);toast('❌ تعذر تعديل الغياب: '+String(e&&e.message||e),true);return false;}
 }
-function closeOpenAbs(wid,aid){
-  const list=DB.absences[wid]||[],idx=list.findIndex(x=>x.id===aid);
-  const a=idx>=0?list[idx]:null;if(!a||!a.openEnded)return;
-  const endISO=prompt('تاريخ نهاية الغياب (YYYY-MM-DD):',todayISO());if(!endISO)return;
-  const since=_toDate(a.openSince),end=_toDate(endISO);
-  if(!since||!end||end<since){toast('❌ تاريخ النهاية قبل البداية أو غير صالح',true);return;}
-  const w=getW(wid);if(!w)return;
-  if(!ensureWorkerEmploymentDate(w,a.openSince,'بداية الغياب'))return;
-  if(!ensureWorkerEmploymentDate(w,endISO,'نهاية الغياب'))return;
-  const days=countAbsenceWorkDays(a.openSince,endISO);
-  if(days<=0){toast('✅ المدة لا تحتوي يوم عمل غياب؛ الجمعة راحة مدفوعة',true);return;}
-  const segments=absenceCycleSegments(w,a.openSince,endISO);
-  if(!segments.length){toast('❌ تعذر تقسيم الغياب على الدورات بأمان',true);return;}
-
-  // استبدال الغياب المفتوح بسجلات دورية صحيحة؛ لا يبقى الخصم كله في دورة البداية.
-  list.splice(idx,1);
-  appendAbsenceSegments(w,wid,segments,a.reason||'',a.deductOpt||'now');
-  _markDeleted(a.id);
-  audit(`إغلاق غياب مفتوح — ${w.name} — ${days} يوم عمل موزع على ${segments.length} دورة بعد استثناء الجمعة`);
-  saveDB();renderAbsContent();renderDash();updateBadges();
-  if(S.sw===wid)renderSalContent();
-  toast(`✅ تم إغلاق الغياب — ${days} يوم عمل — موزع على ${segments.length} دورة`);
+async function closeOpenAbs(wid,aid){
+  const sync=window.EGTPH_SYNC;if(!sync||typeof sync.save!=='function'){toast('❌ محرك Firebase غير جاهز',true);return false;}
+  let state=sync.status?sync.status():null;if(state&&(state.running||state.outbox||(+state.pending||0)>0)){toast('⏳ ثبّت أو ألغ العملية المعلقة أولاً',true);return false;}
+  const list=DB.absences[wid]||[],idx=list.findIndex(x=>String(x&&x.id)===String(aid)),a=idx>=0?list[idx]:null;if(!a||!a.openEnded)return false;
+  const endISO=prompt('تاريخ نهاية الغياب (YYYY-MM-DD):',todayISO());if(!endISO)return false;
+  const since=_toDate(a.openSince),end=_toDate(endISO);if(!since||!end||end<since){toast('❌ تاريخ النهاية قبل البداية أو غير صالح',true);return false;}
+  const w=getW(wid);if(!w)return false;if(!ensureWorkerEmploymentDate(w,a.openSince,'بداية الغياب')||!ensureWorkerEmploymentDate(w,endISO,'نهاية الغياب'))return false;
+  const days=countAbsenceWorkDays(a.openSince,endISO);if(days<=0){toast('✅ المدة لا تحتوي يوم عمل غياب؛ الجمعة راحة مدفوعة',true);return false;}
+  const segments=absenceCycleSegments(w,a.openSince,endISO);if(!segments.length){toast('❌ تعذر تقسيم الغياب على الدورات بأمان',true);return false;}
+  const before=JSON.parse(JSON.stringify(DB));
+  try{
+    list.splice(idx,1);_markDeleted(a.id);
+    const op='ABSOP_'+genId();appendAbsenceSegments(w,wid,segments,a.reason||'',a.deductOpt||'now',op,new Date().toISOString());
+    audit('إغلاق غياب مفتوح — '+w.name+' — '+days+' يوم عمل موزع على '+segments.length+' دورة — operationId: '+op);
+    const saved=await sync.save();if(!saved||saved.ok!==true)throw new Error((saved&&saved.error)||'لم يثبت إغلاق الغياب');
+    refreshAbsenceViews(wid);toast('✅ تم إغلاق الغياب — '+days+' يوم عمل — موزع على '+segments.length+' دورة');return true;
+  }catch(e){state=sync.status?sync.status():null;if(!(state&&state.outbox))window.DB=DB=before;refreshAbsenceViews(wid);toast('❌ تعذر إغلاق الغياب: '+String(e&&e.message||e),true);return false;}
 }
 
 // ═══════════════════════════════════════════════════
@@ -5999,7 +6504,7 @@ function renderDbtContent(){
       <div class="sechdr"><h3>📅 أقساط نشطة (${actInst.length})</h3></div>
       <div class="secbody">${actInst.map(d=>{
         const instPaid=+d.instPaid||0;const instCount=+d.instCount||1;
-        const instAmt=+d.instAmt||0;
+        const instAmt=+d.instAmt||0;const instSnap=installmentSnapshotForAdvance(w.id,d);const currentPart=instSnap?instSnap.amount:0;const partial=instSnap?instSnap.partialPaid:0;
         // المتبقي الفعلي = الدين - كل الدفعات المرتبطة بهذا الدين
         const linkedP=entries.filter(e=>e.type==='return'&&e.debtId===d.id).reduce((s,e)=>s+(+e.amount||0),0);
         const unlinkedP=entries.filter(e=>e.type==='return'&&!e.debtId).reduce((s,e)=>s+(+e.amount||0),0);
@@ -6014,7 +6519,7 @@ function renderDbtContent(){
         return`<div style="padding:11px;background:var(--ui-teal-fill);border:1px solid var(--border);border-radius:10px;margin-bottom:9px">
           <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
             <div><b>${fmt(d.amount)}</b> <span style="color:var(--gray);font-size:10px">— ${d.instType==='weekly'?'أسبوعي':d.instType==='monthly'?'شهري':'كل '+d.instDays+'ي'}</span></div>
-            <div style="font-size:11px">قسط: <b style="color:var(--green1)">${fmt(instAmt)}</b> | ${instPaid}/${instCount} مدفوع</div>
+            <div style="font-size:11px">القسط الجاري: <b style="color:var(--green1)">${fmt(currentPart||instAmt)}</b> | مكتمل ${instPaid}/${instCount}${partial?` | جزئي ${fmt(partial)}`:''}</div>
           </div>
           <div class="pbar" style="margin-bottom:8px"><div class="pbar-f" style="width:${pct}%"></div></div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px">
@@ -6023,7 +6528,7 @@ function renderDbtContent(){
             <span style="color:${dl<0?'var(--red)':dl<=3?'var(--amber)':'var(--gray)'}">
               ${dd?`موعد: ${isoToD(d.nextDue)} (${dl<0?'متأخر '+Math.abs(dl)+'ي':dl===0?'اليوم':dl+'ي'})`:'—'}
             </span>
-            <button class="bsm" onclick="payInst('${d.id}',${w.id})">💵 دفع ${fmt(Math.min(instAmt,remAmt))}</button>
+            <button class="bsm" onclick="payInst('${d.id}',${w.id})">💵 دفع ${fmt(Math.min(currentPart||instAmt,remAmt))}</button>
             <button class="bsm" onclick="toggleDebtInst(${w.id},'${d.id}')" style="color:var(--amber)">⏸️ تعطيل</button>
           </div>
         </div>`;
@@ -6041,7 +6546,7 @@ function renderDbtContent(){
       <table><thead><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>الأقساط</th><th>ملاحظة</th><th></th></tr></thead>
       <tbody>${entries.length?entries.map(d=>{
         const isPaid=d.type==='return';
-        const instTxt=d.inst?`<div style="font-size:10px;color:var(--gray)">${d.instType==='weekly'?'أسبوعي':d.instType==='monthly'?'شهري':'كل '+d.instDays+'ي'}</div><div style="font-size:10px"><span style="color:var(--green1)">${d.instPaid||0}/${d.instCount}</span> قسط</div>`:'—';
+        const instTxt=d.inst?`<div style="font-size:10px;color:var(--gray)">${d.instType==='weekly'?'أسبوعي':d.instType==='monthly'?'شهري':'كل '+d.instDays+'ي'}</div><div style="font-size:10px"><span style="color:var(--green1)">${d.instPaid||0}/${d.instCount}</span> قسط${(+d.instPartialPaid||0)>0?` + جزئي ${fmt(d.instPartialPaid)}`:''}</div>`:'—';
         return`<tr>
           <td style="font-size:11px;color:var(--gray)">${d.date}</td>
           <td>${isPaid?'<span class="badge bgr">↩️ إرجاع</span>':'<span class="badge br">📋 دين</span>'}</td>
@@ -6057,51 +6562,46 @@ function renderDbtContent(){
       </div>
     </div>`;
 }
-function payInst(did,wid){
-  const d=(DB.debts[wid]||[]).find(x=>x.id===did);if(!d)return;
-  const instPaid=+d.instPaid||0;
-  const instCount=+d.instCount||1;
-  const instAmt=+d.instAmt||0;
-  const totalDebt=+d.amount||0;
-  // المبلغ الفعلي المُسدَّد = مجموع كل return entries
-  // يشمل quickPayDebt والأقساط السابقة — لا خطر دفع زائد
-  // فقط return entries المرتبطة بهذا الدين بالـ debtId
-  // لا نستخدم مطابقة النص — خطر خلط ديون متعددة
-  // نأخذ جميع return entries (مرتبطة بهذا الدين أو غير مرتبطة بأي دين)
-  // لتجنّب إهمال دفعات quickPayDebt التي لا تحمل debtId
-  const linkedPaid=(DB.debts[wid]||[])
-    .filter(e=>e.type==='return'&&e.debtId===did)
-    .reduce((s,e)=>s+(+e.amount||0),0);
-  const unlinkedPaid=(DB.debts[wid]||[])
-    .filter(e=>e.type==='return'&&!e.debtId)
-    .reduce((s,e)=>s+(+e.amount||0),0);
-  // الرصيد الكلي للديون
-  const totalAllDebts=(DB.debts[wid]||[]).filter(e=>e.type==='debt').reduce((s,e)=>s+(+e.amount||0),0);
-  const totalAllReturns=(DB.debts[wid]||[]).filter(e=>e.type==='return').reduce((s,e)=>s+(+e.amount||0),0);
-  const globalBalance=Math.max(0,totalAllDebts-totalAllReturns);
-  // نستخدم القيمة الأصغر (الأكثر تفاؤلاً) لصالح الدقة
-  const actuallyPaid=linkedPaid+Math.min(unlinkedPaid,Math.max(0,totalDebt-linkedPaid));
-  const remaining=Math.min(totalDebt,Math.max(0,globalBalance,totalDebt-actuallyPaid));
-  if(remaining<=0){toast('✅ هذا الدين مسدد بالكامل');return;}
-  const toPay=Math.min(instAmt,remaining);
-  if(!confirm(`دفع قسط ${fmt(toPay)}؟\nالقسط ${instPaid+1}/${instCount} | مسدَّد فعلاً: ${fmt(actuallyPaid)} | متبقي: ${fmt(remaining)}`))return;
-  DB.debts[wid].push({id:genId(),type:'return',amount:toPay,date:todayStr(),debtId:did,
-    note:`قسط ${instPaid+1}/${instCount} — ${d.note||'دين'}`,by:(DB.settings.userName||'مستخدم'),
-    _instPayment:true,_instTag:String(did)+'_'+(instPaid+1)});
-  syncDebtInstallmentState(wid,d);
-  const newRem=Math.max(0,remaining-toPay);
-  audit(`دفع قسط ${fmt(toPay)} — ${getW(wid)?.name||''} | متبقي: ${fmt(newRem)}`);
-  saveDB();renderDbtContent();renderDash();updateBadges();
-  if(S.sw===wid)renderSalContent();
-  toast(`✅ قسط ${fmt(toPay)} | متبقي: ${fmt(newRem)}`);
+async function payInst(did,wid){
+  const sync=window.EGTPH_SYNC;
+  if(!sync||typeof sync.save!=='function'){toast('❌ محرك Firebase غير جاهز',true);return false;}
+  let state=typeof sync.status==='function'?sync.status():null;
+  if(state&&(state.running||state.outbox||(+state.pending||0)>0)){toast('⏳ ثبّت أو ألغ العملية المعلقة أولاً',true);return false;}
+  const d=(DB.debts[wid]||[]).find(x=>x&&x.type==='debt'&&String(x.id)===String(did));if(!d)return false;
+  const snap=installmentSnapshotForAdvance(wid,d);
+  if(!snap){toast('✅ لا يوجد قسط متبقٍ في هذا الدين');return false;}
+  const toPay=Math.max(0,Math.round(snap.amount));
+  if(!toPay){toast('✅ هذا القسط مكتمل');return false;}
+  if(!confirm(`دفع ${fmt(toPay)} من القسط ${snap.installmentNo}/${snap.count}؟\nالمسدّد من القسط الحالي: ${fmt(snap.partialPaid||0)} | المتبقي بعد الدفع: ${fmt(Math.max(0,snap.amount-toPay))}`))return false;
+  const before=JSON.parse(JSON.stringify(DB));
+  try{
+    const tag=String(did)+'_'+snap.installmentNo,paymentId=tag+'|MANUAL_'+genId();
+    DB.debts[wid].push({id:'INSTRET_'+genId(),type:'return',amount:toPay,date:todayStr(),debtId:did,
+      note:`قسط ${snap.installmentNo}/${snap.count} — ${d.note||'دين'}`,by:(DB.settings.userName||'مستخدم'),
+      _instPayment:true,_instTag:tag,_instPaymentId:paymentId,_installmentNo:snap.installmentNo});
+    syncDebtInstallmentState(wid,d);
+    audit(`دفع قسط ${fmt(toPay)} — ${getW(wid)?.name||''}`);
+    const saved=await sync.save();if(!saved||saved.ok!==true)throw new Error((saved&&saved.error)||'لم يثبت القسط في Firebase');
+    renderDbtContent();renderDash();updateBadges();if(S.sw===wid)renderSalContent();
+    toast(`✅ تم دفع ${fmt(toPay)} من القسط ${snap.installmentNo}/${snap.count}`);return true;
+  }catch(e){
+    state=typeof sync.status==='function'?sync.status():null;
+    if(!(state&&state.outbox))window.DB=DB=before;
+    renderDbtContent();renderDash();updateBadges();
+    toast('❌ لم يثبت دفع القسط: '+String(e&&e.message||e),true);return false;
+  }
 }
 function _removeReturnDeduction(wid,ret){
   let changed=false;
+  const linkedIds=new Set((Array.isArray(ret&&ret._advanceIds)?ret._advanceIds:[]).map(String));
+  if(ret&&ret._advanceId!=null)linkedIds.add(String(ret._advanceId));
   Object.values(DB.advances[wid]||{}).forEach(arr=>(arr||[]).forEach(a=>{
     const before=(a.deductions||[]).length;
     a.deductions=(a.deductions||[]).filter(d=>{
-      if(ret._instTag&&d._instTag===ret._instTag)return false;
-      if(ret._advanceId&&String(a.id)===String(ret._advanceId)&&d.type==='debt'&&String(d.debtId||'')===String(ret.debtId||''))return false;
+      if(!d||d.type!=='debt'||String(d.debtId||'')!==String((ret||{}).debtId||''))return true;
+      if(ret._instPaymentId&&String(d._instPaymentId||'')===String(ret._instPaymentId))return false;
+      if(linkedIds.has(String(a.id||''))&&(!ret._instPaymentId||String(d._instPaymentId||'')===String(ret._instPaymentId)))return false;
+      if(!ret._instPaymentId&&!linkedIds.size&&ret._instTag&&String(d._instTag||'')===String(ret._instTag))return false;
       return true;
     });
     if(a.deductions.length!==before){a.netPaid=advNetPaid(a);changed=true;}
@@ -6433,7 +6933,7 @@ function getAlerts(){
         const due=new Date(d.nextDue+'T00:00:00'),dl=Math.round((due-today)/86400000);
         if(dl>=-30&&dl<=5)alerts.push({
           icon:dl<0?'🔥':dl===0?'🚨':dl<=2?'⚠️':'📅',
-          text:`قسط <b>${w.name}</b> (#${n}): <b>${fmt(d.instAmt)}</b> ${dl<0?`<b style="color:var(--ui-red-text)">متأخر ${Math.abs(dl)}ي</b>`:dl===0?'<b style="color:var(--ui-red-text)">اليوم</b>':`بعد <b>${dl}</b> أيام`}`,
+          text:`قسط <b>${w.name}</b> (#${n}): <b>${fmt((installmentSnapshotForAdvance(w.id,d)||{}).amount||d.instAmt)}</b> ${dl<0?`<b style="color:var(--ui-red-text)">متأخر ${Math.abs(dl)}ي</b>`:dl===0?'<b style="color:var(--ui-red-text)">اليوم</b>':`بعد <b>${dl}</b> أيام`}`,
           urgent:dl<=2,type:'inst',days:dl,wid:w.id,did:d.id
         });
       }
@@ -7535,17 +8035,17 @@ function printWorkerDetail(wid,fM,tM){
           <td style="font-weight:800;color:var(--ui-blue-text);text-align:left">${fmtN(ps)} دج<span style="color:var(--ui-muted-2);font-size:10px;margin-right:6px">(${wd} يوم)</span></td>
         </tr>
         ${advE.map((e,i)=>`<tr>
-          <td style="color:var(--ui-amber-text)">💰 تسبيق ${i+1} — ${e.date}${advEntryStamp(e)?' <small style="color:var(--ui-teal-text)">[إدخال: '+advEntryStamp(e)+']</small>':''}${e.note?' <small style="color:var(--ui-muted-2)">('+e.note+')</small>':''}${advDedNote(e)?' <br><small style="color:var(--ui-red-text)">'+advDedNote(e)+' | النقد المسلّم فعلياً: '+fmtN(advNetPaid(e))+'</small>':''}</td>
+          <td style="color:var(--ui-amber-text)">💰 تسبيق ${i+1} — ${e.date}${advEntryStamp(e)?' <small style="color:var(--ui-teal-text)">[إدخال: '+advEntryStamp(e)+']</small>':''}${advancePublicPrintNote(e)?' <br><small style="color:var(--ui-red-text)">'+advancePublicPrintNote(e)+'</small>':''}</td>
           <td style="color:var(--ui-green-text);font-weight:700;text-align:left">+ ${fmtN(advGross(e))} دج</td>
         </tr>`).join('')}
         ${absNow.filter(a=>!a._advanceId).map(a=>`<tr>
           <td style="color:var(--ui-red-text)">📅 خصم غياب — ${a.date} — ${a.days}ي${a.reason?' ('+a.reason+')':''}</td>
           <td style="color:var(--ui-red-text);font-weight:700;text-align:left">− ${fmtN(a.deduct)} دج</td>
         </tr>`).join('')}
-        ${activeInst.map(d=>`<tr>
-          <td style="color:var(--ui-purple-text)">📋 قسط دين مستحق — ${fmtN(d.instAmt)} — ${d.note||'دين'} <small style="color:var(--ui-muted)">(لا يُطرح من الراتب هنا؛ يُخصم فقط داخل تسبيق فعلي)</small></td>
-          <td style="color:var(--ui-purple-text);font-weight:700;text-align:left">− ${fmtN(d.instAmt)} دج (مستحق)</td>
-        </tr>`).join('')}
+        ${activeInst.map(d=>{const s=installmentSnapshotForAdvance(w.id,d),amt=s?s.amount:(+d.instAmt||0);return `<tr>
+          <td style="color:var(--ui-purple-text)">📋 قسط دين مستحق — ${fmtN(amt)} — ${d.note||'دين'}</td>
+          <td style="color:var(--ui-purple-text);font-weight:700;text-align:left">− ${fmtN(amt)} دج (مستحق)</td>
+        </tr>`;}).join('')}
         ${tAdv||tAbsNow||tInst?`<tr style="background:var(--ui-panel)">
           <td style="font-weight:800">💳 صافي الراتب</td>
           <td style="font-weight:900;font-size:13px;text-align:left;color:${netSal<0?'var(--ui-red-text)':netSal===0?'var(--ui-teal-text)':'var(--ui-blue-text)'}">${fmtN(netSal)} دج</td>
@@ -7644,17 +8144,16 @@ function printTodayAdvances(){
     const n=wNum(w.id);
     // جمع كل العمليات بغض النظر عن التاريخ
     const advRows=[];
-    let totAdv=0,totHrs=0,totBon=0,totAbs=0,totDbt=0;
+    let totAdv=0,totAdvCash=0,totAdvDebt=0,totHrs=0,totBon=0,totAbs=0,totDbt=0;
 
     Object.entries(DB.advances[w.id]||{}).forEach(([m,arr])=>{
       arr.forEach(a=>{
         if(_isInstAdv(a))return;
-        const gross=advGross(a);
-        totAdv+=gross;
+        const gross=advGross(a),cash=advNetPaid(a),debt=(a.deductions||[]).filter(d=>d&&d.type==='debt').reduce((s,d)=>s+(+d.amount||0),0);
+        totAdv+=gross;totAdvCash+=cash;totAdvDebt+=debt;
         const ded=advDedNote(a);
-        const net=advDedTotal(a)>0?' | النقد المسلّم فعلياً: '+fmtN(advNetPaid(a)):'';
-        // التاريخ المعروض = التاريخ الفعلي للدفع إن وُجد (قيود موجَّهة لدورة سابقة)
-        advRows.push({date:a.realDate||a.date||'—',type:'💰 تسبيق',month:MN[+m]||'',amt:gross,note:(a.note||'')+(ded?(' | '+ded+net):''),color:'#155e1a',sign:'+'});
+        const net=advDedTotal(a)>0?' | النقد المسلّم فعلياً: '+fmtN(cash):'';
+        advRows.push({date:a.realDate||a.date||'—',type:debt?'💰 تسبيق محاسبي (نقد + قسط)':'💰 تسبيق',month:MN[+m]||'',amt:gross,note:advancePublicPrintNote(a),color:debt?'#8a5a00':'#155e1a',sign:'+'});
       });
     });
     (DB.hours[w.id]||[]).forEach(h=>{
@@ -7673,8 +8172,10 @@ function printTodayAdvances(){
       advRows.push({date:d.date||'—',type:'📋 دين',month:'',amt:+d.amount||0,note:d.note||'',color:'#7c3aed',sign:'⊕'});
     });
     (DB.debts[w.id]||[]).filter(d=>d.type==='return').forEach(d=>{
+      // القسط المرتبط بتسبيق ظاهر داخل نفس سطر التسبيق؛ لا نعرضه كحركة نقدية ثانية.
+      if(d._advanceId||(Array.isArray(d._advanceIds)&&d._advanceIds.length))return;
       totDbt+=+d.amount||0;
-      advRows.push({date:d.date||'—',type:'💵 إرجاع دين',month:'',amt:+d.amount||0,note:d.note||'',color:'#1a7a4a',sign:'-'});
+      advRows.push({date:d.date||'—',type:'💵 إرجاع دين مستقل',month:'',amt:+d.amount||0,note:d.note||'',color:'#1a7a4a',sign:'-'});
     });
 
     if(!advRows.length)return; // لا توجد عمليات لهذا العامل
@@ -7685,14 +8186,16 @@ function printTodayAdvances(){
       const ib=dToISO(b.date)||b.date||'';
       return ia.localeCompare(ib);
     });
-    const net=totAdv+totHrs+totBon-totAbs-totDbt;
-    wData.push({w,n,advRows,totAdv,totHrs,totBon,totAbs,totDbt,net});
+    const net=totAdvCash+totHrs+totBon-totAbs-totDbt;
+    wData.push({w,n,advRows,totAdv,totAdvCash,totAdvDebt,totHrs,totBon,totAbs,totDbt,net});
   });
 
   if(!wData.length){toast('لا توجد عمليات مسجلة','#e8a020');return;}
 
   // بناء صفوف الجدول — كل عامل له مجموعة صفوف + صف مجموع
   const gAdv=wData.reduce((s,d)=>s+d.totAdv,0);
+  const gAdvCash=wData.reduce((s,d)=>s+d.totAdvCash,0);
+  const gAdvDebt=wData.reduce((s,d)=>s+d.totAdvDebt,0);
   const gHrs=wData.reduce((s,d)=>s+d.totHrs,0);
   const gBon=wData.reduce((s,d)=>s+d.totBon,0);
   const gAbs=wData.reduce((s,d)=>s+d.totAbs,0);
@@ -7717,7 +8220,7 @@ function printTodayAdvances(){
     bodyRows+=`<tr style="background:var(--ui-panel);border-top:2px solid var(--ui-teal-border)">
       <td colspan="2" style="font-weight:900;color:var(--ui-blue-text);text-align:right;padding:6px 10px">${d.n}. ${d.w.name} — المجموع</td>
       <td colspan="3" style="font-size:11px;color:var(--ui-muted);padding:4px 8px">
-        ${d.totAdv?`تسبيق: <b style="color:var(--ui-red-text)">+${fmtN(d.totAdv)}</b> `:' '}
+        ${d.totAdv?`تسبيق محاسبي: <b style="color:var(--ui-red-text)">+${fmtN(d.totAdv)}</b> ${d.totAdvDebt?`(قسط −${fmtN(d.totAdvDebt)} / نقد +${fmtN(d.totAdvCash)})`:''} `:' '}
         ${d.totHrs?`ساعات: <b style="color:var(--ui-teal-text)">+${fmtN(d.totHrs)}</b> `:' '}
         ${d.totBon?`مكافأة: <b style="color:var(--ui-purple-text)">+${fmtN(d.totBon)}</b> `:' '}
         ${d.totAbs?`غياب: <b style="color:var(--ui-red-text)">-${fmtN(d.totAbs)}</b> `:' '}
@@ -7772,7 +8275,8 @@ function printTodayAdvances(){
   </table>
   <div style="margin-top:8px;padding:8px;background:var(--ui-panel);border:1px solid var(--ui-blue-border);border-radius:4px;font-size:11px;display:flex;gap:16px;flex-wrap:wrap">
     <span>👷 العمال: <b>${wData.length}</b></span>
-    ${gAdv>0?`<span>💰 تسبيقات: <b style="color:var(--ui-red-text)">+${fmtN(gAdv)}</b></span>`:''}
+    ${gAdv>0?`<span>💰 تسبيقات محاسبية: <b style="color:var(--ui-red-text)">+${fmtN(gAdv)}</b></span>`:''}
+    ${gAdvDebt>0?`<span>💳 أقساط داخل التسبيقات: <b style="color:#8a5a00">−${fmtN(gAdvDebt)}</b></span><span>💵 النقد المسلّم: <b style="color:#1a7a4a">+${fmtN(gAdvCash)}</b></span>`:''}
     ${gHrs>0?`<span>⏱️ ساعات: <b style="color:var(--ui-teal-text)">+${fmtN(gHrs)}</b></span>`:''}
     ${gBon>0?`<span>🎁 مكافآت: <b style="color:var(--ui-purple-text)">+${fmtN(gBon)}</b></span>`:''}
     ${gAbs>0?`<span>📅 غيابات: <b style="color:var(--ui-red-text)">-${fmtN(gAbs)}</b></span>`:''}
@@ -7827,14 +8331,14 @@ function dailyAdvanceGroups(w,ctx){
     (rows||[]).forEach(a=>{
       if(!a||_isInstAdv(a)||!dailyRecordMatches(a,'advance',ctx))return;
       const key=String(a.operationId||a.transactionId||a.id);
-      if(!groups[key])groups[key]={id:key,rows:[],amount:0,net:0,months:new Set(),notes:[]};
+      if(!groups[key])groups[key]={id:key,rows:[],amount:0,net:0,months:new Set()};
       const g=groups[key];g.rows.push(a);g.amount+=advGross(a);g.net+=advNetPaid(a);g.months.add(MN[+bucket]||'');
-      if(a.note&&!g.notes.includes(a.note))g.notes.push(a.note);
     });
   });
   return Object.values(groups).map(g=>({
     id:g.id,rows:g.rows,amount:g.amount,net:g.net,months:[...g.months].filter(Boolean),
-    note:g.notes.join(' | '),deductions:g.rows.flatMap(r=>Array.isArray(r.deductions)?r.deductions:[]),
+    publicNote:advancePublicPrintNote(g.rows),
+    deductions:g.rows.flatMap(r=>Array.isArray(r.deductions)?r.deductions:[]),
     by:(g.rows[0]&&g.rows[0].by)||''
   }));
 }
@@ -7860,15 +8364,16 @@ function printTodayOnly(){
 
   workers.forEach(w=>{
     const n=wNum(w.id),rows=[];
-    let totAdv=0,totHrs=0,totBon=0,totAbs=0;
+    let totAdvGross=0,totAdvCash=0,totDebtInst=0,totHrs=0,totBon=0,totAbs=0;
 
     dailyAdvanceGroups(w,ctx).forEach(g=>{
-      totAdv+=g.amount;
       const debt=(g.deductions||[]).filter(d=>d&&d.type==='debt').reduce((s,d)=>s+(+d.amount||0),0);
+      totAdvGross+=g.amount;totAdvCash+=g.net;totDebtInst+=debt;
       rows.push({
-        type:'تسبيق'+(g.months.length?' (دورة '+g.months.join(' / ')+')':''),
-        amt:g.amount,note:(g.note||'—')+(debt?' | قسط دين: '+fmtN(debt)+' | النقد المسلّم: '+fmtN(g.net):''),
-        sign:'+',col:'#1a7a4a'
+        type:debt?'تسبيق (يتضمن قسط دين)':'تسبيق',
+        amt:g.amount,
+        note:g.publicNote||'—',
+        sign:'+',col:debt?'#8a5a00':'#1a7a4a',cash:g.net,debt
       });
     });
 
@@ -7886,20 +8391,20 @@ function printTodayOnly(){
     });
 
     if(!rows.length)return;
-    wData.push({w,n,rows,totAdv,totHrs,totBon,totAbs,net:totAdv+totHrs+totBon-totAbs});
+    wData.push({w,n,rows,totAdvGross,totAdvCash,totDebtInst,totHrs,totBon,totAbs,netCash:totAdvCash+totHrs+totBon-totAbs});
   });
 
   const admin=dailyAuditEvents(ctx);
-  const gAdv=wData.reduce((s,d)=>s+d.totAdv,0),gHrs=wData.reduce((s,d)=>s+d.totHrs,0);
-  const gBon=wData.reduce((s,d)=>s+d.totBon,0),gAbs=wData.reduce((s,d)=>s+d.totAbs,0);
-  const gNet=wData.reduce((s,d)=>s+d.net,0);
+  const gAdvGross=wData.reduce((s,d)=>s+d.totAdvGross,0),gAdvCash=wData.reduce((s,d)=>s+d.totAdvCash,0),gDebtInst=wData.reduce((s,d)=>s+d.totDebtInst,0);
+  const gHrs=wData.reduce((s,d)=>s+d.totHrs,0),gBon=wData.reduce((s,d)=>s+d.totBon,0),gAbs=wData.reduce((s,d)=>s+d.totAbs,0);
+  const gNetCash=wData.reduce((s,d)=>s+d.netCash,0);
 
   let cards='';
   wData.forEach(d=>{
     cards+=`<div class="wcard"><div class="whd">#${d.n} — ${d.w.name}${d.w.type?' ('+d.w.type+')':''}</div><table class="wtbl">
-      <tr class="wsh"><th style="width:36%">النوع</th><th style="width:42%;text-align:right">ملاحظة</th><th style="width:22%">المبلغ</th></tr>
+      <tr class="wsh"><th style="width:36%">النوع</th><th style="width:42%;text-align:right">ملاحظة</th><th style="width:22%">المبلغ المحاسبي</th></tr>
       ${d.rows.map(r=>`<tr><td style="color:${r.col};font-weight:bold">${r.type}</td><td style="text-align:right;font-size:13px;color:var(--ui-muted)">${r.note||'—'}</td><td style="text-align:center;font-weight:bold;color:${r.col}">${r.sign}${fmtN(r.amt)}</td></tr>`).join('')}
-      <tr class="wnet"><td colspan="2" style="text-align:right">صافي عمليات العامل في السجل</td><td style="text-align:center;color:${d.net<0?'var(--ui-red-text)':'var(--ui-teal-text)'}">${fmtN(d.net)}</td></tr>
+      <tr class="wnet"><td colspan="2" style="text-align:right">النقد الفعلي وحركات العامل في السجل</td><td style="text-align:center;color:${d.netCash<0?'var(--ui-red-text)':'var(--ui-teal-text)'}">${fmtN(d.netCash)}</td></tr>
     </table></div>`;
   });
 
@@ -7912,11 +8417,18 @@ function printTodayOnly(){
     h2{text-align:center;font-size:18px;margin:0 0 4px;color:#1a3a6b}.sub{text-align:center;font-size:13px;color:#444;margin:0 0 10px;border-bottom:2px solid #1a3a6b;padding-bottom:6px}
     .wcard{width:100%;border:1.5px solid #1a3a6b;border-radius:4px;overflow:visible;page-break-inside:avoid;margin:0 0 10px;background:#fff}.whd{background:#1a3a6b;color:#fff;padding:6px 10px;font-size:15px;font-weight:bold;text-align:right}
     table.wtbl{width:100%;border-collapse:collapse;background:#fff}table.wtbl .wsh th{background:#eef2f8;color:#1a3a6b;padding:5px 10px;font-size:13px;border-bottom:1px solid #1a3a6b}table.wtbl td{padding:5px 10px;border-bottom:1px solid #e8e8e8;font-size:14px}table.wtbl .wnet td{background:#eaf7ef;border-top:2px solid #1a7a4a;font-weight:bold;font-size:15px}
-    .gt{width:75%;margin:14px auto 0;border-collapse:collapse;border:2.5px solid #1a3a6b;page-break-inside:avoid}.gt .gh th{background:#1a3a6b;color:#fff;padding:9px;font-size:16px}.gt td{padding:9px 18px;border-bottom:1px solid #ccc;font-size:15px;font-weight:bold}.gt .gtot td{background:#eef2f8;color:#1a3a6b;font-size:17px;border-top:2px solid #1a3a6b}
+    .gt{width:82%;margin:14px auto 0;border-collapse:collapse;border:2.5px solid #1a3a6b;page-break-inside:avoid}.gt .gh th{background:#1a3a6b;color:#fff;padding:9px;font-size:16px}.gt td{padding:8px 18px;border-bottom:1px solid #ccc;font-size:14px;font-weight:bold}.gt .gtot td{background:#eef2f8;color:#1a3a6b;font-size:17px;border-top:2px solid #1a3a6b}
     .empty{padding:35px;text-align:center;border:2px dashed #9aa9b8;border-radius:8px;color:#555;font-size:15px}.admin{margin-top:14px;border:1px solid #d49b22;padding:10px;border-radius:6px;background:#fff9e8}.admin h3{margin:0 0 7px;color:#8a5a00}.admin div{padding:5px;border-top:1px solid #ead9ad}.admin small{color:#777}.sig{display:flex;justify-content:space-around;margin-top:22px;font-size:13px;text-align:center;page-break-inside:avoid}@media print{body{padding:0}}
   </style></head><body>
     <h2>EGTPH — سجل اليوم الكامل</h2><p class="sub">${ctx.display} | ${ctx.basisLabel} | ${wData.length} عامل | Youcef Abdi</p>${cards}
-    <table class="gt"><tr class="gh"><th colspan="2">المجاميع الكلية — ${wData.length} عامل</th></tr><tr><td>مجموع التسبيقات</td><td style="text-align:center;color:var(--ui-teal-text)">+${fmtN(gAdv)}</td></tr><tr><td>مجموع الساعات الإضافية</td><td style="text-align:center;color:var(--ui-teal-text)">+${fmtN(gHrs)}</td></tr><tr><td>مجموع المكافآت</td><td style="text-align:center;color:var(--ui-purple-text)">+${fmtN(gBon)}</td></tr><tr><td>مجموع الغيابات (خصم)</td><td style="text-align:center;color:var(--ui-red-text)">−${fmtN(gAbs)}</td></tr><tr class="gtot"><td>الصافي الكلي للسجل</td><td style="text-align:center">${fmtN(gNet)} دج</td></tr></table>
+    <table class="gt"><tr class="gh"><th colspan="2">المجاميع الكلية — ${wData.length} عامل</th></tr>
+      <tr><td>التسبيقات المحاسبية</td><td style="text-align:center;color:var(--ui-teal-text)">+${fmtN(gAdvGross)}</td></tr>
+      <tr><td>منها أقساط دين داخل التسبيقات</td><td style="text-align:center;color:#8a5a00">−${fmtN(gDebtInst)}</td></tr>
+      <tr><td>النقد المسلّم فعلياً كتسبيقات</td><td style="text-align:center;color:#1a7a4a">+${fmtN(gAdvCash)}</td></tr>
+      <tr><td>مجموع الساعات الإضافية</td><td style="text-align:center;color:var(--ui-teal-text)">+${fmtN(gHrs)}</td></tr>
+      <tr><td>مجموع المكافآت</td><td style="text-align:center;color:var(--ui-purple-text)">+${fmtN(gBon)}</td></tr>
+      <tr><td>مجموع الغيابات (خصم)</td><td style="text-align:center;color:var(--ui-red-text)">−${fmtN(gAbs)}</td></tr>
+      <tr class="gtot"><td>الصافي النقدي الفعلي للسجل</td><td style="text-align:center">${fmtN(gNetCash)} دج</td></tr></table>
     ${adminHtml}<div class="sig"><div>توقيع المدير<br>Youcef Abdi<br><br>____________</div><div>توقيع المحاسب<br><br><br>____________</div><div>الختم<br><br><br>____________</div></div>
   </body></html>`);
 }
@@ -8212,7 +8724,8 @@ function printTodayByType(type){
     if(type==='advances'){
       title='💰 التسبيقات المصروفة';color='#1a7a4a';
       const items=dailyAdvanceGroups(w,ctx).map(g=>({
-        id:g.id,amount:g.amount,netPaid:g.net,deductions:g.deductions,note:g.note,
+        id:g.id,amount:g.amount,netPaid:g.net,deductions:g.deductions,publicNote:g.publicNote,
+        debtPaid:(g.deductions||[]).filter(d=>d&&d.type==='debt').reduce((s,d)=>s+(+d.amount||0),0),
         _month:g.months.join(' / '),by:g.by,enteredAt:g.rows[0]&&g.rows[0].enteredAt
       }));
       if(items.length)rows.push({w,n,items,total:items.reduce((s,a)=>s+(+a.amount||0),0)});
@@ -8239,8 +8752,9 @@ function printTodayByType(type){
     rows.forEach((r,i)=>r.items.forEach((item,j)=>{
       let details='',val='',status='',entryT=_advEntryTime(item)||'—';
       if(type==='advances'){
-        const debt=(item.deductions||[]).filter(d=>d&&d.type==='debt').reduce((s,d)=>s+(+d.amount||0),0);
-        details=(item.note||'—')+(item._month?' ('+item._month+')':'')+(debt?' | قسط '+fmtN(debt)+' | نقد '+fmtN(item.netPaid):'');val='+'+fmtN(item.amount);status=item.by||'—';
+        const debt=+item.debtPaid||0;
+        details=item.publicNote||'—';
+        val='+'+fmtN(item.amount);status=debt?'💳 نقد '+fmtN(item.netPaid):(item.by||'—');
       }else if(type==='hours'){details=`${item.hours}سا × ${fmtN(item.hourly||0)}/سا`;val='+'+fmtN(item.total);status=window.EGTPHPrintStatus.sourcePaid(item)?'✅ مسددة':'⏳ معلقة';}
       else if(type==='absences'){details=item.reason||'—';val='-'+fmtN(item.deduct);status=window.EGTPHPrintStatus.absence(item,r.w.id).label;}
       else{details=item.reason||'—';val='+'+fmtN(item.net||item.amount);status=window.EGTPHPrintStatus.sourcePaid(item)?'✅ مسددة':'⏳ معلقة';}
@@ -9058,7 +9572,7 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
   if(!row){say('❌ لم يُعثر على التسبيق',true);return false;}
 
   var children=childRowsForOperation(d,w.id,row,bucket);
-  var original=+row.originalAmount||children.reduce(function(s,c){return s+(+c.row.amount||0);},0);
+  var original=children.reduce(function(s,c){return s+(+c.row.amount||0);},0);
   if(!(await confirmFinancialDelete(
     '🗑️ حذف عملية تسبيق',
     'سيُحذف <b>التسبيق كاملاً</b> مع كل آثاره المحاسبية المرتبطة، ويُحفظ حزمة استرجاع كاملة في السلة.<br><b>العامل:</b> '+String(w.name||'')+'<br><b>المبلغ الأصلي:</b> '+money(original)+' دج<br><b>أجزاء العملية:</b> '+children.length,
@@ -11639,7 +12153,7 @@ new MutationObserver(mutations=>{
   }
 }).observe(document.documentElement,{childList:true,subtree:true});
 
-const EGTPH_SYNC_API={version:'203.0-trash-only-no-undo',source:SOURCE,root:ROOT,save,flush,sync,schedule,refreshHealth,livePullTick,startLivePull,showConflicts,acceptRemote,forceLocal,verifyPatchDetailed,patchCloudState,status:()=>({ready:!!baseline,running,queued,pending:pendingCount(),lastError,lastSavedAt,lastPullAt,lastLivePullAt,livePollMs:LIVE_POLL_MS,remoteEtag:remoteEtag||null,openConflicts:allOpenConflicts.length||0,ownedConflicts:currentConflicts.length||0,outbox:!!loadOutbox(),writes:clone(writes),source:SOURCE,fingerprint:diag.cloudFingerprint||null,localFingerprint:diag.localFingerprint||null,cloudMatch:diag.cloudMatch===true}),noLatestWins:true,conflictPolicy:'same-id-difference-stops-and-records-conflict',conditionalRootPut:true,noAutomaticDelete:true,tombstoneGatedPhysicalDelete:true,nearLiveInbound:true,restorePolicy:'trash-only',undoFeature:false,tableView:{min:TABLE_SCALE_MIN,max:TABLE_SCALE_MAX,step:TABLE_SCALE_STEP,scan:scanTableViews,refresh:refreshTableViews}};window.EGTPH_SYNC=EGTPH_SYNC_API;window.EGTPH_V203=EGTPH_SYNC_API;window.EGTPH_V202=EGTPH_SYNC_API;window.EGTPH_V201=EGTPH_SYNC_API;window.EGTPH_V200=EGTPH_SYNC_API;window.EGTPH_V199=EGTPH_SYNC_API;window.EGTPH_V175=EGTPH_SYNC_API;window.EGTPH_V172=EGTPH_SYNC_API;
+const EGTPH_SYNC_API={version:'207.0-auto-complete-installment-cycle',source:SOURCE,root:ROOT,save,flush,sync,schedule,refreshHealth,livePullTick,startLivePull,showConflicts,acceptRemote,forceLocal,verifyPatchDetailed,patchCloudState,status:()=>({ready:!!baseline,running,queued,pending:pendingCount(),lastError,lastSavedAt,lastPullAt,lastLivePullAt,livePollMs:LIVE_POLL_MS,remoteEtag:remoteEtag||null,openConflicts:allOpenConflicts.length||0,ownedConflicts:currentConflicts.length||0,outbox:!!loadOutbox(),writes:clone(writes),source:SOURCE,fingerprint:diag.cloudFingerprint||null,localFingerprint:diag.localFingerprint||null,cloudMatch:diag.cloudMatch===true}),noLatestWins:true,conflictPolicy:'same-id-difference-stops-and-records-conflict',conditionalRootPut:true,noAutomaticDelete:true,tombstoneGatedPhysicalDelete:true,nearLiveInbound:true,restorePolicy:'trash-only',undoFeature:false,tableView:{min:TABLE_SCALE_MIN,max:TABLE_SCALE_MAX,step:TABLE_SCALE_STEP,scan:scanTableViews,refresh:refreshTableViews}};window.EGTPH_SYNC=EGTPH_SYNC_API;window.EGTPH_V207=window.EGTPH_V206=EGTPH_SYNC_API;window.EGTPH_V205=EGTPH_SYNC_API;window.EGTPH_V204=EGTPH_SYNC_API;window.EGTPH_V203=EGTPH_SYNC_API;window.EGTPH_V202=EGTPH_SYNC_API;window.EGTPH_V201=EGTPH_SYNC_API;window.EGTPH_V200=EGTPH_SYNC_API;window.EGTPH_V199=EGTPH_SYNC_API;window.EGTPH_V175=EGTPH_SYNC_API;window.EGTPH_V172=EGTPH_SYNC_API;
 })();
 </script>
 <style id="egtph-v172-final-sync-style">
@@ -11660,8 +12174,8 @@ const EGTPH_SYNC_API={version:'203.0-trash-only-no-undo',source:SOURCE,root:ROOT
 (function(){
   'use strict';
   window.__EGTPH_V175_SURGICAL__=true;
-  window.__EGTPH_V175_BUILD__='v203-trash-only-no-undo';
-  try{document.title='EGTPH — سجل الأجور v203';}catch(e){}
+  window.__EGTPH_V175_BUILD__='v207-auto-complete-installment-cycle';
+  try{document.title='EGTPH — سجل الأجور v207';}catch(e){}
 })();
 </script>
 
