@@ -224,7 +224,7 @@
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes" name="viewport"/>
-<title>EGTPH — سجل الأجور v202</title>
+<title>EGTPH — سجل الأجور v203</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -1135,7 +1135,7 @@ body{background:linear-gradient(145deg,#f2f7f4 0%,#fbfdfc 42%,#eef7f1 100%);}
 }
 @media screen and (max-width:900px){.twrap thead th,.sec table thead th{font-size:11.2px!important;padding:10px 8px!important}.twrap tbody td,.sec table tbody td{font-size:11px!important;padding:10px 8px!important;line-height:1.65!important}#page-settlement .twrap table{min-width:1120px!important}}
 </style>
-<meta content="v202-real-pdf-share-clean-print" name="egtph-build"/>
+<meta content="v203-trash-only-no-undo" name="egtph-build"/>
 <style id="egtph-v176-night-theme">
 /* v176 — ثيم ثانٍ فقط: ليلي أخضر متناسق. الأبيض يبقى الافتراضي. */
 body.egtph-theme-night{
@@ -1539,7 +1539,7 @@ body.egtph-theme-night .egtph-table-viewport::-webkit-scrollbar-thumb{
 <span class="auto-save-dot" id="saveDot"></span>
 <span id="saveLabel">—</span>
 </div>
-<div class="tright"><button class="bsm" id="themeToggleBtn" type="button" onclick="toggleEGTPHTheme()" aria-pressed="false" title="التبديل بين الأبيض والليلي الأخضر">☀️ أبيض</button><button class="bsm" id="undoBtn" onclick="openUndoLock()" title="تراجع عن آخر عملية مالية قابلة للتراجع — ليس رجوعاً بين الصفحات">↩️ تراجع عملية <span id="undoCount">0</span></button><span id="_saveInd" style="font-size:10px;color:var(--green1);min-width:60px;text-align:center">✅ محفوظ</span></div>
+<div class="tright"><button class="bsm" id="themeToggleBtn" type="button" onclick="toggleEGTPHTheme()" aria-pressed="false" title="التبديل بين الأبيض والليلي الأخضر">☀️ أبيض</button><span id="_saveInd" style="font-size:10px;color:var(--green1);min-width:60px;text-align:center">✅ محفوظ</span></div>
 </div>
 <!-- ══════════════ LAYOUT ══════════════ -->
 <div class="layout">
@@ -2401,7 +2401,7 @@ function _applyDBData(d){
     return out;
   };
   const workerRoot=root=>{const out={};Object.keys((Array.isArray(root)||isObj(root))?root:{}).forEach(wid=>out[String(wid)]=recordList(root[wid]));return out;};
-  const defaults={workers:[],advances:{},hours:{},absences:{},bonuses:{},debts:{},trash:{workers:[],advances:[],hours:[],absences:[],bonuses:[],debts:[]},deletedIds:[],deletedRecords:{},auditLog:[],ledger:[],txJournal:[],repairLog:[],undoJournal:[],cycleLocks:{},settings:{mult:1.5,holidays:[],lastBackup:null,backupInterval:7,paydayAlert:true,bonTax:0,userName:'Youcef Abdi'}};
+  const defaults={workers:[],advances:{},hours:{},absences:{},bonuses:{},debts:{},trash:{workers:[],advances:[],hours:[],absences:[],bonuses:[],debts:[]},deletedIds:[],deletedRecords:{},auditLog:[],ledger:[],txJournal:[],repairLog:[],cycleLocks:{},settings:{mult:1.5,holidays:[],lastBackup:null,backupInterval:7,paydayAlert:true,bonTax:0,userName:'Youcef Abdi'}};
   DB=Object.assign({},defaults,src);
   DB.settings=Object.assign({},defaults.settings,isObj(src.settings)?src.settings:{},{cloudUrl:'https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',cloudKey:'EGTPH-pay-clean-v144-live',cloudAuto:true,v91CloudAuto:false,v170FirebaseOnly:true,v170AuthoritativePath:'/egtph/EGTPH-pay-clean-v144-live'});
   ['v148AdvanceJournal','v148AdvanceJournalUpdatedAt'].forEach(k=>delete DB.settings[k]);
@@ -2410,7 +2410,7 @@ function _applyDBData(d){
   DB.workers=orderedValues(src.workers).filter(w=>isObj(w)&&!dead(w));
   DB.advances=monthRoot(src.advances||{});DB.bonuses=monthRoot(src.bonuses||{});
   DB.hours=workerRoot(src.hours||{});DB.absences=workerRoot(src.absences||{});DB.debts=workerRoot(src.debts||{});
-  ['auditLog','ledger','txJournal','repairLog','undoJournal'].forEach(k=>DB[k]=recordList(src[k]||[]));
+  ['auditLog','ledger','txJournal','repairLog'].forEach(k=>DB[k]=recordList(src[k]||[]));delete DB.undoJournal;
   DB.cycleLocks=isObj(src.cycleLocks)?clone(src.cycleLocks):{};
   window.DB=DB;
   DB.workers.forEach(w=>{
@@ -2423,7 +2423,7 @@ function _applyDBData(d){
     DB.absences[wid].forEach(a=>{if(!Object.prototype.hasOwnProperty.call(a,'deductOpt'))a.deductOpt='now';});
     DB.debts[wid].forEach(x=>{if(x.installment!==undefined&&x.inst===undefined)x.inst=x.installment;});
   });
-  window.__EGTPH_V175_LOAD_COUNTS__={workers:DB.workers.length,advances:Object.values(DB.advances).reduce((s,n)=>s+Object.values(n||{}).reduce((q,a)=>q+(a||[]).length,0),0),hours:Object.values(DB.hours).reduce((s,a)=>s+(a||[]).length,0),absences:Object.values(DB.absences).reduce((s,a)=>s+(a||[]).length,0),bonuses:Object.values(DB.bonuses).reduce((s,n)=>s+Object.values(n||{}).reduce((q,a)=>q+(a||[]).length,0),0),debts:Object.values(DB.debts).reduce((s,a)=>s+(a||[]).length,0),undoAvailable:DB.undoJournal.filter(x=>x&&x.status==='available').length};
+  window.__EGTPH_V175_LOAD_COUNTS__={workers:DB.workers.length,advances:Object.values(DB.advances).reduce((s,n)=>s+Object.values(n||{}).reduce((q,a)=>q+(a||[]).length,0),0),hours:Object.values(DB.hours).reduce((s,a)=>s+(a||[]).length,0),absences:Object.values(DB.absences).reduce((s,a)=>s+(a||[]).length,0),bonuses:Object.values(DB.bonuses).reduce((s,n)=>s+Object.values(n||{}).reduce((q,a)=>q+(a||[]).length,0),0),debts:Object.values(DB.debts).reduce((s,a)=>s+(a||[]).length,0)};
 }
 
 // ══════════════════════════════════════════════════════
@@ -2470,7 +2470,7 @@ async function _v169PullAuthoritativeCloud(){
 }
 function loadDB(){
   // لا مصدر احتياطي مالي: يبدأ فارغاً ثم يجلب المسار المرجعي وحده.
-  _applyDBData({workers:[],advances:{},hours:{},absences:{},bonuses:{},debts:{},undoJournal:[],deletedIds:[],deletedRecords:{},trash:{workers:[],advances:[],hours:[],absences:[],bonuses:[],debts:[]},settings:{cloudUrl:'https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',cloudKey:'EGTPH-pay-clean-v144-live',cloudAuto:true,v170FirebaseOnly:true}});
+  _applyDBData({workers:[],advances:{},hours:{},absences:{},bonuses:{},debts:{},deletedIds:[],deletedRecords:{},trash:{workers:[],advances:[],hours:[],absences:[],bonuses:[],debts:[]},settings:{cloudUrl:'https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',cloudKey:'EGTPH-pay-clean-v144-live',cloudAuto:true,v170FirebaseOnly:true}});
   window.__EGTPH_DB_READY__=false;window.__EGTPH_DB_READY_SOURCE__='firebase-pending';
   setTimeout(_v169PullAuthoritativeCloud,0);
 }
@@ -7843,7 +7843,7 @@ function dailyAuditEvents(ctx){
   return (DB.auditLog||[]).filter(row=>{
     if(!row)return false;
     const action=String(row.action||'');
-    if(!/(حذف|استرجاع|تراجع|إلغاء)/.test(action))return false;
+    if(!/(حذف|استرجاع|إلغاء)/.test(action))return false;
     return recordEntryDateISO(row)===ctx.iso||sameLocalDate(row.time,ctx.iso);
   });
 }
@@ -9638,9 +9638,9 @@ const OUTBOX_RECORD_KEY='pending';
 const DIAG_KEY='EGTPH_V172_SYNC_DIAGNOSTICS';
 const LEGACY_DIAG_KEYS=['EGTPH_V171_SYNC_DIAGNOSTICS','EGTPH_V170_SYNC_DIAGNOSTICS'];
 const DEVICE_KEY='EGTPH_DEVICE_ID_V172';
-const MAX_RETRY=7, RETRY_MS=3000, LIVE_POLL_MS=5000, UNDO_LIMIT=30;
+const MAX_RETRY=7, RETRY_MS=3000, LIVE_POLL_MS=5000;
 const BASE_FETCH=window.fetch.bind(window);
-let baseline=null,rollbackSnapshot=null,running=false,queued=false,lastError=null,lastSavedAt=null,lastPullAt=null,lastLivePullAt=null,remoteEtag=null,suppressUndoJournal=false;
+let baseline=null,rollbackSnapshot=null,running=false,queued=false,lastError=null,lastSavedAt=null,lastPullAt=null,lastLivePullAt=null,remoteEtag=null;
 let retryTimer=null,activePromise=null,resolveActive=null,writes=[],currentConflicts=[],allOpenConflicts=[],uiPending=false,deferredCloses=[],deferredToasts=[],saveInvocationSeq=0;
 let scheduleTimer=null,liveTimer=null,liveRunning=false,localSavePreparing=false,livePullGeneration=0,livePullAbortController=null;
 let outboxMemory=null,outboxBackend=null,outboxReadyPromise=null;
@@ -9755,14 +9755,14 @@ function mergeListInto(root,path,ops){const cur=list(getAt(root,path)).map(clone
 function countPatch(p){let n=0;Object.values(p.listOps||{}).forEach(a=>n+=a.length);n+=Object.keys(p.valueOps||{}).length;const ds=p.setOps&&p.setOps.deletedIds;n+=(ds&&ds.add||[]).length+(ds&&ds.remove||[]).length;return n;}
 function countData(d){const c={workers:list(d&&d.workers).length,advances:0,hours:0,absences:0,bonuses:0,debts:0};for(const sec of ['advances','bonuses'])for(const wid of keys(d&&d[sec]))for(const m of keys(d[sec][wid]))c[sec]+=list(d[sec][wid][m]).length;for(const sec of ['hours','absences','debts'])for(const wid of keys(d&&d[sec]))c[sec]+=list(d[sec][wid]).length;return c;}
 function activeDeletedSet(d){const out=new Set(list(d&&d.deletedIds).map(String));for(const k of keys(d&&d.deletedRecords)){const r=d.deletedRecords[k];if(!r||typeof r!=='object')continue;const dt=Date.parse(r.deletedAt||'1970-01-01T00:00:00.000Z')||0,rt=Date.parse(r.restoredAt||'')||0;if((r.deleted===true||r.status==='deleted'||r.deletedAt)&&!(rt&&rt>=dt)){out.add(String(k).split('|').pop());if(r.id!=null)out.add(String(r.id));}}return out;}
-function businessProjection(d){d=d||{};const dead=activeDeletedSet(d),clean=(path,v)=>list(v).filter(x=>x&&typeof x==='object'&&!dead.has(String(x.id||''))&&!dead.has(String(x.transactionId||''))&&!dead.has(String(x.operationId||''))).map(x=>normalizeRecord(path,x)).sort((a,b)=>recKey(a).localeCompare(recKey(b)));const out={workers:clean('workers',d.workers),advances:{},hours:{},absences:{},bonuses:{},debts:{},trash:{},deletedIds:[...dead].sort(),deletedRecords:clone(d.deletedRecords||{}),cycleLocks:clone(d.cycleLocks||{}),settings:{},auditLog:clean('auditLog',d.auditLog),ledger:clean('ledger',d.ledger),txJournal:clean('txJournal',d.txJournal),repairLog:clean('repairLog',d.repairLog),undoJournal:clean('undoJournal',d.undoJournal)};for(const sec of ['advances','bonuses'])for(const wid of keys(d[sec])){const b={};for(const m of keys(d[sec][wid])){const a=clean(sec+'/'+wid+'/'+m,d[sec][wid][m]);if(a.length)b[m]=a;}if(keys(b).length)out[sec][wid]=b;}for(const sec of ['hours','absences','debts'])for(const wid of keys(d[sec])){const a=clean(sec+'/'+wid,d[sec][wid]);if(a.length)out[sec][wid]=a;}for(const sec of keys(d.trash)){const a=clean('trash/'+sec,d.trash[sec]);if(a.length)out.trash[sec]=a;}const st=d.settings||{};out.settings={mult:Number(st.mult==null?1.5:st.mult),hoursMultiplier:Number(st.hoursMultiplier==null?(st.mult==null?1.5:st.mult):st.hoursMultiplier),holidays:list(st.holidays).map(String).sort(),backupInterval:Number(st.backupInterval==null?7:st.backupInterval),paydayAlert:st.paydayAlert!==false,bonTax:Number(st.bonTax||0),userName:String(st.userName||'Youcef Abdi'),deletePass:String(st.deletePass||'admin123')};return out;}
+function businessProjection(d){d=d||{};const dead=activeDeletedSet(d),clean=(path,v)=>list(v).filter(x=>x&&typeof x==='object'&&!dead.has(String(x.id||''))&&!dead.has(String(x.transactionId||''))&&!dead.has(String(x.operationId||''))).map(x=>normalizeRecord(path,x)).sort((a,b)=>recKey(a).localeCompare(recKey(b)));const out={workers:clean('workers',d.workers),advances:{},hours:{},absences:{},bonuses:{},debts:{},trash:{},deletedIds:[...dead].sort(),deletedRecords:clone(d.deletedRecords||{}),cycleLocks:clone(d.cycleLocks||{}),settings:{},auditLog:clean('auditLog',d.auditLog),ledger:clean('ledger',d.ledger),txJournal:clean('txJournal',d.txJournal),repairLog:clean('repairLog',d.repairLog)};for(const sec of ['advances','bonuses'])for(const wid of keys(d[sec])){const b={};for(const m of keys(d[sec][wid])){const a=clean(sec+'/'+wid+'/'+m,d[sec][wid][m]);if(a.length)b[m]=a;}if(keys(b).length)out[sec][wid]=b;}for(const sec of ['hours','absences','debts'])for(const wid of keys(d[sec])){const a=clean(sec+'/'+wid,d[sec][wid]);if(a.length)out[sec][wid]=a;}for(const sec of keys(d.trash)){const a=clean('trash/'+sec,d.trash[sec]);if(a.length)out.trash[sec]=a;}const st=d.settings||{};out.settings={mult:Number(st.mult==null?1.5:st.mult),hoursMultiplier:Number(st.hoursMultiplier==null?(st.mult==null?1.5:st.mult):st.hoursMultiplier),holidays:list(st.holidays).map(String).sort(),backupInterval:Number(st.backupInterval==null?7:st.backupInterval),paydayAlert:st.paydayAlert!==false,bonTax:Number(st.bonTax||0),userName:String(st.userName||'Youcef Abdi'),deletePass:String(st.deletePass||'admin123')};return out;}
 function dataFingerprint(d){return hash(firebaseSemanticStable(businessProjection(d)));}
 function isSynchronizedOperationList(path){
   return path==='workers'||
     /^(advances|bonuses)\/[^/]+\/[^/]+$/.test(path)||
     /^(hours|absences|debts)\/[^/]+$/.test(path)||
     /^trash\/(workers|advances|hours|absences|bonuses|debts)$/.test(path)||
-    ['auditLog','ledger','txJournal','repairLog','undoJournal'].includes(path);
+    ['auditLog','ledger','txJournal','repairLog'].includes(path);
 }
 
 function assertListIntegrity(path,v,changes){
@@ -9821,7 +9821,7 @@ function buildPatch(base,target){
       addList(sec+'/'+wid,base[sec]&&base[sec][wid],target[sec]&&target[sec][wid]);
     }
   }
-  for(const sec of ['auditLog','ledger','txJournal','repairLog','undoJournal'])addList(sec,base[sec],target[sec]);
+  for(const sec of ['auditLog','ledger','txJournal','repairLog'])addList(sec,base[sec],target[sec]);
 
   const trashKeys=new Set([...keys(base.trash),...keys(target.trash)]);
   trashKeys.forEach(sec=>addList('trash/'+sec,base.trash&&base.trash[sec],target.trash&&target.trash[sec]));
@@ -9893,12 +9893,25 @@ async function idbDeleteOutbox(){
     });
   }finally{db.close();}
 }
+
+function isRetiredUndoOutbox(p){
+  if(!p||typeof p!=='object')return false;
+  const tx=String(p.txId||'');
+  return /^undo(?:_tx)?_/i.test(tx)||
+    !!(p.listOps&&p.listOps.undoJournal&&Object.keys(p.listOps).length===1&&
+       !Object.keys(p.valueOps||{}).length);
+}
+
 function readLegacyLocalOutbox(){
   try{
-    let p=normalizeOutbox(JSON.parse(localStorage.getItem(OUTBOX_KEY)||'null'));
-    if(p)return p;
-    for(const key of LEGACY_OUTBOX_KEYS){
-      p=normalizeOutbox(JSON.parse(localStorage.getItem(key)||'null'));
+    const keysToCheck=[OUTBOX_KEY,...LEGACY_OUTBOX_KEYS];
+    for(const key of keysToCheck){
+      const raw=JSON.parse(localStorage.getItem(key)||'null');
+      if(isRetiredUndoOutbox(raw)){
+        localStorage.removeItem(key);
+        continue;
+      }
+      const p=normalizeOutbox(raw);
       if(p)return p;
     }
   }catch(e){}
@@ -9917,6 +9930,10 @@ async function ensureOutboxReady(){
     try{
       raw=await idbReadOutbox();
       if(raw&&raw.__egtphCleared===true)raw=null;
+      if(isRetiredUndoOutbox(raw)){
+        try{await idbDeleteOutbox();}catch(e){}
+        raw=null;
+      }
       p=normalizeOutbox(raw);
       if(p){
         outboxMemory=p;
@@ -9970,7 +9987,8 @@ async function saveOutbox(p){
 }
 function normalizeOutbox(p){
   if(!p||p.root!==ROOT||![170,171,VERSION].includes(Number(p.version)))return null;
-  let n=clone(p);
+  if(isRetiredUndoOutbox(p))return null;
+  const n=clone(p);
   n.version=VERSION;
   if(!n.setOps)n.setOps={deletedIds:{add:[],remove:[]}};
   if(!n.setOps.deletedIds)n.setOps.deletedIds={add:[],remove:[]};
@@ -9982,8 +10000,9 @@ function normalizeOutbox(p){
   }
   delete n.setAdds;
 
-  // ترقية طابور v187 المعلّق: مسارات inverse القديمة كانت مفاتيح كائن تحتوي "/".
-  n=migrateUndoJournalOpsInsidePatch(n);
+  // v203: سجل التراجع متقاعد نهائياً. أي أثر تقني له داخل عملية مالية قديمة يُحذف،
+  // بينما تبقى القيود المالية الأصلية داخل نفس الطابور قابلة للتثبيت.
+  if(n.listOps&&n.listOps.undoJournal)delete n.listOps.undoJournal;
   return n;
 }
 function loadOutbox(){
@@ -10137,15 +10156,6 @@ function replayComparableRecord(path,record){
 
   if(path.startsWith('trash/'))return trashComparableRecord(path,out);
 
-  if(path==='undoJournal'){
-    if(out.inverse){
-      out.inverse=encodeUndoInverseForFirebase(
-        decodeUndoInverseFromFirebase(out.inverse)
-      );
-    }
-    return out;
-  }
-
   if(isSynchronizedOperationList(path)&&out.id!=null&&String(out.id).trim()!==''){
     REPLAY_VOLATILE_FIELDS.forEach(key=>delete out[key]);
   }
@@ -10164,22 +10174,6 @@ function equivalentListRecord(path,left,right){
     const ib=String((b&&b.id!=null?b.id:b&&b._tid)||'');
     if(ia&&ia===ib)return firebaseSemanticSame(trashComparableRecord(path,a),trashComparableRecord(path,b));
     return false;
-  }
-
-  if(path==='undoJournal'){
-    const ca=replayComparableRecord(path,a);
-    const cb=replayComparableRecord(path,b);
-
-    if(ca&&cb&&
-       String(ca.id||'')!==''&&
-       String(ca.id||'')===String(cb.id||'')&&
-       String(ca.sourceTxId||'')===String(cb.sourceTxId||'')&&
-       String(ca.action||'')===String(cb.action||'')&&
-       String(ca.status||'available')===String(cb.status||'available')){
-      return true;
-    }
-
-    return firebaseSemanticSame(ca,cb);
   }
 
   // القاعدة الجذرية:
@@ -10358,7 +10352,7 @@ function verifyPatch(raw,p){
   e.verification=result;
   throw e;
 }
-function materializeRoot(raw,updates){const next=clone(raw);for(const path of Object.keys(updates||{}))setAt(next,path,clone(updates[path]));return next;}
+function materializeRoot(raw,updates){const next=clone(raw);delete next.undoJournal;for(const path of Object.keys(updates||{}))setAt(next,path,clone(updates[path]));return next;}
 async function responseDetail(r){try{const x=await r.clone().text();return String(x||'').replace(/\s+/g,' ').slice(0,240);}catch(e){return '';}}
 async function atomicCommit(p){
   const t=await token();
@@ -10862,7 +10856,6 @@ function renderAll(){
     alerts:'renderAlerts',admin:'renderAdmin',trash:'renderTrash'
   }[page];
   if(pageRender)call(pageRender);
-  try{refreshUndoButton();}catch(e){}
   requestAnimationFrame(()=>{try{refreshTableViews(active||document);}catch(e){}});
 }
 function releaseSuccess(){uiPending=false;hideGate();const closes=deferredCloses.splice(0),toasts=deferredToasts.splice(0);closes.forEach(id=>{try{originalCloseModal(id);}catch(e){}});toasts.forEach(x=>{try{originalToast(x[0],x[1]);}catch(e){}});}
@@ -11040,92 +11033,12 @@ async function flush(){
   }
 }
 
-function reversiblePath(path){return path==='workers'||/^(advances|bonuses|hours|absences|debts)\//.test(path);}
 
-const UNDO_PATCH_STORAGE_FORMAT='firebase-safe-undo-patch-v188';
 
-function encodeUndoInverseForFirebase(inverse){
-  if(!inverse)return null;
-  const p=decodeUndoInverseFromFirebase(inverse)||clone(inverse);
-  return {
-    storageFormat:UNDO_PATCH_STORAGE_FORMAT,
-    version:p.version,
-    root:p.root,
-    txId:p.txId,
-    createdAt:p.createdAt,
-    deviceId:p.deviceId,
-    force:!!p.force,
-    listOpsEntries:Object.keys(p.listOps||{}).map(path=>({
-      path:String(path),
-      ops:clone(p.listOps[path]||[])
-    })),
-    valueOpsEntries:Object.keys(p.valueOps||{}).map(path=>({
-      path:String(path),
-      op:clone(p.valueOps[path])
-    })),
-    setOps:clone(p.setOps||{deletedIds:{add:[],remove:[]}})
-  };
-}
 
-function decodeUndoInverseFromFirebase(stored){
-  if(!stored)return null;
-  if(stored.storageFormat===UNDO_PATCH_STORAGE_FORMAT||
-     Array.isArray(stored.listOpsEntries)||
-     Array.isArray(stored.valueOpsEntries)){
-    const p={
-      version:stored.version||VERSION,
-      root:stored.root||ROOT,
-      txId:stored.txId||'',
-      createdAt:stored.createdAt||'',
-      deviceId:stored.deviceId||DEVICE,
-      listOps:{},
-      valueOps:{},
-      setOps:clone(stored.setOps||{deletedIds:{add:[],remove:[]}}),
-      force:!!stored.force
-    };
-    (stored.listOpsEntries||[]).forEach(entry=>{
-      if(!entry||typeof entry.path!=='string'||!Array.isArray(entry.ops))return;
-      p.listOps[entry.path]=clone(entry.ops);
-    });
-    (stored.valueOpsEntries||[]).forEach(entry=>{
-      if(!entry||typeof entry.path!=='string'||!entry.op)return;
-      p.valueOps[entry.path]=clone(entry.op);
-    });
-    return p;
-  }
-  return clone(stored);
-}
 
-function normalizeUndoJournalRecordForFirebase(record){
-  if(!record||typeof record!=='object')return clone(record);
-  const out=clone(record);
-  if(out.inverse){
-    out.inverse=encodeUndoInverseForFirebase(out.inverse);
-  }
-  return out;
-}
 
-function migrateUndoJournalOpsInsidePatch(patch){
-  const p=clone(patch||{});
-  const ops=p.listOps&&p.listOps.undoJournal;
-  if(Array.isArray(ops)){
-    ops.forEach(op=>{
-      if(op&&op.before&&op.before.inverse){
-        op.before=normalizeUndoJournalRecordForFirebase(op.before);
-      }
-      if(op&&op.after&&op.after.inverse){
-        op.after=normalizeUndoJournalRecordForFirebase(op.after);
-      }
-    });
-  }
-  return p;
-}
 
-function normalizeUndoJournalStorageInDB(db){
-  if(!db||!Array.isArray(db.undoJournal))return db;
-  db.undoJournal=db.undoJournal.map(normalizeUndoJournalRecordForFirebase);
-  return db;
-}
 
 function findInvalidFirebaseKey(root){
   const invalid=/[.#$\[\]\/\u0000-\u001F\u007F]/;
@@ -11150,158 +11063,6 @@ function assertFirebaseSafeTree(root){
   return true;
 }
 
-function makeInversePatch(p){
-  const inv={version:VERSION,root:ROOT,txId:'undo_'+p.txId,createdAt:new Date().toISOString(),deviceId:DEVICE,listOps:{},valueOps:{},setOps:{deletedIds:{add:[],remove:[]}},force:false};let count=0;
-  const ds=p&&p.setOps&&p.setOps.deletedIds,hasDeleteMeta=(ds&&((ds.add&&ds.add.length)||(ds.remove&&ds.remove.length)))||Object.keys(p.valueOps||{}).some(k=>k.startsWith('deletedRecords/'))||Object.keys(p.listOps||{}).some(k=>k.startsWith('trash/'));
-  if(hasDeleteMeta)return null;
-  Object.keys(p.listOps||{}).forEach(path=>{if(!reversiblePath(path))return;const ops=[];(p.listOps[path]||[]).forEach(op=>{if(op.action==='delete')ops.push({action:'upsert',key:op.key,existsBefore:false,after:clone(op.before)});else if(op.existsBefore)ops.push({action:'upsert',key:op.key,existsBefore:true,before:clone(op.after),after:clone(op.before)});else ops.push({action:'delete',key:op.key,existsBefore:true,before:clone(op.after)});});if(ops.length){inv.listOps[path]=ops;count+=ops.length;}});
-  return count?inv:null;
-}
-function undoActionLabel(){const a=list(DB&&DB.auditLog)[0];return String(a&&a.action||'عملية مالية');}
-function attachUndoEntry(p){
-  const inverse=makeInversePatch(p);
-  if(!inverse)return false;
-  if(!Array.isArray(DB.undoJournal))DB.undoJournal=[];
-  DB.undoJournal.unshift({
-    id:'UJ_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),
-    createdAt:new Date().toISOString(),
-    action:undoActionLabel(),
-    deviceId:DEVICE,
-    status:'available',
-    sourceTxId:p.txId,
-    inverse:encodeUndoInverseForFirebase(inverse)
-  });
-  DB.undoJournal=DB.undoJournal.slice(0,UNDO_LIMIT);
-  return true;
-}
-function availableUndo(){return list(DB&&DB.undoJournal).filter(x=>x&&x.status==='available'&&x.inverse).sort((a,b)=>Date.parse(b.createdAt||0)-Date.parse(a.createdAt||0));}
-function refreshUndoButton(){const c=availableUndo().length,b=document.getElementById('undoBtn'),n=document.getElementById('undoCount');if(n)n.textContent=String(c);if(b){b.style.opacity=c?'1':'.65';b.title='تراجع عن آخر عملية مالية قابلة للتراجع — ليس رجوعاً بين الصفحات — المتاح: '+c;}}
-function inverseCanApply(storedInverse){
-  const inv=decodeUndoInverseFromFirebase(storedInverse);
-  if(!inv)return false;
-  for(const path of Object.keys(inv.listOps||{})){
-    const m=listMap(getAt(DB,path),path);
-    for(const op of inv.listOps[path]){
-      const got=m[op.key]&&m[op.key].record;
-      if(op.action==='delete'){
-        if(!got||!same(got,op.before))return false;
-      }else if(op.existsBefore){
-        if(!got||!same(got,op.before))return false;
-      }else if(got){
-        return false;
-      }
-    }
-  }
-  return true;
-}
-async function undoOperation(id){
-  await ensureOutboxReady();
-  if(running||loadOutbox()){
-    originalToast('⏳ انتظر تثبيت العملية الحالية قبل التراجع',true);
-    return false;
-  }
-
-  const entry=list(DB&&DB.undoJournal).find(
-    x=>x&&String(x.id)===String(id)&&x.status==='available'
-  );
-  if(!entry){
-    originalToast('ℹ️ لا توجد عملية قابلة للتراجع',true);
-    refreshUndoButton();
-    return false;
-  }
-
-  const inverse=decodeUndoInverseFromFirebase(entry.inverse);
-  if(!inverse||!inverseCanApply(inverse)){
-    originalToast('❌ تغير أحد قيود العملية بعد حفظها؛ أوقف التراجع الآمن حتى لا تُستبدل بيانات أحدث',true);
-    return false;
-  }
-
-  const base=clone(baseline||DB);
-  try{
-    applyPatch(DB,inverse);
-
-    const live=list(DB.undoJournal).find(x=>x&&String(x.id)===String(id));
-    if(live){
-      live.status='undone';
-      live.undoneAt=new Date().toISOString();
-      live.undoneBy=DB.settings&&DB.settings.userName||'مستخدم';
-    }
-
-    try{
-      if(typeof audit==='function'){
-        audit('↩️ تراجع عن عملية سابقة: '+String(entry.action||'عملية مالية'));
-      }
-    }catch(e){}
-
-    const p=buildPatch(base,DB);
-    Object.keys(inverse.listOps||{}).forEach(path=>{
-      const invOps=clone(inverse.listOps[path]||[]);
-      if(!invOps.length)return;
-      const invKeys=new Set(invOps.map(op=>String(op.key)));
-      const metaOps=(p.listOps[path]||[]).filter(op=>!invKeys.has(String(op.key)));
-      p.listOps[path]=metaOps.concat(invOps);
-    });
-
-    p.txId='undo_tx_'+Date.now()+'_'+Math.random().toString(36).slice(2,9);
-    p.createdAt=new Date().toISOString();
-    p.deviceId=DEVICE;
-    p.force=false;
-
-    if(patchEmpty(p)){
-      throw new Error('لم ينتج عن التراجع أي قيد قابل للتثبيت');
-    }
-
-    rollbackSnapshot=clone(base);
-    await saveOutbox(p);
-    queued=true;
-    uiPending=true;
-
-    try{markUnsaved();}catch(e){}
-    gate('saving','تثبيت تراجع آمن عن '+String(entry.action||'عملية مالية')+' داخل '+ROOT+'…');
-    setPanel('saving','⏳ جارٍ تثبيت التراجع المشروط والتحقق من القراءة الراجعة');
-
-    const promise=beginPromise();
-    Promise.resolve().then(flush);
-    const res=await promise;
-    refreshUndoButton();
-
-    if(res&&res.ok){
-      originalToast('✅ تم التراجع عن العملية وتثبيته في Firebase: '+String(entry.action||'عملية مالية'));
-      return true;
-    }
-
-    originalToast(
-      '⚠️ التراجع ما زال قيد التثبيت أو توقف بسبب تعارض: '+
-      String(res&&res.error||lastError||''),
-      true
-    );
-    return false;
-  }catch(e){
-    window.DB=DB=clone(base);
-    rollbackSnapshot=null;
-    await clearOutbox();
-    queued=false;
-    uiPending=false;
-    hideGate();
-    renderAll();
-    refreshUndoButton();
-
-    lastError=String(e&&e.message||e);
-    diag.lastError=lastError;
-    diag.lastErrorAt=new Date().toISOString();
-    saveDiag(diag);
-
-    originalToast('❌ أُلغي التراجع قبل الرفع: '+lastError,true);
-    return false;
-  }
-}
-async function openUndoLock(){
-  const rows=availableUndo();refreshUndoButton();if(!rows.length){originalToast('ℹ️ لا توجد عملية مالية قابلة للتراجع منذ اعتماد سجل التراجع v175');return false;}
-  const pass=prompt('🔒 قفل التراجع\nهذا ليس رجوعاً بين الصفحات. أدخل كلمة سر الإدارة للرجوع عن آخر عملية مالية:');if(pass===null)return false;
-  const expected=String(DB&&DB.settings&&DB.settings.deletePass||'admin123');if(String(pass)!==expected){originalToast('❌ كلمة السر غير صحيحة',true);return false;}
-  const entry=rows[0],ok=confirm('↩️ تراجع عن عملية مالية سابقة\n\nالعملية: '+String(entry.action||'عملية مالية')+'\n\nهذا لا يرجع إلى صفحة سابقة؛ سيعكس قيود آخر عملية قابلة للتراجع ثم يثبت النتيجة في Firebase.\n\nمتابعة؟');if(!ok)return false;
-  return undoOperation(entry.id);
-}
 
 function cancelLivePullForLocalMutation(){
   livePullGeneration++;
@@ -11467,14 +11228,10 @@ async function save(){
     }
 
     const base=clone(baseline||DB);
-    normalizeUndoJournalStorageInDB(DB);
-    let target=clone(DB),patch;
+    const target=clone(DB);
+    let patch;
     try{
       patch=buildPatch(base,target);
-      if(!suppressUndoJournal&&!patchEmpty(patch)&&attachUndoEntry(patch)){
-        target=clone(DB);
-        patch=buildPatch(base,target);
-      }
     }catch(e){
       lastError=String(e&&e.message||e);diag.lastError=lastError;saveDiag(diag);
       window.DB=DB=clone(base);renderAll();
@@ -11487,7 +11244,6 @@ async function save(){
 
     if(patchEmpty(patch)){
       try{markSaved();}catch(e){}
-      refreshUndoButton();
       if(!wasUiPending)releaseSuccess();
       setPanel('ok','🟢 لا توجد تغييرات غير مرفوعة');
       return {ok:true,noChanges:true,source:SOURCE};
@@ -11532,7 +11288,6 @@ async function ready(){
   diag.lastPullAt=lastPullAt;
   diag.counts=countData(DB);
   saveDiag(diag);
-  refreshUndoButton();
   startLivePull();
 
   const p=loadOutbox();
@@ -11884,7 +11639,7 @@ new MutationObserver(mutations=>{
   }
 }).observe(document.documentElement,{childList:true,subtree:true});
 
-const EGTPH_SYNC_API={version:'202.0-real-pdf-share-clean-print',source:SOURCE,root:ROOT,save,flush,sync,schedule,refreshHealth,livePullTick,startLivePull,showConflicts,acceptRemote,forceLocal,openUndoLock,undoOperation,refreshUndoButton,verifyPatchDetailed,patchCloudState,status:()=>({ready:!!baseline,running,queued,pending:pendingCount(),lastError,lastSavedAt,lastPullAt,lastLivePullAt,livePollMs:LIVE_POLL_MS,remoteEtag:remoteEtag||null,openConflicts:allOpenConflicts.length||0,ownedConflicts:currentConflicts.length||0,outbox:!!loadOutbox(),writes:clone(writes),source:SOURCE,fingerprint:diag.cloudFingerprint||null,localFingerprint:diag.localFingerprint||null,cloudMatch:diag.cloudMatch===true,undoAvailable:availableUndo().length}),noLatestWins:true,conflictPolicy:'same-id-difference-stops-and-records-conflict',conditionalRootPut:true,noAutomaticDelete:true,tombstoneGatedPhysicalDelete:true,nearLiveInbound:true,tableView:{min:TABLE_SCALE_MIN,max:TABLE_SCALE_MAX,step:TABLE_SCALE_STEP,scan:scanTableViews,refresh:refreshTableViews}};window.openUndoLock=openUndoLock;window.EGTPH_SYNC=EGTPH_SYNC_API;window.EGTPH_V202=EGTPH_SYNC_API;window.EGTPH_V201=EGTPH_SYNC_API;window.EGTPH_V200=EGTPH_SYNC_API;window.EGTPH_V199=EGTPH_SYNC_API;window.EGTPH_V175=EGTPH_SYNC_API;window.EGTPH_V172=EGTPH_SYNC_API;
+const EGTPH_SYNC_API={version:'203.0-trash-only-no-undo',source:SOURCE,root:ROOT,save,flush,sync,schedule,refreshHealth,livePullTick,startLivePull,showConflicts,acceptRemote,forceLocal,verifyPatchDetailed,patchCloudState,status:()=>({ready:!!baseline,running,queued,pending:pendingCount(),lastError,lastSavedAt,lastPullAt,lastLivePullAt,livePollMs:LIVE_POLL_MS,remoteEtag:remoteEtag||null,openConflicts:allOpenConflicts.length||0,ownedConflicts:currentConflicts.length||0,outbox:!!loadOutbox(),writes:clone(writes),source:SOURCE,fingerprint:diag.cloudFingerprint||null,localFingerprint:diag.localFingerprint||null,cloudMatch:diag.cloudMatch===true}),noLatestWins:true,conflictPolicy:'same-id-difference-stops-and-records-conflict',conditionalRootPut:true,noAutomaticDelete:true,tombstoneGatedPhysicalDelete:true,nearLiveInbound:true,restorePolicy:'trash-only',undoFeature:false,tableView:{min:TABLE_SCALE_MIN,max:TABLE_SCALE_MAX,step:TABLE_SCALE_STEP,scan:scanTableViews,refresh:refreshTableViews}};window.EGTPH_SYNC=EGTPH_SYNC_API;window.EGTPH_V203=EGTPH_SYNC_API;window.EGTPH_V202=EGTPH_SYNC_API;window.EGTPH_V201=EGTPH_SYNC_API;window.EGTPH_V200=EGTPH_SYNC_API;window.EGTPH_V199=EGTPH_SYNC_API;window.EGTPH_V175=EGTPH_SYNC_API;window.EGTPH_V172=EGTPH_SYNC_API;
 })();
 </script>
 <style id="egtph-v172-final-sync-style">
@@ -11905,8 +11660,8 @@ const EGTPH_SYNC_API={version:'202.0-real-pdf-share-clean-print',source:SOURCE,r
 (function(){
   'use strict';
   window.__EGTPH_V175_SURGICAL__=true;
-  window.__EGTPH_V175_BUILD__='v202-real-pdf-share-clean-print';
-  try{document.title='EGTPH — سجل الأجور v202';}catch(e){}
+  window.__EGTPH_V175_BUILD__='v203-trash-only-no-undo';
+  try{document.title='EGTPH — سجل الأجور v203';}catch(e){}
 })();
 </script>
 
