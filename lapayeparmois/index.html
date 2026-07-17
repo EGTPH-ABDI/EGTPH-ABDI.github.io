@@ -224,7 +224,7 @@
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes" name="viewport"/>
-<title>EGTPH — سجل الأجور v207</title>
+<title>EGTPH — سجل الأجور v211</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -1135,7 +1135,7 @@ body{background:linear-gradient(145deg,#f2f7f4 0%,#fbfdfc 42%,#eef7f1 100%);}
 }
 @media screen and (max-width:900px){.twrap thead th,.sec table thead th{font-size:11.2px!important;padding:10px 8px!important}.twrap tbody td,.sec table tbody td{font-size:11px!important;padding:10px 8px!important;line-height:1.65!important}#page-settlement .twrap table{min-width:1120px!important}}
 </style>
-<meta content="v207-auto-complete-installment-cycle" name="egtph-build"/>
+<meta content="v211-debt-settlement-print-reverified" name="egtph-build"/>
 <style id="egtph-v176-night-theme">
 /* v176 — ثيم ثانٍ فقط: ليلي أخضر متناسق. الأبيض يبقى الافتراضي. */
 body.egtph-theme-night{
@@ -2975,6 +2975,33 @@ function advancePublicPrintNote(recordsInput){
   return parts.join(' | ');
 }
 
+// v211 — تجميع كل أجزاء عملية التسبيق الواحدة في سطر طباعة واحد.
+// العملية قد تتكون من تسبيق فعلي + تسبيق محاسبي تلقائي، لكنها تبقى عملية واحدة.
+function groupAdvanceRecordsForPrint(recordsInput){
+  const records=(Array.isArray(recordsInput)?recordsInput:[recordsInput]).filter(Boolean);
+  const groups=new Map();
+  records.forEach((row,index)=>{
+    const key=String(row.operationId||row.transactionId||row.id||('row_'+index));
+    if(!groups.has(key))groups.set(key,{id:key,rows:[],gross:0,cash:0,debt:0,absence:0,months:new Set(),date:'',realDate:'',entryStamp:'',by:''});
+    const g=groups.get(key);
+    g.rows.push(row);
+    g.gross+=Math.max(0,advGross(row));
+    g.cash+=Math.max(0,advNetPaid(row));
+    (Array.isArray(row.deductions)?row.deductions:[]).forEach(d=>{
+      if(!d)return;
+      if(d.type==='debt')g.debt+=Math.max(0,+d.amount||0);
+      else if(d.type==='absence')g.absence+=Math.max(0,+d.amount||0);
+    });
+    const mi=row.month!=null?+row.month:null;
+    if(mi!=null&&MN[mi])g.months.add(MN[mi]);
+    if(!g.date)g.date=row.date||row.realDate||'—';
+    if(!g.realDate)g.realDate=row.realDate||row.date||'—';
+    if(!g.entryStamp)g.entryStamp=advEntryStamp(row)||'';
+    if(!g.by)g.by=row.by||'';
+  });
+  return Array.from(groups.values()).map(g=>Object.assign(g,{publicNote:advancePublicPrintNote(g.rows),months:[...g.months]}));
+}
+
 // المبلغ النقدي الحقيقي الذي سُلِّم للعامل. مبلغ amount يبقى مبلغاً محاسبياً من الراتب.
 function advDedCapacity(e){return Math.max(0,advGross(e)-advDedTotal(e));}
 function attachDeductionToAdvance(adv,ded){
@@ -3365,7 +3392,16 @@ function calcFinalSettlement(w){
   const advDate=a=>a&&(a.realDate||a.paymentDate||a.effectiveDate||a.date||a.enteredAt);
   const gross=a=>{try{if(typeof advGross==='function')return advGross(a);}catch(e){}return a&&a._isInstDeduction?0:Math.max(0,num(a&&a.amount));};
   // القيد الاصطناعي للقسط لا يعد تسبيقاً ثانياً. العملية المركبة الأصلية تدخل بكامل مبلغها المحاسبي.
-  const totalAdv=money(advRows.filter(a=>!a._isInstDeduction&&within(advDate(a))).reduce((s,a)=>s+gross(a),0));
+  // v210 — نفصل بين المبلغ المحاسبي المحتسب على الراتب والنقد الحقيقي المسلّم للعامل.
+  // التسبيق المحاسبي التلقائي يدخل في totalAdv لإغلاق الدورة، لكنه لا يعد خروجاً نقدياً.
+  const salaryAdvanceRows=advRows.filter(a=>!a._isInstDeduction&&within(advDate(a)));
+  const totalAdv=money(salaryAdvanceRows.reduce((s,a)=>s+gross(a),0));
+  const cashAdvances=money(salaryAdvanceRows.reduce((s,a)=>{
+    if(a&&a._cashDisbursed===false)return s;
+    try{if(typeof advNetPaid==='function')return s+Math.max(0,advNetPaid(a));}catch(e){}
+    const deductions=arr(a&&a.deductions).reduce((q,d)=>q+Math.max(0,num(d&&d.amount)),0);
+    return s+Math.max(0,gross(a)-deductions);
+  },0));
   const unpaidHrs=money(flatten(db.hours,wid).filter(h=>h&&!isDeleted(h)&&!h.paid&&within(h.date||h.realDate||h.enteredAt)).reduce((s,h)=>s+num(h.total),0));
   const unpaidBon=money(flatten(db.bonuses,wid).filter(b=>b&&!isDeleted(b)&&!b.paid&&within(b.date||b.realDate||b.enteredAt)).reduce((s,b)=>s+num(b.net!=null?b.net:b.amount),0));
   const totalAbs=money(flatten(db.absences,wid).filter(a=>a&&!isDeleted(a)&&a.deductOpt!=='cancel'&&within(a.from||a.date||a.realDate||a.enteredAt)).reduce((s,a)=>s+Math.max(0,num(a.deduct)),0));
@@ -3389,12 +3425,27 @@ function calcFinalSettlement(w){
     });
   });
   const debtPaid=money(Object.values(paymentMap).reduce((sum,row)=>sum+Math.max(row.deductions,row.returns),0));
+  // فقط ما خُصم فعلياً من التسبيقات/الراتب، دون احتساب التسديدات النقدية اليدوية كأنها خصم من الراتب.
+  // نحسبه من روابط التسبيق نفسها حتى لو وُجد قيد return مقابلها؛ وجود القيدين لا يعني ازدواجية بل طرفا نفس العملية.
+  const salaryRecoverySeen=new Set();let salaryRecoveryTotal=0;
+  advRows.filter(a=>within(advDate(a))).forEach(a=>{
+    if(a&&a._isInstDeduction){
+      const key='legacy|'+str(a.id||a._instPaymentId||a._instTag||'');
+      if(!salaryRecoverySeen.has(key)){salaryRecoverySeen.add(key);salaryRecoveryTotal+=Math.max(0,num(a.amount));}
+    }
+    arr(a&&a.deductions).filter(x=>x&&x.type==='debt').forEach(x=>{
+      const key=[str(a&&a.id),str(x._instPaymentId||x._instTag||x.id||''),str(x._instPart||''),str(x.amount)].join('|');
+      if(salaryRecoverySeen.has(key))return;
+      salaryRecoverySeen.add(key);salaryRecoveryTotal+=Math.max(0,num(x.amount));
+    });
+  });
+  const debtRecoveredFromSalary=money(salaryRecoveryTotal);
   const debtBalance=Math.max(0,money(debtOriginal-debtPaid));
   const netFinal=money(earnedSal+unpaidHrs+unpaidBon-totalAdv-totalAbs-debtBalance);
   const current=cycleRangeFor(ref);
   const actualDays=Math.floor((ref-start)/DAY)+1;
   return {
-    isFinal,refDate:iso(ref),actualDays,earnedSal,daily,unpaidHrs,unpaidBon,totalAdv,cashAdvances:totalAdv,totalAbs,
+    isFinal,refDate:iso(ref),actualDays,earnedSal,daily,unpaidHrs,unpaidBon,totalAdv,cashAdvances,debtRecoveredFromSalary,totalAbs,
     debtOriginal,debtPaid,debtBalance,netFinal,inclusive:true,fullCycles,currentCycleStart:iso(current.from),currentCycleEnd:iso(current.to),
     currentCycleDays:Math.floor((ref-new Date(Math.max(start.getTime(),current.from.getTime())))/DAY)+1,
     exitEligibleDays,exitCycleStart,exitCycleEnd,
@@ -3506,15 +3557,34 @@ function installmentSnapshotForAdvance(wid,debt){
     first:ledger.first,nextDue:ledger.nextDue,remaining,amount,returns:ledger.returns,ledger
   };
 }
-function advanceOperationCycleCloseState(wid,records,paidDate){
+function advanceOperationCycleCloseStates(wid,records,paidDate){
   const w=getW(wid),rows=(Array.isArray(records)?records:[records]).filter(Boolean);
-  if(!w||!rows.length)return{closes:false,reason:'missing'};
-  const effectiveDate=advanceOperationPaymentDate(rows,paidDate),cycle=cycleAnchorForDate(w,effectiveDate),status=advanceCycleStatus(wid,cycle);
-  const operationGross=rows.filter(row=>advanceBelongsToCycle(row,w,cycle.m,cycle.yr)).reduce((s,row)=>s+Math.max(0,advGross(row)),0);
-  const paidBefore=Math.max(0,status.paid-operationGross);
-  const remainingBefore=Math.max(0,status.due-paidBefore);
-  const closes=operationGross>0&&remainingBefore>0&&status.remaining<=0;
-  return{closes,effectiveDate,cycle,status,operationGross,paidBefore,remainingBefore};
+  if(!w||!rows.length)return[];
+
+  // v209 — العملية الواحدة قد تُوزَّع على السابقة ثم الحالية ثم الموالية.
+  // لذلك يجب تقييم كل دورة محاسبية لمستها العملية، لا الاكتفاء بأول حصة فقط.
+  const effectiveDate=advanceOperationPaymentDate(rows,paidDate),groups=new Map();
+  rows.forEach(row=>{
+    if(!row||_isInstAdv(row))return;
+    const accountingDate=advanceAccountingDate(row)||effectiveDate;
+    const cycle=cycleAnchorForDate(w,accountingDate),key=cycle.yr+'_'+cycle.m;
+    if(!groups.has(key))groups.set(key,{cycle,accountingDate,rows:[]});
+    groups.get(key).rows.push(row);
+  });
+
+  return Array.from(groups.values()).map(group=>{
+    const cycle=group.cycle,status=advanceCycleStatus(wid,cycle);
+    const operationGross=group.rows.reduce((s,row)=>s+Math.max(0,advGross(row)),0);
+    const paidBefore=Math.max(0,status.paid-operationGross);
+    const remainingBefore=Math.max(0,status.due-paidBefore);
+    const closes=operationGross>0&&remainingBefore>0&&status.remaining<=0;
+    return{closes,effectiveDate,accountingDate:group.accountingDate,cycle,status,operationGross,paidBefore,remainingBefore,rows:group.rows};
+  }).sort((a,b)=>a.cycle.yr-b.cycle.yr||a.cycle.m-b.cycle.m);
+}
+function advanceOperationCycleCloseState(wid,records,paidDate){
+  const states=advanceOperationCycleCloseStates(wid,records,paidDate);
+  if(!states.length)return{closes:false,reason:'missing',states:[]};
+  return Object.assign({},states[0],{states});
 }
 function nextAutomaticInstallmentCandidate(wid,records,paidDate){
   const w=getW(wid),rows=(Array.isArray(records)?records:[records]).filter(Boolean);
@@ -3523,44 +3593,50 @@ function nextAutomaticInstallmentCandidate(wid,records,paidDate){
   const effectiveDate=advanceOperationPaymentDate(rows,paidDate);
   const capacity=rows.reduce((s,row)=>s+advDedCapacity(row),0);
   if(capacity<=0)return null;
-  const closeState=advanceOperationCycleCloseState(wid,rows,effectiveDate);
+  const cycleStates=advanceOperationCycleCloseStates(wid,rows,effectiveDate);
+  const primaryState=cycleStates[0]||{closes:false,status:{remaining:0}};
   const candidates=[];
 
   (DB.debts[wid]||[]).filter(d=>d&&d.type==='debt'&&d.inst&&!d.instDisabled).forEach(d=>{
     const snap=installmentSnapshotForAdvance(wid,d);
     if(!snap||!snap.amount)return;
     const dueNow=!!(snap.nextDue&&_dateOnOrBefore(snap.nextDue,effectiveDate));
-    const remainingAfter=Math.max(0,+((closeState&&closeState.status&&closeState.status.remaining)||0));
-    const closes=!!(closeState&&closeState.closes);
 
-    // v207 — إغلاق ذكي وفوري للدورة:
-    // إذا بقي من راتب الدورة مبلغ لا يتجاوز باقي القسط، وكان التسبيق الحالي يستطيع
-    // تغطية الفرق بين القسط وهذا المتبقي، نعتبر المتبقي نفسه تسبيقاً محاسبياً تلقائياً
-    // مخصوماً بالكامل للدين. هكذا تُغلق الدورة فوراً دون انتظار دفع نقدي لاحق.
-    const actualPartNeeded=Math.max(0,snap.amount-remainingAfter);
-    const autoCloseEligible=!!(
-      closeState&&closeState.operationGross>0&&closeState.remainingBefore>0&&
-      remainingAfter>0&&remainingAfter<=snap.amount&&capacity>=actualPartNeeded
-    );
+    // v209 — نبحث من أحدث دورة لمستها العملية إلى أقدمها.
+    // إذا كان المتبقي بعد العملية لا يتجاوز باقي القسط، وكانت السيولة المحاسبية
+    // للعملية تكفي للجزء الحقيقي من القسط، نُغلق تلك الدورة فوراً بتسبيق محاسبي.
+    const autoCloseState=cycleStates.slice().reverse().find(state=>{
+      const remainingAfter=Math.max(0,+((state.status&&state.status.remaining)||0));
+      const actualPartNeeded=Math.max(0,snap.amount-remainingAfter);
+      return state.operationGross>0&&state.remainingBefore>0&&remainingAfter>0&&
+        remainingAfter<=snap.amount&&capacity>=actualPartNeeded;
+    })||null;
+    const closingState=cycleStates.find(state=>state.closes)||null;
 
-    let collectAmount=0,trigger='',collectFromOperation=0,autoAdvanceAmount=0;
-    if(autoCloseEligible){
-      collectFromOperation=actualPartNeeded;
+    let collectAmount=0,trigger='',collectFromOperation=0,autoAdvanceAmount=0,closeState=primaryState,remainingAfter=0;
+    if(autoCloseState){
+      closeState=autoCloseState;
+      remainingAfter=Math.max(0,+((closeState.status&&closeState.status.remaining)||0));
+      collectFromOperation=Math.max(0,snap.amount-remainingAfter);
       autoAdvanceAmount=remainingAfter;
       collectAmount=collectFromOperation+autoAdvanceAmount;
       trigger='near-close-auto-settle';
     }else if(dueNow){
+      closeState=closingState||primaryState;
+      remainingAfter=Math.max(0,+((closeState.status&&closeState.status.remaining)||0));
       collectAmount=Math.min(snap.amount,capacity);
       collectFromOperation=collectAmount;
       trigger='due';
-    }else if(closes){
+    }else if(closingState){
+      closeState=closingState;
+      remainingAfter=Math.max(0,+((closeState.status&&closeState.status.remaining)||0));
       collectAmount=Math.min(snap.amount,capacity);
       collectFromOperation=collectAmount;
       trigger='cycle-close';
     }
     if(collectAmount<=0)return;
     candidates.push(Object.assign({},snap,{
-      effectiveDate,capacity,closeState,remainingAfter,collectAmount,trigger,
+      effectiveDate,capacity,closeState,cycleStates,remainingAfter,collectAmount,trigger,
       collectFromOperation,autoAdvanceAmount,
       scheduledDue:snap.nextDue||'',willComplete:collectAmount>=snap.amount
     }));
@@ -3591,8 +3667,14 @@ function advanceOperationNeedsInstallmentRepair(wid,record){
   if(!rows.length||advanceOperationSummary(rows).debt>0)return false;
   return !!nextAutomaticInstallmentCandidate(wid,rows,advanceOperationPaymentDate(rows,''));
 }
+function automaticInstallmentStableHash(value){
+  const s=String(value||'');
+  let h=2166136261;
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}
+  return (h>>>0).toString(36);
+}
 function automaticInstallmentAdvanceId(wid,records,candidate){
-  return 'AUTOADV_'+hash([
+  return 'AUTOADV_'+automaticInstallmentStableHash([
     String(wid),advanceOperationIdentity(records&&records[0]),String(candidate&&candidate.debt&&candidate.debt.id||''),
     String(candidate&&candidate.installmentNo||''),String(candidate&&candidate.closeState&&candidate.closeState.cycle&&candidate.closeState.cycle.yr||''),
     String(candidate&&candidate.closeState&&candidate.closeState.cycle&&candidate.closeState.cycle.m||'')
@@ -3698,8 +3780,13 @@ function autoSettleOnAdvance(wid,recordsInput,paidDate){
     const automaticAdvance=ensureAutomaticInstallmentAdvance(wid,records,candidate);
     if(!automaticAdvance)throw new Error('تعذر إنشاء التسبيق المحاسبي التلقائي لإغلاق الدورة');
     const autoAmount=Math.max(0,Math.round(+candidate.autoAdvanceAmount||0));
+    const totalParts=allParts.length+1;
+    // v209 — بعد إضافة التسبيق المحاسبي يجب أن تحمل جميع أجزاء القسط العدد النهائي نفسه.
+    records.forEach(row=>(row.deductions||[]).forEach(d=>{
+      if(d&&d.type==='debt'&&String(d._instPaymentId||'')===String(paymentId))d._instParts=totalParts;
+    }));
     if(!attachDeductionToAdvance(automaticAdvance,Object.assign({},baseDeduction,{
-      amount:autoAmount,_instPart:allParts.length+1,_instParts:allParts.length+1,
+      amount:autoAmount,_instPart:totalParts,_instParts:totalParts,
       _autoInstallmentSettlement:true
     })))throw new Error('تعذر خصم القسط من التسبيق المحاسبي التلقائي');
     allParts.push({advanceId:automaticAdvance.id,amount:autoAmount});
@@ -5211,7 +5298,7 @@ async function saveAdv(){
     }else{
       toast('❌ لم يُحفظ التسبيق: '+String(err&&err.message||err),true);
     }
-    console.error('[advance-core-v207]',err);
+    console.error('[advance-core-v209]',err);
     return false;
   }finally{
     _advanceSaveInFlight=false;
@@ -7992,6 +8079,7 @@ function printWorkerDetail(wid,fM,tM){
     const calRes=ms.calRes;
     const ps=ms.baseSal;const wd=calRes.days;const pro=calRes.pro;
     const advE=advanceEntriesInCycle(w.id,m,yr);
+    const advPrintGroups=groupAdvanceRecordsForPrint(advE);
     const hrsE=hourEntriesInCycle(w.id,m,yr);
     const absAll=absenceEntriesInCycle(w.id,m,yr);
     const absNow=absAll.filter(a=>a.deductOpt==='now');
@@ -8034,9 +8122,9 @@ function printWorkerDetail(wid,fM,tM){
           <td style="color:var(--ui-muted);font-weight:700">الراتب${pro?' (نسبي)':''}</td>
           <td style="font-weight:800;color:var(--ui-blue-text);text-align:left">${fmtN(ps)} دج<span style="color:var(--ui-muted-2);font-size:10px;margin-right:6px">(${wd} يوم)</span></td>
         </tr>
-        ${advE.map((e,i)=>`<tr>
-          <td style="color:var(--ui-amber-text)">💰 تسبيق ${i+1} — ${e.date}${advEntryStamp(e)?' <small style="color:var(--ui-teal-text)">[إدخال: '+advEntryStamp(e)+']</small>':''}${advancePublicPrintNote(e)?' <br><small style="color:var(--ui-red-text)">'+advancePublicPrintNote(e)+'</small>':''}</td>
-          <td style="color:var(--ui-green-text);font-weight:700;text-align:left">+ ${fmtN(advGross(e))} دج</td>
+        ${advPrintGroups.map((g,i)=>`<tr>
+          <td style="color:var(--ui-amber-text)">💰 تسبيق ${i+1} — ${g.date}${g.entryStamp?' <small style="color:var(--ui-teal-text)">[إدخال: '+g.entryStamp+']</small>':''}${g.publicNote?' <br><small style="color:var(--ui-red-text)">'+g.publicNote+'</small>':''}</td>
+          <td style="color:var(--ui-green-text);font-weight:700;text-align:left">+ ${fmtN(g.gross)} دج</td>
         </tr>`).join('')}
         ${absNow.filter(a=>!a._advanceId).map(a=>`<tr>
           <td style="color:var(--ui-red-text)">📅 خصم غياب — ${a.date} — ${a.days}ي${a.reason?' ('+a.reason+')':''}</td>
@@ -8146,14 +8234,17 @@ function printTodayAdvances(){
     const advRows=[];
     let totAdv=0,totAdvCash=0,totAdvDebt=0,totHrs=0,totBon=0,totAbs=0,totDbt=0;
 
+    const allAdvanceRows=[];
     Object.entries(DB.advances[w.id]||{}).forEach(([m,arr])=>{
-      arr.forEach(a=>{
-        if(_isInstAdv(a))return;
-        const gross=advGross(a),cash=advNetPaid(a),debt=(a.deductions||[]).filter(d=>d&&d.type==='debt').reduce((s,d)=>s+(+d.amount||0),0);
-        totAdv+=gross;totAdvCash+=cash;totAdvDebt+=debt;
-        const ded=advDedNote(a);
-        const net=advDedTotal(a)>0?' | النقد المسلّم فعلياً: '+fmtN(cash):'';
-        advRows.push({date:a.realDate||a.date||'—',type:debt?'💰 تسبيق محاسبي (نقد + قسط)':'💰 تسبيق',month:MN[+m]||'',amt:gross,note:advancePublicPrintNote(a),color:debt?'#8a5a00':'#155e1a',sign:'+'});
+      (arr||[]).forEach(a=>{if(!_isInstAdv(a))allAdvanceRows.push(a);});
+    });
+    groupAdvanceRecordsForPrint(allAdvanceRows).forEach(g=>{
+      totAdv+=g.gross;totAdvCash+=g.cash;totAdvDebt+=g.debt;
+      advRows.push({
+        date:g.realDate||g.date||'—',
+        type:g.debt?'💰 تسبيق محاسبي (نقد + قسط)':'💰 تسبيق',
+        month:g.months.join('، '),amt:g.gross,note:g.publicNote,
+        color:g.debt?'#8a5a00':'#155e1a',sign:'+'
       });
     });
     (DB.hours[w.id]||[]).forEach(h=>{
@@ -12174,8 +12265,8 @@ const EGTPH_SYNC_API={version:'207.0-auto-complete-installment-cycle',source:SOU
 (function(){
   'use strict';
   window.__EGTPH_V175_SURGICAL__=true;
-  window.__EGTPH_V175_BUILD__='v207-auto-complete-installment-cycle';
-  try{document.title='EGTPH — سجل الأجور v207';}catch(e){}
+  window.__EGTPH_V175_BUILD__='v211-debt-settlement-print-reverified';
+  try{document.title='EGTPH — سجل الأجور v211';}catch(e){}
 })();
 </script>
 
