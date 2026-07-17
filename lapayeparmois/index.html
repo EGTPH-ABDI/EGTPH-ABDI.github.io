@@ -2479,15 +2479,61 @@ function _v169SanitizeCloud(x){
   window.__EGTPH_V172_RAW_COUNTS__={workers:count(y.workers),advances:count(y.advances),hours:count(y.hours),absences:count(y.absences),bonuses:count(y.bonuses),debts:count(y.debts)};
   return y;
 }
+
+const EGTPH_STARTUP_TIMEOUT_MS=22000;
+const EGTPH_STARTUP_CACHE_DB='EGTPH_PAYROLL_STARTUP_CACHE';
+const EGTPH_STARTUP_CACHE_STORE='snapshots';
+const EGTPH_STARTUP_CACHE_KEY='latest';
+function _v227OpenStartupCache(){
+  return new Promise((resolve,reject)=>{
+    if(!window.indexedDB){reject(new Error('IndexedDB غير متاح'));return;}
+    let req;try{req=indexedDB.open(EGTPH_STARTUP_CACHE_DB,1);}catch(e){reject(e);return;}
+    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(EGTPH_STARTUP_CACHE_STORE))db.createObjectStore(EGTPH_STARTUP_CACHE_STORE);};
+    req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('تعذر فتح ذاكرة التشغيل'));
+  });
+}
+async function _v227SaveStartupCache(data){
+  try{
+    const db=await _v227OpenStartupCache();
+    try{await new Promise((resolve,reject)=>{const tx=db.transaction(EGTPH_STARTUP_CACHE_STORE,'readwrite');tx.objectStore(EGTPH_STARTUP_CACHE_STORE).put({savedAt:new Date().toISOString(),data:JSON.parse(JSON.stringify(data))},EGTPH_STARTUP_CACHE_KEY);tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error||new Error('فشل حفظ ذاكرة التشغيل'));tx.onabort=()=>reject(tx.error||new Error('أُلغي حفظ ذاكرة التشغيل'));});}finally{db.close();}
+  }catch(e){console.warn('[v227] startup cache save skipped',e);}
+}
+async function _v227LoadStartupCache(){
+  try{
+    const db=await _v227OpenStartupCache();
+    try{return await new Promise((resolve,reject)=>{const tx=db.transaction(EGTPH_STARTUP_CACHE_STORE,'readonly');const req=tx.objectStore(EGTPH_STARTUP_CACHE_STORE).get(EGTPH_STARTUP_CACHE_KEY);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error||new Error('فشل قراءة ذاكرة التشغيل'));});}finally{db.close();}
+  }catch(e){return null;}
+}
+function _v227RenderStartupData(){
+  ['renderDash','renderWorkers','renderSettlement','renderSalContent','renderHrsContent','renderAbsContent','renderAbsSummary','renderBonContent','renderDbtContent','renderAnn','renderAlerts','renderAdmin','renderTrash','updateBadges','cloudFillInputs'].forEach(n=>{try{if(typeof window[n]==='function')window[n]();}catch(e){console.warn('render '+n,e);}});
+}
+async function _v227FetchWithTimeout(url,options,timeoutMs){
+  const controller=typeof AbortController==='function'?new AbortController():null;
+  const upstream=options&&options.signal;
+  let timer=null,onAbort=null;
+  const opts=Object.assign({},options||{});
+  if(controller){
+    opts.signal=controller.signal;
+    if(upstream){if(upstream.aborted)controller.abort();else{onAbort=()=>controller.abort();upstream.addEventListener('abort',onAbort,{once:true});}}
+    timer=setTimeout(()=>controller.abort(),Math.max(1000,Number(timeoutMs)||EGTPH_STARTUP_TIMEOUT_MS));
+  }
+  try{return await fetch(url,opts);}catch(e){if(e&&e.name==='AbortError')throw new Error('انتهت مهلة الاتصال بـFirebase');throw e;}finally{if(timer)clearTimeout(timer);if(upstream&&onAbort)try{upstream.removeEventListener('abort',onAbort);}catch(e){}}
+}
+
 async function _v169PullAuthoritativeCloud(){
   if(window.__EGTPH_V172_LOADING__)return false;
   window.__EGTPH_V172_LOADING__=true;
   const URL='https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app',KEY='EGTPH-pay-clean-v144-live',SOURCE='firebase:/egtph/'+KEY;
   try{
-    if(typeof window.egtphEnsureAuthenticated==='function')await window.egtphEnsureAuthenticated();
+    if(typeof window.egtphEnsureAuthenticated==='function'){
+      await Promise.race([
+        Promise.resolve(window.egtphEnsureAuthenticated()),
+        new Promise((_,reject)=>setTimeout(()=>reject(new Error('انتهت مهلة تسجيل الدخول إلى Firebase')),15000))
+      ]);
+    }
     const h=window.EGTPHAuth,token=h&&typeof h.getToken==='function'?h.getToken('lapayeparmois'):null;
     if(!token)throw new Error('لا يوجد رمز دخول صالح إلى Firebase');
-    const res=await fetch(URL+'/egtph/'+encodeURIComponent(KEY)+'.json?auth='+encodeURIComponent(token),{cache:'no-store',headers:{'Cache-Control':'no-cache'}});
+    const res=await _v227FetchWithTimeout(URL+'/egtph/'+encodeURIComponent(KEY)+'.json?auth='+encodeURIComponent(token),{cache:'no-store',headers:{'Cache-Control':'no-cache'}},EGTPH_STARTUP_TIMEOUT_MS);
     if(!res.ok)throw new Error('Firebase HTTP '+res.status);
     const raw=await res.json();
     _applyDBData(_v169SanitizeCloud(raw));
@@ -2496,12 +2542,25 @@ async function _v169PullAuthoritativeCloud(){
     try{window.dispatchEvent(new CustomEvent('egtph-db-ready',{detail:{source:SOURCE,counts:window.__EGTPH_V172_LOAD_COUNTS__}}));}catch(e){}
     ['renderDash','renderWorkers','renderSettlement','renderSalContent','renderHrsContent','renderAbsContent','renderAbsSummary','renderBonContent','renderDbtContent','renderAnn','renderAlerts','renderAdmin','renderTrash','updateBadges','cloudFillInputs'].forEach(n=>{try{if(typeof window[n]==='function')window[n]();}catch(e){console.warn('render '+n,e);}});
     try{_cloudStatus('🟢 المصدر المالي الوحيد: Firebase /egtph/'+KEY,'var(--green1)');}catch(e){}
-    console.info('[v172] authoritative Firebase snapshot loaded',window.__EGTPH_V172_LOAD_COUNTS__);
+    Promise.resolve(_v227SaveStartupCache(DB));
+    console.info('[v227] authoritative Firebase snapshot loaded',window.__EGTPH_V172_LOAD_COUNTS__);
     return true;
   }catch(err){
-    console.error('[v172] Firebase load failed',err);window.__EGTPH_DB_READY__=false;window.__EGTPH_DB_READY_SOURCE__='firebase-error';
-    try{_cloudStatus('🔴 تعذر جلب Firebase؛ لم تُستعمل أي نسخة مالية محلية','var(--red)');}catch(e){}
-    try{toast('❌ تعذر جلب Firebase. لم تُستعمل بيانات محلية أو مضمّنة.',true);}catch(e){}
+    console.error('[v227] Firebase load failed',err);
+    const cached=await _v227LoadStartupCache();
+    if(cached&&cached.data&&typeof cached.data==='object'){
+      try{
+        _applyDBData(_v169SanitizeCloud(cached.data));
+        _cloudDirty=false;window.__EGTPH_DB_READY__=true;window.__EGTPH_DB_READY_SOURCE__='local-cache-readonly';
+        _v227RenderStartupData();
+        try{_cloudStatus('🟠 تعذر Firebase — عرض آخر نسخة محفوظة للقراءة فقط','var(--amber)');}catch(e){}
+        try{window.dispatchEvent(new CustomEvent('egtph-startup-offline',{detail:{error:String(err&&err.message||err),cachedAt:cached.savedAt||''}}));}catch(e){}
+        return false;
+      }catch(cacheError){console.warn('[v227] cached snapshot rejected',cacheError);}
+    }
+    window.__EGTPH_DB_READY__=false;window.__EGTPH_DB_READY_SOURCE__='firebase-error';
+    try{_cloudStatus('🔴 تعذر جلب Firebase؛ افتح الاتصال ثم أعد المحاولة','var(--red)');}catch(e){}
+    try{window.dispatchEvent(new CustomEvent('egtph-startup-offline',{detail:{error:String(err&&err.message||err),cachedAt:''}}));}catch(e){}
     return false;
   }finally{window.__EGTPH_V172_LOADING__=false;}
 }
@@ -10430,7 +10489,7 @@ const LEGACY_DIAG_KEYS=['EGTPH_V171_SYNC_DIAGNOSTICS','EGTPH_V170_SYNC_DIAGNOSTI
 const DEVICE_KEY='EGTPH_DEVICE_ID_V172';
 const MAX_RETRY=7, RETRY_MS=3000, LIVE_POLL_MS=5000;
 const BASE_FETCH=window.fetch.bind(window);
-let baseline=null,rollbackSnapshot=null,running=false,queued=false,lastError=null,lastSavedAt=null,lastPullAt=null,lastLivePullAt=null,remoteEtag=null;
+let baseline=null,rollbackSnapshot=null,running=false,queued=false,lastError=null,lastSavedAt=null,lastPullAt=null,lastLivePullAt=null,remoteEtag=null,startupPhase=true;
 let retryTimer=null,activePromise=null,resolveActive=null,writes=[],currentConflicts=[],allOpenConflicts=[],uiPending=false,deferredCloses=[],deferredToasts=[],saveInvocationSeq=0;
 let scheduleTimer=null,liveTimer=null,liveRunning=false,localSavePreparing=false,livePullGeneration=0,livePullAbortController=null;
 let outboxMemory=null,outboxBackend=null,outboxReadyPromise=null;
@@ -10819,9 +10878,14 @@ async function clearOutbox(){
 function loadDiag(){try{const cur=JSON.parse(localStorage.getItem(DIAG_KEY)||'null');if(cur&&typeof cur==='object')return Object.assign({},cur);for(const k of LEGACY_DIAG_KEYS){const old=JSON.parse(localStorage.getItem(k)||'null');if(old&&typeof old==='object')return Object.assign({},old);}return {};}catch(e){return {};}}
 function saveDiag(x){try{localStorage.setItem(DIAG_KEY,JSON.stringify(x));}catch(e){}}
 let diag=loadDiag();
-async function token(){if(typeof window.egtphEnsureAuthenticated==='function')await window.egtphEnsureAuthenticated();const h=window.EGTPHAuth,t=h&&typeof h.getToken==='function'?h.getToken('lapayeparmois'):null;if(!t)throw new Error('لا يوجد رمز Firebase صالح');return t;}
+async function token(){if(typeof window.egtphEnsureAuthenticated==='function')await Promise.race([Promise.resolve(window.egtphEnsureAuthenticated()),new Promise((_,reject)=>setTimeout(()=>reject(new Error('انتهت مهلة تسجيل الدخول إلى Firebase')),15000))]);const h=window.EGTPHAuth,t=h&&typeof h.getToken==='function'?h.getToken('lapayeparmois'):null;if(!t)throw new Error('لا يوجد رمز Firebase صالح');return t;}
 function endpoint(path,t){const p=String(path||'').split('/').filter(Boolean).map(encodeURIComponent).join('/');return URL+ROOT+(p?'/'+p:'')+'.json?auth='+encodeURIComponent(t);}
-async function request(url,opt){const o=Object.assign({},opt||{});o.cache='no-store';o.headers=Object.assign({'Cache-Control':'no-cache','Pragma':'no-cache'},(opt&&opt.headers)||{});return BASE_FETCH(url,o);}
+async function request(url,opt){
+  const o=Object.assign({},opt||{});o.cache='no-store';o.headers=Object.assign({'Cache-Control':'no-cache','Pragma':'no-cache'},(opt&&opt.headers)||{});
+  const controller=typeof AbortController==='function'?new AbortController():null,upstream=o.signal;let timer=null,onAbort=null;
+  if(controller){o.signal=controller.signal;if(upstream){if(upstream.aborted)controller.abort();else{onAbort=()=>controller.abort();upstream.addEventListener('abort',onAbort,{once:true});}}timer=setTimeout(()=>controller.abort(),25000);}
+  try{return await BASE_FETCH(url,o);}catch(e){if(e&&e.name==='AbortError')throw new Error('انتهت مهلة الاتصال بـFirebase بعد 25 ثانية');throw e;}finally{if(timer)clearTimeout(timer);if(upstream&&onAbort)try{upstream.removeEventListener('abort',onAbort);}catch(e){}}
+}
 function nextIndex(node){let max=-1;rawEntries(node).forEach(([k])=>{const n=Number(k);if(Number.isInteger(n)&&n>=0)max=Math.max(max,n);});return String(max+1);}
 function conflict(kind,path,key,op,remote){return {kind,path,recordKey:key||path,base:clone(op&&op.before),local:clone(op&&op.after),remote:clone(remote),message:kind==='id-collision'?'نفس المعرّف موجود بقيمة مختلفة في السحابة':'تم تعديل نفس القيد في جهاز آخر بعد آخر جلب'};}
 async function writeConflictRecords(items,t,txId){const now=new Date().toISOString(),ids=[];for(let i=0;i<items.length;i++){const base=txId+'|'+DEVICE+'|'+String(items[i].path||'')+'|'+String(items[i].recordKey||'');const id='cf_'+hash(base);const rec=Object.assign({id,status:'open',txId,deviceId:DEVICE,detectedAt:now,source:SOURCE},items[i]);const r=await request(endpoint('syncConflicts/'+id,t),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)});if(!r.ok)throw new Error('تعذر تسجيل التعارض '+id+' HTTP '+r.status);ids.push(id);}currentConflicts=items.map((x,i)=>Object.assign({id:ids[i],status:'open',txId,deviceId:DEVICE},x));return ids;}
@@ -11605,6 +11669,19 @@ function ensureGate(){
 function gate(mode,msg){const g=ensureGate();g.style.display='flex';g.className=mode==='conflict'?'conflict':mode==='failed'?'failed':'';g.querySelector('.v170-title').textContent=mode==='conflict'?'تعارض مزامنة — لم تُستبدل أي نسخة':mode==='failed'?'فشل تثبيت العملية':'تثبيت العملية في Firebase…';g.querySelector('.v170-msg').textContent=msg||'';}
 function hideGate(){const g=document.getElementById('egtphV170SaveGate');if(g)g.style.display='none';}
 
+function ensureStartupNotice(){
+  let n=document.getElementById('egtphStartupSyncNotice');if(n)return n;
+  n=document.createElement('section');n.id='egtphStartupSyncNotice';n.setAttribute('role','status');n.innerHTML='<div class="egtph-startup-notice-copy"><b></b><span></span></div><div class="egtph-startup-notice-actions"><button type="button" data-startup-act="retry">إعادة المحاولة</button><button type="button" data-startup-act="cancel" class="danger">إلغاء العملية المعلقة</button><button type="button" data-startup-act="dismiss" class="plain">إخفاء</button></div>';
+  const main=document.querySelector('.main');if(main)main.insertBefore(n,main.firstChild);else document.body.appendChild(n);
+  n.querySelector('[data-startup-act="retry"]').onclick=async()=>{startupPhase=false;hideStartupNotice();const p=loadOutbox();if(p){uiPending=true;gate('saving','إعادة محاولة تثبيت العملية المعلقة…');queued=true;await flush();}else if(typeof window._v169PullAuthoritativeCloud==='function'){await window._v169PullAuthoritativeCloud();}else{location.reload();}};
+  n.querySelector('[data-startup-act="cancel"]').onclick=()=>{if(confirm('هل تريد إلغاء العملية القديمة غير المثبتة؟'))cancelPending();};
+  n.querySelector('[data-startup-act="dismiss"]').onclick=hideStartupNotice;
+  return n;
+}
+function showStartupNotice(mode,title,msg,hasPending){const n=ensureStartupNotice();n.className=mode||'warning';n.style.display='flex';n.querySelector('b').textContent=title||'تنبيه المزامنة';n.querySelector('span').textContent=msg||'';const cancel=n.querySelector('[data-startup-act="cancel"]');if(cancel)cancel.style.display=hasPending?'inline-flex':'none';}
+function hideStartupNotice(){const n=document.getElementById('egtphStartupSyncNotice');if(n)n.style.display='none';}
+
+
 function reconcileSyncGate(){
   const pending=loadOutbox();
   const hasCurrentConflict=!!pending&&
@@ -11612,6 +11689,7 @@ function reconcileSyncGate(){
     currentConflicts.length>0;
 
   if(hasCurrentConflict){
+    if(startupPhase){hideGate();showStartupNotice('error','تعارض في عملية سابقة','توجد عملية قديمة معلقة مع تعارض. افتح تفاصيل المزامنة قبل تسجيل عملية جديدة.',true);return 'conflict';}
     gate(
       'conflict',
       '⚠️ توجد تعارضات حقيقية تخص العملية المعلقة الحالية؛ لم تُستبدل أي نسخة تلقائياً'
@@ -11620,6 +11698,7 @@ function reconcileSyncGate(){
   }
 
   if(pending){
+    if(startupPhase){hideGate();showStartupNotice('warning','عملية سابقة غير مثبتة','لم تُحجب الصفحة. راجع العملية القديمة ثم اختر إعادة المحاولة أو الإلغاء قبل تسجيل عملية جديدة.',true);return 'pending';}
     // لا نترك بوابة "تعارض" قديمة معلقة عندما لا توجد تعارضات حالية.
     // العملية هنا معلقة فقط: إعادة المحاولة أو الإلغاء هما المساران الآمنان.
     gate(
@@ -11630,7 +11709,7 @@ function reconcileSyncGate(){
   }
 
   currentConflicts=[];
-  hideGate();
+  hideGate();hideStartupNotice();
   uiPending=false;
   return 'clear';
 }
@@ -11648,11 +11727,11 @@ function renderAll(){
   if(pageRender)call(pageRender);
   requestAnimationFrame(()=>{try{refreshTableViews(active||document);}catch(e){}});
 }
-function releaseSuccess(){uiPending=false;hideGate();const closes=deferredCloses.splice(0),toasts=deferredToasts.splice(0);closes.forEach(id=>{try{originalCloseModal(id);}catch(e){}});toasts.forEach(x=>{try{originalToast(x[0],x[1]);}catch(e){}});}
+function releaseSuccess(){uiPending=false;hideGate();hideStartupNotice();const closes=deferredCloses.splice(0),toasts=deferredToasts.splice(0);closes.forEach(id=>{try{originalCloseModal(id);}catch(e){}});toasts.forEach(x=>{try{originalToast(x[0],x[1]);}catch(e){}});}
 
 
 async function cancelPending(){
-  await ensureOutboxReady();clearTimeout(retryTimer);queued=false;running=false;lastError=null;diag.lastError='';diag.lastErrorAt='';saveDiag(diag);await clearOutbox();if(rollbackSnapshot){window.DB=DB=clone(rollbackSnapshot);baseline=clone(rollbackSnapshot);}rollbackSnapshot=null;uiPending=false;deferredCloses=[];deferredToasts=[];hideGate();try{markSaved();}catch(e){}renderAll();setPanel('ok','🟢 لا توجد عملية معلقة');try{originalToast('↩️ أُلغي التغيير لأنه لم يُحفظ في Firebase','#c0392b');}catch(e){}settlePromise({ok:false,cancelled:true});}
+  await ensureOutboxReady();clearTimeout(retryTimer);queued=false;running=false;lastError=null;diag.lastError='';diag.lastErrorAt='';saveDiag(diag);await clearOutbox();if(rollbackSnapshot){window.DB=DB=clone(rollbackSnapshot);baseline=clone(rollbackSnapshot);}rollbackSnapshot=null;uiPending=false;deferredCloses=[];deferredToasts=[];hideGate();hideStartupNotice();try{markSaved();}catch(e){}renderAll();setPanel('ok','🟢 لا توجد عملية معلقة');try{originalToast('↩️ أُلغي التغيير لأنه لم يُحفظ في Firebase','#c0392b');}catch(e){}settlePromise({ok:false,cancelled:true});}
 function beginPromise(){if(activePromise)return activePromise;activePromise=new Promise(res=>{resolveActive=res;});return activePromise;}
 function settlePromise(val){const r=resolveActive;activePromise=null;resolveActive=null;if(r)r(val);}
 async function pullRoot(){const t=await token(),r=await request(endpoint('',t),{headers:{'X-Firebase-ETag':'true'}});if(!r.ok)throw new Error('جلب Firebase HTTP '+r.status);remoteEtag=r.headers.get('etag')||remoteEtag;const raw=await r.json();if(!raw||typeof raw!=='object')throw new Error('نسخة Firebase المرجعية غير مكتملة');_applyDBData(_v169SanitizeCloud(raw));window.__EGTPH_DB_READY__=true;window.__EGTPH_DB_READY_SOURCE__=SOURCE;baseline=clone(DB);lastPullAt=new Date().toISOString();diag.lastPullAt=lastPullAt;diag.counts=countData(DB);diag.lastError='';saveDiag(diag);renderAll();setPanel('ok','🟢 تم جلب النسخة السحابية بالكامل؛ لا توجد تغييرات محلية معلقة');return DB;}
@@ -12066,43 +12145,33 @@ async function save(){
   }
 }
 async function ready(){
+  startupPhase=true;
   await ensureOutboxReady();
-
-  // لا نورث أي نافذة مرئية من حالة واجهة سابقة؛ الحالة الفعلية يعيد المحرك بناءها من outbox + Firebase.
-  hideGate();
-  uiPending=false;
+  hideGate();uiPending=false;
 
   baseline=clone(DB);
   lastError=null;
   lastPullAt=new Date().toISOString();
-  diag.lastPullAt=lastPullAt;
-  diag.counts=countData(DB);
-  saveDiag(diag);
+  diag.lastPullAt=lastPullAt;diag.counts=countData(DB);saveDiag(diag);
   startLivePull();
 
   const p=loadOutbox();
   if(p){
     rollbackSnapshot=clone(baseline);
-    applyPatch(DB,p);
-    window.DB=DB;
-    queued=true;
-    uiPending=true;
-    gate('saving','استرجاع عملية غير مؤكدة ثم فحص التعارض قبل تثبيتها…');
-    renderAll();
-    flush();
-  }else{
-    queued=false;
-    lastError=null;
-    diag.lastError='';
-    saveDiag(diag);
-    status(
-      '🟢 المصدر الوحيد: Firebase '+ROOT+' — استقبال تلقائي كل 5 ثوانٍ',
-      'var(--green1)',
-      'ok'
-    );
-    await refreshHealth(false);
-    reconcileSyncGate();
+    applyPatch(DB,p);window.DB=DB;queued=true;uiPending=false;renderAll();
+    setPanel('saving','🟠 توجد عملية قديمة غير مثبتة؛ لم تُحجب الصفحة');
+    showStartupNotice('warning','عملية سابقة غير مثبتة','يمكنك تصفح البرنامج، لكن لا تسجل عملية جديدة قبل إعادة المحاولة أو إلغاء العملية القديمة.',true);
+    try{await refreshHealth(false);}catch(e){lastError=String(e&&e.message||e);diag.lastError=lastError;saveDiag(diag);}
+    if(loadOutbox())showStartupNotice(currentConflicts.length?'error':'warning',currentConflicts.length?'تعارض في عملية سابقة':'عملية سابقة غير مثبتة',currentConflicts.length?'راجع التعارض من إعدادات المزامنة قبل المتابعة.':'اختر إعادة المحاولة أو الإلغاء قبل تسجيل عملية جديدة.',true);else hideStartupNotice();
+    startupPhase=false;
+    return;
   }
+
+  queued=false;lastError=null;diag.lastError='';saveDiag(diag);
+  status('🟢 المصدر الوحيد: Firebase '+ROOT+' — استقبال تلقائي كل 5 ثوانٍ','var(--green1)','ok');
+  try{await refreshHealth(false);}catch(e){lastError=String(e&&e.message||e);diag.lastError=lastError;saveDiag(diag);showStartupNotice('error','تعذر فحص Firebase','البرنامج مفتوح. تحقق من الإنترنت ثم اضغط إعادة المحاولة.',false);}
+  startupPhase=false;
+  reconcileSyncGate();
 }
 function schedule(){clearTimeout(scheduleTimer);scheduleTimer=setTimeout(()=>{if(loadOutbox()&&!running)flush();},500);}
 async function sync(manual){
@@ -12429,7 +12498,7 @@ new MutationObserver(mutations=>{
   }
 }).observe(document.documentElement,{childList:true,subtree:true});
 
-const EGTPH_SYNC_API={version:'207.0-auto-complete-installment-cycle',source:SOURCE,root:ROOT,save,flush,sync,schedule,refreshHealth,livePullTick,startLivePull,showConflicts,acceptRemote,forceLocal,verifyPatchDetailed,patchCloudState,status:()=>({ready:!!baseline,running,queued,pending:pendingCount(),lastError,lastSavedAt,lastPullAt,lastLivePullAt,livePollMs:LIVE_POLL_MS,remoteEtag:remoteEtag||null,openConflicts:allOpenConflicts.length||0,ownedConflicts:currentConflicts.length||0,outbox:!!loadOutbox(),writes:clone(writes),source:SOURCE,fingerprint:diag.cloudFingerprint||null,localFingerprint:diag.localFingerprint||null,cloudMatch:diag.cloudMatch===true}),noLatestWins:true,conflictPolicy:'same-id-difference-stops-and-records-conflict',conditionalRootPut:true,noAutomaticDelete:true,tombstoneGatedPhysicalDelete:true,nearLiveInbound:true,restorePolicy:'trash-only',undoFeature:false,tableView:{min:TABLE_SCALE_MIN,max:TABLE_SCALE_MAX,step:TABLE_SCALE_STEP,scan:scanTableViews,refresh:refreshTableViews}};window.EGTPH_SYNC=EGTPH_SYNC_API;window.EGTPH_V207=window.EGTPH_V206=EGTPH_SYNC_API;window.EGTPH_V205=EGTPH_SYNC_API;window.EGTPH_V204=EGTPH_SYNC_API;window.EGTPH_V203=EGTPH_SYNC_API;window.EGTPH_V202=EGTPH_SYNC_API;window.EGTPH_V201=EGTPH_SYNC_API;window.EGTPH_V200=EGTPH_SYNC_API;window.EGTPH_V199=EGTPH_SYNC_API;window.EGTPH_V175=EGTPH_SYNC_API;window.EGTPH_V172=EGTPH_SYNC_API;
+const EGTPH_SYNC_API={version:'207.0-auto-complete-installment-cycle',source:SOURCE,root:ROOT,save,flush,sync,schedule,refreshHealth,livePullTick,startLivePull,showConflicts,acceptRemote,forceLocal,verifyPatchDetailed,patchCloudState,cancelPending,retryPending:async()=>{startupPhase=false;hideStartupNotice();queued=true;return flush();},status:()=>({ready:!!baseline,running,queued,pending:pendingCount(),lastError,lastSavedAt,lastPullAt,lastLivePullAt,livePollMs:LIVE_POLL_MS,remoteEtag:remoteEtag||null,openConflicts:allOpenConflicts.length||0,ownedConflicts:currentConflicts.length||0,outbox:!!loadOutbox(),writes:clone(writes),source:SOURCE,fingerprint:diag.cloudFingerprint||null,localFingerprint:diag.localFingerprint||null,cloudMatch:diag.cloudMatch===true}),noLatestWins:true,conflictPolicy:'same-id-difference-stops-and-records-conflict',conditionalRootPut:true,noAutomaticDelete:true,tombstoneGatedPhysicalDelete:true,nearLiveInbound:true,restorePolicy:'trash-only',undoFeature:false,tableView:{min:TABLE_SCALE_MIN,max:TABLE_SCALE_MAX,step:TABLE_SCALE_STEP,scan:scanTableViews,refresh:refreshTableViews}};window.EGTPH_SYNC=EGTPH_SYNC_API;window.EGTPH_V207=window.EGTPH_V206=EGTPH_SYNC_API;window.EGTPH_V205=EGTPH_SYNC_API;window.EGTPH_V204=EGTPH_SYNC_API;window.EGTPH_V203=EGTPH_SYNC_API;window.EGTPH_V202=EGTPH_SYNC_API;window.EGTPH_V201=EGTPH_SYNC_API;window.EGTPH_V200=EGTPH_SYNC_API;window.EGTPH_V199=EGTPH_SYNC_API;window.EGTPH_V175=EGTPH_SYNC_API;window.EGTPH_V172=EGTPH_SYNC_API;
 })();
 </script>
 <style id="egtph-v172-final-sync-style">
@@ -13298,6 +13367,33 @@ var oldShow=window.showPage;if(typeof oldShow==='function'&&!oldShow._v226){var 
 var obs=new MutationObserver(function(m){if(m.some(function(x){return x.addedNodes&&x.addedNodes.length}))setTimeout(refresh,40)});obs.observe(document.documentElement,{subtree:true,childList:true});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(refresh,180)},{once:true});else setTimeout(refresh,180);setInterval(removeRedundantMoreItems,3000);
 window.EGTPH_V226={version:'226.0-ui-corrections',refresh:refresh,canonicalTable:canonicalTable};
+})();
+</script>
+
+
+<style id="egtph-v227-startup-no-overlap-style">
+#egtphStartupSyncNotice{display:none;position:sticky;top:8px;z-index:1200;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:12px 14px;border-radius:16px;border:1px solid #f3c56d;background:#fff8e7;color:#6f4a00;box-shadow:0 8px 24px rgba(80,55,0,.10);direction:rtl}
+#egtphStartupSyncNotice.error{border-color:#f1a7ad;background:#fff1f2;color:#8f1d2c}#egtphStartupSyncNotice.ok{border-color:#9ed6b9;background:#edf9f2;color:#145d3d}
+.egtph-startup-notice-copy{display:flex;flex-direction:column;gap:3px;min-width:0}.egtph-startup-notice-copy b{font-size:13px}.egtph-startup-notice-copy span{font-size:11px;line-height:1.55}
+.egtph-startup-notice-actions{display:flex;gap:7px;flex-wrap:wrap}.egtph-startup-notice-actions button{border:0;border-radius:10px;min-height:38px;padding:8px 12px;background:#0d9488;color:#fff;font-family:inherit;font-weight:900;white-space:nowrap}.egtph-startup-notice-actions button.danger{background:#dc2626}.egtph-startup-notice-actions button.plain{background:#64748b}
+.mo.open{align-items:center!important;padding:calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom))!important}
+.mo.open .modal{width:min(620px,96vw)!important;max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;overflow:auto!important;padding-bottom:calc(96px + env(safe-area-inset-bottom))!important;box-sizing:border-box!important}
+.mo.open .modal .mbtns{position:sticky!important;bottom:calc(-96px - env(safe-area-inset-bottom))!important;z-index:40!important;display:grid!important;grid-template-columns:repeat(auto-fit,minmax(130px,1fr))!important;gap:10px!important;margin:18px -16px calc(-96px - env(safe-area-inset-bottom))!important;padding:12px 16px calc(14px + env(safe-area-inset-bottom))!important;background:rgba(255,255,255,.98)!important;border-top:1px solid #dce7e3!important;box-shadow:0 -10px 24px rgba(15,50,45,.08)!important}
+.mo.open .modal .mbtns button{position:relative!important;inset:auto!important;transform:none!important;min-width:0!important;width:100%!important;min-height:48px!important;margin:0!important;white-space:normal!important;line-height:1.3!important}
+body.egtph-modal-open .bnav{display:none!important;pointer-events:none!important}
+@media(max-width:560px){#egtphStartupSyncNotice{align-items:stretch;flex-direction:column}.egtph-startup-notice-actions{display:grid;grid-template-columns:1fr 1fr}.egtph-startup-notice-actions button.plain{grid-column:1/-1}.mo.open .modal .mbtns{grid-template-columns:1fr 1fr!important}.mo.open .modal .mbtns button:only-child{grid-column:1/-1}}
+</style>
+<script id="egtph-v227-startup-no-overlap-script">
+(function(){
+'use strict';if(window.__EGTPH_V227__)return;window.__EGTPH_V227__=true;try{document.title='EGTPH — سجل الأجور v227';}catch(e){}
+function showOffline(detail){
+  const main=document.querySelector('.main');if(!main)return;
+  let n=document.getElementById('egtphStartupOfflineNotice');if(!n){n=document.createElement('section');n.id='egtphStartupOfflineNotice';n.style.cssText='position:sticky;top:8px;z-index:1190;margin:0 0 12px;padding:12px 14px;border:1px solid #f1a7ad;border-radius:16px;background:#fff1f2;color:#8f1d2c;box-shadow:0 8px 24px rgba(80,20,25,.10);direction:rtl;font-size:12px;line-height:1.6';main.insertBefore(n,main.firstChild);}const cached=detail&&detail.cachedAt;n.innerHTML='<b style="display:block;margin-bottom:4px">تعذر الاتصال بـFirebase</b><span>'+(cached?'تم فتح آخر نسخة محفوظة للقراءة فقط.':'لم تتوفر نسخة محلية بعد.')+'</span><button type="button" style="margin-right:10px;border:0;border-radius:9px;padding:7px 11px;background:#0d9488;color:#fff;font-family:inherit;font-weight:900">إعادة المحاولة</button>';n.querySelector('button').onclick=()=>{n.remove();if(typeof window._v169PullAuthoritativeCloud==='function')window._v169PullAuthoritativeCloud();else location.reload();};
+}
+window.addEventListener('egtph-startup-offline',e=>showOffline(e.detail||{}));
+function auditModalButtons(){document.querySelectorAll('.mo.open .modal').forEach(modal=>{const actions=modal.querySelector('.mbtns');if(!actions)return;const buttons=Array.from(actions.querySelectorAll('button')).filter(b=>getComputedStyle(b).display!=='none');buttons.forEach(b=>{b.style.pointerEvents='auto';b.style.zIndex='1';});});}
+new MutationObserver(auditModalButtons).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style']});
+window.EGTPH_V227={version:'227.0',auditModalButtons};
 })();
 </script>
 
