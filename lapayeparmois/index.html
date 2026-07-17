@@ -1533,7 +1533,7 @@ body.egtph-theme-night .egtph-table-viewport::-webkit-scrollbar-thumb{
 <div class="toast" id="toast" style=""></div>
 <!-- ══════════════ TOPBAR ══════════════ -->
 <div class="topbar">
-<div class="tlogo">EGTPH <span>| سجل الأجور v217</span></div>
+<div class="tlogo">EGTPH <span>| سجل الأجور v219</span></div>
 <div id="autoSv" style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--gray)">
 <span class="auto-save-dot" id="saveDot"></span>
 <span id="saveLabel">—</span>
@@ -1576,7 +1576,7 @@ body.egtph-theme-night .egtph-table-viewport::-webkit-scrollbar-thumb{
 <div class="pgsub" id="dashDate">الجمعة، 17 جويلية 2026</div>
 <div id="dashAlerts"></div>
 <div class="crow" id="dashCards"></div>
-<section id="v83ActivityPanel"></section><div class="qgrid" id="qgrid"></div>
+<div class="qgrid" id="qgrid"></div>
 <!-- ═══ جدول الحالة المالية الشاملة اليومية ═══ -->
 <div class="twrap egtph-table-pan-host" style="margin-bottom:16px">
 <div class="thdr">
@@ -10314,34 +10314,8 @@ body{background:linear-gradient(135deg,#f6f8fc 0%,#f1f7f4 100%);color:var(--v53-
 <!-- v141: removed old settlement/patch script -->
 <!-- v141: removed old settlement/patch script -->
 <!-- v141: removed old settlement/patch script -->
-<style id="egtph-v83-quick-activity-style">
-#v83ActivityPanel{margin:0 0 14px;padding:13px 14px;border:1px solid rgba(14,117,70,.24);border-radius:16px;background:linear-gradient(135deg,#f4fff7,#fff);box-shadow:0 8px 20px rgba(18,92,54,.07)}
-.v83-activity-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.v83-activity-title{font-size:14px;font-weight:900;color:#164d34}.v83-activity-sub{font-size:10px;color:#60776b;line-height:1.6}.v83-activity-count{font-size:11px;font-weight:900;color:#1565a0;background:#eef7ff;border:1px solid #c5dff2;border-radius:999px;padding:5px 10px}.v83-last{margin-top:9px;padding:8px 10px;border-radius:10px;background:#eef8ff;border:1px solid #cae4f4;color:#205f86;font-size:11px}.v83-worker-events{display:flex;gap:7px;overflow:auto;padding-top:8px}.v83-worker-event{min-width:180px;text-align:right;border:1px solid #d9e7df;background:#fff;border-radius:10px;padding:8px 10px;color:#244b37;font-family:Tajawal,sans-serif;cursor:pointer}.v83-worker-event span{font-size:10px;color:#60776b;line-height:1.5}.v83-empty{padding:10px;color:#60776b;font-size:11px;text-align:center}
-.v83-card-activity{margin:6px 0 8px;padding:8px 9px;border-radius:10px;font-size:10px;line-height:1.75;border:1px solid rgba(93,117,105,.18);background:#fbfdfc;color:#5d7468}.v83-card-activity.has-events{background:#eef8ff;border-color:rgba(26,105,164,.26);color:#1b5f8e}.v83-card-activity b{font-weight:900}.qcard.v83-has-activity{border-color:rgba(26,105,164,.42)!important;box-shadow:0 0 0 2px rgba(26,105,164,.05),var(--v60-shadow)!important}
-@media(max-width:900px){#v83ActivityPanel{padding:11px}.v83-worker-event{font-size:12px}.v83-card-activity{font-size:11px}}
-@media print{#v83ActivityPanel,.v83-card-activity{display:none!important}}
-</style>
-<script id="egtph-v83-quick-activity-and-logic-stable">
-/* EGTPH v175 — سجل عمليات اليوم فقط. لا فحص محاسبي موازي ولا محرك تعديل بيانات. */
-(function(){
-  'use strict';
-  if(window.__EGTPH_V83_ACTIVITY__)return;window.__EGTPH_V83_ACTIVITY__=true;
-  var observer=null,observedGrid=null,queued=false,painting=false;
-  function D(){try{return (typeof DB!=='undefined'&&DB)?DB:(window.DB||null);}catch(e){return window.DB||null;}}
-  function A(v){return Array.isArray(v)?v:((v&&typeof v!=='string'&&typeof v.length==='number')?Array.prototype.slice.call(v):[]);}
-  function O(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{}}function N(v){var n=Number(v);return isFinite(n)?n:0;}
-  function esc(v){return String(v==null?'':v).replace(/[&<>'"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c];});}
-  function pad(n){return String(n).padStart(2,'0');}function dateKey(v){if(!v)return '';var s=String(v).trim(),m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[1]+'-'+m[2]+'-'+m[3];m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);return m?m[3]+'-'+pad(m[2])+'-'+pad(m[1]):'';}function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}function isToday(){for(var i=0;i<arguments.length;i++)if(dateKey(arguments[i])===today())return true;return false;}function stamp(v){if(!v)return 0;var t=Date.parse(v);if(isFinite(t))return t;var k=dateKey(v);return k?Date.parse(k+'T00:00:00'):0;}function money(v){return N(v).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' دج';}
-  function nestedRows(section,wid){var d=D(),root=O(d&&d[section]),bucket=root[wid]||root[String(wid)]||{},out=[];Object.keys(O(bucket)).forEach(function(k){out=out.concat(A(bucket[k]));});return out.filter(function(x){return x&&typeof x==='object';});}function directRows(section,wid){var d=D(),root=O(d&&d[section]);return A(root[wid]||root[String(wid)]).filter(function(x){return x&&typeof x==='object';});}function debtPart(a){return A(a&&a.deductions).filter(function(z){return z&&z.type==='debt';}).reduce(function(s,z){return s+Math.max(0,N(z.amount));},0);}function when(x){return x&&((x.enteredAt)||(x._createdAt)||(x.realDate)||(x.date)||(x.from)||'');}
-  function activityFor(wid){var out=[];nestedRows('advances',wid).forEach(function(a){if(!a||a._instAuto||a.source==='installment'||!isToday(when(a)))return;var gross=Math.max(0,N(a.amount)),debt=Math.min(gross,debtPart(a)),cash=Math.max(0,gross-debt),label='💰 تسبيق '+money(gross);if(debt>0)label+=' (نقد '+money(cash)+' + قسط دين '+money(debt)+')';out.push({kind:'advance',label:label,at:when(a),ts:stamp(when(a)),id:String(a.id||'')});});directRows('hours',wid).forEach(function(h){if(!h||!isToday(when(h)))return;var hrs=N(h.hours||h.qty||h.count),total=N(h.total!=null?h.total:h.amount),label='⏱️ ساعات';if(hrs>0)label+=' '+hrs+' س';if(total>0)label+=(hrs>0?' — ':' ')+money(total);out.push({kind:'hours',label:label,at:when(h),ts:stamp(when(h)),id:String(h.id||'')});});directRows('absences',wid).forEach(function(a){if(!a||!isToday(when(a)))return;var days=N(a.days||a.count||a.nbr),ded=N(a.deduct!=null?a.deduct:a.amount),label='📅 غياب';if(days>0)label+=' '+days+' يوم عمل';if(ded>0)label+=(days>0?' — ':' ')+money(ded);out.push({kind:'absence',label:label,at:when(a),ts:stamp(when(a)),id:String(a.id||'')});});nestedRows('bonuses',wid).forEach(function(b){if(!b||!isToday(when(b)))return;out.push({kind:'bonus',label:'🎁 مكافأة '+money(b.net!=null?b.net:b.amount),at:when(b),ts:stamp(when(b)),id:String(b.id||'')});});directRows('debts',wid).forEach(function(r){if(!r||!isToday(when(r)))return;if(r.type==='return'&&r._advanceId)return;var k=r.type==='return'?'💵 تسديد دين':'📋 دين';out.push({kind:r.type==='return'?'debtReturn':'debt',label:k+' '+money(r.amount),at:when(r),ts:stamp(when(r)),id:String(r.id||'')});});return out.sort(function(a,b){return b.ts-a.ts;});}
-  function allActivities(){var d=D(),out=[];A(d&&d.workers).filter(function(w){return w&&w.id!=null;}).forEach(function(w){var rows=activityFor(w.id);if(rows.length)out.push({worker:w,rows:rows,last:rows[0]});});return out.sort(function(a,b){return b.last.ts-a.last.ts;});}
-  function workerIdFromCard(card){var btn=card&&card.querySelector('button[onclick*="openAdvModal("]'),code=btn&&btn.getAttribute('onclick')||'',m=code.match(/openAdvModal\(\s*([^,\)]+)/);return m?String(m[1]).replace(/["']/g,'').trim():null;}function removeLegacyFollowup(root){if(!root)return;A(root.querySelectorAll('#v76Panel,.v76-panel,.v76-card,.v76-review,.v82-activity-panel,.v82-card-activity')).forEach(function(x){x.remove();});A(root.querySelectorAll('.qcard')).forEach(function(c){c.classList.remove('v76-reviewed','v76-moved','v76-pending','v82-has-activity');});}function jump(wid){var grid=document.getElementById('qgrid');if(!grid)return;var cards=A(grid.querySelectorAll('.qcard'));for(var i=0;i<cards.length;i++){if(workerIdFromCard(cards[i])===String(wid)){cards[i].scrollIntoView({behavior:'smooth',block:'center'});cards[i].style.outline='3px solid var(--ui-blue-border)';setTimeout((function(c){return function(){c.style.outline='';};})(cards[i]),1100);break;}}}
-  function decorateCards(grid){A(grid.querySelectorAll('.qcard')).forEach(function(card){var wid=workerIdFromCard(card);if(!wid)return;var rows=activityFor(wid),box=card.querySelector('.v83-card-activity');if(!box){box=document.createElement('div');box.className='v83-card-activity';var h=card.querySelector('.qcname');if(h&&h.nextSibling)card.insertBefore(box,h.nextSibling);else card.appendChild(box);}var text=rows.length?'<b>📌 عمليات اليوم:</b><br>'+rows.map(function(x){return esc(x.label);}).join('<br>'):'<b>📌 اليوم:</b> لا توجد عملية مسجلة.';if(box.dataset.v83Text!==text){box.dataset.v83Text=text;box.innerHTML=text;}box.classList.toggle('has-events',rows.length>0);card.classList.toggle('v83-has-activity',rows.length>0);});}
-  function renderPanel(){var grid=document.getElementById('qgrid'),page=document.getElementById('page-dashboard');if(!grid||!page)return;var panel=document.getElementById('v83ActivityPanel');if(!panel){panel=document.createElement('section');panel.id='v83ActivityPanel';page.insertBefore(panel,grid);}var acts=allActivities(),total=acts.reduce(function(s,x){return s+x.rows.length;},0),latest=acts.length?acts[0]:null,html='<div class="v83-activity-head"><div><div class="v83-activity-title">📌 عمليات اليوم</div><div class="v83-activity-sub">يعرض فقط ما سُجّل فعلياً اليوم: تسبيقات، ساعات، غيابات، مكافآت، ديون وتسديدات.</div></div><div class="v83-activity-count">'+total+' عملية اليوم</div></div>';if(!acts.length)html+='<div class="v83-empty">لا توجد أي عملية مسجلة اليوم.</div>';else{html+='<div class="v83-last"><b>آخر عملية:</b> '+esc(latest.worker.name)+' — '+esc(latest.last.label)+'</div><div class="v83-worker-events">';acts.forEach(function(x){html+='<button type="button" class="v83-worker-event" data-v83-go="'+esc(x.worker.id)+'"><b>'+esc(x.worker.name)+'</b><br><span>'+x.rows.map(function(r){return esc(r.label);}).join(' • ')+'</span></button>';});html+='</div>';}if(panel.dataset.v83Html!==html){panel.dataset.v83Html=html;panel.innerHTML=html;A(panel.querySelectorAll('[data-v83-go]')).forEach(function(b){b.addEventListener('click',function(){jump(b.getAttribute('data-v83-go'));});});}}
-  function paint(){var grid=document.getElementById('qgrid');if(!grid)return;painting=true;try{removeLegacyFollowup(document.getElementById('page-dashboard'));renderPanel();decorateCards(grid);}catch(e){console.warn('v175 activity',e);}finally{painting=false;}}function queue(){if(queued)return;queued=true;setTimeout(function(){queued=false;paint();},80);}function install(){var grid=document.getElementById('qgrid');if(grid&&grid!==observedGrid){if(observer)observer.disconnect();observer=new MutationObserver(function(){if(!painting)queue();});observer.observe(grid,{childList:true,subtree:false});observedGrid=grid;}queue();}
-  document.addEventListener('click',function(e){var q=e.target&&e.target.closest?e.target.closest('#qgrid .qb'):null;if(q){setTimeout(queue,600);setTimeout(queue,1800);}},true);[0,500,1500,3500,7000,12000].forEach(function(ms){setTimeout(install,ms);});setInterval(queue,60000);window.EGTPH_V83={version:'83.1-activities-only',activities:allActivities};
-})();
-</script>
+
+
 <!-- v141: removed old settlement/patch script -->
 <!-- v99: removed v98 custom settlement override; v90/v81 settlement authority retained. -->
 <script id="egtph-v101-print-status-projection">
@@ -12786,5 +12760,224 @@ body.dark .egtph-storage-summary{background:linear-gradient(135deg,rgba(15,118,1
 </style>
 <script id="egtph-v218-storage-settings-marker">
 (function(){window.__EGTPH_V218_BUILD__='v218-clean-verified-no-accumulation';try{document.title='EGTPH — سجل الأجور v218'}catch(e){}})();
+</script>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     v219 — مركز العمليات السريعة اليومي + إصلاح لمس الجداول والنوافذ
+     طبقة واجهة فقط: تستعمل دوال الحفظ الأصلية ولا تنشئ أي سجل موازٍ.
+════════════════════════════════════════════════════════════════════ -->
+<style id="egtph-v219-quick-control-mobile-style">
+:root{
+  --v219-petrol:#075e54;--v219-petrol2:#0b7568;--v219-green:#16834f;
+  --v219-green-fill:#eaf8f0;--v219-green-line:#bce6ce;
+  --v219-red:#b42336;--v219-red-fill:#fff1f2;--v219-red-line:#fecdd3;
+  --v219-amber:#a56500;--v219-amber-fill:#fff7e6;--v219-muted:#6f817b;
+  --v219-blue:#1d5fa7;--v219-blue-fill:#edf5ff;--v219-purple:#6d28d9;
+}
+/* الشريط العلوي المتحرك للعمال */
+#egtphWorkerRail{
+  position:sticky;top:0;z-index:22;margin:0 0 14px;padding:10px 8px 11px;
+  border:1px solid rgba(7,94,84,.15);border-radius:18px;
+  background:rgba(255,255,255,.94);backdrop-filter:blur(18px) saturate(145%);
+  box-shadow:0 8px 25px rgba(7,64,54,.09)
+}
+.egtph-worker-rail-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 4px 8px}
+.egtph-worker-rail-head b{font-size:13px;color:#143f36}.egtph-worker-rail-head small{font-size:9px;color:var(--v219-muted)}
+.egtph-worker-rail-track{
+  display:flex;gap:8px;overflow-x:auto;overflow-y:hidden;padding:2px 2px 7px;
+  -webkit-overflow-scrolling:touch;touch-action:pan-x;scroll-snap-type:x proximity;
+  overscroll-behavior-x:contain;scrollbar-width:thin;direction:rtl
+}
+.egtph-worker-rail-chip{
+  scroll-snap-align:start;flex:0 0 auto;min-width:145px;max-width:205px;min-height:61px;
+  border:1px solid var(--v219-red-line);border-radius:15px;padding:8px 10px;
+  background:var(--v219-red-fill);color:#344b44;text-align:right;font-family:inherit;
+  display:grid;grid-template-columns:32px minmax(0,1fr);gap:7px;align-items:center;
+  box-shadow:0 4px 12px rgba(20,55,45,.04);transition:.18s ease
+}
+.egtph-worker-rail-chip.has-today{background:var(--v219-green-fill);border-color:var(--v219-green-line)}
+.egtph-worker-rail-chip.active{outline:2px solid var(--v219-petrol);outline-offset:1px;transform:translateY(-1px)}
+.egtph-worker-rail-avatar{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#fff;color:var(--v219-petrol);font-weight:900;border:1px solid rgba(7,94,84,.18)}
+.egtph-worker-rail-copy{min-width:0}.egtph-worker-rail-name{display:block;font-size:11px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#153c34}
+.egtph-worker-rail-sub{display:block;margin-top:3px;font-size:8.5px;line-height:1.45;color:var(--v219-red);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.egtph-worker-rail-chip.has-today .egtph-worker-rail-sub{color:var(--v219-green)}
+/* بطاقة العامل */
+#page-dashboard #qgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+#page-dashboard .qcard{position:relative;scroll-margin-top:124px;padding:15px!important;border-radius:20px!important;overflow:visible}
+#page-dashboard .qcard.egtph-worker-focus{box-shadow:0 0 0 3px rgba(7,94,84,.16),0 14px 34px rgba(7,64,54,.12)!important}
+#v83ActivityPanel,#page-dashboard .v83-card-activity{display:none!important}
+.egtph-mini-log{margin:8px 0 10px;border-radius:12px;padding:8px 10px;border:1px solid var(--v219-red-line);background:var(--v219-red-fill)}
+.egtph-mini-log.has-today{background:var(--v219-green-fill);border-color:var(--v219-green-line)}
+.egtph-mini-log-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;font-weight:900;color:var(--v219-red)}
+.egtph-mini-log.has-today .egtph-mini-log-head{color:var(--v219-green)}
+.egtph-mini-log-list{display:flex;gap:6px;overflow-x:auto;padding-top:6px;-webkit-overflow-scrolling:touch;touch-action:pan-x;scrollbar-width:thin}
+.egtph-mini-log-item{flex:0 0 auto;max-width:230px;border-radius:999px;background:rgba(255,255,255,.82);border:1px solid rgba(72,105,94,.13);padding:5px 9px;font-size:9px;color:#405d53;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ترتيب العمليات: التسبيق والساعات أولاً */
+.egtph-action-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:7px;margin-top:8px}
+.egtph-action-grid .qb{margin:0!important;width:100%!important;min-width:0!important;min-height:58px!important;padding:7px 5px!important;border-radius:14px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:3px!important;line-height:1.15!important;white-space:normal!important}
+.egtph-action-grid .qb.egtph-priority{grid-column:span 3;min-height:67px!important}
+.egtph-action-grid .qb.egtph-secondary{grid-column:span 2}
+.egtph-action-grid .qb.egtph-utility{grid-column:span 2;background:var(--v219-blue-fill)!important;border-color:#cfe2ff!important;color:var(--v219-blue)!important}
+.egtph-action-icon-svg{width:22px;height:22px;display:block;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.egtph-action-grid .qb.egtph-priority .egtph-action-icon-svg{width:25px;height:25px}
+.egtph-action-label{font-size:10.5px;font-weight:900}.egtph-action-summary{font-size:8.5px;font-weight:750;opacity:.86;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.egtph-action-grid .qb.egtph-empty{background:var(--v219-red-fill)!important;border-color:var(--v219-red-line)!important;color:var(--v219-red)!important}
+.egtph-action-grid .qb.egtph-done{background:var(--v219-green-fill)!important;border-color:var(--v219-green-line)!important;color:var(--v219-green)!important;box-shadow:inset 0 0 0 1px rgba(22,131,79,.03)!important}
+.egtph-action-grid .qb.egtph-saving{background:var(--v219-amber-fill)!important;border-color:#f6d590!important;color:var(--v219-amber)!important}
+.egtph-action-grid .qb:active{transform:scale(.975)!important}
+/* زر سريع في الشريط السفلي يعيد مباشرة إلى مركز التحكم ولا يفتح Sheet */
+#egtphQuickSheet{display:none!important}
+/* لا شريط سفلي فوق النوافذ؛ زر الإغلاق والحفظ يبقيان قابلين للنقر */
+body.egtph-modal-open{overflow:hidden!important}
+body.egtph-modal-open .bnav{display:none!important}
+body.egtph-modal-open .mo.open{padding:calc(10px + env(safe-area-inset-top)) 10px calc(14px + env(safe-area-inset-bottom))!important;align-items:center!important}
+body.egtph-modal-open .mo.open .modal{
+  max-height:calc(100dvh - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;
+  padding:20px 16px calc(20px + env(safe-area-inset-bottom))!important;overscroll-behavior:contain
+}
+.egtph-modal-x{position:sticky;top:0;margin:-8px 0 4px auto;z-index:20;width:38px;height:38px;border:1px solid #d9e8e3;border-radius:50%;background:rgba(255,255,255,.96);color:#385d54;font-size:23px;display:grid;place-items:center;box-shadow:0 5px 15px rgba(0,0,0,.08)}
+.mo.open .modal .mbtns{position:sticky;bottom:calc(-20px - env(safe-area-inset-bottom));z-index:15;margin:16px -16px calc(-20px - env(safe-area-inset-bottom));padding:10px 16px calc(12px + env(safe-area-inset-bottom));background:rgba(255,255,255,.97);border-top:1px solid #dfe9e5;backdrop-filter:blur(12px)}
+/* الجداول: سحب أفقي فعلي + pinch داخل الجدول */
+#page-workers .egtph-table-viewport,#page-settlement .egtph-table-viewport{
+  overflow-x:scroll!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch!important;
+  touch-action:pan-y!important;overscroll-behavior-x:contain!important;cursor:grab!important
+}
+#page-workers .egtph-table-stage,#page-settlement .egtph-table-stage{max-width:none!important;min-width:max-content!important}
+#page-workers .egtph-table-toolbar,#page-settlement .egtph-table-toolbar{position:sticky;right:0;left:0;z-index:8}
+.egtph-pinch-hint{text-align:center;color:var(--v219-muted);font-size:9px;margin:2px 0 7px}
+body.egtph-theme-night #egtphWorkerRail{background:rgba(15,38,31,.95);border-color:#285247}.egtph-theme-night .egtph-worker-rail-name{color:#e1f3ec}.egtph-theme-night .egtph-worker-rail-chip{background:#3b2025;border-color:#6e3039}.egtph-theme-night .egtph-worker-rail-chip.has-today{background:#173d2c;border-color:#286344}.egtph-theme-night .egtph-mini-log{background:#3b2025;border-color:#6e3039}.egtph-theme-night .egtph-mini-log.has-today{background:#173d2c;border-color:#286344}.egtph-theme-night .egtph-modal-x,.egtph-theme-night .mo.open .modal .mbtns{background:rgba(15,38,31,.97);border-color:#285247;color:#dff3eb}
+@media(max-width:900px){
+  #page-dashboard #dashCards{display:none!important}
+  #page-dashboard #qgrid{grid-template-columns:1fr!important;gap:12px!important}
+  #egtphWorkerRail{top:0;border-radius:14px;margin-inline:-3px;padding-inline:7px}
+  .egtph-worker-rail-chip{min-width:135px}
+  .egtph-action-grid{gap:6px}.egtph-action-grid .qb{min-height:55px!important}.egtph-action-grid .qb.egtph-priority{min-height:66px!important}
+  .main{padding-bottom:calc(118px + env(safe-area-inset-bottom))!important}
+  .page{padding-bottom:calc(20px + env(safe-area-inset-bottom))}
+}
+@media(max-width:390px){.egtph-action-label{font-size:9.8px}.egtph-action-summary{font-size:8px}.egtph-worker-rail-chip{min-width:126px}.egtph-action-grid .qb{padding-inline:3px!important}}
+@media print{#egtphWorkerRail,.egtph-mini-log{display:none!important}}
+</style>
+<script id="egtph-v219-quick-control-mobile-script">
+(function(){
+'use strict';
+if(window.__EGTPH_V219__)return;window.__EGTPH_V219__=true;
+var enhanceTimer=null,railObserver=null,activeWorkerId='';
+function A(v){return Array.isArray(v)?v:[];}function O(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{}}function N(v){var n=Number(v);return isFinite(n)?n:0;}
+function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function pad(n){return String(n).padStart(2,'0')}function todayKey(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function dateKey(v){if(!v)return'';var s=String(v),m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[1]+'-'+m[2]+'-'+m[3];m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);return m?m[3]+'-'+pad(m[2])+'-'+pad(m[1]):''}
+function when(x){return x&&((x.enteredAt)||(x._createdAt)||(x.realDate)||(x.date)||(x.from)||'')}
+function isToday(x){return dateKey(when(x))===todayKey()}
+function money(v){return Math.round(N(v)).toLocaleString('fr-FR')+' دج'}
+function nested(section,wid){var root=O(window.DB&&DB[section]),b=root[wid]||root[String(wid)]||{},out=[];Object.keys(O(b)).forEach(function(k){out=out.concat(A(b[k]))});return out.filter(Boolean)}
+function direct(section,wid){var root=O(window.DB&&DB[section]);return A(root[wid]||root[String(wid)]).filter(Boolean)}
+function gross(a){try{return typeof advGross==='function'?Math.max(0,N(advGross(a))):Math.max(0,N(a&&a.amount))}catch(e){return Math.max(0,N(a&&a.amount))}}
+function groupAdvances(rows){var groups={};rows.forEach(function(a){if(!a||a._instAuto||a.source==='installment')return;var key=String(a.operationId||a.transactionId||a.id||Math.random());if(!groups[key])groups[key]={amount:0,rows:[]};groups[key].amount+=gross(a);groups[key].rows.push(a)});return Object.keys(groups).map(function(k){return groups[k]})}
+function workerStats(wid){
+  var adv=groupAdvances(nested('advances',wid).filter(isToday)),hrs=direct('hours',wid).filter(isToday),abs=direct('absences',wid).filter(isToday),bon=nested('bonuses',wid).filter(isToday),debts=direct('debts',wid).filter(isToday);
+  var debt=debts.filter(function(x){return x&&x.type==='debt'}),ret=debts.filter(function(x){return x&&x.type==='return'&&!x._advanceId});
+  var s={
+    advance:{count:adv.length,total:adv.reduce(function(q,x){return q+x.amount},0)},
+    hours:{count:hrs.length,hours:hrs.reduce(function(q,x){return q+N(x.hours||x.qty||x.count)},0),total:hrs.reduce(function(q,x){return q+N(x.total!=null?x.total:x.amount)},0)},
+    absence:{count:abs.length,days:abs.reduce(function(q,x){return q+N(x.days||x.count)},0),total:abs.reduce(function(q,x){return q+N(x.deduct!=null?x.deduct:x.amount)},0)},
+    bonus:{count:bon.length,total:bon.reduce(function(q,x){return q+N(x.net!=null?x.net:x.amount)},0)},
+    debt:{count:debt.length,total:debt.reduce(function(q,x){return q+N(x.amount)},0)},
+    debtReturn:{count:ret.length,total:ret.reduce(function(q,x){return q+N(x.amount)},0)},events:[]
+  };
+  adv.forEach(function(x){s.events.push({kind:'advance',ts:Date.parse(when(x.rows[0]))||0,text:'تسبيق '+money(x.amount)})});
+  hrs.forEach(function(x){s.events.push({kind:'hours',ts:Date.parse(when(x))||0,text:'ساعات '+N(x.hours||x.qty||x.count)+'س'+(N(x.total)>0?' — '+money(x.total):'')})});
+  abs.forEach(function(x){s.events.push({kind:'absence',ts:Date.parse(when(x))||0,text:'غياب '+N(x.days||x.count)+'ي'})});
+  bon.forEach(function(x){s.events.push({kind:'bonus',ts:Date.parse(when(x))||0,text:'مكافأة '+money(x.net!=null?x.net:x.amount)})});
+  debt.forEach(function(x){s.events.push({kind:'debt',ts:Date.parse(when(x))||0,text:'دين '+money(x.amount)})});
+  ret.forEach(function(x){s.events.push({kind:'debtReturn',ts:Date.parse(when(x))||0,text:'تسديد دين '+money(x.amount)})});
+  s.events.sort(function(a,b){return b.ts-a.ts});s.totalEvents=s.events.length;return s;
+}
+function workerIdFromCard(card){var b=card&&card.querySelector('button[onclick*="openAdvModal("]'),m=(b&&b.getAttribute('onclick')||'').match(/openAdvModal\(\s*([^,\)]+)/);return m?String(m[1]).replace(/["']/g,'').trim():''}
+function svg(kind){var p={
+ advance:'<path d="M20 7V5a2 2 0 0 0-2-2H5a3 3 0 0 0 0 6h15v10a2 2 0 0 1-2 2H5a3 3 0 0 1-3-3V6"/><path d="M16 13h2"/>',
+ hours:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><path d="M19 5v4"/><path d="M17 7h4"/>',
+ absence:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M3 10h18"/><path d="M9 15h6"/>',
+ debt:'<path d="M6 2h12a2 2 0 0 1 2 2v18l-4-2-4 2-4-2-4 2V4a2 2 0 0 1 2-2Z"/><path d="M8 7h8"/><path d="M8 11h8"/>',
+ bonus:'<path d="m12 2 3.1 6.3L22 9.3l-5 4.9 1.2 6.8-6.2-3.3L5.8 21 7 14.2 2 9.3l6.9-1Z"/>',
+ debtReturn:'<path d="M3 12h14"/><path d="m11 6 6 6-6 6"/><path d="M21 5v14"/>',
+ print:'<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
+ audit:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8"/><path d="M8 12h5"/><path d="m13 17 2 2 4-4"/>',
+ status:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>'};return '<svg class="egtph-action-icon-svg" viewBox="0 0 24 24" aria-hidden="true">'+(p[kind]||p.status)+'</svg>'}
+function buttonInfo(btn){var code=btn.getAttribute('onclick')||'';
+ if(code.indexOf('openAdvModal')>=0)return['advance','تسبيق'];if(code.indexOf('openHrsModal')>=0)return['hours','ساعات إضافية'];if(code.indexOf('openAbsModal')>=0)return['absence','غياب'];if(code.indexOf("openDbtModal")>=0)return['debt','دين'];if(code.indexOf('openBonModal')>=0)return['bonus','مكافأة'];if(code.indexOf('quickPayDebt')>=0)return['debtReturn','تسديد دين'];if(code.indexOf('openPrtModal')>=0)return['print','طباعة العامل'];if(code.indexOf('openAuditModal')>=0)return['audit','السجل الشامل'];if(code.indexOf('quickSettle')>=0)return['status','حالة الغياب'];return['status',btn.textContent.trim()]}
+function summary(kind,s){var x=s[kind]||{};if(!x.count)return 'لم يسجل اليوم';if(kind==='hours')return (x.hours||0)+' س • '+money(x.total);if(kind==='absence')return (x.days||0)+' يوم';return money(x.total)}
+function decorateButton(btn,kind,label,s){
+ btn.dataset.egtphKind=kind;btn.classList.remove('egtph-priority','egtph-secondary','egtph-utility','egtph-empty','egtph-done');
+ var transactional=['advance','hours','absence','debt','bonus','debtReturn'].indexOf(kind)>=0;
+ btn.classList.add(kind==='advance'||kind==='hours'?'egtph-priority':transactional?'egtph-secondary':'egtph-utility');
+ if(transactional)btn.classList.add((s[kind]&&s[kind].count)?'egtph-done':'egtph-empty');
+ btn.innerHTML=svg(kind)+'<span class="egtph-action-label">'+esc(label)+'</span><span class="egtph-action-summary">'+esc(transactional?summary(kind,s):(kind==='audit'?'منذ الدخول إلى اليوم':kind==='print'?'PDF وتقارير':'التفاصيل الحالية'))+'</span>';
+}
+function buildMiniLog(card,s){var box=card.querySelector('.egtph-mini-log');if(!box){box=document.createElement('div');box.className='egtph-mini-log';var actions=card.querySelector('.egtph-action-grid');if(actions)card.insertBefore(box,actions);else card.appendChild(box)}box.classList.toggle('has-today',s.totalEvents>0);var items=s.events.slice(0,3).map(function(e){return '<span class="egtph-mini-log-item">'+esc(e.text)+'</span>'}).join('');box.innerHTML='<div class="egtph-mini-log-head"><span>'+(s.totalEvents?'✓ عمليات اليوم':'● لا توجد عملية اليوم')+'</span><span>'+s.totalEvents+' عملية</span></div>'+(s.totalEvents?'<div class="egtph-mini-log-list">'+items+'</div>':'')}
+function decorateCard(card){var wid=workerIdFromCard(card);if(!wid)return;card.dataset.workerId=wid;card.id='quick-worker-'+wid;var s=workerStats(wid);var buttons=Array.from(card.querySelectorAll('.qbtns .qb,.egtph-action-grid .qb'));if(!buttons.length)return;var order=['advance','hours','absence','debt','bonus','debtReturn','print','audit','status'],map={};buttons.forEach(function(b){var inf=buttonInfo(b);map[inf[0]]={btn:b,label:inf[1]}});var grid=card.querySelector('.egtph-action-grid');if(!grid){grid=document.createElement('div');grid.className='egtph-action-grid';card.querySelectorAll('.qbtns').forEach(function(r){r.remove()});card.appendChild(grid)}order.forEach(function(k){if(map[k]){decorateButton(map[k].btn,k,map[k].label,s);grid.appendChild(map[k].btn)}});buildMiniLog(card,s)}
+function railSummary(s){var a=[];if(s.advance.count)a.push('تسبيق '+money(s.advance.total));if(s.hours.count)a.push('ساعات '+s.hours.hours+'س');if(s.absence.count)a.push('غياب '+s.absence.days+'ي');if(s.debt.count)a.push('دين '+money(s.debt.total));if(s.bonus.count)a.push('مكافأة '+money(s.bonus.total));if(s.debtReturn.count)a.push('تسديد '+money(s.debtReturn.total));return a.join(' • ')||'لا توجد عملية اليوم'}
+function buildRail(){var page=document.getElementById('page-dashboard'),cards=Array.from(document.querySelectorAll('#qgrid .qcard'));if(!page||!cards.length)return;var rail=document.getElementById('egtphWorkerRail'),oldTrack=rail&&rail.querySelector('.egtph-worker-rail-track'),oldScroll=oldTrack?oldTrack.scrollLeft:0;if(!rail){rail=document.createElement('section');rail.id='egtphWorkerRail';var anchor=document.getElementById('dashCards')||document.getElementById('qgrid');anchor.parentNode.insertBefore(rail,anchor)}var chips=cards.map(function(card,i){var wid=card.dataset.workerId||workerIdFromCard(card),w=(typeof getW==='function'?getW(wid):null),s=workerStats(wid),name=w&&w.name||('عامل '+(i+1));return '<button type="button" class="egtph-worker-rail-chip '+(s.totalEvents?'has-today':'')+'" data-worker="'+esc(wid)+'"><span class="egtph-worker-rail-avatar">'+esc(name.trim().charAt(0)||'ع')+'</span><span class="egtph-worker-rail-copy"><span class="egtph-worker-rail-name">'+esc(name)+'</span><span class="egtph-worker-rail-sub">'+esc(railSummary(s))+'</span></span></button>'}).join('');rail.innerHTML='<div class="egtph-worker-rail-head"><b>مركز عمليات العمال</b><small>اسحب يميناً ويساراً واضغط على العامل</small></div><div class="egtph-worker-rail-track">'+chips+'</div>';rail.querySelectorAll('[data-worker]').forEach(function(chip){chip.onclick=function(){focusWorker(chip.dataset.worker)}});var newTrack=rail.querySelector('.egtph-worker-rail-track');if(newTrack&&oldScroll)requestAnimationFrame(function(){newTrack.scrollLeft=oldScroll});syncActiveChip()}
+function focusWorker(wid){activeWorkerId=String(wid);var card=document.getElementById('quick-worker-'+CSS.escape(String(wid)));if(card){card.scrollIntoView({behavior:'smooth',block:'start'});card.classList.add('egtph-worker-focus');setTimeout(function(){card.classList.remove('egtph-worker-focus')},1200)}syncActiveChip()}
+function syncActiveChip(){document.querySelectorAll('#egtphWorkerRail [data-worker]').forEach(function(x){x.classList.toggle('active',String(x.dataset.worker)===String(activeWorkerId))})}
+function enhance(){clearTimeout(enhanceTimer);enhanceTimer=setTimeout(function(){var grid=document.getElementById('qgrid');if(!grid)return;Array.from(grid.querySelectorAll('.qcard')).forEach(decorateCard);buildRail();installModalCloseButtons();installTableGestures();syncDock()},40)}
+function syncDock(){var quick=document.getElementById('bn-quick'),more=document.getElementById('bn-more'),page=document.getElementById('page-dashboard');if(!quick)return;var active=!!(page&&page.classList.contains('active'));quick.classList.toggle('active',active);quick.classList.toggle('has-active',active);if(active&&more)more.classList.remove('active')}
+function makeQuickDirect(){var quick=document.getElementById('bn-quick');if(!quick||quick.dataset.v219Direct)return;quick.dataset.v219Direct='1';quick.addEventListener('click',function(e){e.preventDefault();e.stopImmediatePropagation();var sheet=document.getElementById('egtphQuickSheet');if(sheet)sheet.remove();quick.classList.remove('open');if(typeof showPage==='function')showPage('dashboard');requestAnimationFrame(function(){window.scrollTo({top:0,behavior:'smooth'});enhance()})},true)}
+function installModalCloseButtons(){document.querySelectorAll('.mo .modal').forEach(function(modal){if(modal.querySelector('.egtph-modal-x'))return;var mo=modal.closest('.mo'),b=document.createElement('button');b.type='button';b.className='egtph-modal-x';b.setAttribute('aria-label','إغلاق');b.textContent='×';b.onclick=function(){if(mo&&typeof closeModal==='function')closeModal(mo.id)};modal.insertBefore(b,modal.firstChild)})}
+function syncModalBody(){document.body.classList.toggle('egtph-modal-open',!!document.querySelector('.mo.open'))}
+function distance(t){var dx=t[0].clientX-t[1].clientX,dy=t[0].clientY-t[1].clientY;return Math.sqrt(dx*dx+dy*dy)}
+function installTableGestures(){document.querySelectorAll('#page-workers .egtph-table-viewport,#page-settlement .egtph-table-viewport').forEach(function(vp){
+ if(vp.dataset.v219Gesture)return;vp.dataset.v219Gesture='1';var pinch=false,startDist=0,startScale=100,ctl=null;
+ vp.addEventListener('touchstart',function(e){
+   if(!e.touches||e.touches.length!==2)return;
+   var table=vp.querySelector('table');ctl=table&&table._egtphTableView;if(!ctl)return;
+   pinch=true;startDist=distance(e.touches);startScale=ctl.value||100;
+   if(e.cancelable)e.preventDefault();
+ },{passive:false,capture:true});
+ vp.addEventListener('touchmove',function(e){
+   if(!pinch||!ctl||!e.touches||e.touches.length!==2)return;
+   var d=distance(e.touches);if(startDist>0&&typeof applyTableScale==='function')applyTableScale(ctl,startScale*(d/startDist));
+   if(e.cancelable)e.preventDefault();
+ },{passive:false,capture:true});
+ vp.addEventListener('touchend',function(e){if(!e.touches||e.touches.length<2){pinch=false;ctl=null}},{passive:true,capture:true});
+ vp.addEventListener('touchcancel',function(){pinch=false;ctl=null},{passive:true,capture:true});
+ if(!vp.parentNode.querySelector('.egtph-pinch-hint')){var hint=document.createElement('div');hint.className='egtph-pinch-hint';hint.textContent='اسحب الجدول يميناً ويساراً — قرّب أو باعد إصبعين للتكبير والتصغير';vp.parentNode.insertBefore(hint,vp)}
+ })}
+var originalRenderDash=window.renderDash;try{if(typeof renderDash==='function')originalRenderDash=renderDash}catch(e){}
+if(typeof originalRenderDash==='function'){var wrapped=function(){var r=originalRenderDash.apply(this,arguments);enhance();return r};window.renderDash=wrapped;try{renderDash=wrapped}catch(e){}}
+var originalShowPage=window.showPage;try{if(typeof showPage==='function')originalShowPage=showPage}catch(e){}
+if(typeof originalShowPage==='function'){var wrapPage=function(id){var r=originalShowPage.apply(this,arguments);setTimeout(function(){makeQuickDirect();syncDock();if(id==='dashboard')enhance();if(id==='workers'||id==='settlement')installTableGestures()},30);return r};window.showPage=wrapPage;try{showPage=wrapPage}catch(e){}}
+var moObserver=new MutationObserver(function(){syncModalBody();installModalCloseButtons()});moObserver.observe(document.body,{subtree:true,attributes:true,attributeFilter:['class'],childList:true});
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('#qgrid .qb');if(b){b.classList.add('egtph-saving');setTimeout(function(){b.classList.remove('egtph-saving')},1800);setTimeout(enhance,800);setTimeout(enhance,2400)}},true);
+function boot(){makeQuickDirect();installModalCloseButtons();syncModalBody();installTableGestures();enhance();var grid=document.getElementById('qgrid');if(grid&&!railObserver){railObserver=new MutationObserver(enhance);railObserver.observe(grid,{childList:true})}setInterval(function(){if(document.getElementById('page-dashboard')&&document.getElementById('page-dashboard').classList.contains('active'))enhance();syncDock()},30000)}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+window.EGTPH_V219={version:'219.0',enhance:enhance,workerStats:workerStats,installTableGestures:installTableGestures};
+})();
+</script>
+
+
+<style id="egtph-v220-modal-table-final-style">
+.mo.open{z-index:5000!important}
+body.egtph-modal-open .bnav{display:none!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important;transform:translateY(140%)!important}
+body.egtph-modal-open .mo.open{z-index:5000!important}
+body.egtph-modal-open .mo.open .modal{max-height:calc(100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important}
+body.egtph-modal-open .mo.open .modal .mbtns{position:sticky!important;bottom:0!important;z-index:30!important;margin:16px -16px calc(-20px - env(safe-area-inset-bottom))!important;padding:11px 16px calc(14px + env(safe-area-inset-bottom))!important}
+#page-workers .egtph-table-viewport,#page-settlement .egtph-table-viewport{touch-action:pan-y!important;overflow-x:scroll!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch!important}
+</style>
+<script id="egtph-v220-modal-table-final-script">
+(function(){
+'use strict';if(window.__EGTPH_V220__)return;window.__EGTPH_V220__=true;
+function modalIsOpen(){if(document.querySelector('.mo.open'))return true;var chart=document.getElementById('mChart');return !!(chart&&getComputedStyle(chart).display!=='none')}
+function syncModalState(){if(!document.body)return;document.body.classList.toggle('egtph-modal-open',modalIsOpen())}
+var baseOpen=window.openModal;try{if(typeof openModal==='function')baseOpen=openModal}catch(e){}
+if(typeof baseOpen==='function'){var openWrapped=function(id){var r=baseOpen.apply(this,arguments);syncModalState();requestAnimationFrame(syncModalState);return r};window.openModal=openWrapped;try{openModal=openWrapped}catch(e){}}
+var baseClose=window.closeModal;try{if(typeof closeModal==='function')baseClose=closeModal}catch(e){}
+if(typeof baseClose==='function'){var closeWrapped=function(id){var r=baseClose.apply(this,arguments);syncModalState();requestAnimationFrame(syncModalState);return r};window.closeModal=closeWrapped;try{closeModal=closeWrapped}catch(e){}}
+var observer=new MutationObserver(syncModalState);
+function boot(){syncModalState();observer.observe(document.body,{subtree:true,attributes:true,attributeFilter:['class','style'],childList:true});try{window.EGTPH_SYNC&&window.EGTPH_SYNC.tableView&&window.EGTPH_SYNC.tableView.refresh&&window.EGTPH_SYNC.tableView.refresh(document)}catch(e){}}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+window.EGTPH_V220={version:'220.0',syncModalState:syncModalState};
+})();
 </script>
 </body></html>
