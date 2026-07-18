@@ -10840,4 +10840,452 @@ if (document.readyState === 'loading') {
   window.EGTPHTripArithmetic = { calc:_egtphTripCalc, normalizeTruckInput:_egtphNormalizeTruckInputElement };
 })();
 </script>
+<style id="egtph-account-project-upgrade-v141-css">
+/* EGTPH v14.1 — أرصدة الموردين، كميات الفواتير حسب اسم المشروع الاختياري، وملخص السجل */
+.sup-credit-notice{margin:0 0 13px;padding:11px 13px;border:1px solid rgba(34,211,238,.38);border-radius:var(--r);background:linear-gradient(135deg,rgba(34,211,238,.12),rgba(79,142,247,.06));color:var(--cyan);font-size:12px;font-weight:800;box-shadow:0 0 20px rgba(34,211,238,.08)}
+.sup-project-summary{margin-bottom:13px;border-color:rgba(79,142,247,.28)}
+.sup-project-head{padding:10px 13px;background:linear-gradient(90deg,rgba(79,142,247,.10),rgba(34,211,238,.04));border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.sup-project-note{font-size:9px;color:var(--tx3);line-height:1.6}
+.sup-project-group{border-bottom:1px solid var(--bdr)}
+.sup-project-group:last-child{border-bottom:none}
+.sup-project-group>summary{list-style:none;cursor:pointer;padding:9px 13px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(255,255,255,.018)}
+.sup-project-group>summary::-webkit-details-marker{display:none}
+.sup-project-group[open]>summary{background:rgba(79,142,247,.055)}
+.sup-project-title{font-size:12px;font-weight:800;color:var(--tx)}
+.sup-project-sub{font-size:9px;color:var(--tx3);margin-top:2px}
+.sup-project-total{font-size:12px;font-weight:900;color:var(--gold2);white-space:nowrap}
+.sup-project-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:12px;background:rgba(79,142,247,.12);border:1px solid rgba(79,142,247,.24);color:var(--blue);font-size:9px;font-weight:800;margin-top:3px}
+.sup-project-chip.auto{background:rgba(251,146,60,.10);border-color:rgba(251,146,60,.25);color:var(--orange)}
+.sup-project-chip.optional{background:rgba(139,154,181,.10);border-color:rgba(139,154,181,.24);color:var(--tx2)}
+.record-balance-note{margin:0 12px 9px;padding:8px 10px;border-radius:var(--rs);font-size:11px;line-height:1.65}
+.record-balance-note.general{background:var(--bdim);border:1px solid rgba(79,142,247,.26);color:var(--blue)}
+.record-balance-note.credit{background:rgba(34,211,238,.10);border:1px solid rgba(34,211,238,.28);color:var(--cyan)}
+@media(max-width:520px){.sup-project-group .tbl{min-width:520px}.record-settlement-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+</style>
+<script id="egtph-account-project-upgrade-v141">
+(function(){
+  'use strict';
+
+  const EPS = 0.009;
+  const PENDING = 'pending';
+  const CONFIRMED = 'confirmed';
+  const num = v => parseFloat(v) || 0;
+  const html = v => typeof esc === 'function' ? esc(String(v == null ? '' : v)) : String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const money = v => typeof fDA === 'function' ? fDA(num(v)) : num(v).toFixed(2);
+  const qtyText = v => typeof fN === 'function' ? fN(num(v)) : String(num(v));
+  const dateText = v => typeof fD === 'function' ? fD(v) : (v || '');
+  const isPending = row => !!row && row.priceStatus === PENDING;
+  const norm = v => String(v == null ? '' : v).trim().toLowerCase().replace(/[\u064B-\u065F\u0670]/g,'').replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/[^a-z0-9\u0600-\u06ff]+/g,' ').replace(/\s+/g,' ').trim();
+
+  function getRecordById(id){ return (typeof records !== 'undefined' ? records : []).find(r => r && r.id === id) || null; }
+  function getClientById(id){ return (typeof clients !== 'undefined' ? clients : []).find(c => c && c.id === id) || null; }
+
+  const PROJECT_STOP_WORDS = new Set([
+    'مشروع','المشروع','اشغال','أشغال','الاشغال','الأشغال','projet','chantier','travaux',
+    '2024','2025','2026','2027','facture','فاتورة','bl','bon','livraison'
+  ]);
+
+  function projectTokens(value){
+    return norm(value).split(' ').filter(token => token.length >= 2 && !PROJECT_STOP_WORDS.has(token));
+  }
+
+  function knownProjectNames(){
+    const names = [];
+    const seen = new Set();
+    (typeof records !== 'undefined' ? records : []).forEach(r => {
+      const name = String(r?.name || '').trim();
+      const key = norm(name);
+      if (!name || !key || seen.has(key)) return;
+      seen.add(key);
+      names.push({name,key,tokens:projectTokens(name)});
+    });
+    return names;
+  }
+
+  function extractProjectPhrase(value){
+    const raw = String(value || '').replace(/\s+/g,' ').trim();
+    if (!raw) return '';
+    const patterns = [
+      /((?:اسم\s*المشروع|المشروع|مشروع)\s*[:：\-–—]?\s*[^|،؛;\n\r]+)/i,
+      /((?:nom\s+du\s+projet|projet|chantier)\s*[:：\-–—]?\s*[^|,;\n\r]+)/i
+    ];
+    for (const pattern of patterns) {
+      const match = raw.match(pattern);
+      if (!match) continue;
+      let phrase = String(match[1] || '').trim()
+        .replace(/\s+(?:رقم\s*(?:الفاتورة|الوصل)?|فاتورة|وصل|facture|bon\s+de\s+livraison|bl)\b.*$/i,'')
+        .replace(/[.\-–—:：،؛;,]+$/g,'')
+        .trim();
+      if (norm(phrase).length >= 3) return phrase;
+    }
+    return '';
+  }
+
+  function inferProjectNameFromText(inv){
+    const sources = [inv?.note, inv?.ref].map(v => String(v || '').trim()).filter(Boolean);
+    if (!sources.length) return '';
+    const projects = knownProjectNames();
+
+    for (const source of sources) {
+      const sourceNorm = norm(source);
+      if (!sourceNorm) continue;
+
+      const direct = projects
+        .filter(p => p.key.length >= 3 && sourceNorm.includes(p.key))
+        .sort((a,b) => b.key.length - a.key.length);
+      if (direct.length) {
+        const longest = direct[0].key.length;
+        const top = direct.filter(p => p.key.length === longest);
+        if (top.length === 1) return top[0].name;
+      }
+
+      const sourceTokens = new Set(projectTokens(source));
+      const scored = projects.map(p => {
+        const common = p.tokens.filter(t => sourceTokens.has(t));
+        const score = p.tokens.length ? common.length / p.tokens.length : 0;
+        return {p,common,score};
+      }).filter(x => x.common.length >= 2 || (x.common.length === 1 && x.common[0].length >= 5 && x.score === 1))
+        .sort((a,b) => b.score - a.score || b.common.length - a.common.length || b.p.key.length - a.p.key.length);
+      if (scored.length && scored[0].score >= 0.75) {
+        const second = scored[1];
+        if (!second || scored[0].score > second.score || scored[0].common.length > second.common.length) return scored[0].p.name;
+      }
+
+      const phrase = extractProjectPhrase(source);
+      if (phrase) return phrase;
+    }
+    return '';
+  }
+
+  function resolveInvoiceProject(inv){
+    if (!inv) return {key:'general',name:'بدون اسم مشروع',inferred:false,unassigned:true,source:'none'};
+
+    const explicitName = String(inv.projectName || '').trim();
+    if (explicitName) {
+      return {key:'name:'+norm(explicitName),name:explicitName,inferred:false,unassigned:false,source:'field'};
+    }
+
+    // توافق مع النسخة السابقة فقط: نحول الرابط القديم إلى اسم نصي دون إنشاء أي ارتباط جديد.
+    const legacyId = inv.projectRecordId || inv.projectId || '';
+    const legacyRecord = legacyId ? getRecordById(legacyId) : null;
+    if (legacyRecord?.name) {
+      return {key:'name:'+norm(legacyRecord.name),name:legacyRecord.name,inferred:true,unassigned:false,source:'legacy'};
+    }
+
+    const inferredName = inferProjectNameFromText(inv);
+    if (inferredName) {
+      return {key:'name:'+norm(inferredName),name:inferredName,inferred:true,unassigned:false,source:'text'};
+    }
+
+    return {key:'general',name:'بدون اسم مشروع',inferred:false,unassigned:true,source:'none'};
+  }
+
+  function invoiceCalculatedTotal(inv){
+    const rows = Array.isArray(inv?.items) ? inv.items : [];
+    if (!rows.length) return num(inv?.total);
+    return rows.reduce((sum,row) => sum + (isPending(row) ? 0 : num(row.qty) * num(row.unitPrice)), 0);
+  }
+
+  function supplierAccount(spId){
+    const invs = (window._supInvs || []).filter(v => v && v.supplierId === spId);
+    let invoiced = 0, pendingLines = 0, pendingQty = 0;
+    invs.forEach(inv => {
+      const rows = Array.isArray(inv.items) ? inv.items : [];
+      if (!rows.length) invoiced += num(inv.total);
+      else rows.forEach(row => {
+        const q = num(row.qty);
+        if (isPending(row)) { if (q > 0) { pendingLines++; pendingQty += q; } }
+        else invoiced += q * num(row.unitPrice);
+      });
+    });
+    const sp = (typeof suppliers !== 'undefined' ? suppliers : []).find(x => x && x.id === spId);
+    const initDebt = num(sp?.initialDebt);
+    const totalDebt = invoiced + initDebt;
+    const paid = (typeof supPays !== 'undefined' ? supPays : []).filter(p => p && p.supplierId === spId).reduce((s,p) => s + num(p.amount), 0);
+    const balance = totalDebt - paid;
+    return {
+      totalDebt, paid, invoiced, initDebt, balance,
+      remain:Math.max(0,balance),
+      overpaid:Math.max(0,-balance),
+      credit:Math.max(0,-balance),
+      pendingLines, pendingQty
+    };
+  }
+  window.getSupDebt = supplierAccount;
+
+  function supplierStatus(sd){
+    if (sd.overpaid > EPS) return {cls:'bb', text:'رصيد لنا: '+money(sd.overpaid)};
+    if (sd.remain > EPS) return {cls:'br', text:money(sd.remain)+' متبقي'};
+    if (sd.totalDebt > EPS || sd.paid > EPS) return {cls:'bg', text:'✓ مسدد'};
+    return {cls:'bx', text:'جديد'};
+  }
+
+  window.renderSuppliers = function(p={}){
+    if (p.sid) { openSpId = p.sid; return renderSupDetail(p.sid); }
+    openSpId = null;
+    if (typeof window._supSelMode === 'undefined') window._supSelMode = false;
+    if (!window._supSelected) window._supSelected = new Set();
+    const sel = window._supSelMode;
+    const list = typeof suppliers !== 'undefined' ? suppliers : [];
+    const typeIc = {'خدمة':'🔧','سلعة':'📦','كراء شاحنة':'🚛','كراء آلات':'🏗','وقود':'⛽','نقل':'🚚','صيانة':'🔩','أخرى':'📋'};
+    const root = document.getElementById('content'); if (!root) return;
+    root.innerHTML = `
+      <div class="ph"><div><h1>🏭 الموردون</h1><p>${list.length} مورد مسجّل</p></div><div class="ph-act">
+      ${sel ? `<button class="btn btn-sec" onclick="supSelectAll()">☑ تحديد الكل</button><button class="btn btn-gold" onclick="supSelEnd()">✓ إنهاء التحديد</button>` : `<button class="btn btn-sec" onclick="supSelStart()">📊 تحديد ومجموع</button><button class="btn btn-gold" onclick="addSupplier()">＋ مورد جديد</button>`}
+      </div></div>
+      ${sel ? `<div id="sup-sum-bar" class="sup-sum-bar"></div>` : ''}
+      <div>${list.length ? list.map(s => {
+        const sd = supplierAccount(s.id), status = supplierStatus(sd), checked = window._supSelected.has(s.id);
+        const onclick = sel ? `onclick="supToggle('${s.id}')"` : `onclick="renderSupDetail('${s.id}')"`;
+        return `<div class="sup-c${sel&&checked?' sel-on':''}" ${onclick}>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+            <div style="display:flex;align-items:center;gap:7px">${sel?`<span style="font-size:17px">${checked?'☑':'⬜'}</span>`:''}<span style="font-size:16px">${typeIc[s.type]||'🏭'}</span><div style="font-size:14px;font-weight:700;color:var(--tx)">${html(s.name)}</div></div>
+            <span class="bdg ${status.cls}">${status.text}</span>
+          </div>
+          <div style="font-size:11px;color:var(--tx3)">${s.type?`<span class="bdg bx" style="margin-left:4px">${html(s.type)}</span>`:''}${s.phone?'📞 '+html(s.phone):''}${s.product?' · '+html(s.product):''}</div>
+        </div>`;
+      }).join('') : `<div class="empty"><div class="empty-ic">🏭</div><h3>لا يوجد موردون</h3><p>اضغط "＋ مورد جديد" للبدء</p></div>`}</div>`;
+    if (sel) updateSupSumBar();
+  };
+
+  window._supSelTotals = function(){
+    let inv=0, paid=0, remain=0, overpaid=0, balance=0;
+    for (const id of (window._supSelected || new Set())) {
+      const d = supplierAccount(id); inv += d.totalDebt; paid += d.paid; remain += d.remain; overpaid += d.overpaid; balance += d.balance;
+    }
+    return {inv,paid,remain,overpaid,balance,n:(window._supSelected || new Set()).size};
+  };
+
+  window.updateSupSumBar = function(){
+    const bar = document.getElementById('sup-sum-bar'); if (!bar) return;
+    const t = window._supSelTotals();
+    if (!t.n) { bar.innerHTML = `<div style="color:var(--tx3);font-size:12px;text-align:center;padding:4px">اضغط على الموردين لتحديدهم…</div>`; return; }
+    bar.innerHTML = `<div class="ssb-row">
+      <div class="ssb-cell"><span class="ssb-l">محدّد</span><span class="ssb-v">${t.n}</span></div>
+      <div class="ssb-cell"><span class="ssb-l">إجمالي الفواتير</span><span class="ssb-v gd">${money(t.inv)}</span></div>
+      <div class="ssb-cell"><span class="ssb-l">المدفوع</span><span class="ssb-v gn">${money(t.paid)}</span></div>
+      <div class="ssb-cell"><span class="ssb-l">المتبقي للموردين</span><span class="ssb-v rd">${money(t.remain)}</span></div>
+      <div class="ssb-cell"><span class="ssb-l">رصيد لنا عند الموردين</span><span class="ssb-v bl">${money(t.overpaid)}</span></div>
+      <button class="btn btn-gold btn-sm" onclick="printSupSelection()">🖨 طباعة المجموع</button>
+    </div>`;
+  };
+
+  window.printSupSelection = function(){
+    const ids = Array.from(window._supSelected || []); if (!ids.length) return T('حدّد موردين أولاً','error');
+    const rows = ids.map(id => ({s:suppliers.find(x=>x.id===id), d:supplierAccount(id)})).filter(x=>x.s);
+    let gInv=0,gPaid=0,gRem=0,gCredit=0;
+    let body = `<table><thead><tr><th>المورد</th><th>النوع</th><th>إجمالي الفواتير</th><th>المدفوع</th><th>المتبقي</th><th>رصيد لصالح المؤسسة</th></tr></thead><tbody>`;
+    rows.forEach(({s,d}) => { gInv+=d.totalDebt; gPaid+=d.paid; gRem+=d.remain; gCredit+=d.overpaid; body += `<tr><td>${html(s.name)}</td><td class="c">${html(s.type||'—')}</td><td class="r amt">${money(d.totalDebt)}</td><td class="r amt">${money(d.paid)}</td><td class="r amt">${money(d.remain)}</td><td class="r amt">${money(d.overpaid)}</td></tr>`; });
+    body += `<tr class="tot"><td colspan="2"><strong>الإجمالي (${rows.length} مورد)</strong></td><td class="r amt"><strong>${money(gInv)}</strong></td><td class="r amt"><strong>${money(gPaid)}</strong></td><td class="r amt"><strong>${money(gRem)}</strong></td><td class="r amt"><strong>${money(gCredit)}</strong></td></tr></tbody></table>`;
+    openPrintWin(printHeader('كشف مجموع الموردين المحدّدين',new Date().toLocaleDateString('fr-DZ'))+body+`<div class="foot"><span>EGTPH GP</span><span>${new Date().toLocaleString('fr-DZ')}</span></div></body></html>`);
+  };
+
+  function supplierProjectGroups(spId){
+    const map = new Map();
+    (window._supInvs || []).filter(inv => inv && inv.supplierId === spId).forEach(inv => {
+      const project = resolveInvoiceProject(inv);
+      if (!map.has(project.key)) map.set(project.key,{...project,invoices:[],items:new Map(),total:0,pendingLines:0});
+      const group = map.get(project.key); group.invoices.push(inv); group.total += invoiceCalculatedTotal(inv);
+      (inv.items || []).forEach(row => {
+        const key = norm(row.name)+'|'+norm(row.unit||'وحدة');
+        if (!group.items.has(key)) group.items.set(key,{name:row.name||'—',unit:row.unit||'وحدة',qty:0,amount:0,pendingQty:0,invoiceIds:new Set()});
+        const item = group.items.get(key); item.qty += num(row.qty); item.invoiceIds.add(inv.id);
+        if (isPending(row)) { item.pendingQty += num(row.qty); group.pendingLines++; }
+        else item.amount += num(row.qty)*num(row.unitPrice);
+      });
+    });
+    return Array.from(map.values()).sort((a,b) => Number(a.unassigned)-Number(b.unassigned) || String(a.name).localeCompare(String(b.name),'ar'));
+  }
+
+  function projectSummaryHTML(spId){
+    const groups = supplierProjectGroups(spId);
+    if (!groups.length) return '';
+    return `<div class="cp sup-project-summary" data-sup-project-summary="${html(spId)}">
+      <div class="sup-project-head"><div><div class="sh-t">📁 كميات الفواتير حسب المشروع</div><div class="sup-project-note">تجميع معلوماتي من اسم المشروع الاختياري داخل الفاتورة، أو من اسم يُستخرج تلقائياً من الملاحظة القديمة. هذا القسم <b>غير مرتبط بالمخزون</b> ولا يغيّر كمياته.</div></div><span class="bdg bb">${groups.length} تصنيف</span></div>
+      ${groups.map((g,idx) => {
+        const items = Array.from(g.items.values()).sort((a,b)=>String(a.name).localeCompare(String(b.name),'ar'));
+        const chipCls = g.unassigned ? 'optional' : (g.inferred ? 'auto' : '');
+        const chipText = g.unassigned ? 'اسم المشروع اختياري' : (g.inferred ? 'مستخرج تلقائياً' : 'مدخل في الفاتورة');
+        return `<details class="sup-project-group" ${idx===0?'open':''}><summary><div><div class="sup-project-title">${html(g.name)}</div><div class="sup-project-sub">${g.invoices.length} فاتورة · ${items.length} صنف <span class="sup-project-chip ${chipCls}">${chipText}</span></div></div><div class="sup-project-total">${money(g.total)}</div></summary>
+          <div class="tw" style="border:0;border-radius:0"><table class="tbl" style="min-width:560px"><thead><tr><th class="tl">الصنف</th><th>إجمالي الكمية في الفواتير</th><th>الوحدة</th><th>المبلغ</th><th>عدد الفواتير</th></tr></thead><tbody>
+            ${items.length ? items.map(it=>`<tr><td class="tl" style="font-weight:800">${html(it.name)}${it.pendingQty>0?`<div style="font-size:9px;color:var(--orange)">منها ${qtyText(it.pendingQty)} بسعر معلّق</div>`:''}</td><td class="num" style="color:var(--cyan);font-weight:900">${qtyText(it.qty)}</td><td>${html(it.unit)}</td><td class="num" style="color:var(--green)">${money(it.amount)}</td><td>${it.invoiceIds.size}</td></tr>`).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--tx3);padding:12px">لا توجد أصناف</td></tr>`}
+          </tbody></table></div></details>`;
+      }).join('')}
+    </div>`;
+  }
+
+  function decorateInvoiceProjectChips(spId){
+    (window._supInvs || []).filter(inv=>inv && inv.supplierId===spId).forEach(inv=>{
+      const details = document.getElementById('iv_'+inv.id); if (!details) return;
+      const head = details.previousElementSibling?.querySelector('div[style*="cursor:pointer"]'); if (!head || head.querySelector('[data-project-chip]')) return;
+      const p = resolveInvoiceProject(inv), cls=p.unassigned?'optional':(p.inferred?'auto':'');
+      head.insertAdjacentHTML('beforeend',`<div data-project-chip="1"><span class="sup-project-chip ${cls}">${p.unassigned?'اسم المشروع غير محدد':'📁 '+html(p.name)+(p.inferred?' · تلقائي':'')}</span></div>`);
+    });
+  }
+
+  function decorateSupplierDetail(spId){
+    const root = document.getElementById('content'); if (!root) return;
+    const sd = supplierAccount(spId);
+    const cards = root.querySelectorAll('.cl-hdr .cl-stats .cl-st');
+    if (cards.length >= 3) {
+      const value = cards[2].querySelector('.v'), label = cards[2].querySelector('.l');
+      if (sd.overpaid > EPS) {
+        if (value) { value.textContent=money(sd.overpaid); value.className='v bl'; value.style.color='var(--cyan)'; }
+        if (label) { label.textContent='رصيد لصالح المؤسسة'; label.style.color='var(--cyan)'; }
+      } else {
+        if (value) { value.textContent=money(sd.remain); value.className='v '+(sd.remain>EPS?'rd':'gn'); value.style.color=''; }
+        if (label) { label.textContent='المتبقي'; label.style.color=''; }
+      }
+    }
+    const badge = document.querySelector('#tb-act .bdg');
+    if (badge) {
+      const st = supplierStatus(sd); badge.className='bdg '+st.cls; badge.textContent=st.text;
+    }
+    root.querySelector('[data-sup-credit-notice]')?.remove();
+    root.querySelector('[data-sup-project-summary]')?.remove();
+    const header = root.querySelector('.cl-hdr');
+    if (header && sd.overpaid > EPS) header.insertAdjacentHTML('afterend',`<div class="sup-credit-notice" data-sup-credit-notice="1">💠 دفعت للمورد أكثر من مستحقاته بمبلغ <strong>${money(sd.overpaid)}</strong>. هذا المبلغ محفوظ كرصد لصالح المؤسسة لدى المورد، وليس صفراً ولا ديناً متبقياً.</div>`);
+    const anchor = root.querySelector('[data-sup-credit-notice]') || header;
+    const summary = projectSummaryHTML(spId); if (anchor && summary) anchor.insertAdjacentHTML('afterend',summary);
+    decorateInvoiceProjectChips(spId);
+  }
+
+  const baseRenderSupDetail = window.renderSupDetail;
+  window.renderSupDetail = function(spId){
+    const out = baseRenderSupDetail ? baseRenderSupDetail.apply(this,arguments) : undefined;
+    setTimeout(()=>decorateSupplierDetail(spId),0);
+    return out;
+  };
+
+  function projectNameDatalist(){
+    return knownProjectNames().map(p => `<option value="${html(p.name)}"></option>`).join('');
+  }
+
+  window.openSupInvoice = function(spId){
+    if (secGuard('sup:'+spId,'حساب المورد')) return;
+    if (!suppliers.find(x=>x.id===spId)) return;
+    window._inv = {spId,rows:[{name:'',unit:'وحدة',qty:1,unitPrice:0,priceStatus:PENDING}],date:today(),invoiceNo:'',blNo:'',ref:'',note:'',projectName:''};
+    renderInvModal();
+  };
+
+  window.editSupInvoice = function(invId,spId){
+    if (secGuard('sup:'+spId,'حساب المورد')) return;
+    const v=(window._supInvs||[]).find(x=>x.id===invId); if(!v) return T('الفاتورة غير موجودة','error');
+    const p=resolveInvoiceProject(v);
+    window._inv={
+      spId,editId:invId,
+      rows:(v.items||[]).map(it=>({name:it.name||'',unit:it.unit||'وحدة',qty:num(it.qty),unitPrice:num(it.unitPrice),priceStatus:isPending(it)?PENDING:CONFIRMED})),
+      date:v.date||today(),invoiceNo:v.invoiceNo||'',blNo:v.blNo||'',ref:v.ref||'',note:v.note||'',
+      projectName:p.unassigned?'':(v.projectName||p.name||'')
+    };
+    if(!window._inv.rows.length) window._inv.rows=[{name:'',unit:'وحدة',qty:1,unitPrice:0,priceStatus:PENDING}];
+    renderInvModal();
+  };
+
+  const baseRenderInvModal = window.renderInvModal;
+  window.renderInvModal = function(){
+    const out = baseRenderInvModal ? baseRenderInvModal.apply(this,arguments) : undefined;
+    const inv=window._inv; if(!inv) return out;
+    const firstRow=document.getElementById('inv-date')?.closest('.fgr'); if(!firstRow || document.getElementById('inv-project-meta')) return out;
+    const box=document.createElement('div'); box.id='inv-project-meta'; box.style.marginBottom='10px';
+    box.innerHTML=`<datalist id="inv-project-name-list">${projectNameDatalist()}</datalist><div class="fg"><label>اسم المشروع <span style="color:var(--tx3);font-weight:500">(اختياري)</span></label><input type="text" id="inv-project-name" list="inv-project-name-list" value="${html(inv.projectName||'')}" placeholder="مثال: مشروع الصبحة 2026"><div class="hint">للتجميع والبحث داخل فواتير المورد فقط. لا يربط الفاتورة بالمخزون ولا يغيّر أي كمية فيه. يمكن تركه فارغاً.</div></div>`;
+    firstRow.parentNode.insertBefore(box,firstRow);
+    const name=box.querySelector('#inv-project-name');
+    name.addEventListener('input',()=>{inv.projectName=name.value;});
+    return out;
+  };
+
+  window.invSave = async function(){
+    const inv=window._inv; if(!inv) return;
+    if(secGuard('sup:'+inv.spId,'حساب المورد')) return;
+    const validRows=(inv.rows||[]).filter(r=>(r.name||'').trim()&&num(r.qty)>0).map(r=>({name:(r.name||'').trim(),unit:r.unit||'وحدة',qty:num(r.qty),unitPrice:num(r.unitPrice),priceStatus:isPending(r)?PENDING:CONFIRMED}));
+    if(!validRows.length) return T('أضف صنفاً واحداً على الأقل','error');
+    const projectName=(document.getElementById('inv-project-name')?.value||inv.projectName||'').trim();
+    const total=validRows.reduce((s,r)=>s+(isPending(r)?0:num(r.qty)*num(r.unitPrice)),0);
+    const meta={
+      date:inv.date||today(),invoiceNo:String(inv.invoiceNo||'').trim(),blNo:String(inv.blNo||'').trim(),
+      ref:String(inv.ref||'').trim()||String(inv.invoiceNo||'').trim()||String(inv.blNo||'').trim(),note:String(inv.note||'').trim()
+    };
+    if(projectName) meta.projectName=projectName;
+    if(!window._supInvs) window._supInvs=[];
+    const sp=suppliers.find(x=>x.id===inv.spId);
+    if(inv.editId){
+      const ex=window._supInvs.find(x=>x.id===inv.editId); if(!ex){window._inv=null;CM();return T('الفاتورة غير موجودة','error');}
+      const before=JSON.parse(JSON.stringify(ex)); Object.assign(ex,meta,{items:validRows,total,updatedAt:new Date().toISOString()});
+      if(!projectName) delete ex.projectName;
+      delete ex.projectRecordId; delete ex.projectId; delete ex.projectClientId;
+      const ok=await dbP('sup_invoices',ex); if(!ok){Object.keys(ex).forEach(k=>delete ex[k]);Object.assign(ex,before);return T('فشل حفظ الفاتورة','error');}
+      window._inv=null; if(typeof scheduleAutoSaveFile==='function')scheduleAutoSaveFile(); CM();renderSupDetail(inv.spId);T('✅ تم تعديل الفاتورة — '+money(total),'success');await logA('تعديل فاتورة: '+(sp?.name||''),money(total));return;
+    }
+    const rec={id:uid(),supplierId:inv.spId,...meta,items:validRows,total,createdAt:new Date().toISOString()};window._supInvs.push(rec);
+    const ok=await dbP('sup_invoices',rec);if(!ok){window._supInvs=window._supInvs.filter(x=>x.id!==rec.id);return T('فشل حفظ الفاتورة','error');}
+    window._inv=null;if(typeof scheduleAutoSaveFile==='function')scheduleAutoSaveFile();CM();renderSupDetail(inv.spId);T('✅ فاتورة '+money(total)+' مسجّلة','success');await logA('فاتورة شراء: '+(sp?.name||''),money(total));
+  };
+
+  function clientGeneralPayments(cid){
+    const ops=[];
+    (payments||[]).filter(p=>p.clientId===cid).forEach(p=>ops.push(p));
+    (advances||[]).filter(a=>a.clientId===cid&&a.status!=='X').forEach(a=>ops.push(a));
+    const general=ops.filter(item=>{
+      if(Array.isArray(item.allocations)&&item.allocations.some(a=>num(a.amount)>0&&getRecordById(a.recordId))) return false;
+      if(item.recordId&&getRecordById(item.recordId)) return false;
+      return true;
+    });
+    return {rows:general,total:general.reduce((s,x)=>s+num(x.amount),0)};
+  }
+
+  window.renderRecordSettlementCard = function(rec,cid){
+    const s=window.getRecordSettlement?window.getRecordSettlement(rec.id):{total:getRT(rec.id).amount,paid:0,remain:getRT(rec.id).amount,overpaid:0,cash:0,check:0,unknown:0,rows:[]};
+    const rt=getRT(rec.id), clientTotal=getCT(cid), general=clientGeneralPayments(cid);
+    let metricLabel='إجمالي البنود',metricValue=(entries||[]).filter(e=>e.recordId===rec.id).length;
+    if(rec.type==='trucks'){metricLabel='إجمالي الرحلات / الوصولات';metricValue=rt.trips;}
+    else if(rec.type==='machines'){metricLabel='إجمالي الساعات';metricValue=rt.hours;}
+    else if(rec.type==='stock'||rec.type==='invoice'){metricLabel='إجمالي الكمية';metricValue=(entries||[]).filter(e=>e.recordId===rec.id).reduce((sum,e)=>sum+num(calcE(e)?.qty),0);}
+    const lockedPay=isSecLocked('pay:'+cid),lockedAdv=isSecLocked('adv:'+cid);
+    const action=!lockedPay?`<button class="btn btn-grn btn-sm" onclick="addPay('${cid}',{scope:'record',recordId:'${rec.id}'})">＋ دفعة لهذا السجل</button>`:'';
+    const rowHtml=s.rows?.length?s.rows.map(x=>{
+      const edit=x.source==='payment'?(!lockedPay?`<button class="btn btn-sec btn-xs" onclick="editPay('${x.item.id}','${cid}')">✏</button>`:''):(!lockedAdv?`<button class="btn btn-sec btn-xs" onclick="editAdv('${x.item.id}','${cid}',false)">✏</button>`:'');
+      const method=window.financeMethodLabel?window.financeMethodLabel(x.item):(x.method||'—');
+      return `<tr><td>${dateText(x.date)}</td><td class="tl">${html(x.kind)}</td><td>${html(method)}</td><td class="num" style="color:var(--green)">${money(x.amount)}</td><td class="tl">${x.note?html(x.note):'—'}</td><td>${edit}</td></tr>`;
+    }).join(''):`<tr><td colspan="6" style="padding:12px;color:var(--tx3);text-align:center">لا توجد دفعات مرتبطة بهذا السجل. الدفعات العامة تظهر أدناه ولا تُخصم من السجل حتى تخصيصها.</td></tr>`;
+    return `<div class="cp" style="margin:11px 13px 0;border-color:rgba(40,217,110,.26)">
+      <div style="padding:9px 12px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><div class="sh-t">💳 تسوية السجل: ${html(rec.name)}</div>${action}</div>
+      <div class="kgrid record-settlement-grid" style="margin:10px 12px 8px;grid-template-columns:repeat(auto-fit,minmax(125px,1fr))">
+        <div class="kpi gd"><div class="kl">إجمالي السجل</div><div class="kv gd">${money(s.total)}</div></div>
+        <div class="kpi bl"><div class="kl">${metricLabel}</div><div class="kv bl">${qtyText(metricValue)}</div></div>
+        <div class="kpi gn"><div class="kl">المسدّد لهذا السجل</div><div class="kv gn">${money(s.paid)}</div></div>
+        <div class="kpi ${s.overpaid?'pp':s.remain?'rd':'gn'}"><div class="kl">${s.overpaid?'رصيد زائد في السجل':'المتبقي'}</div><div class="kv ${s.overpaid?'pp':s.remain?'rd':'gn'}">${money(s.overpaid||s.remain)}</div></div>
+        <div class="kpi bl"><div class="kl">نقداً / شيك</div><div class="kv bl" style="font-size:13px">${money(s.cash)} / ${money(s.check)}</div><div class="ks">${s.rows?.length||0} عملية مرتبطة</div></div>
+      </div>
+      ${general.total>EPS?`<div class="record-balance-note general">ℹ️ توجد دفعات أو تسبيقات عامة غير موزعة على سجل بقيمة <strong>${money(general.total)}</strong> (${general.rows.length} عملية). تبقى في رصيد العميل العام ولا تدخل في «المسدّد لهذا السجل» حتى تخصيصها.</div>`:''}
+      ${clientTotal.overpaid>EPS?`<div class="record-balance-note credit">💠 الرصيد الزائد الإجمالي للعميل: <strong>${money(clientTotal.overpaid)}</strong>. يظهر كرصد لصالح العميل ولا يُخفى عند الصفر.</div>`:''}
+      ${s.unknown?`<div style="margin:0 12px 9px;padding:7px 9px;border-radius:var(--rs);background:var(--rdim);color:var(--red);font-size:11px">⚠ ${money(s.unknown)} من عمليات قديمة دون طريقة نقد/شيك محددة.</div>`:''}
+      <div class="tw" style="margin:0 12px 12px"><table class="tbl" style="min-width:610px"><thead><tr><th>التاريخ</th><th class="tl">النوع</th><th>التحصيل</th><th>الحصة المسددة</th><th class="tl">ملاحظة</th><th>إجراء</th></tr></thead><tbody>${rowHtml}</tbody></table></div>
+    </div>`;
+  };
+
+  window.printSuppliersReport = function(){
+    let gDebt=0,gPaid=0,gRem=0,gCredit=0;
+    let body=`<div class="sec">🏭 تقرير الموردين</div><table><thead><tr><th>المورد</th><th>المنتج</th><th>الفواتير</th><th>إجمالي الدين</th><th>المدفوع</th><th>المتبقي</th><th>رصيد لصالح المؤسسة</th></tr></thead><tbody>`;
+    suppliers.forEach(s=>{const d=supplierAccount(s.id),count=(window._supInvs||[]).filter(x=>x.supplierId===s.id).length;gDebt+=d.totalDebt;gPaid+=d.paid;gRem+=d.remain;gCredit+=d.overpaid;body+=`<tr><td style="font-weight:700">${html(s.name)}</td><td>${html(s.type||s.product||'—')}</td><td class="c">${count}</td><td class="c">${money(d.totalDebt)}</td><td class="c" style="color:#1d6f42">${money(d.paid)}</td><td class="c" style="color:#c0392b;font-weight:800">${money(d.remain)}</td><td class="c" style="color:#126b78;font-weight:800">${money(d.overpaid)}</td></tr>`;});
+    body+=`<tr class="tot"><td colspan="3"><strong>الإجمالي</strong></td><td class="c amt"><strong>${money(gDebt)}</strong></td><td class="c amt"><strong>${money(gPaid)}</strong></td><td class="c amt"><strong>${money(gRem)}</strong></td><td class="c amt"><strong>${money(gCredit)}</strong></td></tr></tbody></table>`;
+    openPrintWin(printHeader('تقرير الموردين')+body+`<div class="foot">EGTPH GP · ${new Date().toLocaleString('fr-DZ')}</div></body></html>`);
+  };
+
+  window.printSupplierDoc = function(spId){
+    const s=suppliers.find(x=>x.id===spId);if(!s)return;
+    const d=supplierAccount(spId),pays=supPays.filter(p=>p.supplierId===spId).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),invs=(window._supInvs||[]).filter(v=>v.supplierId===spId).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    let body=`<div class="cl-info"><div><div style="font-size:9px;color:#888;text-transform:uppercase;margin-bottom:3px">المورد</div><div style="font-size:16px;font-weight:900;color:#0f2942">${html(s.name)}</div>${s.type?`<div style="font-size:10px;color:#555">${html(s.type)}${s.product?' · '+html(s.product):''}</div>`:''}${s.phone?`<div style="font-size:10px;color:#555">📞 ${html(s.phone)}</div>`:''}</div><div style="text-align:left"><div style="font-size:9px;color:#888">التاريخ</div><div style="font-size:11px;color:#555">${new Date().toLocaleDateString('fr-DZ')}</div></div></div>`;
+    body+=`<div class="bil"><div class="bx gd"><div class="bx-l">إجمالي الفواتير</div><div class="bx-v">${money(d.totalDebt)}</div></div><div class="bx gn"><div class="bx-l">المدفوع + تسبيقات</div><div class="bx-v">${money(d.paid)}</div></div><div class="bx ${d.overpaid?'bl':'rd'}"><div class="bx-l">${d.overpaid?'رصيد لصالح المؤسسة':'المتبقي'}</div><div class="bx-v">${money(d.overpaid||d.remain)}</div></div></div>`;
+    const groups=supplierProjectGroups(spId);if(groups.length){body+=`<div class="sec">📁 ملخص كميات الفواتير حسب المشروع</div>`;groups.forEach(g=>{body+=`<div style="font-weight:800;margin:8px 0 4px">${html(g.name)} — ${money(g.total)}</div><table><thead><tr><th>الصنف</th><th class="c">الكمية</th><th class="c">الوحدة</th><th class="c">المبلغ</th></tr></thead><tbody>${Array.from(g.items.values()).map(it=>`<tr><td>${html(it.name)}</td><td class="c amt">${qtyText(it.qty)}</td><td class="c">${html(it.unit)}</td><td class="c amt">${money(it.amount)}</td></tr>`).join('')}</tbody></table>`;});}
+    if(invs.length){body+=`<div class="sec">🧾 فواتير الشراء</div>`;invs.forEach((v,i)=>{const p=resolveInvoiceProject(v);body+=`<div style="margin-bottom:12px"><div style="font-weight:700;font-size:11px;margin-bottom:4px">فاتورة ${i+1} — ${dateText(v.date)}${v.invoiceNo?' · فاتورة: '+html(v.invoiceNo):''}${v.blNo?' · BL: '+html(v.blNo):''}${p.unassigned?'':' · المشروع: '+html(p.name)}</div><table><thead><tr><th>الصنف</th><th class="c">الوحدة</th><th class="c">الكمية</th><th class="c">السعر</th><th class="c">المجموع</th></tr></thead><tbody>${(v.items||[]).map(it=>`<tr><td>${html(it.name)}</td><td class="c">${html(it.unit)}</td><td class="c amt">${qtyText(it.qty)}</td><td class="c">${isPending(it)?'معلّق':money(it.unitPrice)}</td><td class="c amt">${isPending(it)?'غير محسوب':money(num(it.qty)*num(it.unitPrice))}</td></tr>`).join('')}<tr class="tot"><td colspan="4"><strong>إجمالي الفاتورة</strong></td><td class="c amt"><strong>${money(invoiceCalculatedTotal(v))}</strong></td></tr></tbody></table></div>`;});}
+    if(pays.length){body+=`<div class="sec">💸 المدفوعات والتسبيقات</div><table><thead><tr><th>التاريخ</th><th>النوع</th><th>الطريقة</th><th class="c">المبلغ</th><th>ملاحظة</th></tr></thead><tbody>${pays.map(p=>`<tr><td>${dateText(p.date)}</td><td>${p.kind==='advance'?'تسبيق':'دفعة'}</td><td>${html(p.method||'—')}</td><td class="c amt">${money(p.amount)}</td><td>${html(p.note||'')}</td></tr>`).join('')}</tbody></table>`;}
+    body+=`<div class="signs"><div class="sbox">المورد<div class="sline">${html(s.name)}</div></div><div class="sbox">المستلم<div class="sline">عبدي يوسف إسلام</div></div></div>`;
+    openPrintWin(printHeader('كشف مورد — '+s.name)+body+`<div class="foot">EGTPH GP · ${new Date().toLocaleString('fr-DZ')}</div></body></html>`);
+  };
+
+  window.EGTPHProjectPurchases={resolveInvoiceProject,supplierProjectGroups,supplierAccount};
+})();
+</script>
+
 </body></html>
