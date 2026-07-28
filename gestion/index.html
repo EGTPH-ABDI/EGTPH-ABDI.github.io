@@ -10452,14 +10452,17 @@ if (document.readyState === 'loading') {
     const s = suppliers.find(x => x.id === inv.spId); if (!s) return;
     const UNITS = ['وحدة','متر','م2','م3','كجم','طن','لتر','رحلة','يوم','ساعة','قطعة'];
     const catalog = s.catalog || [];
-    const dlOpts = catalog.map(c => '<option value="'+safe(c.name)+'" data-unit="'+safe(c.unit)+'">').join('');
     const total = inv.rows.reduce((sum, r) => sum + (isPending(r) ? 0 : n(r.qty) * n(r.unitPrice)), 0);
     let rowsHtml = '';
     inv.rows.forEach((row, i) => {
       const unitSel = UNITS.map(u => '<option value="'+safe(u)+'" '+(u===row.unit?'selected':'')+'>'+safe(u)+'</option>').join('');
       const rowTotal = isPending(row) ? ptag() : fmtDA(n(row.qty) * n(row.unitPrice));
+      const catMatch = catalog.some(c => c.name === row.name);
+      const nameOpts = '<option value=""'+(row.name?'':' selected')+'>— اختر صنفاً —</option>'
+        + (row.name && !catMatch ? '<option value="'+safe(row.name)+'" selected>'+safe(row.name)+'</option>' : '')
+        + catalog.map(c => '<option value="'+safe(c.name)+'" '+(c.name===row.name?'selected':'')+'>'+safe(c.name)+'</option>').join('');
       rowsHtml += '<tr id="inv-tr-'+i+'">'
-        + '<td><input class="ti" type="text" id="inv-n-'+i+'" list="inv-dl" value="'+safe(row.name)+'" placeholder="اسم الصنف" style="min-width:130px" onchange="invCellChange('+i+',\'name\',this.value)"></td>'
+        + '<td><select class="ts" id="inv-n-'+i+'" style="min-width:130px" onchange="invCellChange('+i+',\'name\',this.value)">'+nameOpts+'</select></td>'
         + '<td><select class="ts" id="inv-u-'+i+'" style="min-width:68px" onchange="invCellChange('+i+',\'unit\',this.value)">'+unitSel+'</select></td>'
         + '<td><input class="ti" type="number" id="inv-q-'+i+'" value="'+safe(row.qty)+'" min="0" step="0.01" style="min-width:56px" oninput="invCellChange('+i+',\'qty\',this.value)"></td>'
         + '<td><input class="ti '+(isPending(row)?'price-unset':'')+'" type="number" id="inv-p-'+i+'" value="'+(isPending(row)?'':safe(row.unitPrice))+'" min="0" style="min-width:76px" placeholder="'+(isPending(row)?'لم يتفق عليه':'0')+'" oninput="invCellChange('+i+',\'unitPrice\',this.value)"></td>'
@@ -10467,8 +10470,7 @@ if (document.readyState === 'loading') {
         + '<td><button class="del-btn" onclick="invRemRow('+i+')">✕</button></td>'
         + '</tr>';
     });
-    const html = '<datalist id="inv-dl">'+dlOpts+'</datalist>'
-      + '<div class="docmeta-safe">رقم الفاتورة و Bon de livraison بيانات توثيقية فقط ولا تدخل في حساب دين المورد.</div>'
+    const html = '<div class="docmeta-safe">رقم الفاتورة و Bon de livraison بيانات توثيقية فقط ولا تدخل في حساب دين المورد.</div>'
       + '<div class="fgr" style="margin-bottom:10px">'
       +   '<div class="fg"><label>التاريخ *</label><input type="date" id="inv-date" value="'+safe(inv.date || today())+'" onchange="window._inv.date=this.value"></div>'
       +   '<div class="fg"><label>رقم الفاتورة</label><input type="text" id="inv-invoiceNo" value="'+safe(inv.invoiceNo || '')+'" placeholder="N° Facture" oninput="window._inv.invoiceNo=this.value"></div>'
@@ -10486,14 +10488,42 @@ if (document.readyState === 'loading') {
       +   '<button class="add-row" style="flex:1;border-radius:var(--rs);border-left:none" onclick="invAddRow()">＋ صنف من الكتالوج</button>'
       +   '<button class="btn btn-sec btn-sm" style="flex-shrink:0;white-space:nowrap" onclick="invAddNewCatItem()">＋ صنف جديد</button>'
       + '</div>'
-      + '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 11px;background:var(--bg3);border-radius:var(--rs);border:1px solid var(--bdr);margin-bottom:8px">'
-      +   '<span style="font-size:12px;font-weight:700;color:var(--tx2)">إجمالي الفاتورة</span>'
-      +   '<span class="num" id="inv-grand" style="font-size:16px;font-weight:900;color:var(--gold2)">'+fmtDA(total)+'</span>'
+      + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:700;color:var(--tx2);margin-bottom:8px">'
+      +   '<input type="checkbox" id="inv-ttc" '+(inv.ttc?'checked':'')+' onchange="invToggleTTC(this.checked)"> احتساب TTC (+19% TVA) — يُسجَّل كسعر نهائي عند الحفظ'
+      + '</label>'
+      + '<div style="padding:8px 11px;background:var(--bg3);border-radius:var(--rs);border:1px solid var(--bdr);margin-bottom:8px" id="inv-totals-box">'
+      +   '<div style="display:flex;justify-content:space-between;align-items:center">'
+      +     '<span style="font-size:12px;font-weight:700;color:var(--tx2)" id="inv-grand-label">'+(inv.ttc?'الإجمالي (HT)':'إجمالي الفاتورة')+'</span>'
+      +     '<span class="num" id="inv-grand-ht" style="font-size:15px;font-weight:900;color:var(--gold2)">'+fmtDA(total)+'</span>'
+      +   '</div>'
+      +   '<div style="display:'+(inv.ttc?'flex':'none')+';justify-content:space-between;align-items:center;margin-top:4px" id="inv-tva-row">'
+      +     '<span style="font-size:12px;font-weight:700;color:var(--tx2)">TVA 19%</span>'
+      +     '<span class="num" id="inv-tva-val" style="font-size:13px;font-weight:800;color:var(--tx2)">'+fmtDA(total*0.19)+'</span>'
+      +   '</div>'
+      +   '<div style="display:'+(inv.ttc?'flex':'none')+';justify-content:space-between;align-items:center;margin-top:4px;border-top:1px solid var(--bdr);padding-top:4px" id="inv-ttc-row">'
+      +     '<span style="font-size:12px;font-weight:900;color:var(--tx)">الإجمالي TTC</span>'
+      +     '<span class="num" id="inv-grand-ttc" style="font-size:16px;font-weight:900;color:var(--green)">'+fmtDA(total*1.19)+'</span>'
+      +   '</div>'
       + '</div>'
       + '<div class="fg"><label>ملاحظة</label><input type="text" id="inv-note" value="'+safe(inv.note || '')+'" placeholder="..." oninput="window._inv.note=this.value"></div>';
     OM((inv.editId ? '✎ تعديل فاتورة — ' : '🧾 فاتورة شراء — ') + safe(s.name), html, window.invSave, inv.editId ? 'حفظ التعديل' : 'حفظ الفاتورة');
   };
 
+  function updateInvTotals(){
+    const inv = window._inv; if (!inv) return;
+    const ht = inv.rows.reduce((s,x) => s + (isPending(x) ? 0 : n(x.qty) * n(x.unitPrice)), 0);
+    const htEl = document.getElementById('inv-grand-ht'); if (htEl) htEl.textContent = fmtDA(ht);
+    const tvaEl = document.getElementById('inv-tva-val'); if (tvaEl) tvaEl.textContent = fmtDA(ht*0.19);
+    const ttcEl = document.getElementById('inv-grand-ttc'); if (ttcEl) ttcEl.textContent = fmtDA(ht*1.19);
+    const tvaRow = document.getElementById('inv-tva-row'); if (tvaRow) tvaRow.style.display = inv.ttc ? 'flex' : 'none';
+    const ttcRow = document.getElementById('inv-ttc-row'); if (ttcRow) ttcRow.style.display = inv.ttc ? 'flex' : 'none';
+    const lbl = document.getElementById('inv-grand-label'); if (lbl) lbl.textContent = inv.ttc ? 'الإجمالي (HT)' : 'إجمالي الفاتورة';
+  }
+  window.invToggleTTC = function(checked){
+    if (!window._inv) return;
+    window._inv.ttc = !!checked;
+    updateInvTotals();
+  };
   window.invCellChange = function(i, field, val){
     if (!window._inv || !window._inv.rows[i]) return;
     const r = window._inv.rows[i];
@@ -10503,13 +10533,20 @@ if (document.readyState === 'loading') {
     if (field === 'name') {
       const s = suppliers.find(x => x.id === window._inv.spId);
       const cat = s && s.catalog ? s.catalog.find(c => c.name === val) : null;
-      if (cat) { r.unit = cat.unit; const u = document.getElementById('inv-u-'+i); if (u) u.value = cat.unit; }
+      if (cat) {
+        r.unit = cat.unit;
+        const u = document.getElementById('inv-u-'+i); if (u) u.value = cat.unit;
+        if (cat.lastPrice != null && n(cat.lastPrice) > 0) {
+          r.unitPrice = n(cat.lastPrice); r.priceStatus = CONFIRMED;
+          const p = document.getElementById('inv-p-'+i);
+          if (p) { p.value = r.unitPrice; p.classList.remove('price-unset'); p.placeholder = '0'; }
+        }
+      }
     }
     const totalRow = isPending(r) ? 0 : n(r.qty) * n(r.unitPrice);
     const rowEl = document.getElementById('inv-t-'+i);
     if (rowEl) { rowEl.innerHTML = isPending(r) ? ptag() : fmtDA(totalRow); rowEl.classList.toggle('pending-inline', isPending(r)); }
-    const grand = window._inv.rows.reduce((s,x) => s + (isPending(x) ? 0 : n(x.qty) * n(x.unitPrice)), 0);
-    const g = document.getElementById('inv-grand'); if (g) g.textContent = fmtDA(grand);
+    updateInvTotals();
   };
 
   window.invAddRow = function(){ if (!window._inv) return; window._inv.rows.push({name:'', unit:'وحدة', qty:1, unitPrice:0, priceStatus:PENDING}); renderInvModal(); };
@@ -11188,27 +11225,59 @@ if (document.readyState === 'loading') {
     const inv=window._inv; if(!inv) return out;
     const firstRow=document.getElementById('inv-date')?.closest('.fgr'); if(!firstRow || document.getElementById('inv-project-meta')) return out;
     const box=document.createElement('div'); box.id='inv-project-meta'; box.style.marginBottom='10px';
-    box.innerHTML=`<datalist id="inv-project-name-list">${projectNameDatalist()}</datalist><div class="fg"><label>اسم المشروع <span style="color:var(--tx3);font-weight:500">(اختياري)</span></label><input type="text" id="inv-project-name" list="inv-project-name-list" value="${html(inv.projectName||'')}" placeholder="مثال: مشروع الصبحة 2026"><div class="hint">للتجميع والبحث داخل فواتير المورد فقط. لا يربط الفاتورة بالمخزون ولا يغيّر أي كمية فيه. يمكن تركه فارغاً.</div></div>`;
+    const known = knownProjectNames();
+    const current = String(inv.projectName||'').trim();
+    const knownMatch = known.some(p => p.name === current);
+    const projectOpts = known.map(p => `<option value="${html(p.name)}" ${p.name===current?'selected':''}>${html(p.name)}</option>`).join('');
+    const extraOpt = (current && !knownMatch) ? `<option value="${html(current)}" selected>${html(current)}</option>` : '';
+    const blankOpt = `<option value=""${current?'':' selected'}>— بدون مشروع —</option>`;
+    box.innerHTML=`<div class="fg"><label>اسم المشروع <span style="color:var(--tx3);font-weight:500">(اختياري)</span></label>`
+      + `<select id="inv-project-select" onchange="invProjectSelectChange(this.value)">${blankOpt}${extraOpt}${projectOpts}<option value="__new__">＋ مشروع جديد (اكتب الاسم)</option></select>`
+      + `<input type="text" id="inv-project-name" value="${html(current)}" placeholder="اسم المشروع الجديد" style="display:none;margin-top:6px">`
+      + `<div class="hint">للتجميع والبحث داخل فواتير المورد فقط. لا يربط الفاتورة بالمخزون ولا يغيّر أي كمية فيه. يمكن تركه فارغاً.</div></div>`;
     firstRow.parentNode.insertBefore(box,firstRow);
-    const name=box.querySelector('#inv-project-name');
-    name.addEventListener('input',()=>{inv.projectName=name.value;});
     return out;
+  };
+
+  window.invProjectSelectChange = function(val){
+    const inv=window._inv; if(!inv) return;
+    const input=document.getElementById('inv-project-name');
+    if(val==='__new__'){
+      if(input){ input.style.display='block'; input.value=''; input.focus(); }
+      inv.projectName='';
+    } else {
+      if(input){ input.style.display='none'; input.value=val; }
+      inv.projectName=val;
+    }
   };
 
   window.invSave = async function(){
     const inv=window._inv; if(!inv) return;
     if(secGuard('sup:'+inv.spId,'حساب المورد')) return;
-    const validRows=(inv.rows||[]).filter(r=>(r.name||'').trim()&&num(r.qty)>0).map(r=>({name:(r.name||'').trim(),unit:r.unit||'وحدة',qty:num(r.qty),unitPrice:num(r.unitPrice),priceStatus:isPending(r)?PENDING:CONFIRMED}));
+    let validRows=(inv.rows||[]).filter(r=>(r.name||'').trim()&&num(r.qty)>0).map(r=>({name:(r.name||'').trim(),unit:r.unit||'وحدة',qty:num(r.qty),unitPrice:num(r.unitPrice),priceStatus:isPending(r)?PENDING:CONFIRMED}));
     if(!validRows.length) return T('أضف صنفاً واحداً على الأقل','error');
+    const ttcApplied=!!inv.ttc;
+    if(ttcApplied) validRows=validRows.map(r=>isPending(r)?r:{...r,unitPrice:Math.round(num(r.unitPrice)*1.19*100)/100});
     const projectName=(document.getElementById('inv-project-name')?.value||inv.projectName||'').trim();
     const total=validRows.reduce((s,r)=>s+(isPending(r)?0:num(r.qty)*num(r.unitPrice)),0);
     const meta={
       date:inv.date||today(),invoiceNo:String(inv.invoiceNo||'').trim(),blNo:String(inv.blNo||'').trim(),
-      ref:String(inv.ref||'').trim()||String(inv.invoiceNo||'').trim()||String(inv.blNo||'').trim(),note:String(inv.note||'').trim()
+      ref:String(inv.ref||'').trim()||String(inv.invoiceNo||'').trim()||String(inv.blNo||'').trim(),note:String(inv.note||'').trim(),
+      ttcApplied
     };
     if(projectName) meta.projectName=projectName;
     if(!window._supInvs) window._supInvs=[];
     const sp=suppliers.find(x=>x.id===inv.spId);
+    if(sp){
+      if(!sp.catalog) sp.catalog=[];
+      let catalogChanged=false;
+      validRows.forEach(r=>{
+        if(isPending(r)) return;
+        const cat=sp.catalog.find(c=>c.name===r.name);
+        if(cat && cat.lastPrice!==r.unitPrice){ cat.lastPrice=r.unitPrice; catalogChanged=true; }
+      });
+      if(catalogChanged) await dbP('suppliers', sp);
+    }
     if(inv.editId){
       const ex=window._supInvs.find(x=>x.id===inv.editId); if(!ex){window._inv=null;CM();return T('الفاتورة غير موجودة','error');}
       const before=JSON.parse(JSON.stringify(ex)); Object.assign(ex,meta,{items:validRows,total,updatedAt:new Date().toISOString()});
