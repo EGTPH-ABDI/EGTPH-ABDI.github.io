@@ -5055,17 +5055,22 @@ function renderSupDetail(spId) {
 }
 
 // ── ITEM CATALOG MANAGEMENT ──
+function supCatRowsHtml(spId, catalog) {
+  return catalog.map((item,i)=>`
+    <div class="mgi" style="margin-bottom:5px;gap:6px">
+      <div class="mgi-n">${esc(item.name)} <span style="color:var(--tx3);font-size:10px">— ${item.unit}</span></div>
+      <input type="number" class="ti" min="0" step="0.01" style="width:88px;flex-shrink:0" value="${item.lastPrice!=null?item.lastPrice:''}" placeholder="السعر" onchange="updateSupCatalogPrice('${spId}',${i},this.value)">
+      <button class="del-btn" onclick="removeSupCatalogItem('${spId}',${i})">✕</button>
+    </div>`).join('');
+}
+
 function manageSupCatalog(spId) {
   const s = suppliers.find(x=>x.id===spId); if (!s) return;
   if (!s.catalog) s.catalog = [];
-  const rows = s.catalog.map((item,i)=>`
-    <div class="mgi" style="margin-bottom:5px">
-      <div class="mgi-n">${esc(item.name)} <span style="color:var(--tx3);font-size:10px">— ${item.unit}</span></div>
-      <button class="del-btn" onclick="removeSupCatalogItem('${spId}',${i})">✕</button>
-    </div>`).join('');
+  const rows = supCatRowsHtml(spId, s.catalog);
 
   OM('📋 أصناف المورد — '+esc(s.name),`
-    <div class="hint" style="margin-bottom:9px">أضف الأصناف والخدمات التي تشتريها من هذا المورد</div>
+    <div class="hint" style="margin-bottom:9px">أضف الأصناف والخدمات التي تشتريها من هذا المورد، وسعر كل صنف (اختياري — يمكن تركه أو تعديله لاحقاً). عند اختيار الصنف داخل فاتورة جديدة تُملأ الوحدة والسعر تلقائياً من هنا، وتبقى قابلة للتغيير في كل فاتورة.</div>
     <div id="cat-list">${rows||'<div style="color:var(--tx3);font-size:11px;padding:7px">لا توجد أصناف بعد</div>'}</div>
     <hr class="dvd">
     <div class="fgr">
@@ -5077,6 +5082,7 @@ function manageSupCatalog(spId) {
           <option>يوم</option><option>ساعة</option><option>قطعة</option>
         </select>
       </div>
+      <div class="fg"><label>السعر (اختياري)</label><input type="number" id="cat-p" min="0" step="0.01" placeholder="0"></div>
     </div>
     <button class="btn btn-sec btn-sm" style="width:100%" onclick="addSupCatalogItem('${spId}')">＋ إضافة</button>`,
   async ()=>{ CM(); renderSupDetail(spId); }, 'إغلاق');
@@ -5084,34 +5090,38 @@ function manageSupCatalog(spId) {
 
 async function addSupCatalogItem(spId) {
   const s = suppliers.find(x=>x.id===spId); if (!s) return;
-  const n = document.getElementById('cat-n').value.trim();
+  const nm = document.getElementById('cat-n').value.trim();
   const u = document.getElementById('cat-u').value;
-  if (!n) return T('أدخل اسم الصنف','error');
+  const pRaw = document.getElementById('cat-p')?.value;
+  if (!nm) return T('أدخل اسم الصنف','error');
   if (!s.catalog) s.catalog = [];
-  if (s.catalog.find(x=>x.name===n)) return T('هذا الصنف موجود','warning');
-  s.catalog.push({name:n, unit:u});
+  if (s.catalog.find(x=>x.name===nm)) return T('هذا الصنف موجود','warning');
+  const item = {name:nm, unit:u};
+  if (pRaw !== '' && pRaw != null && parseFloat(pRaw) > 0) item.lastPrice = parseFloat(pRaw);
+  s.catalog.push(item);
   await dbP('suppliers',s);
-  // Refresh list inside modal
-  const rows = s.catalog.map((item,i)=>`
-    <div class="mgi" style="margin-bottom:5px">
-      <div class="mgi-n">${esc(item.name)} <span style="color:var(--tx3);font-size:10px">— ${item.unit}</span></div>
-      <button class="del-btn" onclick="removeSupCatalogItem('${spId}',${i})">✕</button>
-    </div>`).join('');
+  const rows = supCatRowsHtml(spId, s.catalog);
   const el = document.getElementById('cat-list');
   if (el) el.innerHTML = rows;
   document.getElementById('cat-n').value = '';
+  if (document.getElementById('cat-p')) document.getElementById('cat-p').value = '';
   T('✅ تمت الإضافة','success');
+}
+
+async function updateSupCatalogPrice(spId, i, val) {
+  const s = suppliers.find(x=>x.id===spId); if (!s||!s.catalog||!s.catalog[i]) return;
+  const v = String(val==null?'':val).trim();
+  if (v === '' || parseFloat(v) <= 0) delete s.catalog[i].lastPrice;
+  else s.catalog[i].lastPrice = parseFloat(v);
+  await dbP('suppliers',s);
+  T('✅ تم تحديث السعر','success');
 }
 
 async function removeSupCatalogItem(spId, i) {
   const s = suppliers.find(x=>x.id===spId); if (!s||!s.catalog) return;
   s.catalog.splice(i,1);
   await dbP('suppliers',s);
-  const rows = s.catalog.map((item,ii)=>`
-    <div class="mgi" style="margin-bottom:5px">
-      <div class="mgi-n">${esc(item.name)} <span style="color:var(--tx3);font-size:10px">— ${item.unit}</span></div>
-      <button class="del-btn" onclick="removeSupCatalogItem('${spId}',${ii})">✕</button>
-    </div>`).join('');
+  const rows = supCatRowsHtml(spId, s.catalog);
   const el = document.getElementById('cat-list');
   if (el) el.innerHTML = rows || '<div style="color:var(--tx3);font-size:11px;padding:7px">لا توجد أصناف</div>';
 }
@@ -8695,8 +8705,8 @@ if (document.readyState === 'loading') {
   window.invAddRow = function(){if(!window._inv)return;window._inv.rows.push({name:'',unit:'وحدة',qty:1,unitPrice:0,priceStatus:PENDING});renderInvModal();};
   window.invAddNewCatItem = function(){
     const inv=window._inv;if(!inv)return;const s=suppliers.find(x=>x.id===inv.spId);if(!s)return;
-    OM('＋ صنف جديد للكتالوج','<div class="fg"><label>اسم الصنف / الخدمة *</label><input type="text" id="icn-n" placeholder="مثال: وقود، رمل، ساعة آلة..."></div><div class="fg"><label>الوحدة</label><select id="icn-u"><option>وحدة</option><option>متر</option><option>م2</option><option>م3</option><option>كجم</option><option>طن</option><option>لتر</option><option>رحلة</option><option>يوم</option><option>ساعة</option><option>قطعة</option></select></div><div class="hint">سيُضاف هذا الصنف للكتالوج ولفواتير المورد، ثم تحدد السعر عند الاتفاق.</div>',async()=>{
-      const name=document.getElementById('icn-n').value.trim(),unit=document.getElementById('icn-u').value;if(!name)return T('أدخل الاسم','error');if(!s.catalog)s.catalog=[];if(!s.catalog.find(x=>x.name===name)){s.catalog.push({name,unit});await dbP('suppliers',s);}inv.rows.push({name,unit,qty:1,unitPrice:0,priceStatus:PENDING});CM();renderInvModal();T('✅ '+name+' مضاف','success');
+    OM('＋ صنف جديد للكتالوج','<div class="fg"><label>اسم الصنف / الخدمة *</label><input type="text" id="icn-n" placeholder="مثال: وقود، رمل، ساعة آلة..."></div><div class="fgr"><div class="fg"><label>الوحدة</label><select id="icn-u"><option>وحدة</option><option>متر</option><option>م2</option><option>م3</option><option>كجم</option><option>طن</option><option>لتر</option><option>رحلة</option><option>يوم</option><option>ساعة</option><option>قطعة</option></select></div><div class="fg"><label>السعر (اختياري)</label><input type="number" id="icn-p" min="0" step="0.01" placeholder="اتركه فارغاً إذا لم يُتفق عليه بعد"></div></div><div class="hint">سيُضاف هذا الصنف للكتالوج ولفواتير المورد. إذا أدخلت سعراً هنا سيُستعمل تلقائياً في كل مرة تختار فيها هذا الصنف مستقبلاً، ويبقى قابلاً للتعديل من داخل الفاتورة.</div>',async()=>{
+      const name=document.getElementById('icn-n').value.trim(),unit=document.getElementById('icn-u').value,priceRaw=document.getElementById('icn-p').value;if(!name)return T('أدخل الاسم','error');const price=priceRaw!==''&&n(priceRaw)>0?n(priceRaw):null;if(!s.catalog)s.catalog=[];let cat=s.catalog.find(x=>x.name===name);if(!cat){cat={name,unit};s.catalog.push(cat);}else{cat.unit=unit;}if(price!=null)cat.lastPrice=price;await dbP('suppliers',s);inv.rows.push({name,unit,qty:1,unitPrice:price||0,priceStatus:price!=null?CONFIRMED:PENDING});CM();renderInvModal();T('✅ '+name+' مضاف','success');
     },'إضافة وأدراج في الفاتورة');setTimeout(()=>document.getElementById('icn-n')?.focus(),80);
   };
   window.invSave = async function(){
@@ -10927,10 +10937,12 @@ if (document.readyState === 'loading') {
   }
 
   function knownProjectNames(){
+    // ملاحظة: مصدر هذه القائمة هو أسماء المشاريع المُدخلة سابقاً داخل فواتير الموردين أنفسهم فقط.
+    // لا علاقة لها بسجلات العملاء (records) حتى لا تختلط مشاريع العملاء بمشاريع الموردين.
     const names = [];
     const seen = new Set();
-    (typeof records !== 'undefined' ? records : []).forEach(r => {
-      const name = String(r?.name || '').trim();
+    (window._supInvs || []).forEach(inv => {
+      const name = String(inv?.projectName || '').trim();
       const key = norm(name);
       if (!name || !key || seen.has(key)) return;
       seen.add(key);
@@ -11354,6 +11366,97 @@ if (document.readyState === 'loading') {
   };
 
   window.EGTPHProjectPurchases={resolveInvoiceProject,supplierProjectGroups,supplierAccount};
+})();
+</script>
+
+<!-- EGTPH v14.2 — تقرير مشتريات المورد حسب الفترة (تجميع حسب الصنف) -->
+<script id="egtph-supplier-period-report-v142">
+(function(){
+  'use strict';
+  const num = v => parseFloat(v) || 0;
+  const html = v => typeof esc === 'function' ? esc(String(v == null ? '' : v)) : String(v == null ? '' : v);
+  const money = v => typeof fDA === 'function' ? fDA(num(v)) : num(v).toFixed(2);
+  const qtyText = v => typeof fN === 'function' ? fN(num(v)) : String(num(v));
+  const dateLabel = iso => typeof fD === 'function' ? fD(iso) : (iso || '');
+  const isPending = row => !!row && row.priceStatus === 'pending';
+  const pad2 = n => String(n).padStart(2,'0');
+
+  function isoDate(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+  function firstDayOfMonth(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-01'; }
+  function firstDayOfYear(d){ return d.getFullYear()+'-01-01'; }
+
+  function periodInvoices(spId, from, to){
+    return (window._supInvs || []).filter(v => v && v.supplierId === spId && (!from || (v.date||'') >= from) && (!to || (v.date||'') <= to));
+  }
+
+  function aggregateItems(invs){
+    const map = new Map();
+    let total = 0, pendingLines = 0;
+    invs.forEach(inv => {
+      (inv.items || []).forEach(row => {
+        const key = (row.name||'—')+'|'+(row.unit||'وحدة');
+        if (!map.has(key)) map.set(key,{name:row.name||'—',unit:row.unit||'وحدة',qty:0,amount:0,pendingQty:0});
+        const it = map.get(key);
+        it.qty += num(row.qty);
+        if (isPending(row)) { it.pendingQty += num(row.qty); pendingLines++; }
+        else { const amt = num(row.qty)*num(row.unitPrice); it.amount += amt; total += amt; }
+      });
+    });
+    return {items:Array.from(map.values()).sort((a,b)=>String(a.name).localeCompare(String(b.name),'ar')), total, pendingLines};
+  }
+
+  window.openSupplierPeriodReport = function(spId){
+    const s = suppliers.find(x => x.id === spId); if (!s) return;
+    const now = new Date();
+    const todayStr = typeof today === 'function' ? today() : isoDate(now);
+    const monthStart = firstDayOfMonth(now), yearStart = firstDayOfYear(now);
+    const body = '<div class="hint" style="margin-bottom:9px">اختر الفترة، ثم اضغط «عرض وطباعة» لعرض مجموع مشتريات هذا المورد فقط خلالها — مجمّعة حسب الصنف: الكمية الكلية، الوحدة، والمبلغ.</div>'
+      + '<div class="fgr">'
+      +   '<div class="fg"><label>من</label><input type="date" id="spr-from" value="'+monthStart+'"></div>'
+      +   '<div class="fg"><label>إلى</label><input type="date" id="spr-to" value="'+todayStr+'"></div>'
+      + '</div>'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">'
+      +   '<button type="button" class="btn btn-sec btn-xs" onclick="document.getElementById(\'spr-from\').value=\''+monthStart+'\';document.getElementById(\'spr-to\').value=\''+todayStr+'\'">📅 هذا الشهر</button>'
+      +   '<button type="button" class="btn btn-sec btn-xs" onclick="document.getElementById(\'spr-from\').value=\''+yearStart+'\';document.getElementById(\'spr-to\').value=\''+todayStr+'\'">📅 هذا العام</button>'
+      +   '<button type="button" class="btn btn-sec btn-xs" onclick="document.getElementById(\'spr-from\').value=\'\';document.getElementById(\'spr-to\').value=\'\'">♾ كل الفترة</button>'
+      + '</div>';
+    OM('📅 تقرير مشتريات حسب الفترة — '+html(s.name), body, ()=>{ printSupplierPeriodReport(spId); }, '🖨 عرض وطباعة التقرير');
+  };
+
+  window.printSupplierPeriodReport = function(spId){
+    const s = suppliers.find(x => x.id === spId); if (!s) return;
+    const from = document.getElementById('spr-from')?.value || '';
+    const to = document.getElementById('spr-to')?.value || '';
+    const invs = periodInvoices(spId, from, to);
+    if (!invs.length) { T('لا توجد فواتير لهذا المورد في هذه الفترة','warning'); return; }
+    const agg = aggregateItems(invs);
+    const periodLabel = (from || to) ? ((from?dateLabel(from):'البداية')+' → '+(to?dateLabel(to):'اليوم')) : 'كل الفترة';
+    let body = '<div class="cl-info"><div><div style="font-size:9px;color:#888;text-transform:uppercase;margin-bottom:3px">المورد</div><div style="font-size:16px;font-weight:900;color:#0f2942">'+html(s.name)+'</div>'
+      + (s.type?'<div style="font-size:10px;color:#555">'+html(s.type)+(s.product?' · '+html(s.product):'')+'</div>':'')+'</div>'
+      + '<div style="text-align:left"><div style="font-size:9px;color:#888">الفترة</div><div style="font-size:11px;color:#555">'+html(periodLabel)+'</div></div></div>';
+    body += '<div class="sec">📦 مجموع الأصناف خلال الفترة</div><table><thead><tr><th class="tl">الصنف</th><th class="c">الوحدة</th><th class="c">إجمالي الكمية</th><th class="c">المبلغ</th></tr></thead><tbody>'
+      + agg.items.map(it => '<tr><td>'+html(it.name)+(it.pendingQty>0?'<div style="font-size:9px;color:#c0392b">منها '+qtyText(it.pendingQty)+' بسعر معلّق</div>':'')+'</td><td class="c">'+html(it.unit)+'</td><td class="c amt">'+qtyText(it.qty)+'</td><td class="c amt">'+money(it.amount)+'</td></tr>').join('')
+      + '<tr class="tot"><td colspan="3"><strong>الإجمالي</strong></td><td class="c amt"><strong>'+money(agg.total)+'</strong></td></tr></tbody></table>';
+    body += '<div style="margin-top:8px;font-size:10px;color:#888">'+invs.length+' فاتورة'+(agg.pendingLines?' · '+agg.pendingLines+' بند بسعر غير متفق عليه (غير محسوب في المبلغ أعلاه)':'')+'</div>';
+    CM();
+    openPrintWin(printHeader('تقرير مشتريات — '+s.name)+body+'<div class="foot">EGTPH GP · '+new Date().toLocaleString('fr-DZ')+'</div></body></html>');
+  };
+
+  const baseRSD = window.renderSupDetail;
+  window.renderSupDetail = function(spId){
+    const out = baseRSD.apply(this, arguments);
+    setTimeout(() => {
+      const act = document.getElementById('tb-act');
+      if (act) {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-sec btn-sm';
+        btn.textContent = '📅 تقرير فترة';
+        btn.onclick = () => openSupplierPeriodReport(spId);
+        act.insertBefore(btn, act.lastElementChild);
+      }
+    }, 0);
+    return out;
+  };
 })();
 </script>
 
