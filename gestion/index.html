@@ -11442,13 +11442,24 @@ if (document.readyState === 'loading') {
     groups.forEach(({items}) => items.forEach(row => {
       lineCount++;
       const key = (row.name||'—')+'|'+(row.unit||'وحدة');
-      if (!map.has(key)) map.set(key,{name:row.name||'—',unit:row.unit||'وحدة',qty:0,amount:0,pendingQty:0});
+      if (!map.has(key)) map.set(key,{name:row.name||'—',unit:row.unit||'وحدة',qty:0,amount:0,pendingQty:0,minPrice:null,maxPrice:null});
       const it = map.get(key);
       it.qty += num(row.qty);
       if (isPending(row)) { it.pendingQty += num(row.qty); pendingLines++; }
-      else { const amt = num(row.qty)*num(row.unitPrice); it.amount += amt; total += amt; }
+      else {
+        const amt = num(row.qty)*num(row.unitPrice); it.amount += amt; total += amt;
+        const p = num(row.unitPrice);
+        it.minPrice = it.minPrice == null ? p : Math.min(it.minPrice, p);
+        it.maxPrice = it.maxPrice == null ? p : Math.max(it.maxPrice, p);
+      }
     }));
-    return {items:Array.from(map.values()).sort((a,b)=>String(a.name).localeCompare(String(b.name),'ar')), total, pendingLines, lineCount};
+    const items = Array.from(map.values()).map(it => {
+      const validQty = it.qty - it.pendingQty;
+      it.avgPrice = validQty > 0 ? it.amount / validQty : null;
+      it.priceVaries = it.minPrice != null && it.maxPrice != null && Math.abs(it.maxPrice - it.minPrice) > 0.009;
+      return it;
+    }).sort((a,b)=>String(a.name).localeCompare(String(b.name),'ar'));
+    return {items, total, pendingLines, lineCount};
   }
 
   window.openSupplierPeriodReport = function(spId){
@@ -11485,19 +11496,15 @@ if (document.readyState === 'loading') {
   }
 
   function itemSummaryRow(it){
-    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--bdr)">'
-      + '<div style="flex:1;min-width:0">'
+    const priceTxt = it.avgPrice != null ? (money(it.avgPrice) + (it.priceVaries ? ' (متوسط)' : '')) : '—';
+    const pendingTxt = it.pendingQty > 0 ? ' · <span style="color:var(--orange)">منها '+qtyText(it.pendingQty)+' معلّق</span>' : '';
+    return '<div style="padding:8px 10px;border-bottom:1px solid var(--bdr)">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
       +   '<div style="font-weight:800;font-size:12px;color:var(--tx)">'+html(it.name)+'</div>'
-      +   '<div style="font-size:9px;color:var(--tx3)">'+html(it.unit)+(it.pendingQty>0?' · <span style="color:var(--orange)">منها '+qtyText(it.pendingQty)+' معلّق</span>':'')+'</div>'
+      +   '<div style="color:var(--green);font-weight:900;font-size:13px;white-space:nowrap">'+money(it.amount)+'</div>'
       + '</div>'
-      + '<div style="text-align:center;min-width:54px">'
-      +   '<div style="font-size:8px;color:var(--tx3)">الكمية</div>'
-      +   '<div style="color:var(--cyan);font-weight:900;font-size:13px">'+qtyText(it.qty)+'</div>'
-      + '</div>'
-      + '<div style="text-align:left;min-width:76px">'
-      +   '<div style="font-size:8px;color:var(--tx3)">المبلغ</div>'
-      +   '<div style="color:var(--green);font-weight:900;font-size:13px">'+money(it.amount)+'</div>'
-      + '</div></div>';
+      + '<div style="font-size:9px;color:var(--tx3);margin-top:2px">'+html(it.unit)+' · <span style="color:var(--cyan);font-weight:700">'+qtyText(it.qty)+'</span> · سعر الوحدة: <span style="color:var(--gold2);font-weight:700">'+priceTxt+'</span>'+pendingTxt+'</div>'
+      + '</div>';
   }
 
   function invItemRow(it){
