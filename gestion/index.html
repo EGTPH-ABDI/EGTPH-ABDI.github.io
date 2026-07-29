@@ -11484,6 +11484,54 @@ if (document.readyState === 'loading') {
     return window._sprState;
   }
 
+  function itemSummaryRow(it){
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--bdr)">'
+      + '<div style="flex:1;min-width:0">'
+      +   '<div style="font-weight:800;font-size:12px;color:var(--tx)">'+html(it.name)+'</div>'
+      +   '<div style="font-size:9px;color:var(--tx3)">'+html(it.unit)+(it.pendingQty>0?' · <span style="color:var(--orange)">منها '+qtyText(it.pendingQty)+' معلّق</span>':'')+'</div>'
+      + '</div>'
+      + '<div style="text-align:center;min-width:54px">'
+      +   '<div style="font-size:8px;color:var(--tx3)">الكمية</div>'
+      +   '<div style="color:var(--cyan);font-weight:900;font-size:13px">'+qtyText(it.qty)+'</div>'
+      + '</div>'
+      + '<div style="text-align:left;min-width:76px">'
+      +   '<div style="font-size:8px;color:var(--tx3)">المبلغ</div>'
+      +   '<div style="color:var(--green);font-weight:900;font-size:13px">'+money(it.amount)+'</div>'
+      + '</div></div>';
+  }
+
+  function invItemRow(it){
+    const priceCell = isPending(it) ? '<span class="pending-price-tag" style="font-size:9px">⚠ معلّق</span>' : money(it.unitPrice);
+    const amtCell = isPending(it) ? '—' : money(num(it.qty)*num(it.unitPrice));
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--bdr)">'
+      + '<div style="flex:1;min-width:0">'
+      +   '<div style="font-weight:800;font-size:12px;color:var(--tx)">'+html(it.name)+'</div>'
+      +   '<div style="font-size:9px;color:var(--tx3)">'+html(it.unit)+' · <span style="color:var(--cyan);font-weight:700">'+qtyText(it.qty)+'</span></div>'
+      + '</div>'
+      + '<div style="text-align:center;min-width:60px">'
+      +   '<div style="font-size:8px;color:var(--tx3)">سعر الوحدة</div>'
+      +   '<div style="font-weight:800;font-size:12px">'+priceCell+'</div>'
+      + '</div>'
+      + '<div style="text-align:left;min-width:76px">'
+      +   '<div style="font-size:8px;color:var(--tx3)">المبلغ</div>'
+      +   '<div style="color:var(--green);font-weight:900;font-size:13px">'+amtCell+'</div>'
+      + '</div></div>';
+  }
+
+  function payRow(p){
+    const isAdv = p.kind==='advance';
+    const metaBits = [html(p.method||'—')];
+    if (p.chequeNo) metaBits.push('🧾 '+html(p.chequeNo));
+    if (p.bankName) metaBits.push('🏦 '+html(p.bankName));
+    if (p.note) metaBits.push('📝 '+html(p.note));
+    return '<div style="padding:8px 10px;border-bottom:1px solid var(--bdr)">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+      +   '<div style="font-weight:800;font-size:12px;color:'+(isAdv?'var(--blue)':'var(--green)')+'">'+(isAdv?'💳 تسبيق':'💵 دفعة')+' · '+dateLabel(p.date)+'</div>'
+      +   '<div style="font-weight:900;font-size:13px;color:'+(isAdv?'var(--blue)':'var(--green)')+'">'+money(p.amount)+'</div>'
+      + '</div>'
+      + '<div style="font-size:9px;color:var(--tx3);margin-top:2px">'+metaBits.join(' · ')+'</div></div>';
+  }
+
   window.showSupplierPeriodReportPreview = function(spId){
     const s = suppliers.find(x => x.id === spId); if (!s) return;
     const {from, to, projectFilter, itemFilter, includePays} = gatherReportData(spId);
@@ -11505,9 +11553,7 @@ if (document.readyState === 'loading') {
       body += '<details class="sup-project-group" open><summary><div><div class="sup-project-title">📦 مجموع الأصناف خلال الفترة</div>'
         + '<div class="sup-project-sub">'+agg.lineCount+' بند'+(agg.pendingLines?' · '+agg.pendingLines+' بسعر معلّق (غير محسوب)':'')+'</div></div>'
         + '<div class="sup-project-total">'+money(agg.total)+'</div></summary>'
-        + '<div class="tw" style="border:0;border-radius:0"><table class="tbl"><thead><tr><th class="tl">الصنف</th><th>إجمالي الكمية</th><th>الوحدة</th><th>المبلغ</th></tr></thead><tbody>'
-        + agg.items.map(it => '<tr><td class="tl" style="font-weight:800">'+html(it.name)+(it.pendingQty>0?'<div style="font-size:9px;color:var(--orange)">منها '+qtyText(it.pendingQty)+' بسعر معلّق</div>':'')+'</td><td class="num" style="color:var(--cyan);font-weight:900">'+qtyText(it.qty)+'</td><td>'+html(it.unit)+'</td><td class="num" style="color:var(--green)">'+money(it.amount)+'</td></tr>').join('')
-        + '</tbody></table></div></details>';
+        + '<div>'+agg.items.map(itemSummaryRow).join('')+'</div></details>';
     }
 
     groups.forEach((g,i) => {
@@ -11520,9 +11566,7 @@ if (document.readyState === 'loading') {
       body += '<details class="sup-project-group"><summary><div><div class="sup-project-title">فاتورة '+(i+1)+' — '+dateLabel(inv.date)+'</div>'
         + '<div class="sup-project-sub">'+chips.join(' ')+(inv.note?'<div style="margin-top:3px">📝 '+html(inv.note)+'</div>':'')+'</div></div>'
         + '<div class="sup-project-total">'+money(invTotal)+'</div></summary>'
-        + '<div class="tw" style="border:0;border-radius:0"><table class="tbl"><thead><tr><th class="tl">الصنف</th><th>الكمية</th><th>الوحدة</th><th>السعر</th><th>المبلغ</th></tr></thead><tbody>'
-        + g.items.map(it => '<tr><td class="tl">'+html(it.name)+'</td><td class="num" style="color:var(--cyan)">'+qtyText(it.qty)+'</td><td>'+html(it.unit)+'</td><td>'+(isPending(it)?'<span class="pending-price-tag">⚠ معلّق</span>':money(it.unitPrice))+'</td><td class="num" style="color:var(--green)">'+(isPending(it)?'—':money(num(it.qty)*num(it.unitPrice)))+'</td></tr>').join('')
-        + '</tbody></table></div></details>';
+        + '<div>'+g.items.map(invItemRow).join('')+'</div></details>';
     });
 
     if (includePays) {
@@ -11532,9 +11576,7 @@ if (document.readyState === 'loading') {
       body += '<details class="sup-project-group"><summary><div><div class="sup-project-title">💸 الدفعات والتسبيقات</div>'
         + '<div class="sup-project-sub">'+sortedPays.length+' عملية · دفعات '+money(payTotal)+' · تسبيقات '+money(advTotal)+'</div></div>'
         + '<div class="sup-project-total">'+money(payTotal+advTotal)+'</div></summary>'
-        + (sortedPays.length ? '<div class="tw" style="border:0;border-radius:0"><table class="tbl"><thead><tr><th class="tl">التاريخ</th><th class="tl">النوع</th><th>المبلغ</th><th class="tl">الطريقة</th><th class="tl">شيك/تحويل</th><th class="tl">البنك</th><th class="tl">ملاحظة</th></tr></thead><tbody>'
-          + sortedPays.map(p => '<tr><td class="tl">'+dateLabel(p.date)+'</td><td class="tl">'+(p.kind==='advance'?'تسبيق':'دفعة')+'</td><td class="num" style="color:'+(p.kind==='advance'?'var(--blue)':'var(--green)')+'">'+money(p.amount)+'</td><td class="tl">'+html(p.method||'—')+'</td><td class="tl">'+html(p.chequeNo||'—')+'</td><td class="tl">'+html(p.bankName||'—')+'</td><td class="tl">'+html(p.note||'—')+'</td></tr>').join('')
-          + '</tbody></table></div>' : '<div style="padding:12px;text-align:center;color:var(--tx3);font-size:11px">لا توجد دفعات أو تسبيقات خلال هذه الفترة</div>')
+        + (sortedPays.length ? '<div>'+sortedPays.map(payRow).join('')+'</div>' : '<div style="padding:12px;text-align:center;color:var(--tx3);font-size:11px">لا توجد دفعات أو تسبيقات خلال هذه الفترة</div>')
         + '</details>';
     }
     body += '</div>';
