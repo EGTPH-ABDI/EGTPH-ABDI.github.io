@@ -10467,12 +10467,8 @@ if (document.readyState === 'loading') {
     inv.rows.forEach((row, i) => {
       const unitSel = UNITS.map(u => '<option value="'+safe(u)+'" '+(u===row.unit?'selected':'')+'>'+safe(u)+'</option>').join('');
       const rowTotal = isPending(row) ? ptag() : fmtDA(n(row.qty) * n(row.unitPrice));
-      const catMatch = catalog.some(c => c.name === row.name);
-      const nameOpts = '<option value=""'+(row.name?'':' selected')+'>— اختر صنفاً —</option>'
-        + (row.name && !catMatch ? '<option value="'+safe(row.name)+'" selected>'+safe(row.name)+'</option>' : '')
-        + catalog.map(c => '<option value="'+safe(c.name)+'" '+(c.name===row.name?'selected':'')+'>'+safe(c.name)+'</option>').join('');
       rowsHtml += '<tr id="inv-tr-'+i+'">'
-        + '<td><select class="ts" id="inv-n-'+i+'" style="min-width:130px" onchange="invCellChange('+i+',\'name\',this.value)">'+nameOpts+'</select></td>'
+        + '<td><input class="ti" type="text" id="inv-n-'+i+'" list="inv-cat-dl" value="'+safe(row.name)+'" placeholder="اكتب اسم الصنف" style="min-width:130px" onchange="invCellChange('+i+',\'name\',this.value)"></td>'
         + '<td><select class="ts" id="inv-u-'+i+'" style="min-width:68px" onchange="invCellChange('+i+',\'unit\',this.value)">'+unitSel+'</select></td>'
         + '<td><input class="ti" type="number" id="inv-q-'+i+'" value="'+safe(row.qty)+'" min="0" step="0.01" style="min-width:56px" oninput="invCellChange('+i+',\'qty\',this.value)"></td>'
         + '<td><input class="ti '+(isPending(row)?'price-unset':'')+'" type="number" id="inv-p-'+i+'" value="'+(isPending(row)?'':safe(row.unitPrice))+'" min="0" style="min-width:76px" placeholder="'+(isPending(row)?'لم يتفق عليه':'0')+'" oninput="invCellChange('+i+',\'unitPrice\',this.value)"></td>'
@@ -10494,6 +10490,7 @@ if (document.readyState === 'loading') {
       +     '<th class="tl" style="min-width:130px">الصنف / الخدمة</th><th style="min-width:68px">الوحدة</th><th style="min-width:56px">الكمية</th><th style="min-width:76px">السعر DA</th><th style="min-width:90px">المجموع</th><th style="width:26px"></th>'
       +   '</tr></thead><tbody id="inv-body">'+rowsHtml+'</tbody></table>'
       + '</div>'
+      + '<datalist id="inv-cat-dl">'+catalog.map(c => '<option value="'+safe(c.name)+'">').join('')+'</datalist>'
       + '<div style="display:flex;gap:6px;margin-bottom:8px">'
       +   '<button class="add-row" style="flex:1;border-radius:var(--rs);border-left:none" onclick="invAddRow()">＋ صنف من الكتالوج</button>'
       +   '<button class="btn btn-sec btn-sm" style="flex-shrink:0;white-space:nowrap" onclick="invAddNewCatItem()">＋ صنف جديد</button>'
