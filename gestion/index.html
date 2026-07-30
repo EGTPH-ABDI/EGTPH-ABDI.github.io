@@ -4538,6 +4538,7 @@ function renderStock() {
   <div class="tabs">
     <button class="tab ${stTab==='items'?'on':''}" onclick="stTab='items';renderStock()">📦 الأصناف</button>
     <button class="tab ${stTab==='moves'?'on':''}" onclick="stTab='moves';renderStock()">🔄 الحركات</button>
+    <button class="tab ${stTab==='log'?'on':''}" onclick="stTab='log';renderStock()">📜 سجل</button>
   </div>
 
   ${stTab==='items' ? `
@@ -4546,11 +4547,14 @@ function renderStock() {
         ? Math.min(100, Math.round(s.qty / (s.minQty * 3) * 100))
         : Math.min(100, s.qty > 0 ? 80 : 0);
       const isLow = s.qty<=s.minQty;
+      const itMoves = stockMoves.filter(m=>m.itemId===s.id).slice().sort((a,b)=>(b.date||b.createdAt||'').localeCompare(a.date||a.createdAt||''));
+      const last = itMoves[0];
+      const lastTxt = last ? `آخر إدخال: ${last.type==='in'?'+':'−'}${last.qty} ${last.unit||s.unit} — ${fD(last.date||(last.createdAt||'').slice(0,10))}` : 'لا توجد حركات بعد';
       return `<div class="sk-card">
         <div class="sk-hdr">
           <div>
             <div class="sk-nm">${esc(s.name)}</div>
-            <div style="font-size:10px;color:var(--tx3);margin-top:2px">الحد الأدنى: ${s.minQty} ${s.unit}</div>
+            <div style="font-size:10px;color:var(--tx3);margin-top:2px">${lastTxt}</div>
           </div>
           <div style="display:flex;align-items:center;gap:9px">
             <div class="sk-q ${isLow?'low':'ok'}">${s.qty} <span style="font-size:11px;font-weight:400">${s.unit}</span></div>
@@ -4564,7 +4568,7 @@ function renderStock() {
         <div class="sk-bar"><div class="sk-fill" style="width:${pct}%;background:${isLow?'var(--red)':'var(--green)'}"></div></div>
       </div>`;
     }).join('') || `<div class="empty"><div class="empty-ic">📦</div><h3>لا يوجد مخزون</h3><p>اضغط "＋ صنف جديد" للبدء</p></div>`}
-  ` : `
+  ` : stTab==='moves' ? `
     <div class="cp">
       ${[...stockMoves].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,60).map(m => `
         <div class="li">
@@ -4583,6 +4587,26 @@ function renderStock() {
         </div>`).join('') ||
       `<div class="empty"><div class="empty-ic">🔄</div><h3>لا توجد حركات</h3></div>`}
     </div>
+  ` : `
+    ${stockItems.length ? stockItems.map(s => {
+      const itMoves = stockMoves.filter(m=>m.itemId===s.id).slice().sort((a,b)=>(b.date||b.createdAt||'').localeCompare(a.date||a.createdAt||''));
+      const inMoves = itMoves.filter(m=>m.type==='in'), outMoves = itMoves.filter(m=>m.type==='out');
+      const inQty = inMoves.reduce((sum,m)=>sum+(parseFloat(m.qty)||0),0), outQty = outMoves.reduce((sum,m)=>sum+(parseFloat(m.qty)||0),0);
+      return `<div class="cp" style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--bdr)">
+          <div>
+            <div style="font-weight:800;font-size:13px;color:var(--tx)">${esc(s.name)}</div>
+            <div style="font-size:10px;color:var(--tx3);margin-top:2px">الحالي: ${s.qty} ${s.unit} · <span style="color:var(--green)">+${inMoves.length} زيادة (${inQty})</span> · <span style="color:var(--red)">−${outMoves.length} نقصان (${outQty})</span></div>
+          </div>
+        </div>
+        ${itMoves.length ? itMoves.map(m => `
+          <div class="li">
+            <div class="pay-sg ${m.type==='in'?'gn':'pay-sg out'}" style="${m.type==='out'?'background:var(--rdim);color:var(--red)':''}">${m.type==='in'?'＋':'−'}</div>
+            <div class="li-inf"><div class="li-n">${fD(m.date||m.createdAt.slice(0,10))}</div><div class="li-s">${m.note?esc(m.note):(m.type==='in'?'زيادة':'نقصان')}</div></div>
+            <div class="li-r"><span class="num" style="color:${m.type==='in'?'var(--green)':'var(--red)'};font-size:13px;font-weight:800">${m.type==='in'?'+':'−'}${m.qty} ${m.unit||''}</span></div>
+          </div>`).join('') : `<div style="padding:14px;text-align:center;color:var(--tx3);font-size:11px">لا توجد حركات لهذا الصنف</div>`}
+      </div>`;
+    }).join('') : `<div class="empty"><div class="empty-ic">📜</div><h3>لا يوجد مخزون</h3></div>`}
   `}`;
 }
 
