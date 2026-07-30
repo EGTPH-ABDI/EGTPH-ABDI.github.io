@@ -4599,12 +4599,20 @@ function renderStock() {
             <div style="font-size:10px;color:var(--tx3);margin-top:2px">الحالي: ${s.qty} ${s.unit} · <span style="color:var(--green)">+${inMoves.length} زيادة (${inQty})</span> · <span style="color:var(--red)">−${outMoves.length} نقصان (${outQty})</span></div>
           </div>
         </div>
-        ${itMoves.length ? itMoves.map(m => `
-          <div class="li">
-            <div class="pay-sg ${m.type==='in'?'gn':'pay-sg out'}" style="${m.type==='out'?'background:var(--rdim);color:var(--red)':''}">${m.type==='in'?'＋':'−'}</div>
-            <div class="li-inf"><div class="li-n">${fD(m.date||m.createdAt.slice(0,10))}</div><div class="li-s">${m.note?esc(m.note):(m.type==='in'?'زيادة':'نقصان')}</div></div>
-            <div class="li-r"><span class="num" style="color:${m.type==='in'?'var(--green)':'var(--red)'};font-size:13px;font-weight:800">${m.type==='in'?'+':'−'}${m.qty} ${m.unit||''}</span></div>
-          </div>`).join('') : `<div style="padding:14px;text-align:center;color:var(--tx3);font-size:11px">لا توجد حركات لهذا الصنف</div>`}
+        ${itMoves.length ? `
+        <div style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr><th class="tl">التاريخ</th><th>النوع</th><th>الكمية</th></tr></thead>
+          <tbody>
+          ${itMoves.map(m => `
+          <tr>
+            <td class="tl">${fD(m.date||m.createdAt.slice(0,10))}${m.note?`<div style="font-size:9px;color:var(--tx3)">${esc(m.note)}</div>`:''}</td>
+            <td class="c" style="color:${m.type==='in'?'var(--green)':'var(--red)'};font-weight:800">${m.type==='in'?'زيادة':'نقصان'}</td>
+            <td class="c num" style="color:${m.type==='in'?'var(--green)':'var(--red)'};font-weight:800">${m.type==='in'?'+':'−'}${m.qty} ${m.unit||''}</td>
+          </tr>`).join('')}
+          </tbody>
+        </table>
+        </div>` : `<div style="padding:14px;text-align:center;color:var(--tx3);font-size:11px">لا توجد حركات لهذا الصنف</div>`}
       </div>`;
     }).join('') : `<div class="empty"><div class="empty-ic">📜</div><h3>لا يوجد مخزون</h3></div>`}
   `}`;
