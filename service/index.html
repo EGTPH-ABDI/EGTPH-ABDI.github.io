@@ -1211,7 +1211,7 @@ function itemsFor(mc){
   else if(mc&&mc.templateKey){const t=FLEET_TEMPLATES[mc.templateKey]; if(t&&t.items==='car')arr=GENERIC_CAR_ITEMS; else if(t&&t.items==='lightTruck')arr=GENERIC_LIGHT_TRUCK_ITEMS;}
   if(!arr) arr=mc&&mc.type==='truck'?TRK_ITEMS:mc&&mc.type==='jmc'?JMC_ITEMS:mc&&mc.type==='loader'?(lovolLoaderVariant(mc)==='FL936F'?LOAD_F_ITEMS:LOAD_H_ITEMS):mc&&mc.type==='jcb'?JCB_ITEMS:(mc&&mc.type==='car'?GENERIC_CAR_ITEMS:(mc&&mc.type==='truck2'?GENERIC_LIGHT_TRUCK_ITEMS:(mc&&mc.type==='exc2'?GENERIC_MACHINE_ITEMS:EXC_ITEMS)));
   // JMC: فلتر زيت المحرك مرتبط إلزامياً بدورية زيت المحرك، حتى لو كانت نسخة قديمة من الآلة تحتوي interval=5000.
-  if(mc&&mc.type==='jmc'&&Array.isArray(arr)) arr=arr.map(it=>it&&it.id==='oilf'?Object.assign({},it,{followEngineOil:true}):it);
+  if(isJMC(mc)&&Array.isArray(arr)) arr=arr.map(it=>it&&it.id==='oilf'?Object.assign({},it,{followEngineOil:true}):it);
   return arr;
 }
 function remindersFor(mc){if(mc.type==='loader')return lovolLoaderVariant(mc)==='FL936F'?LOAD_F_REM:LOAD_H_REM;return mc.type==='truck'?TRK_REM:mc.type==='jmc'?JMC_REM:mc.type==='jcb'?JCB_REM:EXC_REM;}
@@ -1220,6 +1220,12 @@ function baseOilsFor(mc){if(mc.oils)return mc.oils; return mc.type==='truck'?TRK
 /* ══════ كتالوج قابل للتعديل لكل آلة: OEM / زيوت / مشتريات ══════
    لا نغيّر الجداول الأصلية العامة. عند أول تعديل للآلة ننسخ جدولها إليها فقط،
    ثم تحفظ التعديلات داخل بيانات تلك الآلة وتُزامن كالمعتاد. */
+function isJMC(mc){
+  if(!mc)return false;
+  if(mc.type==='jmc'||mc.templateKey==='jmc_4x2')return true;
+  const sig=[mc.name,mc.model,mc.eng,mc.engine,mc.info&&mc.info.model,mc.info&&mc.info.make,mc.profileInfo&&JSON.stringify(mc.profileInfo)].filter(Boolean).join(' ').toUpperCase();
+  return /\bJMC\b|JX493ZQ4A|JIANG(LING)?\s*MOTORS/.test(sig);
+}
 function isRoadType(type){return ['truck','jmc','truck2','car'].includes(String(type||''));}
 function machineIcon(mc){const t=mc&&mc.type;return t==='truck'?'🚛':t==='jmc'?'🚚':t==='loader'?'🚜':t==='jcb'?'🛠️':t==='car'?'🚗':t==='truck2'?'🚛':'🏗️';}
 function textOnly(v){return String(v==null?'':v).replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();}
@@ -1401,7 +1407,7 @@ function workDaysBetween(fromISO,toISO){
   const a=_parseISO(fromISO), b=_parseISO(toISO);if(!a||!b||b<=a)return 0;
   let n=0;const cur=new Date(a.getTime());while(cur<b){cur.setDate(cur.getDate()+1);const iso=cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0')+'-'+String(cur.getDate()).padStart(2,'0');if(isGlobalWorkDate(iso))n++;}return n;
 }
-function maintenanceAnchorId(it,mc){return (it&&it.followEngineOil)||(mc&&mc.type==='jmc'&&it&&it.id==='oilf')?'eng':(it&&it.id)||'';}
+function maintenanceAnchorId(it,mc){return (it&&it.followEngineOil)||(isJMC(mc)&&it&&it.id==='oilf')?'eng':(it&&it.id)||'';}
 function lastReadOf(mc,id){const done=(mc&&mc.done&&typeof mc.done==='object')?mc.done:{};const v=done[id];if(v==null)return null;return (typeof v==='object')?v.r:v;}
 function lastDateOf(mc,id){const done=(mc&&mc.done&&typeof mc.done==='object')?mc.done:{};const v=done[id];return (v!=null&&typeof v==='object'&&v.d)?v.d:null;}
 function isManualMaintenance(it){return !!(it&&(it.manualOnly||it.conditionOnly));}
@@ -1438,15 +1444,15 @@ function scheduleLabel(mc,it){
 function intervalOf(mc,it){
   if(isManualMaintenance(it)||Array.isArray(it&&it.milestones)||(it&&it.months))return null;
   // JMC oil filter is never allowed to use a stored/static interval. It is exactly the engine-oil interval.
-  if(mc&&mc.type==='jmc'&&it&&it.id==='oilf'){
+  if(isJMC(mc)&&it&&it.id==='oilf'){
     const j=positiveNumberOrNull(mc.engInt);
     return j!=null?j:5000;
   }
   if(it&&it.followEngineOil){const own=positiveNumberOrNull(mc&&mc.engInt);if(own!=null)return own;return intervalOf(mc,{engineOil:true});}
-  if(it.engineOil){const own=positiveNumberOrNull(mc&&mc.engInt);if(own!=null)return own;if(isRoadType(mc.type))return 5000;if(mc.type==='jcb')return 500;return 250;}
+  if(it.engineOil){const own=positiveNumberOrNull(mc&&mc.engInt);if(own!=null)return own;if(isJMC(mc)||isRoadType(mc.type))return 5000;if(mc.type==='jcb')return 500;return 250;}
   return positiveNumberOrNull(it&&it.interval);
 }
-function capLabel(mc,it){if(it.engineOil){if(mc.type==='exc')return mc.engInt===500?'20 L':'14 L';if(mc.type==='truck')return mc.engine==='WP12'?'28 L':'24 L';if(mc.type==='jmc')return '≈6–7 L زيت محرك (مرجعي؛ تحقق بالعصا)';if(mc.type==='jcb')return '12–15 L';return mc.type==='loader'&&lovolLoaderVariant(mc)==='FL936F'?'تأكيد بالسيريال/دليل المحرك':'20 L (رسمي)';}return it.cap||'';}
+function capLabel(mc,it){if(it.engineOil){if(mc.type==='exc')return mc.engInt===500?'20 L':'14 L';if(mc.type==='truck')return mc.engine==='WP12'?'28 L':'24 L';if(isJMC(mc))return '≈6–7 L زيت محرك (مرجعي؛ تحقق بالعصا)';if(mc.type==='jcb')return '12–15 L';return mc.type==='loader'&&lovolLoaderVariant(mc)==='FL936F'?'تأكيد بالسيريال/دليل المحرك':'20 L (رسمي)';}return it.cap||'';}
 // ══════ خطّ زمني موحّد للعدّاد ══════
 // القاعدة الصارمة: mc.readings فقط هي قراءات compteur فعلية وتدخل في العداد الفعلي والمعدل.
 // history و conditionHistory تسجلان «عداد وقت العملية» وقد يكون فعلياً أو تقديرياً؛ لا تستعملان أبداً لاشتقاق معدل الاستعمال أو مرساة تقدير اليوم.
@@ -2259,7 +2265,7 @@ function renderDetail(){
     }else{
       lastInfo='<span class="last-info">آخر: <b>'+fmt(last)+'</b> '+u+(ldate?' <span class="ltr">📅'+esc(ldate)+'</span>':'')+(st.due!=null?' · القادمة: <b>'+fmt(st.due)+' '+u+'</b>':'')+'</span>';
     }
-    const tags=[];let cp=capLabel(mc,it);if(mc&&mc.type==='jmc'&&it&&it.id==='oilf')cp='يتبع موعد تغيير زيت المحرك؛ يُبدّل معه في كل دورة';if(it.spec)tags.push('<span class="tag">'+it.spec+'</span>');if(cp)tags.push('<span class="tag cap">'+cp+'</span>');tags.push('<span class="tag intv">'+esc(scheduleLabel(mc,it))+'</span>');
+    const tags=[];let cp=capLabel(mc,it);if(isJMC(mc)&&it&&it.id==='oilf')cp='يتبع موعد تغيير زيت المحرك؛ يُبدّل معه في كل دورة';if(it.spec)tags.push('<span class="tag">'+it.spec+'</span>');if(cp)tags.push('<span class="tag cap">'+cp+'</span>');tags.push('<span class="tag intv">'+esc(scheduleLabel(mc,it))+'</span>');
     let conditionCtl='';
     if(it.conditionOnly==='airFilter'){
       const count=airFilterCleanCount(mc);
@@ -2512,7 +2518,7 @@ function diagnosticsSelfTests(){
     t.push(diagResult('تنقية المعدلات المستوردة',positiveNumberOrNull('150,5')===150.5&&positiveNumberOrNull(-5)===null&&globalRateOf('jmc')>0,'الفاصلة العشرية مدعومة والمعدل السالب لا يدخل الحساب'));
     t.push(diagResult('حدود إعداد التنبيه',safeAlertDays(17)===17&&safeAlertDays(999)===10&&safeAlertDays('abc')===10,'القيم خارج 1–90 يوم تعود إلى 10 أيام'));
     t.push(diagResult('فاصل الزيت التالف لا يعكس الموعد',intervalOf({type:'jmc',engInt:-500},{engineOil:true})===5000,'فاصل سالب مستورد يعود إلى الافتراضي الآمن'));
-    const jmcOilLink={id:'jmc-oil-link',type:'jmc',engInt:10000,done:{eng:{r:35000,d:'2026-06-28'}},history:[],readings:[],conditionHistory:{airf:[]}};const staleOilFilter={id:'oilf',interval:5000,ar:'فلتر زيت المحرك'};const linkedOilStatus=statusOf(jmcOilLink,staleOilFilter);t.push(diagResult('JMC: فلتر الزيت يتبع دورية زيت المحرك',maintenanceAnchorId(staleOilFilter,jmcOilLink)==='eng'&&intervalOf(jmcOilLink,staleOilFilter)===10000&&linkedOilStatus.due===45000&&scheduleLabel(jmcOilLink,staleOilFilter)==='كل 10000 km','حتى إذا بقيت نسخة قديمة من البند فيها interval=5000، لا يجوز أن يتجاوزها منطق JMC؛ 35,000 + 10,000 = 45,000'));
+    const jmcOilLink={id:'jmc-oil-link',type:'jmc',engInt:10000,done:{eng:{r:35000,d:'2026-06-28'}},history:[],readings:[],conditionHistory:{airf:[]}};const legacyJmc={id:'legacy-jmc',type:'truck',name:'JMC 2025',eng:'JMC JX493ZQ4A · 68 kW / 92 HP · Euro II',engine:'JX493ZQ4A',engInt:10000,done:{eng:{r:35000,d:'2026-06-28'}},history:[],readings:[],conditionHistory:{airf:[]}};const legacyOilFilter={id:'oilf',interval:5000,ar:'فلتر زيت المحرك'};const legacyOilStatus=statusOf(legacyJmc,legacyOilFilter);t.push(diagResult('JMC قديمة محفوظة كـ truck: فلتر الزيت يتبع زيت المحرك',isJMC(legacyJmc)&&maintenanceAnchorId(legacyOilFilter,legacyJmc)==='eng'&&intervalOf(legacyJmc,legacyOilFilter)===10000&&legacyOilStatus.due===45000,'التوافق مع الآلات القديمة التي تحمل هوية JMC لكن type=truck'));const staleOilFilter={id:'oilf',interval:5000,ar:'فلتر زيت المحرك'};const linkedOilStatus=statusOf(jmcOilLink,staleOilFilter);t.push(diagResult('JMC: فلتر الزيت يتبع دورية زيت المحرك',maintenanceAnchorId(staleOilFilter,jmcOilLink)==='eng'&&intervalOf(jmcOilLink,staleOilFilter)===10000&&linkedOilStatus.due===45000&&scheduleLabel(jmcOilLink,staleOilFilter)==='كل 10000 km','حتى إذا بقيت نسخة قديمة من البند فيها interval=5000، لا يجوز أن يتجاوزها منطق JMC؛ 35,000 + 10,000 = 45,000'));
     const jHyd=JCB_ITEMS.find(x=>x.id==='hydf'),jTrans=JCB_ITEMS.find(x=>x.id==='transf');
     t.push(diagResult('مراحل JCB 100/500 ساعة',nextMilestoneAfter(null,jHyd)===100&&nextMilestoneAfter(100,jHyd)===500&&nextMilestoneAfter(500,jHyd)===1000&&nextMilestoneAfter(500,jTrans)===1000,'فلتر الهيدروليك وناقل الحركة: أول 100h ثم 500h وبعدها كل 500h'));
     const jcbIds=new Set(JCB_ITEMS.map(x=>x.id));
