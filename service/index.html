@@ -730,7 +730,7 @@ function baseFiltersFor(mc){if(mc.filters)return mc.filters; return mc.type==='t
 
 const EXC_REM=[["يومياً (10سا): فحص المستويات (محرك/هيدروليك/مبرّد)، تفريغ ماء فاصل الوقود، فحص السير والتسريبات", "Niveaux, purge eau, courroie"], ["كل 250سا: تشحيم محاور الملحقات (11 نقطة) وشحم محمل الدوران · فحص البطارية · تنظيف فلتر المكيّف", "250h: axes, palier rotation, batterie"], ["كل 500سا: تنظيف عنصر فلتر الهواء الأساسي · تنظيف المشعّ والمبرّدات", "500h: filtre à air, radiateurs"], ["كل 1000سا: شحم ترس الدوران والترس الصغير (7.9 كغ)", "1000h: couronne & pignon"], ["كل 2000سا: تنظيف مصفاة الشفط · فحص وتشحيم ذراع RCV · فحص وإعادة شدّ الخراطيم والمرابط", "2000h: crépine, RCV, flexibles"]];
 const TRK_REM=[['يومياً: مستويات، ضغط العجلات (≈8.3 bar)، تفريغ ماء خزان الهواء، الأضواء','Niveaux, pression pneus, purge air'],['الورشة: تشحيم 1×/أسبوع','Graissage 1×/sem'],['دورياً: jeu soupapes 0.3/0.4 مم، injecteurs 225 bar','Soupapes & injecteurs'],['اقتراح زيت المحرك: 15W-40 CI-4 (الرسمي 5W-40)','15W-40 pour la chaleur']];
-const JMC_REM=[['يومياً: زيت المحرك، مستوى المبرّد، التسربات، الأضواء، ضغط الإطارات، فرامل اليد، صوت المحرك','Daily checks'],['كل 5,000 كم: زيت المحرك + فلتر الزيت + تشحيم الشاسيه/الكرودان + فحص عام','Service 5,000 km'],['كل 10,000 كم: فلتر الوقود + فلتر الهواء حسب الغبار + فحص السيور والفرامل','Filters'],['كل 40,000 كم: زيت علبة السرعة اليدوية + زيت الجسر الخلفي + زيت الدركسيون حسب الحالة','Driveline oils'],['كل سنتين: DOT4/HZY4 للفرامل والكلتش + المبرّد 50/50','24 months'],['مصادر داخلية: شهادة المطابقة CK00007123، PI 24MQ1118MN037، مصادر JMC/JX493ZQ4A عامة. OEM النهائي يؤكد بالـVIN/الفلتر القديم.','Source note']];
+const JMC_REM=[['يومياً: زيت المحرك، مستوى المبرّد، التسربات، الأضواء، ضغط الإطارات، فرامل اليد، صوت المحرك','Daily checks'],['في كل دورة زيت المحرك: زيت المحرك + فلتر الزيت + تشحيم الشاسيه/الكرودان + فحص عام','Engine oil service'],['كل 10,000 كم: فلتر الوقود + فلتر الهواء حسب الغبار + فحص السيور والفرامل','Filters'],['كل 40,000 كم: زيت علبة السرعة اليدوية + زيت الجسر الخلفي + زيت الدركسيون حسب الحالة','Driveline oils'],['كل سنتين: DOT4/HZY4 للفرامل والكلتش + المبرّد 50/50','24 months'],['مصادر داخلية: شهادة المطابقة CK00007123، PI 24MQ1118MN037، مصادر JMC/JX493ZQ4A عامة. OEM النهائي يؤكد بالـVIN/الفلتر القديم.','Source note']];
 const LOAD_H_REM=[
   ['يومياً (10سا): مستويات (محرك/هيدروليك/فرامل/مبرّد)، تسربات، ضغط العجلات (AV 0.30-0.32 · AR 0.28-0.30 MPa)، تفريغ ماء خزان الهواء وفاصل ماء الكازوال، شحم مفاصل القفة','Niveaux, pression pneus, purge air/eau, graissage'],
   ['أسبوعياً (50سا): شدّ براغي عمود الإدارة، تفقّد الفرامل، شحم مفاصل الهيكل والجسر الخلفي، تنظيف breather علبة السرعة والجسر','Boulons cardan, freins, graissage, breathers'],
@@ -1393,7 +1393,7 @@ function workDaysBetween(fromISO,toISO){
   const a=_parseISO(fromISO), b=_parseISO(toISO);if(!a||!b||b<=a)return 0;
   let n=0;const cur=new Date(a.getTime());while(cur<b){cur.setDate(cur.getDate()+1);const iso=cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0')+'-'+String(cur.getDate()).padStart(2,'0');if(isGlobalWorkDate(iso))n++;}return n;
 }
-function maintenanceAnchorId(it){return it&&it.followEngineOil?'eng':(it&&it.id)||'';}
+function maintenanceAnchorId(it,mc){return (it&&it.followEngineOil)||(mc&&mc.type==='jmc'&&it&&it.id==='oilf')?'eng':(it&&it.id)||'';}
 function lastReadOf(mc,id){const done=(mc&&mc.done&&typeof mc.done==='object')?mc.done:{};const v=done[id];if(v==null)return null;return (typeof v==='object')?v.r:v;}
 function lastDateOf(mc,id){const done=(mc&&mc.done&&typeof mc.done==='object')?mc.done:{};const v=done[id];return (v!=null&&typeof v==='object'&&v.d)?v.d:null;}
 function isManualMaintenance(it){return !!(it&&(it.manualOnly||it.conditionOnly));}
@@ -1427,7 +1427,7 @@ function scheduleLabel(mc,it){
   }
   return Number.isFinite(n)?'كل '+fmt(n)+' '+unit(mc):'حسب الدليل';
 }
-function intervalOf(mc,it){if(isManualMaintenance(it)||Array.isArray(it&&it.milestones)||(it&&it.months))return null;if(it&&it.followEngineOil){const own=positiveNumberOrNull(mc&&mc.engInt);if(own!=null)return own;return intervalOf(mc,{engineOil:true});}if(it.engineOil){const own=positiveNumberOrNull(mc&&mc.engInt);if(own!=null)return own;if(isRoadType(mc.type))return 5000;if(mc.type==='jcb')return 500;return 250;}return positiveNumberOrNull(it&&it.interval);}
+function intervalOf(mc,it){if(isManualMaintenance(it)||Array.isArray(it&&it.milestones)||(it&&it.months))return null;if(mc&&mc.type==='jmc'&&it&&it.id==='oilf')return intervalOf(mc,{engineOil:true});if(it&&it.followEngineOil){const own=positiveNumberOrNull(mc&&mc.engInt);if(own!=null)return own;return intervalOf(mc,{engineOil:true});}if(it.engineOil){const own=positiveNumberOrNull(mc&&mc.engInt);if(own!=null)return own;if(isRoadType(mc.type))return 5000;if(mc.type==='jcb')return 500;return 250;}return positiveNumberOrNull(it&&it.interval);}
 function capLabel(mc,it){if(it.engineOil){if(mc.type==='exc')return mc.engInt===500?'20 L':'14 L';if(mc.type==='truck')return mc.engine==='WP12'?'28 L':'24 L';if(mc.type==='jmc')return '≈6–7 L زيت محرك (مرجعي؛ تحقق بالعصا)';if(mc.type==='jcb')return '12–15 L';return mc.type==='loader'&&lovolLoaderVariant(mc)==='FL936F'?'تأكيد بالسيريال/دليل المحرك':'20 L (رسمي)';}return it.cap||'';}
 // ══════ خطّ زمني موحّد للعدّاد ══════
 // القاعدة الصارمة: mc.readings فقط هي قراءات compteur فعلية وتدخل في العداد الفعلي والمعدل.
@@ -1664,7 +1664,7 @@ function airFilterCleanCount(mc){
   return airFilterCleaningEntries(mc).filter(e=>e&&isOperationalDate(e.d)&&cleaningAfterReplacement(e,last)).length;
 }
 function statusOf(mc,it){
-  const anchorId=maintenanceAnchorId(it);
+  const anchorId=maintenanceAnchorId(it,mc);
   const last=lastReadOf(mc,anchorId);
   if(it&&it.conditionOnly){
     const count=it.conditionOnly==='airFilter'?airFilterCleanCount(mc):0;
@@ -1992,7 +1992,7 @@ function renderMachineAlerts(mc){
     +'<th>الحالة</th><th>العنصر</th><th>آخر صيانة</th><th>التغيير القادم</th><th>الحالي/الفرق</th><th>تسجيل</th>'
     +'</tr></thead><tbody>'+
     rows.map(r=>{
-      const last=lastReadOf(mc,r.it.id), ld=lastDateOf(mc,r.it.id);
+      const anchorId=maintenanceAnchorId(r.it,mc), last=lastReadOf(mc,anchorId), ld=lastDateOf(mc,anchorId);
       const due=r.s.calendar?('📅 '+esc(r.s.dueDate||'—')+(r.s.dueReading!=null?' · عداد ≈ '+fmt(r.s.dueReading)+' '+u:'')):(r.s.due!=null?fmt(r.s.due)+' '+u+(r.s.effectiveDueDate?' · 📅 ≈ '+esc(r.s.effectiveDueDate):'')+(r.s.calendarLimitDate?' · حد زمني '+esc(r.s.calendarLimitDate):''):'—');
       const est=r.s.calendar
         ? (r.s.dueReading!=null?('≈ '+fmt(r.s.dueReading)+' '+u+' عند الموعد'):'العداد التقديري غير متاح')
@@ -2229,7 +2229,7 @@ function renderDetail(){
 
   // items
   const wrap=document.getElementById('items');wrap.innerHTML='';
-  itemsFor(mc).forEach(it=>{const anchorId=maintenanceAnchorId(it),st=statusOf(mc,it),last=lastReadOf(mc,anchorId),ldate=lastDateOf(mc,anchorId);
+  itemsFor(mc).forEach(it=>{const anchorId=maintenanceAnchorId(it,mc),st=statusOf(mc,it),last=lastReadOf(mc,anchorId),ldate=lastDateOf(mc,anchorId);
     let remTxt='';
     if(st.calendar&&st.remDays!=null)remTxt=st.remDays<0?('+'+fmt(Math.abs(st.remDays))+' يوم'):(st.remDays===0?'اليوم':fmt(st.remDays)+' يوم');
     else if(st.rem!==null)remTxt=st.rem<0?('+'+fmt(Math.abs(st.rem))):fmt(st.rem);
@@ -2494,6 +2494,7 @@ function diagnosticsSelfTests(){
     t.push(diagResult('تنقية المعدلات المستوردة',positiveNumberOrNull('150,5')===150.5&&positiveNumberOrNull(-5)===null&&globalRateOf('jmc')>0,'الفاصلة العشرية مدعومة والمعدل السالب لا يدخل الحساب'));
     t.push(diagResult('حدود إعداد التنبيه',safeAlertDays(17)===17&&safeAlertDays(999)===10&&safeAlertDays('abc')===10,'القيم خارج 1–90 يوم تعود إلى 10 أيام'));
     t.push(diagResult('فاصل الزيت التالف لا يعكس الموعد',intervalOf({type:'jmc',engInt:-500},{engineOil:true})===5000,'فاصل سالب مستورد يعود إلى الافتراضي الآمن'));
+    const jmcOilLink={id:'jmc-oil-link',type:'jmc',engInt:10000,done:{eng:{r:35000,d:'2026-06-28'}},history:[],readings:[],conditionHistory:{airf:[]}};const staleOilFilter={id:'oilf',interval:5000,ar:'فلتر زيت المحرك'};const linkedOilStatus=statusOf(jmcOilLink,staleOilFilter);t.push(diagResult('JMC: فلتر الزيت يتبع دورية زيت المحرك',maintenanceAnchorId(staleOilFilter,jmcOilLink)==='eng'&&intervalOf(jmcOilLink,staleOilFilter)===10000&&linkedOilStatus.due===45000&&scheduleLabel(jmcOilLink,staleOilFilter)==='كل 10000 km','حتى إذا بقيت نسخة قديمة من البند فيها interval=5000، لا يجوز أن يتجاوزها منطق JMC؛ 35,000 + 10,000 = 45,000'));
     const jHyd=JCB_ITEMS.find(x=>x.id==='hydf'),jTrans=JCB_ITEMS.find(x=>x.id==='transf');
     t.push(diagResult('مراحل JCB 100/500 ساعة',nextMilestoneAfter(null,jHyd)===100&&nextMilestoneAfter(100,jHyd)===500&&nextMilestoneAfter(500,jHyd)===1000&&nextMilestoneAfter(500,jTrans)===1000,'فلتر الهيدروليك وناقل الحركة: أول 100h ثم 500h وبعدها كل 500h'));
     const jcbIds=new Set(JCB_ITEMS.map(x=>x.id));
