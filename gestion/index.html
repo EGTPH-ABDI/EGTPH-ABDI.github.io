@@ -4793,7 +4793,8 @@ function renderSuppliers(p={}) {
       ${sel
         ? `<button class="btn btn-sec" onclick="supSelectAll()">☑ تحديد الكل</button>
            <button class="btn btn-gold" onclick="supSelEnd()">✓ إنهاء التحديد</button>`
-        : `<button class="btn btn-sec" onclick="supSelStart()">📊 تحديد ومجموع</button>
+        : `<button class="btn btn-sec" onclick="openAllSuppliersPeriodReport()">📅 تقرير فترة</button>
+           <button class="btn btn-sec" onclick="supSelStart()">📊 تحديد ومجموع</button>
            <button class="btn btn-gold" onclick="addSupplier()">＋ مورد جديد</button>`}
     </div>
   </div>
@@ -4940,6 +4941,49 @@ async function addSupplier() {
   setTimeout(()=>document.getElementById('sp-n')&&document.getElementById('sp-n').focus(),80);
 }
 
+// ── تعديل بيانات المورد (الاسم، النوع، الهاتف، الخدمة المقدّمة...) ──
+async function editSupplier(spId) {
+  const s = suppliers.find(x => x.id === spId); if (!s) return;
+  const types = [
+    {v:'خدمة',      ic:'🔧'}, {v:'سلعة',        ic:'📦'},
+    {v:'كراء شاحنة', ic:'🚛'}, {v:'كراء آلات',   ic:'🏗'},
+    {v:'وقود',       ic:'⛽'}, {v:'نقل',         ic:'🚚'},
+    {v:'صيانة',      ic:'🔩'}, {v:'أخرى',        ic:'📋'}
+  ];
+  OM('✎ تعديل بيانات المورد — ' + esc(s.name),
+    '<div class="fg"><label>اسم المورد *</label><input type="text" id="sp-e-n" value="' + esc(s.name || '') + '"></div>' +
+    '<div class="fgr">' +
+      '<div class="fg"><label>الهاتف</label><input type="tel" id="sp-e-p" value="' + esc(s.phone || '') + '"></div>' +
+      '<div class="fg"><label>نوع التعامل *</label>' +
+        '<select id="sp-e-type">' +
+          types.map(t => '<option value="' + t.v + '"' + (s.type === t.v ? ' selected' : '') + '>' + t.ic + ' ' + t.v + '</option>').join('') +
+        '</select>' +
+      '</div>' +
+    '</div>' +
+    '<div class="fg"><label>تفاصيل المنتج / الخدمة</label><input type="text" id="sp-e-pr" value="' + esc(s.product || '') + '" placeholder="وصف ما يقدمه المورد..."></div>' +
+    '<div class="fgr">' +
+      '<div class="fg"><label>الرقم الضريبي / السجل</label><input type="text" id="sp-e-tax" value="' + esc(s.taxId || '') + '"></div>' +
+      '<div class="fg"><label>الدين المبدئي (DA)</label><input type="number" id="sp-e-d" value="' + (s.initialDebt != null ? s.initialDebt : 0) + '"></div>' +
+    '</div>' +
+    '<div class="fg"><label>ملاحظات</label><textarea id="sp-e-nt">' + esc(s.note || '') + '</textarea></div>' +
+    '<div class="hint" style="margin-top:6px">لتعديل قائمة الأصناف/الخدمات وأسعارها استعمل زر "📋 الأصناف" داخل ملف المورد.</div>',
+  async () => {
+    const n = document.getElementById('sp-e-n').value.trim();
+    if (!n) return T('أدخل اسم المورد', 'error');
+    const newInitDebt = parseFloat(document.getElementById('sp-e-d').value) || 0;
+    s.name    = n;
+    s.phone   = document.getElementById('sp-e-p').value.trim();
+    s.type    = document.getElementById('sp-e-type').value;
+    s.product = document.getElementById('sp-e-pr').value.trim();
+    s.taxId   = document.getElementById('sp-e-tax').value.trim();
+    s.initialDebt = newInitDebt;
+    s.note    = document.getElementById('sp-e-nt').value.trim();
+    await dbP('suppliers', s);
+    CM(); renderSupDetail(spId); T('✅ تم حفظ التعديلات', 'success'); await logA('تعديل بيانات المورد: ' + n);
+  }, 'حفظ التعديلات');
+  setTimeout(() => document.getElementById('sp-e-n') && document.getElementById('sp-e-n').focus(), 80);
+}
+
 function addNewSupCatItem() {
   const n = (document.getElementById('sp-cat-n')||{}).value.trim();
   const u = (document.getElementById('sp-cat-u')||{}).value || 'وحدة';
@@ -4996,6 +5040,7 @@ function renderSupDetail(spId) {
     <span class="bdg ${isPaid?'bg':remain>0?'br':'bx'}" style="margin-left:6px">
       ${isPaid?'✓ مسدد':remain>0?'دين: '+fDA(remain):'جديد'}
     </span>
+    <button class="btn btn-sec btn-sm" onclick="editSupplier('${spId}')">✎ تعديل</button>
     <button class="btn btn-sec btn-sm" onclick="printSupplierDoc('${spId}')">🖨</button>
     <button class="btn btn-red btn-sm" onclick="delSupplier('${spId}')">🗑</button>`;
 
@@ -11702,6 +11747,221 @@ if (document.readyState === 'loading') {
       }
     }, 0);
     return out;
+  };
+})();
+</script>
+
+<!-- ══ تقرير فترة عبر كل الموردين (مشروع + صنف بدون الدخول لكل مورد) ══ -->
+<script>
+(function(){
+  'use strict';
+  const num = v => parseFloat(v) || 0;
+  const html = v => typeof esc === 'function' ? esc(String(v == null ? '' : v)) : String(v == null ? '' : v);
+  const money = v => typeof fDA === 'function' ? fDA(num(v)) : num(v).toFixed(2);
+  const qtyText = v => typeof fN === 'function' ? fN(num(v)) : String(num(v));
+  const dateLabel = iso => typeof fD === 'function' ? fD(iso) : (iso || '');
+  const isPending = row => !!row && row.priceStatus === 'pending';
+  const pad2 = n => String(n).padStart(2,'0');
+  const ALL = '__all__', NONE = '__none__';
+
+  function isoDate(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+  function firstDayOfMonth(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-01'; }
+  function firstDayOfYear(d){ return d.getFullYear()+'-01-01'; }
+  function resolveProj(inv){
+    const fn = window.EGTPHProjectPurchases && window.EGTPHProjectPurchases.resolveInvoiceProject;
+    return typeof fn === 'function' ? fn(inv) : {name:'—', unassigned:true};
+  }
+
+  // كل أسماء المشاريع المستعملة فعلاً في فواتير كل الموردين مجتمعين
+  function allProjectOptions(){
+    const invs = (window._supInvs || []);
+    const seen = new Map(); let hasNone = false;
+    invs.forEach(inv => { const p = resolveProj(inv); if (p.unassigned) hasNone = true; else if (!seen.has(p.key)) seen.set(p.key, p.name); });
+    const names = Array.from(seen.values()).sort((a,b) => String(a).localeCompare(String(b),'ar'));
+    let opts = '<option value="'+ALL+'">🗂 كل المشاريع</option>';
+    if (hasNone) opts += '<option value="'+NONE+'">— بدون مشروع —</option>';
+    opts += names.map(nm => '<option value="'+html(nm)+'">'+html(nm)+'</option>').join('');
+    return opts;
+  }
+
+  // كل الأصناف الموجودة في كتالوجات كل الموردين أو في فواتيرهم
+  function allItemOptions(){
+    const names = new Set();
+    (window.suppliers || []).forEach(s => (s.catalog || []).forEach(c => { if (c && c.name) names.add(c.name); }));
+    (window._supInvs || []).forEach(inv => (inv.items || []).forEach(it => { if (it && it.name) names.add(it.name); }));
+    const sorted = Array.from(names).sort((a,b) => String(a).localeCompare(String(b),'ar'));
+    return '<option value="'+ALL+'">📦 كل الأصناف</option>' + sorted.map(nm => '<option value="'+html(nm)+'">'+html(nm)+'</option>').join('');
+  }
+
+  function periodInvoicesAll(from, to){
+    return (window._supInvs || []).filter(v => v && (!from || (v.date||'') >= from) && (!to || (v.date||'') <= to));
+  }
+
+  // يبني map: spId -> {invIds:Set, items:[أسطر مطابقة]}
+  function collectAllGroups(from, to, projectFilter, itemFilter){
+    const invs = periodInvoicesAll(from, to);
+    const bySupplier = new Map();
+    invs.forEach(inv => {
+      const p = resolveProj(inv);
+      if (projectFilter && projectFilter !== ALL) {
+        if (projectFilter === NONE) { if (!p.unassigned) return; }
+        else if (p.unassigned || p.name !== projectFilter) return;
+      }
+      const items = (inv.items || []).filter(row => !(itemFilter && itemFilter !== ALL) || (row.name||'') === itemFilter);
+      if (!items.length) return;
+      if (!bySupplier.has(inv.supplierId)) bySupplier.set(inv.supplierId, {invIds:new Set(), items:[]});
+      const entry = bySupplier.get(inv.supplierId);
+      entry.invIds.add(inv.id);
+      items.forEach(row => entry.items.push(row));
+    });
+    return bySupplier;
+  }
+
+  function aggregateRows(rows){
+    let qty=0, amount=0, pendingQty=0;
+    rows.forEach(row => {
+      qty += num(row.qty);
+      if (isPending(row)) pendingQty += num(row.qty);
+      else amount += num(row.qty)*num(row.unitPrice);
+    });
+    return {qty, amount, pendingQty};
+  }
+
+  // تجميع كل الأسطر (من كل الموردين) حسب اسم الصنف + الوحدة — يعطي كمية صحيحة حتى مع اختلاف الوحدات
+  function aggregateItemsAcross(bySupplier){
+    const map = new Map();
+    let total = 0, pendingLines = 0, lineCount = 0;
+    bySupplier.forEach(entry => entry.items.forEach(row => {
+      lineCount++;
+      const key = (row.name||'—')+'|'+(row.unit||'وحدة');
+      if (!map.has(key)) map.set(key,{name:row.name||'—',unit:row.unit||'وحدة',qty:0,amount:0,pendingQty:0});
+      const it = map.get(key);
+      it.qty += num(row.qty);
+      if (isPending(row)) { it.pendingQty += num(row.qty); pendingLines++; }
+      else { const amt = num(row.qty)*num(row.unitPrice); it.amount += amt; total += amt; }
+    }));
+    const items = Array.from(map.values()).sort((a,b)=>String(a.name).localeCompare(String(b.name),'ar'));
+    return {items, total, pendingLines, lineCount};
+  }
+
+  function itemAcrossRowHtml(it){
+    const pendingTxt = it.pendingQty > 0 ? ' · <span style="color:var(--orange)">منها '+qtyText(it.pendingQty)+' معلّق</span>' : '';
+    return '<div style="padding:8px 12px;border-bottom:1px solid var(--bdr)">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+      +   '<div style="font-weight:800;font-size:12px;color:var(--tx)">'+html(it.name)+'</div>'
+      +   '<div style="color:var(--green);font-weight:900;font-size:13px;white-space:nowrap">'+money(it.amount)+'</div>'
+      + '</div>'
+      + '<div style="font-size:9px;color:var(--tx3);margin-top:2px">'+html(it.unit)+' · الكمية: <span style="color:var(--cyan);font-weight:700">'+qtyText(it.qty)+'</span>'+pendingTxt+'</div>'
+      + '</div>';
+  }
+
+  window.openAllSuppliersPeriodReport = function(){
+    const now = new Date();
+    const todayStr = typeof today === 'function' ? today() : isoDate(now);
+    const monthStart = firstDayOfMonth(now), yearStart = firstDayOfYear(now);
+    const body = '<div class="hint" style="margin-bottom:9px">اختر الفترة، ثم — إن أردت — حدّد مشروعاً وصنفاً معيّناً بدل «الكل». سيظهر لك مجموع ذلك الصنف في ذلك المشروع عند كل الموردين الذين لديهم فواتير مطابقة، دفعة واحدة، دون الدخول إلى كل مورد على حدة.</div>'
+      + '<div class="fgr">'
+      +   '<div class="fg"><label>من</label><input type="date" id="aspr-from" value="'+monthStart+'"></div>'
+      +   '<div class="fg"><label>إلى</label><input type="date" id="aspr-to" value="'+todayStr+'"></div>'
+      + '</div>'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'
+      +   '<button type="button" class="btn btn-sec btn-xs" onclick="document.getElementById(\'aspr-from\').value=\''+monthStart+'\';document.getElementById(\'aspr-to\').value=\''+todayStr+'\'">📅 هذا الشهر</button>'
+      +   '<button type="button" class="btn btn-sec btn-xs" onclick="document.getElementById(\'aspr-from\').value=\''+yearStart+'\';document.getElementById(\'aspr-to\').value=\''+todayStr+'\'">📅 هذا العام</button>'
+      +   '<button type="button" class="btn btn-sec btn-xs" onclick="document.getElementById(\'aspr-from\').value=\'\';document.getElementById(\'aspr-to\').value=\'\'">♾ كل الفترة</button>'
+      + '</div>'
+      + '<div class="fgr">'
+      +   '<div class="fg"><label>المشروع</label><select id="aspr-project">'+allProjectOptions()+'</select></div>'
+      +   '<div class="fg"><label>الصنف</label><select id="aspr-item">'+allItemOptions()+'</select></div>'
+      + '</div>';
+    OM('📅 تقرير فترة — كل الموردين', body, ()=>{ showAllSuppliersPeriodReportPreview(); }, '📊 عرض النتيجة');
+  };
+
+  function gatherAllReportData(){
+    const from = document.getElementById('aspr-from')?.value || '';
+    const to = document.getElementById('aspr-to')?.value || '';
+    const projectFilter = document.getElementById('aspr-project')?.value || ALL;
+    const itemFilter = document.getElementById('aspr-item')?.value || ALL;
+    window._asprState = {from, to, projectFilter, itemFilter};
+    return window._asprState;
+  }
+
+  function buildRows(bySupplier){
+    const rows = [];
+    Array.from(bySupplier.entries()).forEach(([spId, entry]) => {
+      const s = (window.suppliers||[]).find(x=>x.id===spId); if (!s) return;
+      const agg = aggregateRows(entry.items);
+      rows.push({s, agg, invCount: entry.invIds.size});
+    });
+    rows.sort((a,b)=> b.agg.amount - a.agg.amount);
+    return rows;
+  }
+
+  function supplierRowHtml(r){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;border-bottom:1px solid var(--bdr);cursor:pointer" onclick="CM();renderSupDetail(\''+r.s.id+'\')">'
+      + '<div><div style="font-weight:800;font-size:12px;color:var(--tx)">'+html(r.s.name)+'</div>'
+      +   '<div style="font-size:9px;color:var(--tx3)">'+r.invCount+' فاتورة · الكمية: <span style="color:var(--cyan);font-weight:700">'+qtyText(r.agg.qty)+'</span>'+(r.agg.pendingQty>0?' · <span style="color:var(--orange)">منها '+qtyText(r.agg.pendingQty)+' معلّق</span>':'')+'</div></div>'
+      + '<div style="color:var(--green);font-weight:900;font-size:13px;white-space:nowrap">'+money(r.agg.amount)+'</div></div>';
+  }
+
+  window.showAllSuppliersPeriodReportPreview = function(){
+    const {from, to, projectFilter, itemFilter} = gatherAllReportData();
+    const bySupplier = collectAllGroups(from, to, projectFilter, itemFilter);
+    if (!bySupplier.size) { T('لا توجد فواتير مطابقة لهذه الفلترة','warning'); return; }
+
+    const periodLabel = (from || to) ? ((from?dateLabel(from):'البداية')+' → '+(to?dateLabel(to):'اليوم')) : 'كل الفترة';
+    const projLabel = projectFilter === ALL ? 'كل المشاريع' : (projectFilter === NONE ? 'بدون مشروع' : projectFilter);
+    const itemLabel = itemFilter === ALL ? 'كل الأصناف' : itemFilter;
+
+    const rows = buildRows(bySupplier);
+    let grandAmount=0, invTotal=0;
+    rows.forEach(r => { grandAmount += r.agg.amount; invTotal += r.invCount; });
+    const itemAgg = aggregateItemsAcross(bySupplier);
+
+    let body = '<div class="cp sup-project-summary" style="margin-bottom:10px">'
+      + '<div class="sup-project-head"><div><div class="sh-t">📅 '+html(periodLabel)+'</div>'
+      + '<div class="sup-project-note">📁 المشروع: <b>'+html(projLabel)+'</b> · 📦 الصنف: <b>'+html(itemLabel)+'</b></div></div>'
+      + '<span class="bdg bb">'+rows.length+' مورد · '+invTotal+' فاتورة</span></div></div>';
+
+    body += '<div class="cp" style="margin-bottom:10px">'
+      + '<div style="padding:9px 13px;background:var(--bg3);border-bottom:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center">'
+      +   '<div class="sh-t">📦 مجموع الأصناف (كل الموردين مجتمعين)</div><div style="color:var(--green);font-weight:900;font-size:16px">'+money(itemAgg.total)+'</div></div>'
+      + itemAgg.items.map(itemAcrossRowHtml).join('')
+      + (itemAgg.pendingLines ? '<div style="padding:6px 13px;font-size:9px;color:var(--orange)">⚠ '+itemAgg.pendingLines+' بند بسعر معلّق — غير محسوب في المبلغ</div>' : '')
+      + '</div>';
+
+    body += '<div class="cp"><div style="padding:9px 13px;background:var(--bg3);border-bottom:1px solid var(--bdr)"><div class="sh-t">🏭 التفصيل حسب المورد (اضغط لفتح ملفه)</div></div>'
+      + rows.map(supplierRowHtml).join('') + '</div>';
+
+    OM('📅 تقرير فترة — كل الموردين', body, ()=>{ printAllSuppliersPeriodReport(); }, '🖨 طباعة');
+  };
+
+  window.printAllSuppliersPeriodReport = function(){
+    const st = window._asprState; if (!st) return;
+    const {from, to, projectFilter, itemFilter} = st;
+    const bySupplier = collectAllGroups(from, to, projectFilter, itemFilter);
+    const periodLabel = (from || to) ? ((from?dateLabel(from):'البداية')+' → '+(to?dateLabel(to):'اليوم')) : 'كل الفترة';
+    const projLabel = projectFilter === ALL ? 'كل المشاريع' : (projectFilter === NONE ? 'بدون مشروع' : projectFilter);
+    const itemLabel = itemFilter === ALL ? 'كل الأصناف' : itemFilter;
+
+    const rows = buildRows(bySupplier);
+    let grandAmount=0;
+    rows.forEach(r => grandAmount += r.agg.amount);
+    const itemAgg = aggregateItemsAcross(bySupplier);
+
+    let body = '<div style="margin:6px 0 10px;font-size:11px;color:#555">📅 الفترة: <strong>'+html(periodLabel)+'</strong> &nbsp;·&nbsp; 📁 المشروع: <strong>'+html(projLabel)+'</strong> &nbsp;·&nbsp; 📦 الصنف: <strong>'+html(itemLabel)+'</strong></div>';
+
+    body += '<div class="sec">📦 مجموع الأصناف (كل الموردين مجتمعين)</div>'
+      + '<table><thead><tr><th class="tl">الصنف</th><th class="c">الوحدة</th><th class="c">الكمية</th><th class="c">المبلغ</th></tr></thead><tbody>'
+      + itemAgg.items.map(it => '<tr><td>'+html(it.name)+(it.pendingQty>0?'<div style="font-size:9px;color:#c0392b">منها '+qtyText(it.pendingQty)+' بسعر معلّق</div>':'')+'</td><td class="c">'+html(it.unit)+'</td><td class="c amt">'+qtyText(it.qty)+'</td><td class="c amt">'+money(it.amount)+'</td></tr>').join('')
+      + '<tr class="tot"><td colspan="3"><strong>الإجمالي</strong></td><td class="c amt"><strong>'+money(itemAgg.total)+'</strong></td></tr></tbody></table>';
+
+    body += '<div class="sec" style="margin-top:14px">🏭 التفصيل حسب المورد</div>';
+    body += '<table><thead><tr><th class="tl">المورد</th><th class="c">عدد الفواتير</th><th class="c">الكمية</th><th class="c">المبلغ</th></tr></thead><tbody>'
+      + rows.map(r => '<tr><td>'+html(r.s.name)+'</td><td class="c amt">'+r.invCount+'</td><td class="c amt">'+qtyText(r.agg.qty)+'</td><td class="c amt">'+money(r.agg.amount)+'</td></tr>').join('')
+      + '<tr class="tot"><td colspan="3"><strong>الإجمالي</strong></td><td class="c amt"><strong>'+money(grandAmount)+'</strong></td></tr></tbody></table>';
+
+    CM();
+    openPrintWin(printHeader('تقرير فترة — كل الموردين')+body+'<div class="foot">EGTPH GP · '+new Date().toLocaleString('fr-DZ')+'</div></body></html>');
   };
 })();
 </script>
