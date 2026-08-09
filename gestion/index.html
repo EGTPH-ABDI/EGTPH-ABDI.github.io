@@ -11787,7 +11787,7 @@ if (document.readyState === 'loading') {
   // كل الأصناف الموجودة في كتالوجات كل الموردين أو في فواتيرهم
   function allItemOptions(){
     const names = new Set();
-    (window.suppliers || []).forEach(s => (s.catalog || []).forEach(c => { if (c && c.name) names.add(c.name); }));
+    ((typeof suppliers !== 'undefined' ? suppliers : window.suppliers) || []).forEach(s => (s.catalog || []).forEach(c => { if (c && c.name) names.add(c.name); }));
     (window._supInvs || []).forEach(inv => (inv.items || []).forEach(it => { if (it && it.name) names.add(it.name); }));
     const sorted = Array.from(names).sort((a,b) => String(a).localeCompare(String(b),'ar'));
     return '<option value="'+ALL+'">📦 كل الأصناف</option>' + sorted.map(nm => '<option value="'+html(nm)+'">'+html(nm)+'</option>').join('');
@@ -11888,7 +11888,7 @@ if (document.readyState === 'loading') {
   function buildRows(bySupplier){
     const rows = [];
     Array.from(bySupplier.entries()).forEach(([spId, entry]) => {
-      const s = (window.suppliers||[]).find(x=>x.id===spId); if (!s) return;
+      const s = ((typeof suppliers !== 'undefined' ? suppliers : window.suppliers) || []).find(x=>x.id===spId); if (!s) return;
       const agg = aggregateRows(entry.items);
       rows.push({s, agg, invCount: entry.invIds.size});
     });
@@ -11908,7 +11908,7 @@ if (document.readyState === 'loading') {
     const bySupplier = collectAllGroups(from, to, projectFilter, itemFilter);
     if (!bySupplier.size) { T('لا توجد فواتير مطابقة لهذه الفلترة','warning'); return; }
 
-    const periodLabel = (from || to) ? ((from?dateLabel(from):'البداية')+' → '+(to?dateLabel(to):'اليوم')) : 'كل الفترة';
+    const periodLabel = (from || to) ? ('<span dir="ltr" style="unicode-bidi:isolate">'+(from?dateLabel(from):'البداية')+' → '+(to?dateLabel(to):'اليوم')+'</span>') : 'كل الفترة';
     const projLabel = projectFilter === ALL ? 'كل المشاريع' : (projectFilter === NONE ? 'بدون مشروع' : projectFilter);
     const itemLabel = itemFilter === ALL ? 'كل الأصناف' : itemFilter;
 
@@ -11918,7 +11918,7 @@ if (document.readyState === 'loading') {
     const itemAgg = aggregateItemsAcross(bySupplier);
 
     let body = '<div class="cp sup-project-summary" style="margin-bottom:10px">'
-      + '<div class="sup-project-head"><div><div class="sh-t">📅 '+html(periodLabel)+'</div>'
+      + '<div class="sup-project-head"><div><div class="sh-t">📅 '+periodLabel+'</div>'
       + '<div class="sup-project-note">📁 المشروع: <b>'+html(projLabel)+'</b> · 📦 الصنف: <b>'+html(itemLabel)+'</b></div></div>'
       + '<span class="bdg bb">'+rows.length+' مورد · '+invTotal+' فاتورة</span></div></div>';
 
@@ -11939,7 +11939,7 @@ if (document.readyState === 'loading') {
     const st = window._asprState; if (!st) return;
     const {from, to, projectFilter, itemFilter} = st;
     const bySupplier = collectAllGroups(from, to, projectFilter, itemFilter);
-    const periodLabel = (from || to) ? ((from?dateLabel(from):'البداية')+' → '+(to?dateLabel(to):'اليوم')) : 'كل الفترة';
+    const periodLabel = (from || to) ? ('<span dir="ltr" style="unicode-bidi:isolate">'+(from?dateLabel(from):'البداية')+' → '+(to?dateLabel(to):'اليوم')+'</span>') : 'كل الفترة';
     const projLabel = projectFilter === ALL ? 'كل المشاريع' : (projectFilter === NONE ? 'بدون مشروع' : projectFilter);
     const itemLabel = itemFilter === ALL ? 'كل الأصناف' : itemFilter;
 
@@ -11948,7 +11948,7 @@ if (document.readyState === 'loading') {
     rows.forEach(r => grandAmount += r.agg.amount);
     const itemAgg = aggregateItemsAcross(bySupplier);
 
-    let body = '<div style="margin:6px 0 10px;font-size:11px;color:#555">📅 الفترة: <strong>'+html(periodLabel)+'</strong> &nbsp;·&nbsp; 📁 المشروع: <strong>'+html(projLabel)+'</strong> &nbsp;·&nbsp; 📦 الصنف: <strong>'+html(itemLabel)+'</strong></div>';
+    let body = '<div style="margin:6px 0 10px;font-size:11px;color:#555">📅 الفترة: <strong>'+periodLabel+'</strong> &nbsp;·&nbsp; 📁 المشروع: <strong>'+html(projLabel)+'</strong> &nbsp;·&nbsp; 📦 الصنف: <strong>'+html(itemLabel)+'</strong></div>';
 
     body += '<div class="sec">📦 مجموع الأصناف (كل الموردين مجتمعين)</div>'
       + '<table><thead><tr><th class="tl">الصنف</th><th class="c">الوحدة</th><th class="c">الكمية</th><th class="c">المبلغ</th></tr></thead><tbody>'
