@@ -11967,4 +11967,197 @@ if (document.readyState === 'loading') {
 })();
 </script>
 
+<style id="egtph-trip-opbar-css">
+/* EGTPH — شريط العمليات الحسابية لخلايا الرحلات على الهاتف */
+#egtph-opbar{position:fixed;left:0;right:0;top:0;z-index:99999;display:none;
+  gap:6px;padding:6px 8px;align-items:center;justify-content:center;flex-wrap:nowrap;
+  background:rgba(16,22,38,.97);border-top:1px solid rgba(240,185,11,.35);
+  box-shadow:0 -6px 20px rgba(0,0,0,.45);backdrop-filter:blur(8px);direction:ltr}
+#egtph-opbar.on{display:flex}
+#egtph-opbar button{flex:0 0 auto;min-width:44px;height:40px;padding:0 10px;
+  border-radius:10px;border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.07);color:#e8ecf4;
+  font-size:18px;font-weight:800;font-family:'JetBrains Mono',monospace;
+  cursor:pointer;-webkit-tap-highlight-color:transparent}
+#egtph-opbar button:active{background:rgba(240,185,11,.28)}
+#egtph-opbar button.op{color:#f0b90b;border-color:rgba(240,185,11,.4)}
+#egtph-opbar button.ok{background:linear-gradient(135deg,#f0b90b,#d9a406);color:#1a1408;border-color:transparent}
+#egtph-opbar button.kb{font-size:15px}
+#egtph-opbar .egtph-op-prev{flex:1 1 auto;min-width:52px;text-align:center;
+  font-size:13px;font-weight:900;color:#22c55e;font-family:'JetBrains Mono',monospace;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#egtph-opbar .egtph-op-prev.bad{color:#ef4444}
+</style>
+<script id="egtph-trip-opbar-js">
+/* EGTPH — شريط + − × للهاتف فوق لوحة الأرقام + خيار لوحة المفاتيح الكاملة */
+(function(){
+  'use strict';
+  if (window.__egtphOpBar) return;
+  window.__egtphOpBar = true;
+
+  var KB_KEY = 'egtph_trip_full_keyboard';
+  function fullKb(){ try { return localStorage.getItem(KB_KEY) === '1'; } catch(_) { return false; } }
+  function setFullKb(v){ try { localStorage.setItem(KB_KEY, v ? '1' : '0'); } catch(_) {} }
+
+  function isTripCell(el){
+    if (!el || el.tagName !== 'INPUT' || !el.classList || !el.classList.contains('ti')) return false;
+    if (String(el.getAttribute('onchange') || '').indexOf('updateTruck(') !== -1) return true;
+    return String(el.id || '').indexOf('etd_') === 0;
+  }
+
+  function calc(v){
+    if (window.EGTPHTripArithmetic && window.EGTPHTripArithmetic.calc) return window.EGTPHTripArithmetic.calc(v);
+    var num = parseFloat(v);
+    return { ok:true, value:isNaN(num)?0:num, display:isNaN(num)?'':String(num) };
+  }
+
+  var active = null, bar = null, prev = null;
+
+  // الشريط مخصص للشاشات اللمسية فقط: الحاسوب فيه لوحة مفاتيح كاملة أصلاً.
+  function isTouch(){
+    try { if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return true; } catch(_) {}
+    return ('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0;
+  }
+
+  function build(){
+    if (bar) return bar;
+    bar = document.createElement('div');
+    bar.id = 'egtph-opbar';
+    var defs = [
+      ['+','op','+'], ['−','op','-'], ['×','op','*'],
+      ['⌫','del',null], ['⌨','kb',null], ['✓','ok',null]
+    ];
+    defs.forEach(function(d){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = d[0];
+      b.className = (d[1]==='op' ? 'op' : d[1]==='ok' ? 'ok' : d[1]==='kb' ? 'kb' : '');
+      b.dataset.act = d[1];
+      if (d[2]) b.dataset.ch = d[2];
+      b.addEventListener('mousedown', function(ev){ ev.preventDefault(); });
+      b.addEventListener('touchstart', function(ev){ ev.preventDefault(); }, {passive:false});
+      b.addEventListener('click', function(ev){ ev.preventDefault(); act(d[1], d[2]); });
+      bar.appendChild(b);
+      if (d[1] === 'op' && d[2] === '*') {
+        prev = document.createElement('span');
+        prev.className = 'egtph-op-prev';
+        bar.appendChild(prev);
+      }
+    });
+    document.body.appendChild(bar);
+    return bar;
+  }
+
+  function refreshPreview(){
+    if (!prev) return;
+    if (!active) { prev.textContent = ''; return; }
+    var raw = String(active.value || '').trim();
+    if (!raw || /^[0-9.]+$/.test(raw)) { prev.textContent = ''; prev.classList.remove('bad'); return; }
+    var r = calc(raw);
+    prev.classList.toggle('bad', !r.ok);
+    prev.textContent = r.ok ? ('= ' + (r.display || '0')) : '✗';
+  }
+
+  function insert(ch){
+    if (!active) return;
+    var el = active, v = String(el.value || '');
+    var s = (el.selectionStart == null ? v.length : el.selectionStart);
+    var e = (el.selectionEnd == null ? v.length : el.selectionEnd);
+    el.value = v.slice(0, s) + ch + v.slice(e);
+    try { el.setSelectionRange(s + ch.length, s + ch.length); } catch(_) {}
+    el.classList.toggle('hv', !!el.value);
+    try { el.dispatchEvent(new Event('input', {bubbles:true})); } catch(_) {}
+    refreshPreview();
+  }
+
+  function backspace(){
+    if (!active) return;
+    var el = active, v = String(el.value || '');
+    var s = (el.selectionStart == null ? v.length : el.selectionStart);
+    var e = (el.selectionEnd == null ? v.length : el.selectionEnd);
+    if (s === e) { if (s === 0) return; s = s - 1; }
+    el.value = v.slice(0, s) + v.slice(e);
+    try { el.setSelectionRange(s, s); } catch(_) {}
+    el.classList.toggle('hv', !!el.value);
+    try { el.dispatchEvent(new Event('input', {bubbles:true})); } catch(_) {}
+    refreshPreview();
+  }
+
+  function confirmCell(){
+    if (!active) return;
+    var el = active;
+    var r = calc(el.value);
+    if (!r.ok) {
+      try { T('⚠️ عملية غير صحيحة: استعمل مثل 14+10 أو 10-5','warning'); } catch(_) {}
+      return;
+    }
+    el.value = r.display;
+    el.classList.toggle('hv', !!el.value);
+    try { el.dispatchEvent(new Event('change', {bubbles:true})); } catch(_) {}
+    el.blur();
+  }
+
+  function toggleKeyboard(){
+    if (!active) return;
+    var el = active, on = !fullKb();
+    setFullKb(on);
+    applyKb(el);
+    var s = el.selectionStart, e = el.selectionEnd;
+    el.blur();
+    setTimeout(function(){
+      try { el.focus(); el.setSelectionRange(s, e); } catch(_) {}
+    }, 40);
+    try { T(on ? '⌨️ لوحة المفاتيح الكاملة مفعّلة (تظهر + و −)' : '🔢 عادت لوحة الأرقام السريعة','success'); } catch(_) {}
+  }
+
+  function applyKb(el){
+    if (!el) return;
+    if (fullKb()) el.setAttribute('inputmode', 'text');
+    else el.setAttribute('inputmode', 'decimal');
+  }
+
+  function act(kind, ch){
+    if (kind === 'op') insert(ch);
+    else if (kind === 'del') backspace();
+    else if (kind === 'kb') toggleKeyboard();
+    else if (kind === 'ok') confirmCell();
+  }
+
+  function place(){
+    if (!bar || !bar.classList.contains('on')) return;
+    var h = bar.offsetHeight || 52;
+    var vv = window.visualViewport;
+    var top = vv ? (vv.offsetTop + vv.height - h) : (window.innerHeight - h);
+    bar.style.top = Math.max(0, top) + 'px';
+  }
+
+  function show(){ build(); bar.classList.add('on'); refreshPreview(); place(); setTimeout(place, 120); setTimeout(place, 400); }
+  function hide(){ if (bar) bar.classList.remove('on'); }
+
+  document.addEventListener('focusin', function(ev){
+    if (!isTripCell(ev.target)) { if (!bar || !bar.contains(ev.target)) { active = null; hide(); } return; }
+    active = ev.target;
+    applyKb(active);
+    if (isTouch()) show();
+  });
+
+  document.addEventListener('focusout', function(ev){
+    if (!isTripCell(ev.target)) return;
+    setTimeout(function(){
+      var el = document.activeElement;
+      if (!isTripCell(el)) { active = null; hide(); }
+    }, 60);
+  });
+
+  document.addEventListener('input', function(ev){ if (ev.target === active) refreshPreview(); });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', place);
+    window.visualViewport.addEventListener('scroll', place);
+  }
+  window.addEventListener('resize', place);
+  window.addEventListener('orientationchange', function(){ setTimeout(place, 250); });
+})();
+</script>
+
 </body></html>
