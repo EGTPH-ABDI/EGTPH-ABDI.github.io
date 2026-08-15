@@ -3202,9 +3202,9 @@ async function addRecMat(recId, recType, cid) {
   const truckMatOpts = '<option value="">-- اختر نوعاً --</option>'
     +['TUF','Sable','Grave','Évacuation','Terre','Jour Chantier','Autre']
     .map(m=>'<option value="'+m+'">'+m+'</option>').join('');
-  const truckUnitOpts = ['رحلة','يوم','m³','U','heure','ML','m²']
+  const truckUnitOpts = ['رحلة','يوم','m³','U','kg','tonne','heure','ML','m²']
     .map(u=>'<option value="'+u+'">'+u+'</option>').join('');
-  const machUnitOpts = ['heure','jour','PAH','forfait']
+  const machUnitOpts = ['heure','jour','PAH','forfait','kg','tonne']
     .map(u=>'<option value="'+u+'">'+u+'</option>').join('');
 
   const modalBody = recType==='truck'
@@ -3412,7 +3412,7 @@ function renderTR(rec, cid) {
     const pu = mat.priceUnit||'رحلة';
     const mt = mat.materialType||'';
     const isLocked = !!mat.lockedAt;
-    const puOpts=['رحلة','يوم','m³','U','heure','ML','m²'].map(u=>`<option value="${u}"${u===pu?' selected':''}>${u}</option>`).join('');
+    const puOpts=['رحلة','يوم','m³','U','kg','tonne','heure','ML','m²'].map(u=>`<option value="${u}"${u===pu?' selected':''}>${u}</option>`).join('');
     if (isLocked) {
       return `<tr class="locked-row">
         <td><div style="font-size:9px;color:var(--tx3)">${mt?'📦 '+esc(mt):''}</div>
@@ -3633,7 +3633,7 @@ function renderMR(rec, cid) {
   const unitTableRows = recUnits.map(u => {
     const pu2 = u.priceUnit||'heure';
     const isLocked2 = !!u.lockedAt;
-    const puOpts2=['heure','jour','PAH','forfait'].map(x=>`<option value="${x}"${x===pu2?' selected':''}>${x}</option>`).join('');
+    const puOpts2=['heure','jour','PAH','forfait','kg','tonne'].map(x=>`<option value="${x}"${x===pu2?' selected':''}>${x}</option>`).join('');
     if (isLocked2) {
       return `<tr class="locked-row">
         <td><div style="font-size:12px;font-weight:700;color:var(--tx)">${esc(u.name)}</div></td>
@@ -5229,7 +5229,7 @@ function editSupInvoice(invId, spId) {
 function renderInvModal() {
   const inv = window._inv; if (!inv) return;
   const s   = suppliers.find(x=>x.id===inv.spId); if (!s) return;
-  const UNITS = ['وحدة','متر','م2','م3','كجم','طن','لتر','رحلة','يوم','ساعة','قطعة'];
+  const UNITS = ['وحدة','متر','م2','م3','كجم','kg','طن','tonne','لتر','رحلة','يوم','ساعة','قطعة'];
   const catalog = s.catalog || [];
 
   // Build catalog options for datalist
@@ -8674,8 +8674,8 @@ if (document.readyState === 'loading') {
     const label=recType==='truck'?'مادة':'وحدة';
     const pholder=recType==='truck'?'مثال: TUF، Sable، Grave...':'مثال: JCB، Pelle Godet...';
     const truckMatOpts='<option value="">-- اختر نوعاً --</option>'+['TUF','Sable','Grave','Évacuation','Terre','Jour Chantier','Autre'].map(m=>'<option value="'+m+'">'+m+'</option>').join('');
-    const truckUnitOpts=['رحلة','يوم','m³','U','heure','ML','m²'].map(u=>'<option value="'+u+'">'+u+'</option>').join('');
-    const machUnitOpts=['heure','jour','PAH','forfait'].map(u=>'<option value="'+u+'">'+u+'</option>').join('');
+    const truckUnitOpts=['رحلة','يوم','m³','U','kg','tonne','heure','ML','m²'].map(u=>'<option value="'+u+'">'+u+'</option>').join('');
+    const machUnitOpts=['heure','jour','PAH','forfait','kg','tonne'].map(u=>'<option value="'+u+'">'+u+'</option>').join('');
     const body=recType==='truck'
       ? '<div class="fg"><label>نوع المادة</label><select id="rm-mtype">'+truckMatOpts+'</select></div><div class="fg"><label>الاسم / الوصف *</label><input type="text" id="rm-n" placeholder="'+pholder+'"></div><div class="fgr"><div class="fg"><label>السعر العام للسجل (اختياري)</label><input type="number" id="rm-p" placeholder="اتركه فارغاً إذا لم يُتفق عليه" min="0"><div class="hint">يبقى السعر معلّقاً ولا يدخل في الإجمالي حتى تثبيته.</div></div><div class="fg"><label>وحدة السعر</label><select id="rm-pu">'+truckUnitOpts+'</select></div></div>'
       : '<div class="fg"><label>اسم الآلة / الوحدة *</label><input type="text" id="rm-n" placeholder="'+pholder+'"></div><div class="fgr"><div class="fg"><label>السعر العام للسجل (اختياري)</label><input type="number" id="rm-p" placeholder="اتركه فارغاً إذا لم يُتفق عليه" min="0"><div class="hint">يبقى السعر معلّقاً ولا يدخل في الإجمالي حتى تثبيته.</div></div><div class="fg"><label>وحدة التسعير</label><select id="rm-pu">'+machUnitOpts+'</select></div></div>';
@@ -9619,7 +9619,7 @@ if (document.readyState === 'loading') {
     const units=prices.filter(p=>p.recordId===recId&&p.type==='unit_def');
     const rt=getRT(recId);
     const sum=document.querySelector('[data-summary="'+recId+'"]');
-    if(sum){let html='';mats.forEach(mat=>{const es=truckEs.filter(e=>e.materialId===mat.id),qty=es.reduce((s,e)=>s+calcE(e).qty,0),amount=es.reduce((s,e)=>s+calcE(e).amount,0);if(!qty)return;html+='<tr><td class="tl" style="font-weight:700">'+esc(mat.name)+'</td><td class="num">'+fN(qty)+'</td><td class="num" style="color:var(--gold2)">'+priceLabelForEntries(es)+'</td><td class="num" style="color:var(--green);font-weight:800">'+fDA(amount)+'</td></tr>';});html+='<tr class="ttr"><td class="tl">'+tx('الإجمالي','Total')+'</td><td class="num">'+fN(rt.trips)+'</td><td>—</td><td class="num">'+fDA(rt.amount)+'</td></tr>';sum.innerHTML=html||'<tr><td colspan="4" style="color:var(--tx3);padding:10px;text-align:center">—</td></tr>';}
+    if(sum){let html='';mats.forEach(mat=>{const es=truckEs.filter(e=>e.materialId===mat.id),qty=es.reduce((s,e)=>s+calcE(e).qty,0),amount=es.reduce((s,e)=>s+calcE(e).amount,0);if(!qty)return;const _pu=(mat.priceUnit&&mat.priceUnit!=='رحلة')?(' '+mat.priceUnit):'';html+='<tr><td class="tl" style="font-weight:700">'+esc(mat.name)+'</td><td class="num">'+fN(qty)+_pu+'</td><td class="num" style="color:var(--gold2)">'+priceLabelForEntries(es)+'</td><td class="num" style="color:var(--green);font-weight:800">'+fDA(amount)+'</td></tr>';});html+='<tr class="ttr"><td class="tl">'+tx('الإجمالي','Total')+'</td><td class="num">'+fN(rt.trips)+'</td><td>—</td><td class="num">'+fDA(rt.amount)+'</td></tr>';sum.innerHTML=html||'<tr><td colspan="4" style="color:var(--tx3);padding:10px;text-align:center">—</td></tr>';}
     const trSum=document.querySelector('[data-trucksummary="'+recId+'"]');
     if(trSum){let html='';trucks.forEach(tr=>{let q=0,a=0;truckEs.forEach(e=>{const x=n(e.cols?.[tr]);if(!x)return;const c=calcE(e);q+=x;a+=c.pending?0:x*c.price;});if(!q)return;html+='<tr><td class="tl" style="font-weight:700;font-family:JetBrains Mono;font-size:11px">'+esc(tr)+'</td><td class="num">'+fN(q)+'</td><td class="num" style="color:var(--green);font-weight:800">'+fDA(a)+'</td></tr>';});trSum.innerHTML=html||'<tr><td colspan="3" style="color:var(--tx3);padding:10px;text-align:center">—</td></tr>';}
     const machSum=document.querySelector('[data-machsummary="'+recId+'"]');
@@ -10537,7 +10537,7 @@ if (document.readyState === 'loading') {
   window.renderInvModal = function(){
     const inv = window._inv; if (!inv) return;
     const s = suppliers.find(x => x.id === inv.spId); if (!s) return;
-    const UNITS = ['وحدة','متر','م2','م3','كجم','طن','لتر','رحلة','يوم','ساعة','قطعة'];
+    const UNITS = ['وحدة','متر','م2','م3','كجم','kg','طن','tonne','لتر','رحلة','يوم','ساعة','قطعة'];
     const catalog = s.catalog || [];
     const total = inv.rows.reduce((sum, r) => sum + (isPending(r) ? 0 : n(r.qty) * n(r.unitPrice)), 0);
     let rowsHtml = '';
@@ -11401,8 +11401,9 @@ if (document.readyState === 'loading') {
     const s=window.getRecordSettlement?window.getRecordSettlement(rec.id):{total:getRT(rec.id).amount,paid:0,remain:getRT(rec.id).amount,overpaid:0,cash:0,check:0,unknown:0,rows:[]};
     const rt=getRT(rec.id), clientTotal=getCT(cid), general=clientGeneralPayments(cid);
     let metricLabel='إجمالي البنود',metricValue=(entries||[]).filter(e=>e.recordId===rec.id).length;
-    if(rec.type==='trucks'){metricLabel='إجمالي الرحلات / الوصولات';metricValue=rt.trips;}
-    else if(rec.type==='machines'){metricLabel='إجمالي الساعات';metricValue=rt.hours;}
+    const recUnitOf=function(defType,fallback){try{const list=(typeof prices!=='undefined'?prices:[]).filter(p=>p.recordId===rec.id&&p.type===defType).map(p=>p.priceUnit||fallback);const uniq=[...new Set(list)];return uniq.length===1?uniq[0]:'';}catch(_){return '';}};
+    if(rec.type==='trucks'){const pu=recUnitOf('mat_def','رحلة');metricLabel=(pu&&pu!=='رحلة')?('إجمالي الكمية ('+pu+')'):'إجمالي الرحلات / الوصولات';metricValue=rt.trips;}
+    else if(rec.type==='machines'){const pu=recUnitOf('unit_def','heure');metricLabel=(pu&&pu!=='heure')?('إجمالي الكمية ('+pu+')'):'إجمالي الساعات';metricValue=rt.hours;}
     else if(rec.type==='stock'||rec.type==='invoice'){metricLabel='إجمالي الكمية';metricValue=(entries||[]).filter(e=>e.recordId===rec.id).reduce((sum,e)=>sum+num(calcE(e)?.qty),0);}
     const lockedPay=isSecLocked('pay:'+cid),lockedAdv=isSecLocked('adv:'+cid);
     const action=!lockedPay?`<button class="btn btn-grn btn-sm" onclick="addPay('${cid}',{scope:'record',recordId:'${rec.id}'})">＋ دفعة لهذا السجل</button>`:'';
