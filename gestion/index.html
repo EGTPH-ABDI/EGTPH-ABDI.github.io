@@ -1311,6 +1311,17 @@ const fD    = d => { if (!d) return '—'; const loc=(typeof getAppLanguage==='f
 const fEntryT = iso => { if(!iso) return ''; try{ const d=new Date(iso); if(isNaN(d.getTime()))return ''; const loc=(typeof getAppLanguage==='function'&&getAppLanguage()==='fr')?'fr-DZ':'ar-DZ'; return d.toLocaleDateString(loc,{day:'2-digit',month:'2-digit',year:'numeric'})+' '+formatTime(d); }catch(e){ return ''; } };
 const fDA   = n => { const v = parseFloat(n)||0; return v.toLocaleString('fr-DZ',{minimumFractionDigits:2,maximumFractionDigits:2}); };
 const fN    = n => (parseFloat(n)||0).toLocaleString('fr-DZ',{maximumFractionDigits:2});
+// وحدة الوزن: kg / tonne — تُعرض منفصلة عن عدد الرحلات
+const WEIGHT_UNITS = { kg:1, tonne:1000 };
+function matUnitOf(e){
+  try{
+    const d = prices.find(p => p.id===e.materialId && p.recordId===e.recordId && (p.type==='mat_def'||p.type==='unit_def'));
+    return (d && d.priceUnit) ? d.priceUnit : (e.type==='machine' ? 'heure' : 'رحلة');
+  }catch(_){ return e.type==='machine' ? 'heure' : 'رحلة'; }
+}
+function isWeightUnit(u){ return Object.prototype.hasOwnProperty.call(WEIGHT_UNITS, u); }
+function toKg(qty,u){ return (parseFloat(qty)||0) * (WEIGHT_UNITS[u]||1); }
+const fT = kg => ((parseFloat(kg)||0)/1000).toLocaleString('fr-DZ',{minimumFractionDigits:2,maximumFractionDigits:3});
 // ── تحويل المبلغ إلى أحرف عربية ──
 function amountToWords(n) {
   n = Math.round(parseFloat(n)||0);
@@ -1489,11 +1500,14 @@ function calcE(e) {
 
 // Client totals (amount, trips, hours, paid, advances, remain)
 function getCT(cid) {
-  let tot=0, trips=0, hours=0;
+  let tot=0, trips=0, hours=0, kg=0;
   records.filter(r=>r.clientId===cid).forEach(rec =>
     entries.filter(e=>e.recordId===rec.id).forEach(e => {
       const cv = calcE(e); tot += cv.amount;
-      if (e.type==='truck')   trips += cv.qty;
+      if (e.type==='truck') {
+        const u = matUnitOf(e);
+        if (isWeightUnit(u)) kg += toKg(cv.qty,u); else trips += cv.qty;
+      }
       if (e.type==='machine') hours += cv.qty;
     })
   );
@@ -1503,7 +1517,7 @@ function getCT(cid) {
   const adv  = advances.filter(a=>a.clientId===cid&&a.status!=='X').reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
   const totalPaid = paid + adv;
   const balance   = tot - totalPaid;
-  return { tot, trips, hours, paid, adv, totalPaid,
+  return { tot, trips, hours, kg, paid, adv, totalPaid,
            remain: Math.max(0, balance),
            overpaid: Math.max(0, -balance),
            balance };
@@ -1511,13 +1525,17 @@ function getCT(cid) {
 
 // Record totals
 function getRT(rid) {
-  let amount=0, trips=0, hours=0;
+  let amount=0, trips=0, hours=0, kg=0;
   entries.filter(e=>e.recordId===rid).forEach(e => {
     const cv2 = calcE(e); amount += cv2.amount;
-    if (e.type==='truck')   trips += cv2.qty;
+    if (e.type==='truck') {
+      const u = matUnitOf(e);
+      trips += cv2.qty;
+      if (isWeightUnit(u)) kg += toKg(cv2.qty,u);
+    }
     if (e.type==='machine') hours += cv2.qty;
   });
-  return { amount, trips, hours };
+  return { amount, trips, hours, kg };
 }
 
 // حساب دين المورد الصحيح (من مجموع الفواتير لا من totalDebt المتراكم)
@@ -2541,7 +2559,10 @@ function renderCD(cid) {
           : `<div class="v ${t.remain>0?'rd':'gn'}">${fDA(t.remain)}</div><div class="l">المتبقي</div>`
         }
       </div>
-      <div class="cl-st"><div class="v">${fN(t.trips)}</div><div class="l">رحلة</div></div>
+      ${t.trips ? `<div class="cl-st"><div class="v">${fN(t.trips)}</div><div class="l">رحلة</div></div>` : ''}
+      ${t.kg ? `<div class="cl-st"><div class="v">${fN(t.kg)}</div><div class="l">kg</div></div>
+      <div class="cl-st"><div class="v" style="color:var(--cyan)">${fT(t.kg)}</div><div class="l">طن</div></div>` : ''}
+      ${(!t.trips && !t.kg) ? `<div class="cl-st"><div class="v">0</div><div class="l">رحلة</div></div>` : ''}
     </div>
   </div>
 
@@ -3407,6 +3428,11 @@ function renderTR(rec, cid) {
   const recMats = prices.filter(p=>p.recordId===rec.id && p.type==='mat_def')
     .sort((a,b)=>(a.order||0)-(b.order||0));
 
+  // عنوان عمود الكمية يتبع وحدة مواد السجل (kg، tonne، m³ …) بدل «الرحلات» دائماً
+  const recUnits = [...new Set(recMats.map(m=>m.priceUnit||'رحلة'))];
+  const recUnit  = recUnits.length===1 ? recUnits[0] : 'رحلة';
+  const recQtyLabel = recUnit==='رحلة' ? 'الرحلات' : ('الكمية ('+recUnit+')');
+
   // ── Price table rows (editable per record) ──
   const matTableRows = recMats.map(mat => {
     const pu = mat.priceUnit||'رحلة';
@@ -3563,7 +3589,7 @@ function renderTR(rec, cid) {
       </div>
       <div style="font-size:11px;color:var(--tx3)">
         إجمالي: <span class="num" data-inlinetot="${rec.id}" style="color:var(--gold2)">${fDA(rt.amount)}</span>
-        · <span class="num">${fN(rt.trips)}</span> رحلة
+        · <span class="num">${fN(rt.trips)}</span> ${(() => { const u=(prices.filter(p=>p.recordId===rec.id&&p.type==='mat_def').map(p=>p.priceUnit||'رحلة')); const q=[...new Set(u)]; return q.length===1?q[0]:'رحلة'; })()}${rt.kg?` <span style="color:var(--cyan)">· ${fT(rt.kg)} طن</span>`:''}
       </div>
     </div>
 
@@ -3596,17 +3622,17 @@ function renderTR(rec, cid) {
       <div style="background:var(--bg3);border-radius:var(--rs);border:1px solid var(--bdr);overflow:hidden">
         <div style="padding:7px 12px;background:var(--bg4);border-bottom:1px solid var(--bdr);font-size:11px;font-weight:800;color:var(--tx2)">📊 ملخص حسب المادة</div>
         <table class="tbl" style="min-width:unset">
-          <thead><tr><th class="tl">المادة</th><th>الرحلات</th><th>السعر</th><th>المبلغ</th></tr></thead>
+          <thead><tr><th class="tl">المادة</th><th>${recQtyLabel}</th><th>السعر</th><th>المبلغ</th></tr></thead>
           <tbody data-summary="${rec.id}">
             ${summaryRows||'<tr><td colspan="4" style="color:var(--tx3);padding:10px;text-align:center">—</td></tr>'}
-            <tr class="ttr"><td class="tl">الإجمالي</td><td class="num">${fN(rt.trips)}</td><td>—</td><td class="num">${fDA(rt.amount)}</td></tr>
+            <tr class="ttr"><td class="tl">الإجمالي</td><td class="num">${fN(rt.trips)}${rt.kg?`<div style="font-size:9px;color:var(--cyan);font-weight:700">${fT(rt.kg)} طن</div>`:''}</td><td>—</td><td class="num">${fDA(rt.amount)}</td></tr>
           </tbody>
         </table>
       </div>
       <div style="background:var(--bg3);border-radius:var(--rs);border:1px solid var(--bdr);overflow:hidden">
         <div style="padding:7px 12px;background:var(--bg4);border-bottom:1px solid var(--bdr);font-size:11px;font-weight:800;color:var(--tx2)">🚛 ملخص حسب الشاحنة</div>
         <table class="tbl" style="min-width:unset">
-          <thead><tr><th class="tl">الشاحنة</th><th>الرحلات</th><th>المبلغ</th></tr></thead>
+          <thead><tr><th class="tl">الشاحنة</th><th>${recQtyLabel}</th><th>المبلغ</th></tr></thead>
           <tbody data-trucksummary="${rec.id}">${truckSummaryRows||'<tr><td colspan="3" style="color:var(--tx3);padding:10px;text-align:center">—</td></tr>'}</tbody>
         </table>
       </div>
@@ -8631,29 +8657,29 @@ if (document.readyState === 'loading') {
   };
 
   window.getCT = function(cid){
-    let tot=0,trips=0,hours=0,pendingLines=0,pendingQty=0;
+    let tot=0,trips=0,hours=0,kg=0,pendingLines=0,pendingQty=0;
     const pendingEntries=[];
     records.filter(r=>r.clientId===cid).forEach(rec=>entries.filter(e=>e.recordId===rec.id).forEach(e=>{
       const cv=calcE(e); tot+=cv.amount;
-      if(e.type==='truck') trips+=cv.qty;
+      if(e.type==='truck'){ const u=matUnitOf(e); if(isWeightUnit(u)) kg+=toKg(cv.qty,u); else trips+=cv.qty; }
       if(e.type==='machine') hours+=cv.qty;
       if(cv.pending && cv.qty>0){ pendingLines++; pendingQty+=cv.qty; pendingEntries.push({entry:e,calc:cv,record:rec}); }
     }));
     const paid=payments.filter(p=>p.clientId===cid).reduce((s,p)=>s+n(p.amount),0);
     const adv=advances.filter(a=>a.clientId===cid&&a.status!=='X').reduce((s,a)=>s+n(a.amount),0);
     const totalPaid=paid+adv, balance=tot-totalPaid;
-    return {tot,trips,hours,paid,adv,totalPaid,remain:Math.max(0,balance),overpaid:Math.max(0,-balance),balance,pendingLines,pendingQty,pendingEntries};
+    return {tot,trips,hours,kg,paid,adv,totalPaid,remain:Math.max(0,balance),overpaid:Math.max(0,-balance),balance,pendingLines,pendingQty,pendingEntries};
   };
 
   window.getRT = function(rid){
-    let amount=0,trips=0,hours=0,pendingLines=0,pendingQty=0;
+    let amount=0,trips=0,hours=0,kg=0,pendingLines=0,pendingQty=0;
     entries.filter(e=>e.recordId===rid).forEach(e=>{
       const cv=calcE(e); amount+=cv.amount;
-      if(e.type==='truck') trips+=cv.qty;
+      if(e.type==='truck'){ trips+=cv.qty; const u=matUnitOf(e); if(isWeightUnit(u)) kg+=toKg(cv.qty,u); }
       if(e.type==='machine') hours+=cv.qty;
       if(cv.pending&&cv.qty>0){pendingLines++;pendingQty+=cv.qty;}
     });
-    return {amount,trips,hours,pendingLines,pendingQty};
+    return {amount,trips,hours,kg,pendingLines,pendingQty};
   };
 
   window.getSupDebt = function(spId){
@@ -9619,7 +9645,7 @@ if (document.readyState === 'loading') {
     const units=prices.filter(p=>p.recordId===recId&&p.type==='unit_def');
     const rt=getRT(recId);
     const sum=document.querySelector('[data-summary="'+recId+'"]');
-    if(sum){let html='';mats.forEach(mat=>{const es=truckEs.filter(e=>e.materialId===mat.id),qty=es.reduce((s,e)=>s+calcE(e).qty,0),amount=es.reduce((s,e)=>s+calcE(e).amount,0);if(!qty)return;const _pu=(mat.priceUnit&&mat.priceUnit!=='رحلة')?(' '+mat.priceUnit):'';html+='<tr><td class="tl" style="font-weight:700">'+esc(mat.name)+'</td><td class="num">'+fN(qty)+_pu+'</td><td class="num" style="color:var(--gold2)">'+priceLabelForEntries(es)+'</td><td class="num" style="color:var(--green);font-weight:800">'+fDA(amount)+'</td></tr>';});html+='<tr class="ttr"><td class="tl">'+tx('الإجمالي','Total')+'</td><td class="num">'+fN(rt.trips)+'</td><td>—</td><td class="num">'+fDA(rt.amount)+'</td></tr>';sum.innerHTML=html||'<tr><td colspan="4" style="color:var(--tx3);padding:10px;text-align:center">—</td></tr>';}
+    if(sum){let html='';mats.forEach(mat=>{const es=truckEs.filter(e=>e.materialId===mat.id),qty=es.reduce((s,e)=>s+calcE(e).qty,0),amount=es.reduce((s,e)=>s+calcE(e).amount,0);if(!qty)return;const _pu=(mat.priceUnit&&mat.priceUnit!=='رحلة')?(' '+mat.priceUnit):'';html+='<tr><td class="tl" style="font-weight:700">'+esc(mat.name)+'</td><td class="num">'+fN(qty)+_pu+'</td><td class="num" style="color:var(--gold2)">'+priceLabelForEntries(es)+'</td><td class="num" style="color:var(--green);font-weight:800">'+fDA(amount)+'</td></tr>';});html+='<tr class="ttr"><td class="tl">'+tx('الإجمالي','Total')+'</td><td class="num">'+fN(rt.trips)+(rt.kg?('<div style="font-size:9px;color:var(--cyan);font-weight:700">'+fT(rt.kg)+' طن</div>'):'')+'</td><td>—</td><td class="num">'+fDA(rt.amount)+'</td></tr>';sum.innerHTML=html||'<tr><td colspan="4" style="color:var(--tx3);padding:10px;text-align:center">—</td></tr>';}
     const trSum=document.querySelector('[data-trucksummary="'+recId+'"]');
     if(trSum){let html='';trucks.forEach(tr=>{let q=0,a=0;truckEs.forEach(e=>{const x=n(e.cols?.[tr]);if(!x)return;const c=calcE(e);q+=x;a+=c.pending?0:x*c.price;});if(!q)return;html+='<tr><td class="tl" style="font-weight:700;font-family:JetBrains Mono;font-size:11px">'+esc(tr)+'</td><td class="num">'+fN(q)+'</td><td class="num" style="color:var(--green);font-weight:800">'+fDA(a)+'</td></tr>';});trSum.innerHTML=html||'<tr><td colspan="3" style="color:var(--tx3);padding:10px;text-align:center">—</td></tr>';}
     const machSum=document.querySelector('[data-machsummary="'+recId+'"]');
@@ -9984,9 +10010,28 @@ if (document.readyState === 'loading') {
   }
 
   function stageUnit(rec) {
-    if (rec.type==='machines') return 'ساعة';
-    if (rec.type==='trucks') return 'رحلة / وصل';
+    if (rec.type==='machines') {
+      try{ const u=[...new Set(prices.filter(p=>p.recordId===rec.id&&p.type==='unit_def').map(p=>p.priceUnit||'heure'))]; if(u.length===1&&u[0]!=='heure') return u[0]; }catch(_){}
+      return 'ساعة';
+    }
+    if (rec.type==='trucks') {
+      try{ const u=[...new Set(prices.filter(p=>p.recordId===rec.id&&p.type==='mat_def').map(p=>p.priceUnit||'رحلة'))]; if(u.length===1&&u[0]!=='رحلة') return u[0]; }catch(_){}
+      return 'رحلة / وصل';
+    }
     return 'وحدة';
+  }
+
+  // الكمية بصيغتيها: الوحدة الأصلية + المكافئ بالطن عند الوزن
+  function stageQtyText(rec,qty){
+    const u = stageUnit(rec);
+    let extra = '';
+    try{
+      if (typeof isWeightUnit==='function' && isWeightUnit(u)) {
+        const kg = toKg(qty,u);
+        extra = (u==='tonne') ? (' · '+fN(kg)+' kg') : (' · '+fT(kg)+' طن');
+      }
+    }catch(_){}
+    return fN(qty)+' '+u+extra;
   }
 
   function stageCurrentScope(rec) {
@@ -10004,7 +10049,7 @@ if (document.readyState === 'loading') {
       const s = stageStats(rec,stage), c = cumulativeStageStats(rec,stage);
       return `<div class="egtph-stage-row" data-stage-row="${escH(rec.id)}|${escH(stage.id)}" style="padding:10px 12px;border-bottom:1px solid var(--bdr);display:grid;grid-template-columns:minmax(120px,1.25fr) minmax(130px,1fr) minmax(96px,.8fr) minmax(95px,.8fr) auto;gap:8px;align-items:center">
         <div><div style="font-size:12px;font-weight:900;color:var(--gold2)">📌 ${escH(stage.name)}</div><div style="font-size:10px;color:var(--tx3);margin-top:2px">${dateText(stage.startDate)} ← إلى ← ${dateText(stage.endDate)}${stage.note?` · ${escH(stage.note)}`:''}</div></div>
-        <div style="font-size:10px;color:var(--tx2)"><div>المرحلة: <b class="num" style="color:var(--tx)">${fN(s.qty)} ${unit}</b></div><div style="margin-top:1px">تراكمي: <b class="num" style="color:var(--blue)">${fN(c.qty)} ${unit}</b></div></div>
+        <div style="font-size:10px;color:var(--tx2)"><div>المرحلة: <b class="num" style="color:var(--tx)">${stageQtyText(rec,s.qty)}</b></div><div style="margin-top:1px">تراكمي: <b class="num" style="color:var(--blue)">${stageQtyText(rec,c.qty)}</b></div></div>
         <div style="font-size:10px;color:var(--tx2)"><div style="font-size:12px;font-weight:800;color:var(--green)" class="num">${fDA(s.amount)}</div><div style="font-size:9px;color:var(--tx3)">مبلغ المرحلة · ${s.days} يوم</div>${s.pending?`<div style="font-size:9px;color:var(--orange)">⚠ ${fN(s.pending)} بسعر معلّق</div>`:''}</div>
         <div style="font-size:10px;color:var(--tx2)"><div style="font-size:12px;font-weight:800;color:var(--blue)" class="num">${fDA(c.amount)}</div><div style="font-size:9px;color:var(--tx3)">المبلغ التراكمي</div></div>
         <div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap"><button class="btn btn-sec btn-xs" onclick="printRecordStage('${rec.id}','${stage.id}')">🖨</button><button class="btn btn-sec btn-xs" onclick="editRecordStage('${rec.id}','${stage.id}','${cid}')">✏</button><button class="del-btn" onclick="deleteRecordStage('${rec.id}','${stage.id}','${cid}')">🗑</button></div>
@@ -10013,7 +10058,7 @@ if (document.readyState === 'loading') {
     const currentHtml = current ? (()=>{
       const st = stageStats(rec,current);
       const cumulative = stageStats(rec,{startDate:firstRecordDate(rec),endDate:current.endDate});
-      return `<div style="padding:8px 12px;background:rgba(79,142,247,.07);border-top:1px solid var(--bdr);font-size:10px;color:var(--tx2);line-height:1.8">⏳ <b style="color:var(--blue)">الفترة الجارية غير المعتمدة:</b> ${dateText(current.startDate)} إلى ${dateText(current.endDate)} · <span class="num" style="color:var(--tx)">${fN(st.qty)} ${unit}</span> · <span class="num" style="color:var(--green)">${fDA(st.amount)}</span><br><b style="color:var(--gold2)">التراكمي من بداية السجل حتى اليوم:</b> <span class="num" style="color:var(--gold2)">${fN(cumulative.qty)} ${unit}</span> · <span class="num" style="color:var(--gold2)">${fDA(cumulative.amount)}</span></div>`;
+      return `<div style="padding:8px 12px;background:rgba(79,142,247,.07);border-top:1px solid var(--bdr);font-size:10px;color:var(--tx2);line-height:1.8">⏳ <b style="color:var(--blue)">الفترة الجارية غير المعتمدة:</b> ${dateText(current.startDate)} إلى ${dateText(current.endDate)} · <span class="num" style="color:var(--tx)">${stageQtyText(rec,st.qty)}</span> · <span class="num" style="color:var(--green)">${fDA(st.amount)}</span><br><b style="color:var(--gold2)">التراكمي من بداية السجل حتى اليوم:</b> <span class="num" style="color:var(--gold2)">${stageQtyText(rec,cumulative.qty)}</span> · <span class="num" style="color:var(--gold2)">${fDA(cumulative.amount)}</span></div>`;
     })() : '<div style="padding:8px 12px;font-size:10px;color:var(--tx3);border-top:1px solid var(--bdr)">لا توجد إدخالات خارج مرحلة أعمال معتمدة حالياً.</div>';
     return `<div class="cp egtph-stage-panel" data-stage-panel="${escH(rec.id)}" style="margin:0 13px 12px;overflow:hidden">
       <div style="padding:9px 12px;background:linear-gradient(90deg,rgba(212,168,67,.14),rgba(79,142,247,.06));border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
@@ -10103,7 +10148,7 @@ if (document.readyState === 'loading') {
     }).join('') || '<tr><td colspan="6" class="c">لا توجد عمليات ضمن هذه الفترة</td></tr>';
     const body=`
       <div class="cl-info"><div><div style="font-size:15px;font-weight:900;color:#0f2942">${escH(client.name)} — ${escH(rec.name)}</div><div style="font-size:10px;color:#666;margin-top:4px">${escH(stage.name)} · من ${dateText(stage.startDate)} إلى ${dateText(stage.endDate)}${stage.note?` · ${escH(stage.note)}`:''}</div></div><div style="text-align:left;font-size:10px;color:#666">كشف أعمال مستقل<br>ليس وصل دفع · طُبعت: ${new Date().toLocaleString('fr-DZ')}</div></div>
-      <div class="bil"><div class="bx gd"><div class="bx-l">نتيجة المرحلة</div><div class="bx-v">${fN(stat.qty)} ${escH(unit)}</div></div><div class="bx gn"><div class="bx-l">مبلغ المرحلة</div><div class="bx-v">${fDA(stat.amount)}</div></div><div class="bx bl"><div class="bx-l">تراكمي إلى نهاية المرحلة</div><div class="bx-v">${fN(cumulative.qty)} ${escH(unit)}</div></div><div class="bx bl"><div class="bx-l">المبلغ التراكمي</div><div class="bx-v">${fDA(cumulative.amount)}</div></div></div>
+      <div class="bil"><div class="bx gd"><div class="bx-l">نتيجة المرحلة</div><div class="bx-v">${escH(stageQtyText(rec,stat.qty))}</div></div><div class="bx gn"><div class="bx-l">مبلغ المرحلة</div><div class="bx-v">${fDA(stat.amount)}</div></div><div class="bx bl"><div class="bx-l">تراكمي إلى نهاية المرحلة</div><div class="bx-v">${escH(stageQtyText(rec,cumulative.qty))}</div></div><div class="bx bl"><div class="bx-l">المبلغ التراكمي</div><div class="bx-v">${fDA(cumulative.amount)}</div></div></div>
       <div style="padding:8px 10px;border:1px solid #99c6e8;background:#eef8ff;color:#13527d;border-radius:6px;margin-bottom:9px;font-size:10px">هذا كشف للأعمال فقط: لا يسجّل أي دفع، ولا يخصم من المحصّل أو المتبقي. تُسجّل الدفعات والتسبيقات في قسم التحصيلات وحده.</div>${stat.pending?`<div style="padding:8px 10px;border:1px solid #e6a23c;background:#fff7e6;color:#9a6500;border-radius:6px;margin-bottom:12px;font-size:10px">تنبيه: ${fN(stat.pending)} ${escH(unit)} بسعر غير متفق عليه؛ لا تدخل قيمتها ضمن المبلغ.</div>`:''}
       <div class="sec">تفصيل عمليات ${escH(stage.name)}</div>
       <table><thead><tr><th class="c">#</th><th>التاريخ</th><th>المادة / الوحدة</th><th class="c">الكمية</th><th class="c">السعر</th><th class="c">المبلغ</th></tr></thead><tbody>${eRows}<tr class="tot"><td colspan="3"><strong>إجمالي المرحلة</strong></td><td class="c amt"><strong>${fN(stat.qty)} ${escH(unit)}</strong></td><td></td><td class="c amt"><strong>${fDA(stat.amount)}</strong></td></tr><tr class="words-row"><td colspan="6">بالأحرف: ${typeof amountToWords==='function'?amountToWords(stat.amount):''}</td></tr></tbody></table>
@@ -11402,7 +11447,9 @@ if (document.readyState === 'loading') {
     const rt=getRT(rec.id), clientTotal=getCT(cid), general=clientGeneralPayments(cid);
     let metricLabel='إجمالي البنود',metricValue=(entries||[]).filter(e=>e.recordId===rec.id).length;
     const recUnitOf=function(defType,fallback){try{const list=(typeof prices!=='undefined'?prices:[]).filter(p=>p.recordId===rec.id&&p.type===defType).map(p=>p.priceUnit||fallback);const uniq=[...new Set(list)];return uniq.length===1?uniq[0]:'';}catch(_){return '';}};
-    if(rec.type==='trucks'){const pu=recUnitOf('mat_def','رحلة');metricLabel=(pu&&pu!=='رحلة')?('إجمالي الكمية ('+pu+')'):'إجمالي الرحلات / الوصولات';metricValue=rt.trips;}
+    let metricSub='';
+    if(rec.type==='trucks'){const pu=recUnitOf('mat_def','رحلة');metricLabel=(pu&&pu!=='رحلة')?('إجمالي الكمية ('+pu+')'):'إجمالي الرحلات / الوصولات';metricValue=rt.trips;
+      if(rt.kg){ metricSub = (pu==='tonne') ? (fN(rt.kg)+' kg') : ('= '+fT(rt.kg)+' طن'); }}
     else if(rec.type==='machines'){const pu=recUnitOf('unit_def','heure');metricLabel=(pu&&pu!=='heure')?('إجمالي الكمية ('+pu+')'):'إجمالي الساعات';metricValue=rt.hours;}
     else if(rec.type==='stock'||rec.type==='invoice'){metricLabel='إجمالي الكمية';metricValue=(entries||[]).filter(e=>e.recordId===rec.id).reduce((sum,e)=>sum+num(calcE(e)?.qty),0);}
     const lockedPay=isSecLocked('pay:'+cid),lockedAdv=isSecLocked('adv:'+cid);
@@ -11416,7 +11463,7 @@ if (document.readyState === 'loading') {
       <div style="padding:9px 12px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><div class="sh-t">💳 تسوية السجل: ${html(rec.name)}</div>${action}</div>
       <div class="kgrid record-settlement-grid" style="margin:10px 12px 8px;grid-template-columns:repeat(auto-fit,minmax(125px,1fr))">
         <div class="kpi gd"><div class="kl">إجمالي السجل</div><div class="kv gd">${money(s.total)}</div></div>
-        <div class="kpi bl"><div class="kl">${metricLabel}</div><div class="kv bl">${qtyText(metricValue)}</div></div>
+        <div class="kpi bl"><div class="kl">${metricLabel}</div><div class="kv bl">${qtyText(metricValue)}</div>${metricSub?`<div class="ks" style="color:var(--cyan)">${metricSub}</div>`:''}</div>
         <div class="kpi gn"><div class="kl">المسدّد لهذا السجل</div><div class="kv gn">${money(s.paid)}</div></div>
         <div class="kpi ${s.overpaid?'pp':s.remain?'rd':'gn'}"><div class="kl">${s.overpaid?'رصيد زائد في السجل':'المتبقي'}</div><div class="kv ${s.overpaid?'pp':s.remain?'rd':'gn'}">${money(s.overpaid||s.remain)}</div></div>
         <div class="kpi bl"><div class="kl">نقداً / شيك</div><div class="kv bl" style="font-size:13px">${money(s.cash)} / ${money(s.check)}</div><div class="ks">${s.rows?.length||0} عملية مرتبطة</div></div>
