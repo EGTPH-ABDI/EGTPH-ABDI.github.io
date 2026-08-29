@@ -12686,7 +12686,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
   var TYPE_IC = {'خدمة':'🔧','سلعة':'📦','كراء شاحنة':'🚛','كراء آلات':'🏗','وقود':'⛽','نقل':'🚚','صيانة':'🔩','أخرى':'📋'};
 
   function supItems(){
-    return sortItems((suppliers||[]).map(function(s){
+    return sortItems((suppliers||[]).filter(function(s){ return !s.mergedInto; }).map(function(s){
       var d = supplierAccount(s.id), st = supplierStatus(d);
       return {id:s.id, name:s.name, phone:s.phone||'', type:s.type||'', product:s.product||'',
               d:d, st:st, remain:d.remain||0, tot:d.totalDebt||0,
@@ -12742,7 +12742,9 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       ? '<div class="eg-wrap"><div class="eg-empty">🏭 لا يوجد موردون</div></div>'
       : (v==='table' ? supTable(items) : '<div class="'+wrapClass()+'">'+items.map(supCard).join('')+'</div>');
     root.innerHTML =
-      '<div class="ph"><div><h1>🏭 الموردون</h1><p>'+(suppliers||[]).length+' مورد مسجّل</p></div><div class="ph-act">'
+      '<div class="ph"><div><h1>🏭 الموردون</h1><p>'+(suppliers||[]).filter(function(s){ return !s.mergedInto; }).length+' مورد مسجّل'
+      + ((suppliers||[]).some(function(s){ return s.mergedInto; }) ? ' · '+(suppliers||[]).filter(function(s){ return s.mergedInto; }).length+' مدموج (مخفي)' : '')
+      + '</p></div><div class="ph-act">'
       + '<button class="btn btn-sec" onclick="openAllSuppliersPeriodReport()">📅 تقرير فترة</button>'
       + '<button class="btn btn-sec" onclick="supSelStart()">📊 تحديد ومجموع</button>'
       + '<button class="btn btn-gold" onclick="addSupplier()">＋ مورد جديد</button></div></div>'
@@ -12764,6 +12766,10 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
 #eg-subacc .sa-n{font-size:11.5px;font-weight:800;line-height:1.45;word-break:break-word}
 #eg-subacc .sa-btns{display:flex;gap:4px;margin-top:5px}
 #eg-subacc .sa-btns button{padding:4px 7px;font-size:9.5px;border-radius:6px;white-space:nowrap}
+#eg-subacc .sa-items{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+#eg-subacc .sa-items .it{font-size:9px;color:var(--tx2);background:rgba(255,255,255,.05);
+  border:1px solid var(--bdr);border-radius:6px;padding:3px 6px}
+#eg-subacc .sa-items .it b{color:var(--cyan);font-family:'Inter'}
 #eg-subacc .sa-v{text-align:center}
 #eg-subacc .sa-v b{display:block;font-family:'Inter';font-size:11px;font-weight:800;direction:ltr}
 #eg-subacc .sa-v span{display:block;font-size:8.5px;color:var(--tx3);margin-top:1px}
@@ -12850,6 +12856,28 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     }).sort(function(a,b){ return b.invoiced - a.invoiced; });
   };
 
+  // أصناف كل سجل: الكمية والمبلغ لكل مادة داخل المشروع/الخدمة
+  function itemsBreakdown(spId, row){
+    var map = {}, key = row.recId || row.name;
+    invs(spId).forEach(function(v){
+      var k = v.supRecId ? v.supRecId
+            : (v.projectName && row.recId && row.name===String(v.projectName).trim() ? row.recId : accOf(v));
+      if (k !== key) return;
+      (v.items||[]).forEach(function(it){
+        if (!it || !it.name) return;
+        var m = map[it.name] || (map[it.name] = {qty:0, amount:0, unit:it.unit||''});
+        m.qty += num(it.qty);
+        if (it.priceStatus !== 'pending') m.amount += num(it.qty)*num(it.unitPrice);
+      });
+    });
+    var keys = Object.keys(map);
+    if (keys.length < 2) return '';
+    return '<div class="sa-items">' + keys.map(function(k){
+      return '<span class="it">'+e(k)+' <b>'+((typeof fN==='function')?fN(map[k].qty):map[k].qty)+'</b>'
+        + (map[k].unit?' '+e(map[k].unit):'') + ' · ' + money(map[k].amount) + '</span>';
+    }).join('') + '</div>';
+  }
+
   function panelHtml(spId){
     var rows = egtphSupAccountTotals(spId);
     var real = rows.filter(function(r){ return r.nInv || r.nPay; });
@@ -12877,11 +12905,13 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
                 : '<button class="btn btn-sec btn-xs qty" onclick="event.stopPropagation();egtphAddQty(\''+spId+'\',\''+rid+'\')">＋ كمية</button>') : '')
           + '<button class="btn btn-grn btn-xs" onclick="event.stopPropagation();'+payFn+'\'pay\')">＋ دفعة</button>'
           + '<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();'+payFn+'\'adv\')">＋ تسبيق</button>'
-          + (rid ? '<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();egtphNewSupRec(\''+spId+'\',\''+rid+'\')">✎</button>' : '')
+          + (rid ? '<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();egtphNewSupRec(\''+spId+'\',\''+rid+'\')">✎</button>'
+                 : (r.name!==GEN ? '<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();egtphRenameAccount(\''+spId+'\',\''+String(r.name).replace(/'/g,"")+'\')">✎</button>' : ''))
           + '</div></div>'
           + '<div class="sa-v"><b style="color:var(--gold2)">'+money(r.invoiced)+'</b><span>الفواتير</span></div>'
           + '<div class="sa-v"><b style="color:var(--green)">'+money(r.paid)+'</b><span>المدفوع</span></div>'
-          + '<div class="sa-v"><b style="color:'+st.c+'">'+st.t+'</b><span>'+st.l+'</span></div></div>';
+          + '<div class="sa-v"><b style="color:'+st.c+'">'+st.t+'</b><span>'+st.l+'</span></div>'
+          + itemsBreakdown(spId, r) + '</div>';
       }).join('');
     }
     return '<div id="eg-subacc">'
@@ -12903,18 +12933,16 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
   window.egAccField = function(prefix, item){
     var spId = window.__egAccSupId, list = [];
     try {
-      if (spId) {
-        list = egtphSupAccounts(spId).filter(function(a){ return a!==GEN; });
-        invs(spId).forEach(function(v){ (v.items||[]).forEach(function(it){
-          if (it && it.name && list.indexOf(it.name)===-1) list.push(it.name); }); });
-      }
+      if (spId) list = egtphSupAccounts(spId).filter(function(a){ return a!==GEN; });
     } catch(_) {}
     var cur = (item && item.account) ? String(item.account) : (window.__egAccPreset || '');
     var curRec = (item && item.supRecId) ? String(item.supRecId) : (window.__egRecPreset || '');
     var recs = (typeof egtphSupRecords==='function' && spId) ? egtphSupRecords(spId) : [];
     var recOpts = recs.map(function(r){
       var selr = (curRec ? r.id===curRec : (cur && r.name===cur));
-      return '<option value="'+e(r.name)+'" data-rec="'+e(r.id)+'"'+(selr?' selected':'')+'>📋 '+e(r.name)+' · '+money(r.price)+'/'+e(r.priceUnit||'وحدة')+'</option>';
+      var lbl = (r.kind==='project' ? '🏗 ' : '🔧 ') + r.name
+              + (r.kind==='project' ? '' : ' · '+money(r.price)+'/'+e(r.priceUnit||'وحدة'));
+      return '<option value="'+e(r.name)+'" data-rec="'+e(r.id)+'"'+(selr?' selected':'')+'>'+e(lbl)+'</option>';
     }).join('');
     list = list.filter(function(a){ return !recs.some(function(r){ return r.name===a; }); });
     if (cur && !curRec && list.indexOf(cur)===-1) list.unshift(cur);
@@ -12941,6 +12969,24 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     if (!sel || !inp) return;
     if (sel.value === '__new__') { inp.style.display='block'; inp.value=''; inp.focus(); }
     else { inp.style.display='none'; inp.value = sel.value; }
+  };
+
+  // إعادة تسمية سجل حر (غير معرّف) — مثل الناتج عن الدمج
+  window.egtphRenameAccount = function(spId, oldName){
+    OM('✎ تعديل اسم السجل',
+      '<div class="fg"><label>الاسم الحالي</label><input type="text" value="'+e(oldName)+'" disabled></div>'
+      + '<div class="fg"><label>الاسم الجديد *</label><input type="text" id="eg-rn" value="'+e(oldName)+'"></div>'
+      + '<div class="hint">يُعاد تسمية كل فواتير ودفعات هذا السجل. لا يتغيّر أي مبلغ.</div>',
+      async function(){
+        var nn = (document.getElementById('eg-rn').value||'').trim();
+        if (!nn) return T('اكتب الاسم','error');
+        var n = 0;
+        var vi = invs(spId).filter(function(v){ return accOf(v)===oldName && !v.supRecId; });
+        for (var i=0;i<vi.length;i++){ vi[i].account = nn; vi[i]._saved=new Date().toISOString(); await dbP('sup_invoices', vi[i]); n++; }
+        var vp = pays(spId).filter(function(x){ return accOf(x)===oldName && !x.supRecId; });
+        for (var j=0;j<vp.length;j++){ vp[j].account = nn; vp[j]._saved=new Date().toISOString(); await dbP('sup_pays', vp[j]); n++; }
+        CM(); T('✓ أُعيدت تسمية '+n+' حركة','success'); renderSupDetail(spId);
+      }, 'حفظ');
   };
 
   // ── توزيع الفواتير والدفعات على الحسابات ──
@@ -13012,7 +13058,8 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
           me2._saved = new Date().toISOString(); await dbP('suppliers', me2);
           src.initialDebt = 0;
         }
-        src.note = (src.note||'') + ' [مدموج في '+(me?me.name:spId)+' كحساب: '+acc+']';
+        src.note = (src.note||'') + ' [مدموج في '+(me?me.name:spId)+' كسجل: '+acc+']';
+        src.mergedInto = spId; src.mergedAs = acc;
         src._saved = new Date().toISOString(); await dbP('suppliers', src);
         CM(); T('✓ نُقلت '+moved+' حركة إلى حساب «'+acc+'»','success');
         renderSupDetail(spId);
@@ -13044,25 +13091,24 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     }catch(_){}
   }
 
-  // ── ربط الفاتورة بسجل: يملأ الصنف والسعر والحساب تلقائياً ──
+  // ── ربط الفاتورة بسجل هذا المورد نفسه (لا بعميل) ──
   window.egtphInvLink = function(val){
     var inv = window._inv; if (!inv) return;
-    if (!val) { inv.linkRecordId=''; inv.account=''; return; }
-    var rec = (typeof records!=='undefined'?records:[]).find(function(r){ return r.id===val; });
-    if (!rec) return;
-    var cli = (typeof clients!=='undefined'?clients:[]).find(function(c){ return c.id===rec.clientId; });
-    var mats = (typeof prices!=='undefined'?prices:[]).filter(function(p){ return p.recordId===rec.id && p.type==='mat_def'; })
-                 .sort(function(a,b){ return (a.order||0)-(b.order||0); });
-    inv.linkRecordId = val;
-    inv.account = rec.name + (cli ? ' — '+cli.name : '');
-    if (!inv.date) inv.date = (typeof today==='function' ? today() : '');
-    inv.rows = (mats.length ? mats : [{name:rec.name, price:0, priceUnit:'رحلة'}]).map(function(m){
-      return { name: m.name || rec.name, unit: m.priceUnit || 'وحدة',
-               qty: 0, unitPrice: parseFloat(m.price)||0,
-               priceStatus: (parseFloat(m.price)||0) > 0 ? 'confirmed' : 'pending' };
-    });
+    if (!val) { inv.supRecId=''; inv.account=''; return; }
+    var r = (typeof prices!=='undefined'?prices:[]).find(function(p){ return p && p.type==='sup_rec' && p.id===val; });
+    if (!r) return;
+    inv.supRecId = r.id;
+    inv.account = r.name;
+    if (r.kind === 'project') {
+      inv.projectName = r.name;
+      try { T('🏗 الفاتورة تتبع «'+r.name+'»','success'); } catch(_) {}
+    } else {
+      var empty = !(inv.rows||[]).some(function(x){ return (x.name||'').trim() && num(x.qty)>0; });
+      if (empty) inv.rows = [{ name:r.name, unit:r.priceUnit||'وحدة', qty:0,
+                               unitPrice:num(r.price), priceStatus:'confirmed' }];
+      try { T('🔧 «'+r.name+'» بسعر '+money(r.price)+' — أدخل الكمية فقط','success'); } catch(_) {}
+    }
     try { renderInvModal(); } catch(_) {}
-    try { T('🔗 مرتبطة بـ «'+inv.account+'» — أدخل الكمية فقط','success'); } catch(_) {}
   };
 
   var baseInvModal = window.renderInvModal;
@@ -13073,18 +13119,22 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       if (document.getElementById('eg-inv-link')) return;
       var anchor = document.getElementById('inv-project-meta') || (document.getElementById('inv-date') && document.getElementById('inv-date').closest('.fgr'));
       if (!anchor || !anchor.parentNode) return;
-      var recs = (typeof records!=='undefined'?records:[]).filter(function(r){ return r.type==='trucks' || r.type==='machines'; });
+      var recs = (typeof egtphSupRecords==='function') ? egtphSupRecords(inv.spId) : [];
       var opts = recs.map(function(r){
-        var c = (typeof clients!=='undefined'?clients:[]).find(function(x){ return x.id===r.clientId; });
-        var lbl = r.name + (c ? ' — '+c.name : '');
-        return '<option value="'+e(r.id)+'"'+(inv.linkRecordId===r.id?' selected':'')+'>'+e(lbl)+'</option>';
+        var lbl = (r.kind==='project' ? '🏗 ' : '🔧 ') + r.name
+                + (r.kind==='project' ? '' : ' · ' + money(r.price) + '/' + (r.priceUnit||'وحدة'));
+        return '<option value="'+e(r.id)+'"'+(inv.supRecId===r.id?' selected':'')+'>'+e(lbl)+'</option>';
       }).join('');
       var box = document.createElement('div');
       box.id = 'eg-inv-link';
-      box.innerHTML = '<div class="fg"><label>🔗 ربط الفاتورة بسجل <span style="color:var(--tx3);font-weight:500">(اختياري)</span></label>'
+      box.innerHTML = '<div class="fg"><label>📋 سجل المورد <span style="color:var(--tx3);font-weight:500">(اختياري)</span></label>'
         + '<select id="eg-inv-link-sel" onchange="egtphInvLink(this.value)">'
-        + '<option value="">— بدون ربط —</option>' + opts + '</select>'
-        + '<div class="hint">يملأ الأصناف والأسعار من مواد السجل تلقائياً ويضع الفاتورة في حسابه الفرعي — أدخل الكمية فقط.</div></div>';
+        + '<option value="">— بدون سجل (عام) —</option>' + opts
+        + '</select>'
+        + '<div class="hint">' + (recs.length
+            ? 'سجلات هذا المورد نفسه. الخدمة بسعر ثابت تملأ الصنف والسعر — أدخل الكمية فقط؛ والمشروع ينسب الفاتورة إليه.'
+            : 'لا توجد سجلات لهذا المورد بعد — أنشئها من زر <b>＋ سجل</b> في لوحة «سجلات المورد».')
+        + '</div></div>';
       anchor.parentNode.insertBefore(box, anchor);
     }, 0);
     return out;
