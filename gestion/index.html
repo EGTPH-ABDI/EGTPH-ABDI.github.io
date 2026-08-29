@@ -10739,16 +10739,20 @@ if (document.readyState === 'loading') {
       +   '<div class="fg"><label>التاريخ</label><input type="date" id="'+prefix+'-d" value="'+safe(item.date || today())+'"></div>'
       +   '<div class="fg"><label>طريقة الدفع</label><select id="'+prefix+'-m">'+methodOptions(item.method || (item.kind==='advance'?'تسبيق':''), (item.kind==='advance'?['تسبيق','نقداً','تحويل','شيك']:['نقداً','تحويل','شيك']))+'</select></div>'
       + '</div>'
+      + (typeof window.egAccField === 'function' ? window.egAccField(prefix, item) : '')
       + paymentMetaFields(prefix, item)
       + '<div class="fg"><label>ملاحظة</label><input type="text" id="'+prefix+'-n" value="'+safe(item.note||'')+'" placeholder="..."></div>';
   }
   function readSupplierPay(prefix, keepAmount){
     const amount = keepAmount == null ? n(document.getElementById(prefix+'-a')?.value) : n(keepAmount);
     if (amount <= 0) throw new Error('أدخل مبلغاً صحيحاً');
-    return {amount, date:readVal(prefix+'-d') || today(), method:readVal(prefix+'-m'), note:readVal(prefix+'-n'), ...readPaymentMeta(prefix)};
+    const _sel = document.getElementById(prefix+'-acc-sel');
+    const acc = (_sel && _sel.value !== '__new__' ? _sel.value : (document.getElementById(prefix+'-acc')?.value || '')).trim();
+    return {amount, date:readVal(prefix+'-d') || today(), method:readVal(prefix+'-m'), note:readVal(prefix+'-n'), account:acc, ...readPaymentMeta(prefix)};
   }
   window.addSupPay = async function(spId){
     if (secGuard('sup:'+spId,'حساب المورد')) return;
+    window.__egAccSupId = spId;
     OM('＋ دفعة للمورد', supplierPayForm('spp', {method:'نقداً'}), async () => {
       try {
         const next = readSupplierPay('spp');
@@ -10765,6 +10769,7 @@ if (document.readyState === 'loading') {
   };
   window.addSupAdvance = async function(spId){
     if (secGuard('sup:'+spId,'حساب المورد')) return;
+    window.__egAccSupId = spId;
     OM('＋ تسبيق للمورد', supplierPayForm('sadv', {method:'تسبيق', kind:'advance'}), async () => {
       try {
         const next = readSupplierPay('sadv');
@@ -10782,6 +10787,7 @@ if (document.readyState === 'loading') {
     if (secGuard('sup:'+spId,'حساب المورد')) return;
     const p = supPays.find(x => x.id === pid && x.supplierId === spId);
     if (!p) return T('الدفعة غير موجودة','error');
+    window.__egAccSupId = spId;
     OM('✏ تعديل بيانات '+(p.kind==='advance'?'التسبيق':'الدفعة'), supplierPayForm('espp', p, {readOnlyAmount:true}), async () => {
       try {
         Object.assign(p, readSupplierPay('espp', p.amount), {updatedAt:isoNow()});
@@ -12755,6 +12761,8 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
 #eg-subacc .sa-row:last-child{border-bottom:0}
 #eg-subacc .sa-row.tot{background:rgba(255,255,255,.04)}
 #eg-subacc .sa-n{font-size:11.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#eg-subacc .sa-btns{display:flex;gap:4px;margin-top:5px}
+#eg-subacc .sa-btns button{padding:4px 7px;font-size:9.5px;border-radius:6px;white-space:nowrap}
 #eg-subacc .sa-v{text-align:center}
 #eg-subacc .sa-v b{display:block;font-family:'Inter';font-size:11px;font-weight:800;direction:ltr}
 #eg-subacc .sa-v span{display:block;font-size:8.5px;color:var(--tx3);margin-top:1px}
@@ -12825,7 +12833,10 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     } else {
       body = rows.map(function(r){
         return '<div class="sa-row"><div class="sa-n">📁 '+e(r.name)+'<div style="font-size:9px;color:var(--tx3);font-weight:400">'
-          + r.nInv+' فاتورة · '+r.nPay+' دفعة</div></div>'
+          + r.nInv+' فاتورة · '+r.nPay+' دفعة</div>'
+          + '<div class="sa-btns"><button class="btn btn-grn btn-xs" onclick="event.stopPropagation();egtphPayForAccount(\''+spId+'\',\''+String(r.name).replace(/'/g,"") +'\',\'pay\')">＋ دفعة</button>'
+          + '<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();egtphPayForAccount(\''+spId+'\',\''+String(r.name).replace(/'/g,"") +'\',\'adv\')">＋ تسبيق</button></div>'
+          + '</div>'
           + '<div class="sa-v"><b style="color:var(--gold2)">'+money(r.invoiced)+'</b><span>الفواتير</span></div>'
           + '<div class="sa-v"><b style="color:var(--green)">'+money(r.paid)+'</b><span>المدفوع</span></div>'
           + '<div class="sa-v"><b style="color:'+(r.credit>0?'var(--blue)':'var(--red)')+'">'
@@ -12844,6 +12855,43 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       + '</b><span>'+(gBal<0?'رصيد لنا':'المتبقي')+'</span></div></div>'
       + '</div>';
   }
+
+  // حقل «الحساب الفرعي / المادة» داخل نماذج الدفعة والتسبيق
+  window.egAccField = function(prefix, item){
+    var spId = window.__egAccSupId, list = [];
+    try {
+      if (spId) {
+        list = egtphSupAccounts(spId).filter(function(a){ return a!==GEN; });
+        invs(spId).forEach(function(v){ (v.items||[]).forEach(function(it){
+          if (it && it.name && list.indexOf(it.name)===-1) list.push(it.name); }); });
+      }
+    } catch(_) {}
+    var cur = (item && item.account) ? String(item.account) : (window.__egAccPreset || '');
+    if (cur && list.indexOf(cur)===-1) list.unshift(cur);
+    var opts = '<option value="">'+GEN+' — كل المواد</option>'
+      + list.map(function(a){ return '<option value="'+e(a)+'"'+(a===cur?' selected':'')+'>📁 '+e(a)+'</option>'; }).join('')
+      + '<option value="__new__">➕ مادة / حساب جديد…</option>';
+    return '<div class="fg">'
+      + '<label>تخصيص العملية *</label>'
+      + '<select id="'+prefix+'-acc-sel" onchange="egAccPick(\''+prefix+'\')">'+opts+'</select>'
+      + '<input type="text" id="'+prefix+'-acc" value="'+e(cur)+'" placeholder="اسم المادة الجديدة" '
+      + 'style="margin-top:6px;display:none">'
+      + '<div style="font-size:9.5px;color:var(--tx3);margin-top:3px">تُحسب العملية في رصيد هذه المادة وحدها، وتدخل في المجموع العام.</div>'
+      + '</div>';
+  };
+  // فتح نموذج دفعة/تسبيق مرتبط مسبقاً بحساب فرعي (نظير «＋ دفعة لهذا السجل» عند العميل)
+  window.egtphPayForAccount = function(spId, acc, kind){
+    window.__egAccSupId = spId;
+    window.__egAccPreset = acc;
+    try { if (kind === 'adv') addSupAdvance(spId); else addSupPay(spId); }
+    finally { setTimeout(function(){ window.__egAccPreset = null; }, 1200); }
+  };
+  window.egAccPick = function(prefix){
+    var sel = document.getElementById(prefix+'-acc-sel'), inp = document.getElementById(prefix+'-acc');
+    if (!sel || !inp) return;
+    if (sel.value === '__new__') { inp.style.display='block'; inp.value=''; inp.focus(); }
+    else { inp.style.display='none'; inp.value = sel.value; }
+  };
 
   // ── توزيع الفواتير والدفعات على الحسابات ──
   window.egtphAssignAccounts = function(spId){
