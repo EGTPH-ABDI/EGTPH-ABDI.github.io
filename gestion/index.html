@@ -12032,12 +12032,12 @@ if (document.readyState === 'loading') {
 
   var KEY = 'egtph_trip_kb_mode';
   var MODES = { tel:'tel', text:'text', decimal:'decimal' };
+  var CUR = (function(){ try { return MODES[localStorage.getItem(KEY)] || 'tel'; } catch(_) { return 'tel'; } })();
 
-  function mode(){
-    try { var v = localStorage.getItem(KEY); return MODES[v] || 'tel'; } catch(_) { return 'tel'; }
-  }
+  function mode(){ return CUR; }
   function setMode(v){
-    try { localStorage.setItem(KEY, MODES[v] || 'tel'); } catch(_) {}
+    CUR = MODES[v] || 'tel';
+    try { localStorage.setItem(KEY, CUR); } catch(_) {}
     applyAll();
   }
   window.egtphSetKbMode = function(v){
@@ -12467,6 +12467,40 @@ if (document.readyState === 'loading') {
 .eg-C.eg-list .eg-card,.eg-C.eg-grid .eg-card{border-radius:14px}
 .eg-C.eg-list .eg-av,.eg-C.eg-grid .eg-av{border-radius:12px}
 .eg-A .eg-row .dot,.eg-B .eg-row .dot{display:none}
+
+/* ══ النمط داخل ملف العميل والمورد (رأس الملف · أزرار السجلات · بطاقات الأقسام) ══ */
+body[data-eg-skin] .rtab{position:relative}
+/* أ · دفتر الحسابات */
+body[data-eg-skin="A"] .cl-hdr{background:#0e141f;border:1px solid #1e2a40;border-right:4px solid var(--gold);border-radius:4px}
+body[data-eg-skin="A"] .cl-av{display:none}
+body[data-eg-skin="A"] .cl-nm{font-size:22px;letter-spacing:-.3px}
+body[data-eg-skin="A"] .cl-st{background:none;border:0;border-bottom:1px dotted #2b3a56;border-radius:0;padding:6px 2px}
+body[data-eg-skin="A"] .cp{border-radius:4px;border-color:#1e2a40}
+body[data-eg-skin="A"] .rtab{border-radius:3px;border-right:3px solid var(--bdr2)}
+body[data-eg-skin="A"] .rtab.on{border-right-color:var(--gold);background:#0e141f}
+/* ب · لوحة الإرسال */
+body[data-eg-skin="B"] .cl-hdr{background:#0c111b;border:1px solid #1f2937;border-radius:4px;overflow:hidden}
+body[data-eg-skin="B"] .cl-hdr::before{content:"";display:block;height:3px;background:var(--gold);margin:-13px -13px 11px}
+body[data-eg-skin="B"] .cl-av{border-radius:3px;background:#f2c200;color:#0b0d12}
+body[data-eg-skin="B"] .cl-st{border-radius:2px;background:#0f151f}
+body[data-eg-skin="B"] .cp{border-radius:4px}
+body[data-eg-skin="B"] .rtab{border-radius:2px;border-right:3px solid var(--cyan)}
+body[data-eg-skin="B"] .rtab.on{border-right-color:#f2c200;background:#0f151f}
+/* ج · درع EG */
+body[data-eg-skin="C"] .cl-hdr{border-radius:16px;border:1px solid #2b3956;
+  background:linear-gradient(165deg,#18202f 0%,#0d1220 55%,#0a0e18 100%);
+  box-shadow:0 6px 22px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06)}
+body[data-eg-skin="C"] .cl-av{background:linear-gradient(160deg,#d4a843,#8a6a1f);border:0;color:#1a1408;
+  clip-path:polygon(50% 0,100% 14%,100% 66%,50% 100%,0 66%,0 14%);border-radius:0}
+body[data-eg-skin="C"] .cl-nm{font-size:23px;font-weight:800}
+body[data-eg-skin="C"] .cl-st{border-radius:11px;background:rgba(0,0,0,.35);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+body[data-eg-skin="C"] .cp{border-radius:16px;overflow:hidden;
+  box-shadow:0 4px 16px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05)}
+body[data-eg-skin="C"] .rtab{border-radius:11px;
+  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rgba(212,168,67,.35) inset}
 </style>
 <script id="egtph-views-js">
 /* EGTPH — محرّك أشكال العرض والأنماط لشاشتي العملاء والموردين */
@@ -12476,22 +12510,28 @@ if (document.readyState === 'loading') {
   window.__egtphViews = true;
 
   var K = {view:'egtph_view_mode', size:'egtph_view_size', skin:'egtph_skin', sort:'egtph_sort'};
-  function get(k,d){ try{ return localStorage.getItem(K[k]) || d; }catch(_){ return d; } }
-  function set(k,v){ try{ localStorage.setItem(K[k],v); }catch(_){} }
+  var MEM = {};   // مصدر الحقيقة: الذاكرة. التخزين للحفظ بين الجلسات فقط.
+  (function(){ for (var k in K) { try{ var v=localStorage.getItem(K[k]); if(v) MEM[k]=v; }catch(_){} } })();
+  function get(k,d){ return MEM[k] || d; }
+  function set(k,v){ MEM[k] = v; try{ localStorage.setItem(K[k],v); }catch(_){} }
 
   window.egtphSetView = function(v){ set('view',v); rerender(); };
   window.egtphSetSize = function(v){ set('size',v); rerender(); };
   window.egtphSetSkin = function(v){ set('skin',v); rerender(); };
   window.egtphSetSort = function(v){ set('sort',v); rerender(); };
   function rerender(){
-    if (typeof openCid !== 'undefined' && openCid) return;
-    var page = (typeof currentPage !== 'undefined') ? currentPage : '';
-    if (document.getElementById('eg-viewbar')) {
-      if (typeof openSpId !== 'undefined' && openSpId) return;
-      if (document.getElementById('eg-viewbar').dataset.scope === 'sup') renderSuppliers();
-      else renderClients();
-    }
+    var bar = document.getElementById('eg-viewbar');
+    applySkinToBody();
+    if (!bar) return;
+    if (bar.dataset.scope === 'sup') { try{ openSpId = null; }catch(_){} renderSuppliers(); }
+    else { try{ openCid = null; }catch(_){} renderClients(); }
   }
+  // النمط يُطبَّق أيضاً داخل ملف العميل والمورد
+  function applySkinToBody(){
+    try { document.body.setAttribute('data-eg-skin', get('skin','C')); } catch(_){}
+  }
+  document.addEventListener('DOMContentLoaded', applySkinToBody);
+  setTimeout(applySkinToBody, 0);
 
   function n(v){ return (typeof fN==='function') ? fN(v||0) : String(v||0); }
   function da(v){ return (typeof fDA==='function') ? fDA(v||0) : String(v||0); }
@@ -12518,6 +12558,21 @@ if (document.readyState === 'loading') {
       + b('egtphSetSort','recent',so,'آخر نشاط') + b('egtphSetSort','count',so,'عدد السجلات')
       + '</div></div>';
   }
+
+  // iOS: نفّذ على touchend أيضاً تحسّباً لأي منع لحدث click
+  var lastTap = 0;
+  document.addEventListener('touchend', function(ev){
+    var b = ev.target && ev.target.closest ? ev.target.closest('#eg-viewbar button') : null;
+    if (!b) return;
+    ev.preventDefault();
+    lastTap = Date.now();
+    var m = String(b.getAttribute('onclick')||'').match(/(egtphSet\w+)\('([^']+)'\)/);
+    if (m && typeof window[m[1]] === 'function') window[m[1]](m[2]);
+  }, {passive:false});
+  document.addEventListener('click', function(ev){
+    var b = ev.target && ev.target.closest ? ev.target.closest('#eg-viewbar button') : null;
+    if (b && Date.now() - lastTap < 800) { ev.preventDefault(); ev.stopPropagation(); }
+  }, true);
 
   function wrapClass(){
     var v = get('view','files'), sk = get('skin','C'), sz = get('size','sm');
@@ -12602,6 +12657,7 @@ if (document.readyState === 'loading') {
   var origClients = window.renderClients;
   window.renderClients = function(p){
     p = p || {};
+    applySkinToBody();
     if (p.cid) { openCid = p.cid; return renderCD(p.cid); }
     openCid = null;
     var items = clientItems(), v = get('view','files');
