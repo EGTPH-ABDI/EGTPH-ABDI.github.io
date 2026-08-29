@@ -12685,8 +12685,11 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
   // ───────── الموردون ─────────
   var TYPE_IC = {'خدمة':'🔧','سلعة':'📦','كراء شاحنة':'🚛','كراء آلات':'🏗','وقود':'⛽','نقل':'🚚','صيانة':'🔩','أخرى':'📋'};
 
+  function isHidden(s){
+    return !!(s.mergedInto || s.archived || /\[مدموج/.test(String(s.note||'')));
+  }
   function supItems(){
-    return sortItems((suppliers||[]).filter(function(s){ return !s.mergedInto; }).map(function(s){
+    return sortItems((suppliers||[]).filter(function(s){ return !isHidden(s); }).map(function(s){
       var d = supplierAccount(s.id), st = supplierStatus(d);
       return {id:s.id, name:s.name, phone:s.phone||'', type:s.type||'', product:s.product||'',
               d:d, st:st, remain:d.remain||0, tot:d.totalDebt||0,
@@ -12742,8 +12745,8 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       ? '<div class="eg-wrap"><div class="eg-empty">🏭 لا يوجد موردون</div></div>'
       : (v==='table' ? supTable(items) : '<div class="'+wrapClass()+'">'+items.map(supCard).join('')+'</div>');
     root.innerHTML =
-      '<div class="ph"><div><h1>🏭 الموردون</h1><p>'+(suppliers||[]).filter(function(s){ return !s.mergedInto; }).length+' مورد مسجّل'
-      + ((suppliers||[]).some(function(s){ return s.mergedInto; }) ? ' · '+(suppliers||[]).filter(function(s){ return s.mergedInto; }).length+' مدموج (مخفي)' : '')
+      '<div class="ph"><div><h1>🏭 الموردون</h1><p>'+(suppliers||[]).filter(function(s){ return !isHidden(s); }).length+' مورد مسجّل'
+      + ((suppliers||[]).some(isHidden) ? ' · '+(suppliers||[]).filter(isHidden).length+' مخفي (مدموج/مؤرشف)' : '')
       + '</p></div><div class="ph-act">'
       + '<button class="btn btn-sec" onclick="openAllSuppliersPeriodReport()">📅 تقرير فترة</button>'
       + '<button class="btn btn-sec" onclick="supSelStart()">📊 تحديد ومجموع</button>'
@@ -12924,6 +12927,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     return '<div id="eg-subacc">'
       + '<div class="sa-hd"><span class="t">📋 سجلات المورد (خدمة · سعر)</span>'
       + '<span class="acts"><button class="btn btn-gold btn-xs" onclick="egtphNewSupRec(\''+spId+'\')">＋ سجل</button>'
+      + '<button class="btn btn-sec btn-xs" onclick="egtphArchiveSupplier(\''+spId+'\')">🗄</button>'
       + '<button class="btn btn-sec btn-xs" onclick="egtphAssignAccounts(\''+spId+'\')">🏷 توزيع</button>'
       + '<button class="btn btn-sec btn-xs" onclick="egtphMergeSupplier(\''+spId+'\')">🔗 دمج</button></span></div>'
       + body
@@ -12978,6 +12982,32 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     else { inp.style.display='none'; inp.value = sel.value; }
   };
 
+  // أرشفة مورد (لإخفاء ملف قديم أو مدموج سابقاً) أو إعادته
+  window.egtphArchiveSupplier = function(spId){
+    var sp = (typeof suppliers!=='undefined'?suppliers:[]).find(function(x){ return x.id===spId; });
+    if (!sp) return;
+    var d = (typeof supplierAccount==='function') ? supplierAccount(spId) : {totalDebt:0,paid:0};
+    var on = !!(sp.archived || sp.mergedInto);
+    if (on) {
+      OM('↩️ إعادة إظهار المورد',
+        '<div class="hint">سيعود «'+e(sp.name)+'» إلى قائمة الموردين.</div>',
+        async function(){
+          delete sp.archived; delete sp.mergedInto; delete sp.mergedAs;
+          sp._saved=new Date().toISOString(); await dbP('suppliers', sp);
+          CM(); T('✓ عاد المورد إلى القائمة','success'); renderSupDetail(spId);
+        }, 'إعادة');
+      return;
+    }
+    OM('🗄 أرشفة المورد',
+      '<div style="font-size:11px;line-height:1.8;color:var(--tx2)">يُخفى «'+e(sp.name)+'» من قائمة الموردين دون حذف أي بيانات، ويمكن إعادته في أي وقت.</div>'
+      + ((d.totalDebt||d.paid) ? '<div class="hint" style="color:var(--orange);margin-top:8px">⚠️ ما زال لهذا المورد حركات: فواتير '
+        + money(d.totalDebt)+' · مدفوع '+money(d.paid)+'. إن كنت قد دمجته فتأكد من نقل حركاته أولاً.</div>' : ''),
+      async function(){
+        sp.archived = true; sp._saved = new Date().toISOString(); await dbP('suppliers', sp);
+        CM(); T('🗄 أُرشف «'+sp.name+'»','success'); nav('suppliers');
+      }, 'أرشفة');
+  };
+
   // إعادة تسمية سجل حر (غير معرّف) — مثل الناتج عن الدمج
   window.egtphRenameAccount = function(spId, oldName){
     OM('✎ تعديل اسم السجل',
@@ -12989,7 +13019,11 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
         if (!nn) return T('اكتب الاسم','error');
         var n = 0;
         var vi = invs(spId).filter(function(v){ return accOf(v)===oldName && !v.supRecId; });
-        for (var i=0;i<vi.length;i++){ vi[i].account = nn; vi[i]._saved=new Date().toISOString(); await dbP('sup_invoices', vi[i]); n++; }
+        for (var i=0;i<vi.length;i++){
+          vi[i].account = nn;
+          if (vi[i].projectName && String(vi[i].projectName).trim()===oldName) vi[i].projectName = nn;
+          vi[i]._saved=new Date().toISOString(); await dbP('sup_invoices', vi[i]); n++;
+        }
         var vp = pays(spId).filter(function(x){ return accOf(x)===oldName && !x.supRecId; });
         for (var j=0;j<vp.length;j++){ vp[j].account = nn; vp[j]._saved=new Date().toISOString(); await dbP('sup_pays', vp[j]); n++; }
         CM(); T('✓ أُعيدت تسمية '+n+' حركة','success'); renderSupDetail(spId);
@@ -13106,10 +13140,28 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     if (val === '__new__') { inv.supRecId=''; inv.account=''; if (box) { box.value=''; box.focus(); } return; }
     if (!val) { inv.supRecId=''; inv.account=''; return; }
 
-    if (val.indexOf('acc:') === 0) {          // مجموعة قديمة (من الدمج أو التوزيع)
+    if (val.indexOf('acc:') === 0) {          // مجموعة قائمة (من الدمج أو التوزيع أو اسم مشروع)
       inv.supRecId = '';
       inv.account = val.slice(4);
-      try { T('📁 الفاتورة تتبع «'+inv.account+'»','success'); } catch(_) {}
+      // املأ الصنف والسعر من آخر فاتورة في هذه المجموعة
+      var last = null;
+      invs(inv.spId).forEach(function(v){
+        if (accOf(v) !== inv.account) return;
+        if (!v.items || !v.items.length) return;
+        if (!last || String(v.date||'') >= String(last.date||'')) last = v;
+      });
+      var empty = !(inv.rows||[]).some(function(x){ return (x.name||'').trim() && num(x.qty)>0; });
+      if (last && empty) {
+        inv.rows = last.items.map(function(it){
+          return { name: it.name||'', unit: it.unit||'وحدة', qty: 0,
+                   unitPrice: num(it.unitPrice),
+                   priceStatus: num(it.unitPrice) > 0 ? 'confirmed' : 'pending' };
+        });
+        try { renderInvModal(); } catch(_) {}
+        try { T('📁 «'+inv.account+'» — آخر سعر مستعمل '+money(last.items[0].unitPrice)+'/'+(last.items[0].unit||'وحدة')+' — أدخل الكمية','success'); } catch(_) {}
+      } else {
+        try { T('📁 الفاتورة تتبع «'+inv.account+'»','success'); } catch(_) {}
+      }
       return;
     }
     var id = (val.indexOf('rec:') === 0) ? val.slice(4) : val;
@@ -13164,8 +13216,8 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
         + '<input type="text" id="eg-inv-link-new" placeholder="اسم السجل الجديد" style="display:none;margin-top:6px">'
         + '<div class="hint">'
         + (recs.length
-            ? '🔧 خدمة بسعر ثابت تملأ الصنف والسعر — أدخل الكمية فقط. 🏗 مشروع ينسب الفاتورة إليه. 📁 مجموعة قائمة.'
-            : '📁 مجموعات هذا المورد الحالية. لسجل بسعر ثابت أنشئه من زر <b>＋ سجل</b> في لوحة «سجلات المورد».')
+            ? '🔧 خدمة بسعر ثابت تملأ الصنف والسعر — أدخل الكمية فقط. 🏗 مشروع ينسب الفاتورة إليه. 📁 مجموعة قائمة تملأ آخر صنف وسعر استُعملا فيها.'
+            : '📁 مجموعات هذا المورد الحالية — يُملأ منها آخر صنف وسعر استُعملا. ولسعر ثابت دائم أنشئ سجلاً من زر <b>＋ سجل</b>.')
         + '</div></div>';
       anchor.parentNode.insertBefore(box, anchor);
     }, 0);
@@ -13428,6 +13480,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
         var note = (document.getElementById('sr-note').value||'').trim();
         if (!name) return T(k==='project' ? 'اكتب اسم المشروع' : 'اكتب اسم الخدمة / المادة','error');
         if (k==='service' && price <= 0) return T('أدخل سعراً صحيحاً','error');
+        var oldName = r ? r.name : '';
         var obj = r || { id: nowId(), type:'sup_rec', supplierId: spId, createdAt: new Date().toISOString() };
         obj.kind = k; obj.name = name; obj.price = (k==='project' ? null : price);
         obj.priceUnit = (k==='project' ? '' : unit); obj.note = note;
@@ -13435,7 +13488,22 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
         if (!r) prices.push(obj);
         var ok = await dbP('prices', obj);
         if (!ok) { if (!r) prices = prices.filter(function(x){ return x.id!==obj.id; }); return T('فشل الحفظ','error'); }
-        CM(); T(r ? '✓ عُدّل السجل' : '✓ سجل «'+name+'» أُنشئ بسعر '+money(price), 'success');
+        // مزامنة الاسم في كل الفواتير والدفعات التابعة
+        if (r && oldName && oldName !== name) {
+          var vs = (window._supInvs||[]).filter(function(v){
+            return v.supplierId===spId && (v.supRecId===obj.id || v.account===oldName || v.projectName===oldName); });
+          for (var i2=0;i2<vs.length;i2++){
+            vs[i2].account = name;
+            if (vs[i2].projectName === oldName) vs[i2].projectName = name;
+            vs[i2]._saved = new Date().toISOString(); await dbP('sup_invoices', vs[i2]);
+          }
+          var ps = (typeof supPays!=='undefined'?supPays:[]).filter(function(x){
+            return x.supplierId===spId && (x.supRecId===obj.id || x.account===oldName); });
+          for (var j2=0;j2<ps.length;j2++){
+            ps[j2].account = name; ps[j2]._saved = new Date().toISOString(); await dbP('sup_pays', ps[j2]);
+          }
+        }
+        CM(); T(r ? ('✓ عُدّل السجل'+(oldName&&oldName!==name?' وحُدّثت حركاته':'')) : '✓ سجل «'+name+'» أُنشئ بسعر '+money(price), 'success');
         renderSupDetail(spId);
       }, r ? 'حفظ التعديل' : 'إنشاء');
   };
