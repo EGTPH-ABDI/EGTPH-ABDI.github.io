@@ -12795,7 +12795,11 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
   function e(s){ return (typeof esc==='function') ? esc(String(s==null?'':s)) : String(s==null?'':s); }
   function invs(spId){ return (window._supInvs||[]).filter(function(v){ return v && v.supplierId===spId; }); }
   function pays(spId){ return (typeof supPays!=='undefined'?supPays:[]).filter(function(p){ return p && p.supplierId===spId; }); }
-  function accOf(o){ var a = (o && o.account ? String(o.account).trim() : ''); return a || GEN; }
+  function accOf(o){
+    var a = (o && o.account ? String(o.account).trim() : '');
+    if (!a && o && o.projectName) a = String(o.projectName).trim();
+    return a || GEN;
+  }
   function invAmount(inv){
     var rows = Array.isArray(inv.items) ? inv.items : [];
     if (!rows.length) return num(inv.total);
@@ -12808,8 +12812,11 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
   window.egtphSupAccounts = function(spId){
     var set = [];
     function add(a){ if (a && set.indexOf(a)===-1) set.push(a); }
-    invs(spId).forEach(function(v){ add(accOf(v)); });
+    invs(spId).forEach(function(v){ add(accOf(v)); if (v.projectName) add(String(v.projectName).trim()); });
     pays(spId).forEach(function(p){ add(accOf(p)); });
+    try {
+      (typeof egtphSupRecords==='function' ? egtphSupRecords(spId) : []).forEach(function(r){ add(r.name); });
+    } catch(_) {}
     return set.length ? set : [GEN];
   };
 
@@ -13091,14 +13098,24 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     }catch(_){}
   }
 
-  // ── ربط الفاتورة بسجل هذا المورد نفسه (لا بعميل) ──
+  // ── ربط الفاتورة بسجل هذا المورد (سجلات معرّفة + مجموعات قديمة + سجل جديد) ──
   window.egtphInvLink = function(val){
     var inv = window._inv; if (!inv) return;
+    var box = document.getElementById('eg-inv-link-new');
+    if (box) box.style.display = (val === '__new__') ? 'block' : 'none';
+    if (val === '__new__') { inv.supRecId=''; inv.account=''; if (box) { box.value=''; box.focus(); } return; }
     if (!val) { inv.supRecId=''; inv.account=''; return; }
-    var r = (typeof prices!=='undefined'?prices:[]).find(function(p){ return p && p.type==='sup_rec' && p.id===val; });
+
+    if (val.indexOf('acc:') === 0) {          // مجموعة قديمة (من الدمج أو التوزيع)
+      inv.supRecId = '';
+      inv.account = val.slice(4);
+      try { T('📁 الفاتورة تتبع «'+inv.account+'»','success'); } catch(_) {}
+      return;
+    }
+    var id = (val.indexOf('rec:') === 0) ? val.slice(4) : val;
+    var r = (typeof prices!=='undefined'?prices:[]).find(function(p){ return p && p.type==='sup_rec' && p.id===id; });
     if (!r) return;
-    inv.supRecId = r.id;
-    inv.account = r.name;
+    inv.supRecId = r.id; inv.account = r.name;
     if (r.kind === 'project') {
       inv.projectName = r.name;
       try { T('🏗 الفاتورة تتبع «'+r.name+'»','success'); } catch(_) {}
@@ -13119,21 +13136,36 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       if (document.getElementById('eg-inv-link')) return;
       var anchor = document.getElementById('inv-project-meta') || (document.getElementById('inv-date') && document.getElementById('inv-date').closest('.fgr'));
       if (!anchor || !anchor.parentNode) return;
+
       var recs = (typeof egtphSupRecords==='function') ? egtphSupRecords(inv.spId) : [];
+      var recNames = recs.map(function(r){ return r.name; });
+      var legacy = [];
+      try {
+        legacy = egtphSupAccounts(inv.spId).filter(function(a){ return a!==GEN && recNames.indexOf(a)===-1; });
+      } catch(_) {}
+
+      var cur = inv.supRecId ? ('rec:'+inv.supRecId) : (inv.account ? ('acc:'+inv.account) : '');
       var opts = recs.map(function(r){
         var lbl = (r.kind==='project' ? '🏗 ' : '🔧 ') + r.name
                 + (r.kind==='project' ? '' : ' · ' + money(r.price) + '/' + (r.priceUnit||'وحدة'));
-        return '<option value="'+e(r.id)+'"'+(inv.supRecId===r.id?' selected':'')+'>'+e(lbl)+'</option>';
+        return '<option value="rec:'+e(r.id)+'"'+(cur==='rec:'+r.id?' selected':'')+'>'+e(lbl)+'</option>';
+      }).join('')
+      + legacy.map(function(a){
+        return '<option value="acc:'+e(a)+'"'+(cur==='acc:'+a?' selected':'')+'>📁 '+e(a)+'</option>';
       }).join('');
+
       var box = document.createElement('div');
       box.id = 'eg-inv-link';
       box.innerHTML = '<div class="fg"><label>📋 سجل المورد <span style="color:var(--tx3);font-weight:500">(اختياري)</span></label>'
         + '<select id="eg-inv-link-sel" onchange="egtphInvLink(this.value)">'
-        + '<option value="">— بدون سجل (عام) —</option>' + opts
+        + '<option value=""'+(cur?'':' selected')+'>— بدون سجل (عام) —</option>' + opts
+        + '<option value="__new__">➕ سجل جديد (اكتب الاسم)</option>'
         + '</select>'
-        + '<div class="hint">' + (recs.length
-            ? 'سجلات هذا المورد نفسه. الخدمة بسعر ثابت تملأ الصنف والسعر — أدخل الكمية فقط؛ والمشروع ينسب الفاتورة إليه.'
-            : 'لا توجد سجلات لهذا المورد بعد — أنشئها من زر <b>＋ سجل</b> في لوحة «سجلات المورد».')
+        + '<input type="text" id="eg-inv-link-new" placeholder="اسم السجل الجديد" style="display:none;margin-top:6px">'
+        + '<div class="hint">'
+        + (recs.length
+            ? '🔧 خدمة بسعر ثابت تملأ الصنف والسعر — أدخل الكمية فقط. 🏗 مشروع ينسب الفاتورة إليه. 📁 مجموعة قائمة.'
+            : '📁 مجموعات هذا المورد الحالية. لسجل بسعر ثابت أنشئه من زر <b>＋ سجل</b> في لوحة «سجلات المورد».')
         + '</div></div>';
       anchor.parentNode.insertBefore(box, anchor);
     }, 0);
@@ -13147,6 +13179,8 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     var before = (window._supInvs||[]).map(function(v){ return v.id; });
     var out = await baseInvSave.apply(this, arguments);
     try {
+      var freeEl = document.getElementById('eg-inv-link-new');
+      if (freeEl && freeEl.style.display !== 'none' && (freeEl.value||'').trim()) acc = (freeEl.value||'').trim();
       var recId = (inv && inv.supRecId) || (window.__egInvRec && window.__egInvRec.id) || '';
       if (acc || recId) {
         var target = editId ? (window._supInvs||[]).find(function(v){ return v.id===editId; })
