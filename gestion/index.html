@@ -14165,7 +14165,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
   // ── ١) مزامنة الأسماء: كل سجل مورد مرتبط يتبع اسم سجل العميل ──
   window.egtphSyncRecordNames = async function(silent){
     var n = 0;
-    var list = (typeof prices!=='undefined'?prices:[]).filter(function(p){ return p && p.type==='sup_rec' && p.linkedRecordId; });
+    var list = (typeof prices!=='undefined'?prices:[]).filter(function(p){ return p && p.type==='sup_rec' && p.linkedRecordId && !p.adoptedGroup; });
     for (var i=0;i<list.length;i++){
       var sr = list[i], rec = recOf(sr.linkedRecordId);
       if (!rec) continue;
@@ -14753,10 +14753,61 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     return {merged:done, moved:moved};
   };
 
+  // ── تبنّي المجموعات القديمة (📁 بلا سعر) داخل السجل المولَّد لنفس سجل العميل ──
+  window.egtphAdoptGroups = async function(spId, silent){
+    var out = {adopted:0, moved:0};
+    // بديله الآن محرّك المطابقة بدرجة ثقة (egtphAutoMatch) — يُبقى للتوافق فقط
+    if (typeof window.egtphAutoMatch === 'function') return out;
+    var srs = recs(spId).filter(function(r){ return r.linkedRecordId; });
+    if (!srs.length) return out;
+    var groups = [];
+    try {
+      var names = (typeof egtphSupAccounts==='function') ? egtphSupAccounts(spId) : [];
+      var srNames = recs(spId).map(function(r){ return norm(r.name); });
+      groups = names.filter(function(a){ return a && a!=='عام' && srNames.indexOf(norm(a))===-1; });
+    } catch(_) {}
+    if (!groups.length) return out;
+
+    for (var i=0;i<srs.length;i++){
+      var sr = srs[i];
+      var rec = (typeof records!=='undefined'?records:[]).find(function(r){ return r.id===sr.linkedRecordId; });
+      if (!rec) continue;
+      var key = norm(rec.name);
+      if (!key || key.length < 3) continue;
+      // مجموعات تخصّ سجل العميل نفسه
+      var match = groups.filter(function(g){ return norm(g).indexOf(key) !== -1; });
+      if (match.length !== 1) continue;              // غموض ⇒ لا نلمس شيئاً
+      var g = match[0];
+      // لا نتبنّى مجموعة بلا حركات
+      var gInvs = (window._supInvs||[]).filter(function(v){ return v.supplierId===spId && !v.supRecId && norm(v.account||v.projectName)===norm(g); });
+      var gPays = (typeof supPays!=='undefined'?supPays:[]).filter(function(x){ return x.supplierId===spId && !x.supRecId && norm(x.account)===norm(g); });
+      if (!gInvs.length && !gPays.length) continue;
+
+      for (var a=0;a<gInvs.length;a++){
+        gInvs[a].supRecId = sr.id; gInvs[a].account = g;
+        gInvs[a]._saved = new Date().toISOString(); await dbP('sup_invoices', gInvs[a]); out.moved++;
+      }
+      for (var b2=0;b2<gPays.length;b2++){
+        gPays[b2].supRecId = sr.id; gPays[b2].account = g;
+        gPays[b2]._saved = new Date().toISOString(); await dbP('sup_pays', gPays[b2]); out.moved++;
+      }
+      // السجل يأخذ اسم المجموعة القديمة ويتوقّف عن تتبّع الاسم آلياً
+      sr.name = g; sr.adoptedGroup = g; delete sr.linkedMaterial;
+      sr._saved = new Date().toISOString(); await dbP('prices', sr);
+      // الفواتير التلقائية تحمل الاسم الجديد
+      var autos = (window._supInvs||[]).filter(function(v){ return v.supRecId===sr.id && v.autoFrom; });
+      for (var c=0;c<autos.length;c++){ autos[c].account = g; autos[c]._saved=new Date().toISOString(); await dbP('sup_invoices', autos[c]); }
+      out.adopted++;
+    }
+    if (out.adopted && !silent) { try { T('🧩 ضُمّت '+out.adopted+' مجموعة قديمة إلى سجلها ('+out.moved+' حركة)','success'); } catch(_) {} }
+    return out;
+  };
+
   window.egtphMergeDupAll = async function(silent){
     var tot = {merged:0, moved:0};
     var sps = (typeof suppliers!=='undefined'?suppliers:[]);
     for (var i=0;i<sps.length;i++){
+      try { await egtphAdoptGroups(sps[i].id, true); } catch(_) {}
       var r = await egtphMergeDupRecords(sps[i].id, true);
       tot.merged += r.merged; tot.moved += r.moved;
     }
@@ -14776,12 +14827,16 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
         try {
           if (lastDedup[spId] && Date.now() - lastDedup[spId] < 4000) return;
           lastDedup[spId] = Date.now();
-          if (!egtphFindDupRecords(spId).some(function(p){ return !p.unsafe; })) return;
-          egtphMergeDupRecords(spId, true).then(function(r){
+          var hasDup = egtphFindDupRecords(spId).some(function(p){ return !p.unsafe; });
+          egtphAdoptGroups(spId, true).then(function(ad){
+            if (ad && ad.adopted) { try { T('🧩 ضُمّت المجموعة القديمة إلى سجلها','success'); } catch(_) {} renderSupDetail(spId); return; }
+            if (!hasDup) return;
+            egtphMergeDupRecords(spId, true).then(function(r){
             if (r && r.merged) {
               try { T('🧹 دُمج '+r.merged+' سجل مكرّر تلقائياً','success'); } catch(_) {}
               renderSupDetail(spId);
             }
+            });
           });
         } catch(_) {}
       }, 300);
@@ -14833,6 +14888,492 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       return n;
     };
   }
+})();
+</script>
+
+<style id="egtph-match-css">
+#eg-sugg{margin:0 13px 12px;background:var(--bg2);border:1px solid rgba(59,130,246,.4);border-radius:var(--rm);overflow:hidden}
+#eg-sugg .sh{display:flex;align-items:center;gap:8px;padding:9px 12px;
+  background:linear-gradient(90deg,rgba(59,130,246,.16),transparent);border-bottom:1px solid var(--bdr);
+  font-size:11.5px;font-weight:900;color:#93c5fd}
+#eg-sugg .sr{padding:10px 12px;border-bottom:1px solid var(--bdr)}
+#eg-sugg .sr:last-child{border-bottom:0}
+#eg-sugg .t1{font-size:11.5px;font-weight:800;line-height:1.6}
+#eg-sugg .why{font-size:9.5px;color:var(--tx3);margin-top:3px;line-height:1.6}
+#eg-sugg .bar{height:4px;border-radius:4px;background:rgba(255,255,255,.08);margin:6px 0;overflow:hidden}
+#eg-sugg .bar i{display:block;height:100%;background:linear-gradient(90deg,#3b82f6,#22c55e)}
+#eg-sugg .acts{display:flex;gap:5px;margin-top:6px}
+#eg-sugg .pct{font-family:'Inter';font-weight:900;font-size:12px;color:#93c5fd;direction:ltr}
+</style>
+<script id="egtph-match-js">
+/* EGTPH — محرّك مطابقة احترافي: تشابه ضبابي + مرادفات المواد + إشارات الشاحنات
+   والتواريخ والأسعار، مع درجة ثقة، واقتراحات تُقبل بضغطة، وتراجع كامل. */
+(function(){
+  'use strict';
+  if (window.__egtphMatch) return;
+  window.__egtphMatch = true;
+
+  function e(s){ return (typeof esc==='function') ? esc(String(s==null?'':s)) : String(s==null?'':s); }
+  function num(v){ return parseFloat(v)||0; }
+  function money(v){ return (typeof fDA==='function') ? fDA(num(v)) : String(v); }
+
+  // مرادفات المواد الشائعة عندك (عربي / فرنسي / لاتيني)
+  var ALIAS = [
+    ['حصى','حصي','grave','gravier','gravette','grv'],
+    ['تيف','tuf','tuff','touf'],
+    ['رمل','sable','sble'],
+    ['اسمنت','ciment','cement'],
+    ['خرسانة','بيتون','beton','béton'],
+    ['انابيب','انبوب','tube','tuyau','pipe'],
+    ['مازوط','gasoil','gazoil','diesel'],
+    ['تراب','terre','remblai','ردم']
+  ];
+  function norm(s){
+    return String(s||'')
+      .replace(/[\u064B-\u0652]/g,'')
+      .replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه')
+      .replace(/[^\u0621-\u064Aa-zA-Z0-9]+/g,' ').trim().toLowerCase();
+  }
+  var STOP = ['نقل','ماده','مادة','خدمه','خدمة','شراء','فاتوره','ال'];
+  function stripAl(w){ return (w.length>3 && w.indexOf('ال')===0) ? w.slice(2) : w; }
+  function canon(w){
+    w = stripAl(w);
+    for (var i=0;i<ALIAS.length;i++){
+      for (var j=0;j<ALIAS[i].length;j++){
+        var v = ALIAS[i][j];
+        if (w === v || (w.length>2 && v.length>2 && (w.indexOf(v)!==-1 || v.indexOf(w)!==-1))) return ALIAS[i][0];
+      }
+    }
+    return w;
+  }
+  function tokens(s){
+    return norm(s).split(' ').filter(function(w){ return w.length>1; })
+      .map(canon).filter(function(w){ return STOP.indexOf(w)===-1; });
+  }
+  // أي عائلة مادة تظهر في النص؟
+  function matFamily(s){
+    var t = norm(s), out = [];
+    ALIAS.forEach(function(g){
+      for (var i=0;i<g.length;i++){ if (t.indexOf(g[i]) !== -1) { out.push(g[0]); break; } }
+    });
+    return out;
+  }
+
+  // تشابه Dice على الثنائيات — يتحمّل الاختلاف الإملائي
+  function dice(a,b){
+    a = norm(a); b = norm(b);
+    if (!a || !b) return 0;
+    if (a === b) return 1;
+    function bg(x){ var o=[]; for (var i=0;i<x.length-1;i++) o.push(x.slice(i,i+2)); return o; }
+    var A = bg(a), B = bg(b);
+    if (!A.length || !B.length) return 0;
+    var hit = 0, used = {};
+    A.forEach(function(g){
+      for (var i=0;i<B.length;i++){ if (!used[i] && B[i]===g) { used[i]=1; hit++; break; } }
+    });
+    return (2*hit)/(A.length+B.length);
+  }
+  window.egtphSimilarity = dice;
+
+  // ── درجة الثقة بين سجل مولَّد ومجموعة/سجل مرشّح ──
+  window.egtphMatchScore = function(ctx, cand){
+    // ctx: {recName, matName, unit, trucks:[], dates:[], cost}
+    var why = [], sc = 0;
+    var cn = norm(cand.name);
+
+    if (cand.linkedRecordId && ctx.recId && cand.linkedRecordId === ctx.recId) { sc += 60; why.push('مرتبط بنفس سجل العميل'); }
+    if (ctx.recName && cn.indexOf(norm(ctx.recName)) !== -1) { sc += 30; why.push('يحمل اسم سجل العميل «'+ctx.recName+'»'); }
+
+    var famA = matFamily(ctx.matName||''), famB = matFamily(cand.name);
+    var famShared = famA.filter(function(f){ return famB.indexOf(f) !== -1; });
+    if (famShared.length) { sc += 28; why.push('نفس المادة ('+famShared.join('، ')+')'); }
+    var tA = tokens(ctx.matName||''), tB = tokens(cand.name);
+    var shared = tA.filter(function(w){ return tB.indexOf(w) !== -1; });
+    if (shared.length && !famShared.length) { sc += 22; why.push('كلمات مشتركة ('+shared.join(', ')+')'); }
+    else if (!famShared.length) {
+      var d = Math.max(dice(ctx.matName||'', cand.name), dice(ctx.recName||'', cand.name));
+      if (d >= 0.55) { sc += Math.round(d*20); why.push('تشابه نصّي '+Math.round(d*100)+'%'); }
+    }
+
+    // شاحنات مشتركة بين حركات المرشّح وشاحنات الربط
+    if (ctx.trucks && ctx.trucks.length && cand.trucks && cand.trucks.length) {
+      var comm = ctx.trucks.filter(function(t){ return cand.trucks.indexOf(t) !== -1; });
+      if (comm.length) { sc += 18; why.push('شاحنات مشتركة: '+comm.slice(0,2).join(' · ')); }
+    }
+    // تقارب السعر
+    if (ctx.cost > 0 && cand.price > 0) {
+      var diff = Math.abs(ctx.cost - cand.price) / ctx.cost;
+      if (diff < 0.02) { sc += 12; why.push('نفس السعر '+money(cand.price)); }
+      else if (diff < 0.15) { sc += 5; why.push('سعر قريب'); }
+      else { sc -= 10; why.push('سعر مختلف ('+money(cand.price)+')'); }
+    }
+    // توافق الوحدة
+    if (ctx.unit && cand.unit) {
+      if (ctx.unit === cand.unit) { sc += 8; why.push('نفس الوحدة ('+cand.unit+')'); }
+      else { sc -= 25; why.push('وحدة مختلفة ('+cand.unit+' ≠ '+ctx.unit+')'); }
+    }
+    // تداخل الفترة
+    if (ctx.dates && ctx.dates.length && cand.dates && cand.dates.length) {
+      var a1=ctx.dates[0], a2=ctx.dates[1], b1=cand.dates[0], b2=cand.dates[1];
+      if (a1<=b2 && b1<=a2) { sc += 8; why.push('نفس الفترة الزمنية'); }
+    }
+    return { score: Math.max(0, Math.min(100, sc)), why: why };
+  };
+
+  // ── جمع المرشّحين: سجلات + مجموعات قديمة ──
+  function candidates(spId, exceptId){
+    var out = [];
+    var srs = (typeof egtphSupRecords==='function') ? egtphSupRecords(spId) : [];
+    function docsOf(pred){
+      var invs = (window._supInvs||[]).filter(pred);
+      var trucks = [], dates = [];
+      invs.forEach(function(v){
+        (v.autoTrucks||[]).forEach(function(t){ if (trucks.indexOf(t)===-1) trucks.push(t); });
+        if (v.date) dates.push(String(v.date));
+      });
+      dates.sort();
+      return { n: invs.length, trucks: trucks, dates: dates.length?[dates[0],dates[dates.length-1]]:null,
+               total: invs.reduce(function(s,v){ return s+num(v.total); },0) };
+    }
+    srs.forEach(function(r){
+      if (r.id === exceptId) return;
+      var d = docsOf(function(v){ return v.supRecId===r.id; });
+      out.push({kind:'rec', id:r.id, name:r.name, price:num(r.price), unit:r.priceUnit||'',
+                linkedRecordId:r.linkedRecordId||'', trucks:d.trucks, dates:d.dates, nInv:d.n, total:d.total});
+    });
+    try {
+      var names = (typeof egtphSupAccounts==='function') ? egtphSupAccounts(spId) : [];
+      var taken = srs.map(function(r){ return norm(r.name); });
+      names.filter(function(a){ return a && a!=='عام' && taken.indexOf(norm(a))===-1; }).forEach(function(g){
+        var d = docsOf(function(v){ return v.supplierId===spId && !v.supRecId && norm(v.account||v.projectName)===norm(g); });
+        if (!d.n) return;
+        out.push({kind:'group', id:g, name:g, price:0, unit:'', linkedRecordId:'',
+                  trucks:d.trucks, dates:d.dates, nInv:d.n, total:d.total});
+      });
+    } catch(_) {}
+    return out;
+  }
+
+  // ── الاقتراحات لكل سجل مولَّد ──
+  window.egtphMatchSuggestions = function(spId){
+    var rejects = {};
+    try { rejects = JSON.parse(localStorage.getItem('egtph_match_reject')||'{}'); } catch(_) {}
+    var out = [];
+    var srs = (typeof egtphSupRecords==='function') ? egtphSupRecords(spId) : [];
+    srs.filter(function(r){ return r.linkedRecordId && !r.adoptedGroup; }).forEach(function(sr){
+      var rec = (typeof records!=='undefined'?records:[]).find(function(x){ return x.id===sr.linkedRecordId; });
+      if (!rec) return;
+      var links = (typeof egtphTruckLinks==='function') ? egtphTruckLinks(rec.id) : [];
+      var ctx = { recId: rec.id, recName: rec.name, matName: sr.linkedMaterial || sr.name,
+                  unit: sr.priceUnit||'', cost: num(sr.price),
+                  trucks: links.filter(function(l){ return l.supRecId===sr.id; }).map(function(l){ return l.truck; }),
+                  dates: null };
+      candidates(spId, sr.id).forEach(function(c){
+        var m = egtphMatchScore(ctx, c);
+        if (m.score < 45) return;
+        if (rejects[sr.id+'|'+c.id]) return;
+        out.push({ srId:sr.id, srName:sr.name, cand:c, score:m.score, why:m.why });
+      });
+    });
+    // الأقوى أولاً، واقتراح واحد لكل سجل
+    out.sort(function(a,b){ return b.score-a.score; });
+    var seen = {};
+    return out.filter(function(x){ if (seen[x.srId]) return false; seen[x.srId]=1; return true; });
+  };
+
+  // ── التنفيذ مع إمكانية التراجع ──
+  window.egtphApplyMatch = async function(spId, srId, candId, silent){
+    var sr = (typeof prices!=='undefined'?prices:[]).find(function(p){ return p && p.type==='sup_rec' && p.id===srId; });
+    if (!sr) return null;
+    var undo = { srId:srId, oldName:sr.name, moved:[], t:Date.now() };
+    var isRec = (typeof prices!=='undefined'?prices:[]).some(function(p){ return p && p.type==='sup_rec' && p.id===candId; });
+
+    if (isRec) {
+      // ادمج السجل المولَّد داخل السجل المرشّح (الأقدم يبقى)
+      var keep = prices.find(function(p){ return p.id===candId; });
+      var links = prices.filter(function(p){ return p && p.type==='truck_link' && p.supRecId===srId; });
+      for (var i=0;i<links.length;i++){ undo.moved.push({t:'link', id:links[i].id, from:srId});
+        links[i].supRecId = keep.id; links[i]._saved=new Date().toISOString(); await dbP('prices', links[i]); }
+      var vs = (window._supInvs||[]).filter(function(v){ return v.supRecId===srId; });
+      for (var j=0;j<vs.length;j++){
+        if (vs[j].autoFrom) { window._supInvs = window._supInvs.filter(function(x){ return x.id!==vs[j].id; }); await dbD('sup_invoices', vs[j].id); }
+        else { undo.moved.push({t:'inv', id:vs[j].id, from:srId, acc:vs[j].account});
+               vs[j].supRecId=keep.id; vs[j].account=keep.name; vs[j]._saved=new Date().toISOString(); await dbP('sup_invoices', vs[j]); }
+      }
+      var ps = (typeof supPays!=='undefined'?supPays:[]).filter(function(x){ return x.supRecId===srId; });
+      for (var k=0;k<ps.length;k++){ undo.moved.push({t:'pay', id:ps[k].id, from:srId, acc:ps[k].account});
+        ps[k].supRecId=keep.id; ps[k].account=keep.name; ps[k]._saved=new Date().toISOString(); await dbP('sup_pays', ps[k]); }
+      undo.deletedRec = JSON.parse(JSON.stringify(sr));
+      prices = prices.filter(function(p){ return p.id!==srId; });
+      await dbD('prices', srId);
+      var affected = [];
+      prices.filter(function(p){ return p && p.type==='truck_link' && p.supRecId===keep.id; })
+            .forEach(function(l){ if (affected.indexOf(l.recordId)===-1) affected.push(l.recordId); });
+      for (var a=0;a<affected.length;a++){ try { await egtphSyncCosts(affected[a], true); } catch(_) {} }
+    } else {
+      // تبنّي مجموعة قديمة: تنتقل حركاتها إلى السجل ويأخذ اسمها
+      var gInvs = (window._supInvs||[]).filter(function(v){ return v.supplierId===spId && !v.supRecId && norm(v.account||v.projectName)===norm(candId); });
+      for (var x=0;x<gInvs.length;x++){ undo.moved.push({t:'inv', id:gInvs[x].id, from:'', acc:gInvs[x].account});
+        gInvs[x].supRecId=sr.id; gInvs[x]._saved=new Date().toISOString(); await dbP('sup_invoices', gInvs[x]); }
+      var gPays = (typeof supPays!=='undefined'?supPays:[]).filter(function(y){ return y.supplierId===spId && !y.supRecId && norm(y.account)===norm(candId); });
+      for (var y=0;y<gPays.length;y++){ undo.moved.push({t:'pay', id:gPays[y].id, from:'', acc:gPays[y].account});
+        gPays[y].supRecId=sr.id; gPays[y]._saved=new Date().toISOString(); await dbP('sup_pays', gPays[y]); }
+      sr.name = candId; sr.adoptedGroup = candId; delete sr.linkedMaterial;
+      sr._saved = new Date().toISOString(); await dbP('prices', sr);
+      var autos = (window._supInvs||[]).filter(function(v){ return v.supRecId===sr.id && v.autoFrom; });
+      for (var z=0;z<autos.length;z++){ autos[z].account = candId; autos[z]._saved=new Date().toISOString(); await dbP('sup_invoices', autos[z]); }
+    }
+    try { localStorage.setItem('egtph_match_undo', JSON.stringify(undo)); } catch(_) {}
+    if (!silent) { try { T('🔗 دُمج بنجاح — يمكنك التراجع من زر ↩️','success'); } catch(_) {} }
+    return undo;
+  };
+
+  window.egtphUndoMatch = async function(spId){
+    var u = null;
+    try { u = JSON.parse(localStorage.getItem('egtph_match_undo')||'null'); } catch(_) {}
+    if (!u) return T('لا يوجد ما يُتراجع عنه','warning');
+    if (u.deletedRec) { prices.push(u.deletedRec); await dbP('prices', u.deletedRec); }
+    for (var i=0;i<u.moved.length;i++){
+      var m = u.moved[i];
+      if (m.t==='link'){ var l = prices.find(function(p){ return p.id===m.id; });
+        if (l){ l.supRecId = m.from; await dbP('prices', l); } }
+      if (m.t==='inv'){ var v = (window._supInvs||[]).find(function(x){ return x.id===m.id; });
+        if (v){ v.supRecId = m.from; if (m.acc!=null) v.account = m.acc; await dbP('sup_invoices', v); } }
+      if (m.t==='pay'){ var p2 = (typeof supPays!=='undefined'?supPays:[]).find(function(x){ return x.id===m.id; });
+        if (p2){ p2.supRecId = m.from; if (m.acc!=null) p2.account = m.acc; await dbP('sup_pays', p2); } }
+    }
+    var sr = prices.find(function(p){ return p && p.type==='sup_rec' && p.id===u.srId; });
+    if (sr && u.oldName){ sr.name = u.oldName; delete sr.adoptedGroup; await dbP('prices', sr); }
+    try { localStorage.removeItem('egtph_match_undo'); } catch(_) {}
+    T('↩️ تم التراجع','success');
+    renderSupDetail(spId);
+  };
+
+  window.egtphRejectMatch = function(spId, srId, candId){
+    var r = {};
+    try { r = JSON.parse(localStorage.getItem('egtph_match_reject')||'{}'); } catch(_) {}
+    r[srId+'|'+candId] = 1;
+    try { localStorage.setItem('egtph_match_reject', JSON.stringify(r)); } catch(_) {}
+    T('لن يُقترح هذا الربط مجدداً','success');
+    renderSupDetail(spId);
+  };
+
+  // ── دمج تلقائي عند الثقة العالية، واقتراح فيما دونها ──
+  var AUTO = 85;
+  window.egtphAutoMatch = async function(spId, silent){
+    var s = egtphMatchSuggestions(spId), n = 0;
+    for (var i=0;i<s.length;i++){
+      if (s[i].score < AUTO) continue;
+      await egtphApplyMatch(spId, s[i].srId, s[i].cand.id, true);
+      n++;
+    }
+    if (n && !silent) { try { T('🧩 رُبط '+n+' سجل تلقائياً (ثقة عالية)','success'); } catch(_) {} }
+    return n;
+  };
+
+  // ── لوحة الاقتراحات في ملف المورد ──
+  var baseDetail = window.renderSupDetail;
+  window.renderSupDetail = function(spId){
+    var out = baseDetail.apply(this, arguments);
+    setTimeout(async function(){
+      try {
+        if (document.getElementById('eg-sugg')) return;
+        await egtphAutoMatch(spId, true);
+        var s = egtphMatchSuggestions(spId).filter(function(x){ return x.score < AUTO; });
+        var undoable = false;
+        try { undoable = !!JSON.parse(localStorage.getItem('egtph_match_undo')||'null'); } catch(_) {}
+        if (!s.length && !undoable) return;
+        var root = document.getElementById('content'); if (!root) return;
+        var html = '<div id="eg-sugg"><div class="sh"><span style="flex:1">🔎 اقتراحات ربط ذكية</span>'
+          + (undoable ? '<button class="btn btn-sec btn-xs" onclick="egtphUndoMatch(\'' + spId + '\')">↩️ تراجع</button>' : '')
+          + '</div>'
+          + s.map(function(x){
+              return '<div class="sr"><div class="t1">«'+e(x.srName)+'» ≈ '
+                + (x.cand.kind==='group'?'📁 ':'📋 ') + e(x.cand.name)
+                + ' <span class="pct">'+x.score+'%</span></div>'
+                + '<div class="bar"><i style="width:'+x.score+'%"></i></div>'
+                + '<div class="why">'+e(x.why.join(' · '))
+                + (x.cand.nInv?(' · '+x.cand.nInv+' فاتورة · '+money(x.cand.total)):'')+'</div>'
+                + '<div class="acts">'
+                + '<button class="btn btn-grn btn-xs" onclick="egtphApplyMatch(\''+spId+'\',\''+x.srId+'\',\''+String(x.cand.id).replace(/\'/g,"")+'\').then(function(){renderSupDetail(\''+spId+'\')})">✓ ادمجهما</button>'
+                + '<button class="btn btn-sec btn-xs" onclick="egtphRejectMatch(\''+spId+'\',\''+x.srId+'\',\''+String(x.cand.id).replace(/\'/g,"")+'\')">✕ ليسا نفس الشيء</button>'
+                + '</div></div>';
+            }).join('') + '</div>';
+        var anchor = document.getElementById('eg-subacc');
+        var host = document.createElement('div'); host.innerHTML = html;
+        if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(host.firstChild, anchor);
+        else root.appendChild(host.firstChild);
+      } catch(_) {}
+    }, 400);
+    return out;
+  };
+})();
+</script>
+
+<style id="egtph-reclink-css">
+#eg-cost .reclink{display:flex;align-items:center;gap:8px;padding:11px 12px;
+  background:linear-gradient(90deg,rgba(59,130,246,.14),transparent);border-bottom:1px solid var(--bdr)}
+#eg-cost .reclink .t{flex:1;font-size:11.5px;font-weight:800;line-height:1.6}
+#eg-cost .reclink .t small{display:block;font-size:9.5px;color:var(--tx3);font-weight:400;margin-top:2px}
+#eg-cost .tr.auto .lk{color:var(--tx3)}
+#eg-cost .tr.auto .lk b{color:#93c5fd}
+</style>
+<script id="egtph-reclink-js">
+/* EGTPH — ربط سجل العميل كله بسجل مورد واحد:
+   كل شاحنات السجل تتبعه تلقائياً، وتبقى إمكانية تخصيص شاحنة بسعر مختلف. */
+(function(){
+  'use strict';
+  if (window.__egtphRecLink) return;
+  window.__egtphRecLink = true;
+
+  function e(s){ return (typeof esc==='function') ? esc(String(s==null?'':s)) : String(s==null?'':s); }
+  function num(v){ return parseFloat(v)||0; }
+  function money(v){ return (typeof fDA==='function') ? fDA(num(v)) : String(v); }
+  function supRecOf(id){ return (typeof prices!=='undefined'?prices:[]).find(function(p){ return p && p.type==='sup_rec' && p.id===id; }); }
+  function recOf(id){ return (typeof records!=='undefined'?records:[]).find(function(r){ return r.id===id; }); }
+
+  window.egtphRecordLink = function(recId){
+    return (typeof prices!=='undefined'?prices:[])
+      .find(function(p){ return p && p.type==='record_link' && p.recordId===recId; });
+  };
+  function trucksOf(recId){
+    var set = [];
+    (typeof entries!=='undefined'?entries:[]).forEach(function(en){
+      if (en.recordId!==recId || en.type!=='truck') return;
+      Object.keys(en.cols||{}).forEach(function(t){ if (set.indexOf(t)===-1) set.push(t); });
+    });
+    return set;
+  }
+
+  // روابط الشاحنات = الصريحة + المشتقّة من ربط السجل
+  var baseLinks = window.egtphTruckLinks;
+  window.egtphTruckLinks = function(recId){
+    var own = baseLinks ? baseLinks.call(this, recId) : [];
+    var rl = egtphRecordLink(recId);
+    if (!rl || !supRecOf(rl.supRecId)) return own;
+    var have = {};
+    own.forEach(function(l){ have[l.truck] = 1; });
+    var derived = trucksOf(recId).filter(function(t){ return !have[t]; }).map(function(t){
+      return { id:'rl_'+recId+'_'+t, type:'truck_link', recordId:recId, truck:t,
+               supplierId:rl.supplierId, supRecId:rl.supRecId, price:(rl.price!=null?rl.price:null),
+               fromRecordLink:true };
+    });
+    return own.concat(derived);
+  };
+
+  window.egtphLinkRecord = function(recId){
+    var rec = recOf(recId); if (!rec) return;
+    var cur = egtphRecordLink(recId);
+    var sps = (typeof suppliers!=='undefined'?suppliers:[]).filter(function(s){ return !s.mergedInto && !s.archived; });
+    var supOpts = '<option value="">— اختر المورد —</option>' + sps.map(function(s){
+      return '<option value="'+e(s.id)+'"'+(cur&&cur.supplierId===s.id?' selected':'')+'>'+e(s.name)+'</option>'; }).join('');
+    function recOpts(spId){
+      var rs = (typeof egtphSupRecords==='function' && spId) ? egtphSupRecords(spId) : [];
+      if (!rs.length) return '<option value="">— لا توجد سجلات عند هذا المورد —</option>';
+      return '<option value="">— اختر سجل المورد —</option>' + rs.map(function(r){
+        var lbl = r.name + (r.kind==='project' ? '' : ' · '+money(r.price)+'/'+(r.priceUnit||'وحدة'));
+        return '<option value="'+e(r.id)+'"'+(cur&&cur.supRecId===r.id?' selected':'')+'>'+e(lbl)+'</option>'; }).join('');
+    }
+    var mats = (typeof prices!=='undefined'?prices:[]).filter(function(p){ return p.recordId===recId && p.type==='mat_def'; });
+    var sell = mats.length ? num(mats[0].price) : 0, unit = mats.length ? (mats[0].priceUnit||'') : '';
+
+    OM('🔗 ربط سجل «'+e(rec.name)+'» بمورد',
+      '<div class="fg"><label>المورد *</label><select id="rl-sup" onchange="egtphRecLinkSupChanged()">'+supOpts+'</select></div>'
+      + '<div class="fg"><label>سجل المورد *</label><select id="rl-rec" onchange="egtphRecLinkRecChanged()">'+recOpts(cur?cur.supplierId:'')+'</select>'
+      + '<div class="hint" id="rl-hint">تُسجَّل كل كميات هذا السجل عند المورد داخل هذا السجل بسعره.</div></div>'
+      + '<div class="fg"><label>سعر التكلفة</label><input type="number" id="rl-p" step="0.01" min="0" value="'+(cur&&cur.price!=null?num(cur.price):'')+'" placeholder="يُؤخذ من سجل المورد">'
+      + '<div class="hint">'+(sell?('سعر بيعك: <b>'+money(sell)+(unit?('/'+e(unit)):'')+'</b> — اتركه فارغاً لاستعمال سعر سجل المورد.'):'اتركه فارغاً لاستعمال سعر سجل المورد.')+'</div></div>'
+      + (cur ? '<div style="text-align:left"><button class="btn btn-sec btn-xs" onclick="egtphUnlinkRecord(\''+recId+'\')">✕ إلغاء ربط السجل</button></div>' : ''),
+      async function(){
+        var spId = document.getElementById('rl-sup').value;
+        var srId = document.getElementById('rl-rec').value;
+        var pv = document.getElementById('rl-p').value;
+        if (!spId) return T('اختر المورد','error');
+        if (!srId) return T('اختر سجل المورد','error');
+        var obj = cur;
+        if (!obj) {
+          obj = { id:'rlk_'+(typeof uid==='function'?uid():Date.now()), type:'record_link',
+                  recordId:recId, createdAt:new Date().toISOString() };
+          prices.push(obj);
+        }
+        obj.supplierId = spId; obj.supRecId = srId; obj.price = (pv===''?null:num(pv));
+        obj._saved = new Date().toISOString();
+        var ok = await dbP('prices', obj);
+        if (!ok) return T('فشل الحفظ','error');
+        await egtphSyncCosts(recId, true);
+        CM();
+        var sr = supRecOf(srId);
+        T('🔗 «'+rec.name+'» → '+(sr?sr.name:'')+' · كل الشاحنات تتبعه','success');
+        renderCD(rec.clientId);
+      }, 'حفظ الربط');
+
+    setTimeout(function(){ try { egtphRecLinkSupChanged(); } catch(_) {} }, 60);
+    window.egtphRecLinkSupChanged = function(){
+      var sp = document.getElementById('rl-sup'), rs = document.getElementById('rl-rec');
+      if (!sp || !rs) return;
+      rs.innerHTML = recOpts(sp.value);
+      egtphRecLinkRecChanged();
+    };
+    window.egtphRecLinkRecChanged = function(){
+      var rs = document.getElementById('rl-rec'), h = document.getElementById('rl-hint'), pf = document.getElementById('rl-p');
+      if (!rs || !h) return;
+      var r = supRecOf(rs.value);
+      if (!r) { h.textContent = 'اختر سجلاً من سجلات هذا المورد.'; return; }
+      var inv = (window._supInvs||[]).filter(function(v){ return v.supRecId===r.id; }).length;
+      if (pf && !pf.value) pf.placeholder = money(r.price)+'/'+(r.priceUnit||'وحدة');
+      h.innerHTML = 'كل كميات «'+e(rec.name)+'» ستُسجَّل في «'+e(r.name)+'» بسعر <b>'
+        + money(r.price)+'/'+e(r.priceUnit||'وحدة')+'</b>'+(inv?(' — فيه '+inv+' فاتورة سابقة، وتُضاف إليها بلا تكرار.'):'.');
+    };
+  };
+
+  window.egtphUnlinkRecord = async function(recId){
+    var rl = egtphRecordLink(recId);
+    if (rl) { prices = prices.filter(function(p){ return p.id!==rl.id; }); await dbD('prices', rl.id); }
+    await egtphSyncCosts(recId, true);
+    try { await egtphCleanupAuto(true); } catch(_) {}
+    CM(); T('أُلغي ربط السجل','success');
+    var rec = recOf(recId); if (rec) renderCD(rec.clientId);
+  };
+
+  // ── سطر الربط أعلى لوحة التكلفة + وسم الشاحنات المشتقّة ──
+  function decorate(recId){
+    var box = document.getElementById('eg-cost'); if (!box) return;
+    if (box.querySelector('.reclink')) return;
+    var rl = egtphRecordLink(recId), sr = rl ? supRecOf(rl.supRecId) : null;
+    var sp = rl ? (typeof suppliers!=='undefined'?suppliers:[]).find(function(x){ return x.id===rl.supplierId; }) : null;
+    var html = '<div class="reclink"><span class="t">'
+      + (sr ? ('🔗 هذا السجل مربوط بـ <b style="color:var(--gold2)">'+e(sp?sp.name:'')+'</b> · '+e(sr.name)
+               + ' · '+money(rl.price!=null?rl.price:sr.price)+'/'+e(sr.priceUnit||'وحدة')
+               + '<small>كل شاحنات السجل تتبعه تلقائياً — إلا شاحنة ربطتها بمورد آخر.</small>')
+            : ('🔗 اربط هذا السجل بمورد<small>خطوة واحدة: اختر المورد وسجله، فتتبعه كل الشاحنات.</small>'))
+      + '</span><button class="btn '+(sr?'btn-sec':'btn-gold')+' btn-xs" onclick="egtphLinkRecord(\''+recId+'\')">'
+      + (sr?'✎ تعديل':'🔗 ربط الآن')+'</button></div>';
+    var head = box.querySelector('.ch');
+    if (head) head.insertAdjacentHTML('afterend', html);
+    // وسم الشاحنات التابعة لربط السجل
+    if (sr) {
+      var links = egtphTruckLinks(recId);
+      Array.prototype.forEach.call(box.querySelectorAll('.tr'), function(row){
+        var nm = (row.querySelector('.tn')||{}).textContent || '';
+        nm = nm.replace('🚛','').trim();
+        var l = links.find(function(x){ return x.truck===nm; });
+        if (l && l.fromRecordLink) {
+          row.classList.add('auto');
+          var lk = row.querySelector('.lk');
+          if (lk && lk.innerHTML.indexOf('من ربط السجل')===-1)
+            lk.insertAdjacentHTML('beforeend','<span style="font-size:9px;color:#93c5fd"> · من ربط السجل</span>');
+        }
+      });
+    }
+  }
+  var baseCD = window.renderCD;
+  window.renderCD = function(cid){
+    var out = baseCD.apply(this, arguments);
+    setTimeout(function(){
+      try { if (typeof activeRid!=='undefined' && activeRid) decorate(activeRid); } catch(_) {}
+    }, 60);
+    return out;
+  };
 })();
 </script>
 
