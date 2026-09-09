@@ -12511,6 +12511,19 @@ if (document.readyState === 'loading') {
   border:1px solid var(--bdr);background:var(--bg2);color:var(--tx2);cursor:pointer;white-space:nowrap}
 .eg-chip.on{border-color:var(--gold);background:var(--gdim);color:var(--gold2)}
 .eg-chip i{font-style:normal;font-family:'Inter';font-size:9px;color:var(--tx3)}
+
+/* ══ تمرير أفقي مضمون لكل جدول ضيّق على الهاتف + مؤشر «مرّر» ══ */
+.tw{overflow-x:auto!important;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.tw::-webkit-scrollbar{height:5px}
+.tw::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:5px}
+.eg-scrollx{overflow-x:auto!important;-webkit-overflow-scrolling:touch}
+.eg-scrollx::-webkit-scrollbar{height:5px}
+.eg-scrollx::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:5px}
+.eg-scrollhint{position:relative}
+.eg-scrollhint::after{content:"↔ مرّر";position:absolute;left:8px;top:6px;z-index:3;
+  font-size:8.5px;font-weight:800;color:var(--gold2);background:rgba(11,15,26,.9);
+  border:1px solid rgba(201,168,76,.4);border-radius:20px;padding:2px 7px;pointer-events:none}
+
 .sup-row .sup-bar{height:3px;border-radius:3px;background:rgba(255,255,255,.07);margin-top:5px;overflow:hidden}
 .sup-row .sup-bar i{display:block;height:100%}
 .sup-row .sup-amt{flex:none;text-align:left}
@@ -12890,8 +12903,14 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
   background:linear-gradient(90deg,rgba(201,168,76,.16),transparent);border-bottom:1px solid var(--bdr)}
 #eg-subacc .sa-hd .t{font-size:11.5px;font-weight:900;color:var(--gold2)}
 #eg-subacc .sa-hd .acts{display:flex;gap:5px}
-#eg-subacc .sa-row{display:grid;grid-template-columns:1.15fr .95fr .95fr .95fr;gap:6px;align-items:center;
-  padding:9px 12px;border-bottom:1px solid var(--bdr)}
+#eg-subacc .sa-row{display:grid;grid-template-columns:1fr;gap:7px;align-items:center;
+  padding:10px 12px;border-bottom:1px solid var(--bdr)}
+#eg-subacc .sa-vals{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;
+  background:rgba(255,255,255,.03);border:1px solid var(--bdr);border-radius:8px;padding:7px 4px}
+@media (min-width:760px){
+  #eg-subacc .sa-row{grid-template-columns:1.3fr 2fr}
+  #eg-subacc .sa-vals{background:none;border:0;padding:0}
+}
 #eg-subacc .sa-row:last-child{border-bottom:0}
 #eg-subacc .sa-row.tot{background:rgba(255,255,255,.04)}
 #eg-subacc .sa-n{font-size:11.5px;font-weight:800;line-height:1.45;word-break:break-word}
@@ -13047,25 +13066,29 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
           + (rid ? '<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();egtphNewSupRec(\''+spId+'\',\''+rid+'\')">✎</button>'
                  : (r.name!==GEN ? '<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();egtphRenameAccount(\''+spId+'\',\''+String(r.name).replace(/'/g,"")+'\')">✎</button>' : ''))
           + '</div></div>'
-          + '<div class="sa-v"><b style="color:var(--gold2)">'+money(r.invoiced)+'</b><span>الفواتير</span></div>'
-          + '<div class="sa-v"><b style="color:var(--green)">'+money(r.paid)+'</b><span>المدفوع</span></div>'
-          + '<div class="sa-v"><b style="color:'+st.c+'">'+st.t+'</b><span>'+st.l+'</span></div>'
+          + '<div class="sa-vals">'
+          +   '<div class="sa-v"><b style="color:var(--gold2)">'+money(r.invoiced)+'</b><span>الفواتير</span></div>'
+          +   '<div class="sa-v"><b style="color:var(--green)">'+money(r.paid)+'</b><span>المدفوع</span></div>'
+          +   '<div class="sa-v"><b style="color:'+st.c+'">'+st.t+'</b><span>'+st.l+'</span></div>'
+          + '</div>'
           + itemsBreakdown(spId, r) + '</div>';
       }).join('');
     }
     return '<div id="eg-subacc">'
       + '<div class="sa-hd"><span class="t">📋 سجلات المورد (خدمة · سعر)</span>'
       + '<span class="acts"><button class="btn btn-gold btn-xs" onclick="egtphNewSupRec(\''+spId+'\')">＋ سجل</button>'
+      + '<button class="btn btn-sec btn-xs" onclick="egtphMergeDupRecords(\''+spId+'\').then(function(){renderSupDetail(\''+spId+'\')})">🧹</button>'
       + '<button class="btn btn-sec btn-xs" onclick="egtphArchiveSupplier(\''+spId+'\')">🗄</button>'
       + '<button class="btn btn-sec btn-xs" onclick="egtphAssignAccounts(\''+spId+'\')">🏷 توزيع</button>'
       + '<button class="btn btn-sec btn-xs" onclick="egtphMergeSupplier(\''+spId+'\')">🔗 دمج</button></span></div>'
       + body
       + '<div class="sa-row tot"><div class="sa-n">∑ المجموع العام</div>'
+      + '<div class="sa-vals">'
       + '<div class="sa-v"><b style="color:var(--gold2)">'+money(gInv)+'</b><span>الفواتير</span></div>'
       + '<div class="sa-v"><b style="color:var(--green)">'+money(gPaid)+'</b><span>المدفوع</span></div>'
       + '<div class="sa-v"><b style="color:'+(gBal<0?'var(--blue)':gBal>0?'var(--red)':'var(--green)')+'">'
       + (gBal===0 ? '✓ مسدّد' : money(Math.abs(gBal)))
-      + '</b><span>'+(gBal<0?'رصيد لنا':gBal>0?'المتبقي':'الحالة')+'</span></div></div>'
+      + '</b><span>'+(gBal<0?'رصيد لنا':gBal>0?'المتبقي':'الحالة')+'</span></div></div></div>'
       + '</div>';
   }
 
@@ -14186,19 +14209,39 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
         .map(function(sp){ return '<option value="'+e(sp.id)+'"'+(cur&&cur.supplierId===sp.id?' selected':'')+'>'+e(sp.name)+'</option>'; }).join('');
 
     // سجلات جاهزة عند هذا المورد (للاختيار بدل إنشاء جديد)
+    // أفضل مطابقة بين سجلات المورد الموجودة وسجل العميل/المادة — نتجنّب إنشاء سجل مكرّر
+    function scoreRec(r){
+      var n = String(r.name||''), sc = 0;
+      if (matName && n.indexOf(matName) !== -1) sc += 3;
+      if (rec && rec.name && n.indexOf(rec.name) !== -1) sc += 3;
+      if (r.linkedRecordId === recId) sc += 6;
+      if (r.priceUnit && unit && r.priceUnit === unit) sc += 1;
+      // كلمات مشتركة (لحلاف، الحصى، التيف…)
+      var w = String((rec&&rec.name)||'').split(/\s+/).concat(String(matName||'').split(/\s+/));
+      w.forEach(function(x){ if (x && x.length>2 && n.indexOf(x)!==-1) sc += 2; });
+      return sc;
+    }
+    function bestExisting(spId){
+      var recs = (typeof egtphSupRecords==='function' && spId) ? egtphSupRecords(spId) : [];
+      var best = null, bs = 0;
+      recs.forEach(function(r){ var s2 = scoreRec(r); if (s2 > bs) { bs = s2; best = r; } });
+      return bs >= 2 ? best : null;
+    }
     function existingOpts(spId){
       var recs = (typeof egtphSupRecords==='function' && spId) ? egtphSupRecords(spId) : [];
-      return '<option value="__auto__">➕ سجل جديد باسم «'+e(autoName(rec, matName))+'»</option>' +
-        recs.map(function(r){
+      var pick = cur ? cur.supRecId : (bestExisting(spId)||{}).id;
+      return recs.map(function(r){
           var lbl = r.name + (r.kind==='project' ? '' : ' · '+money(r.price)+'/'+(r.priceUnit||'وحدة'));
-          return '<option value="'+e(r.id)+'"'+(cur&&cur.supRecId===r.id?' selected':'')+'>📋 '+e(lbl)+'</option>';
-        }).join('');
+          var mark = (r.id === ((bestExisting(spId)||{}).id)) ? '⭐ ' : '📋 ';
+          return '<option value="'+e(r.id)+'"'+(pick===r.id?' selected':'')+'>'+mark+e(lbl)+'</option>';
+        }).join('')
+        + '<option value="__auto__"'+(recs.length?'':' selected')+'>➕ سجل جديد باسم «'+e(autoName(rec, matName))+'»</option>';
     }
 
     OM('🔗 ربط الشاحنة '+e(truck)+' بمورد',
       '<div class="fg"><label>المورد *</label><select id="cl-sup" onchange="egtphLinkSupChanged()">'+supOpts+'</select></div>'
-      + '<div class="fg"><label>سجل المورد</label><select id="cl-rec">'+existingOpts(cur?cur.supplierId:'')+'</select>'
-      + '<div class="hint">السجل الجديد يأخذ اسم سجل العميل تلقائياً، ويتغيّر معه إن غيّرت اسمه لاحقاً.</div></div>'
+      + '<div class="fg"><label>سجل المورد</label><select id="cl-rec" onchange="egtphLinkRecChanged()">'+existingOpts(cur?cur.supplierId:'')+'</select>'
+      + '<div class="hint" id="cl-hint">⭐ = السجل القديم المطابق — يُختار تلقائياً حتى لا يتكرّر الحساب. اختر «➕ سجل جديد» فقط إن لم يكن موجوداً.</div></div>'
       + '<div class="fg"><label>سعر التكلفة *</label>'
       + '<input type="number" id="cl-p" step="0.01" min="0" value="'+(curSr?num(curSr.price):(cur&&cur.price!=null?num(cur.price):''))+'" placeholder="مثال: 0.70"> '
       + '<div class="hint">تُدخله مرة واحدة فقط، ثم يتبع هذا السجل دائماً.'
@@ -14217,6 +14260,13 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
           if (sr && price > 0 && num(sr.price) !== price) { sr.price = price; sr._saved=new Date().toISOString(); await dbP('prices', sr); }
         } else {
           if (!(price > 0)) return T('أدخل سعر التكلفة','error');
+          var similar = bestExisting(spId);
+          if (similar && !window.__egConfirmDup) {
+            window.__egConfirmDup = true;
+            T('⚠️ يوجد سجل مشابه «'+similar.name+'» — اضغط «حفظ الربط» مرة أخرى لإنشاء سجل جديد رغم ذلك، أو اختره من القائمة.','warning',6000);
+            return;
+          }
+          window.__egConfirmDup = false;
           sr = { id:'sr_'+uid2(), type:'sup_rec', supplierId:spId, kind:'service',
                  name: autoName(rec, matName), price: price, priceUnit: unit,
                  linkedRecordId: recId, linkedMaterial: matName,
@@ -14246,11 +14296,25 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       var chosen = supRecOf(rs.value);
       var pf = document.getElementById('cl-p');
       if (chosen && pf) pf.value = num(chosen.price);
-      rs.onchange = function(){
-        var c2 = supRecOf(rs.value);
-        if (c2 && pf) pf.value = num(c2.price);
-      };
+      rs.onchange = function(){ egtphLinkRecChanged(); };
+      egtphLinkRecChanged();
     };
+  };
+
+  window.egtphLinkRecChanged = function(){
+    var rs = document.getElementById('cl-rec'), pf = document.getElementById('cl-p'), h = document.getElementById('cl-hint');
+    if (!rs) return;
+    var r = (typeof prices!=='undefined'?prices:[]).find(function(p){ return p && p.type==='sup_rec' && p.id===rs.value; });
+    if (r && pf) pf.value = (parseFloat(r.price)||0);
+    if (h) {
+      if (r) {
+        var inv = (window._supInvs||[]).filter(function(v){ return v.supRecId===r.id; }).length;
+        h.innerHTML = '📋 سيُضاف إلى السجل الموجود «'+(typeof esc==='function'?esc(r.name):r.name)+'»'
+          + (inv ? (' — فيه '+inv+' فاتورة سابقة، والكميات الجديدة تُضاف إليها بلا تكرار.') : '');
+      } else {
+        h.innerHTML = '➕ سيُنشأ سجل جديد. تأكّد أنه غير موجود مسبقاً حتى لا يتكرّر الحساب.';
+      }
+    }
   };
 
   window.egtphUnlinkTruck = async function(recId, truck){
@@ -14541,6 +14605,233 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
   var baseRS = window.renderSettings;
   if (typeof baseRS === 'function') {
     window.renderSettings = function(){ var r = baseRS.apply(this, arguments); setTimeout(inject, 0); return r; };
+  }
+})();
+</script>
+
+<script id="egtph-scrollfix-js">
+/* EGTPH — أي كتلة أعرض من الشاشة تصير قابلة للتمرير أفقياً مع مؤشر «↔ مرّر» */
+(function(){
+  'use strict';
+  if (window.__egtphScrollFix) return;
+  window.__egtphScrollFix = true;
+  function fix(){
+    var root = document.getElementById('content'); if (!root) return;
+    var nodes = root.querySelectorAll('div,table,section');
+    for (var i=0;i<nodes.length;i++){
+      var el = nodes[i];
+      if (el.closest('#eg-viewbar') || el.classList.contains('eg-chips')) continue;
+      var over = el.scrollWidth - el.clientWidth;
+      if (over <= 8) { el.classList.remove('eg-scrollhint'); continue; }
+      var ox = getComputedStyle(el).overflowX;
+      if (ox !== 'auto' && ox !== 'scroll') el.classList.add('eg-scrollx');
+      if (!el.classList.contains('eg-scrollhint') && over > 24) {
+        el.classList.add('eg-scrollhint');
+        (function(node){
+          node.addEventListener('scroll', function(){
+            if (node.scrollLeft > 12) node.classList.remove('eg-scrollhint');
+          }, {passive:true});
+        })(el);
+      }
+    }
+  }
+  var t = null;
+  function schedule(){ clearTimeout(t); t = setTimeout(fix, 180); }
+  try { new MutationObserver(schedule).observe(document.body, {childList:true, subtree:true}); } catch(_) {}
+  window.addEventListener('resize', schedule);
+  window.addEventListener('orientationchange', function(){ setTimeout(fix, 300); });
+  setTimeout(fix, 1500);
+})();
+</script>
+
+<script id="egtph-dedup-js">
+/* EGTPH — دمج تلقائي لسجلات المورد المكرّرة:
+   السجل المولَّد الذي يطابق سجلاً قديماً يُدمج فيه ويُحذف، وتنتقل حركاته وروابطه. */
+(function(){
+  'use strict';
+  if (window.__egtphDedup) return;
+  window.__egtphDedup = true;
+
+  function norm(s){
+    return String(s||'')
+      .replace(/[\u064B-\u0652]/g,'')          // التشكيل
+      .replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه')
+      .replace(/[^\u0621-\u064Aa-zA-Z0-9]+/g,' ')
+      .trim().toLowerCase();
+  }
+  function words(s){ return norm(s).split(' ').filter(function(w){ return w.length>2; }); }
+  function num(v){ return parseFloat(v)||0; }
+
+  function recs(spId){
+    return (typeof prices!=='undefined'?prices:[])
+      .filter(function(p){ return p && p.type==='sup_rec' && p.supplierId===spId; })
+      .sort(function(a,b){ return String(a.createdAt||'').localeCompare(String(b.createdAt||'')); });
+  }
+  function invsOf(id){ return (window._supInvs||[]).filter(function(v){ return v.supRecId===id; }); }
+  function paysOf(id){ return (typeof supPays!=='undefined'?supPays:[]).filter(function(x){ return x.supRecId===id; }); }
+  function manualInvs(id){ return invsOf(id).filter(function(v){ return !v.autoFrom; }); }
+
+  // تشابه قويّ يكفي للدمج التلقائي
+  function similar(a, b){
+    if (norm(a.name) === norm(b.name)) return true;
+    var wa = words(a.name), wb = words(b.name);
+    var common = wa.filter(function(w){ return wb.indexOf(w) !== -1; }).length;
+    var sameUnit  = (a.priceUnit||'') === (b.priceUnit||'');
+    var samePrice = Math.abs(num(a.price) - num(b.price)) < 0.001;
+    // كلمتان مشتركتان على الأقل + نفس الوحدة والسعر
+    return common >= 2 && sameUnit && samePrice;
+  }
+
+  window.egtphFindDupRecords = function(spId){
+    var list = recs(spId), pairs = [];
+    for (var i=0;i<list.length;i++){
+      for (var j=i+1;j<list.length;j++){
+        var a = list[i], b = list[j];
+        if (!similar(a,b)) continue;
+        // لا نمسّ حالة فيها فواتير يدوية على الطرفين — تحتاج قرارك
+        if (manualInvs(a.id).length && manualInvs(b.id).length) { pairs.push({keep:a, dup:b, unsafe:true}); continue; }
+        // نُبقي الأقدم، إلا إذا كان الأحدث هو صاحب الفواتير اليدوية
+        var keep = a, dup = b;
+        if (!manualInvs(a.id).length && manualInvs(b.id).length) { keep = b; dup = a; }
+        pairs.push({keep:keep, dup:dup, unsafe:false});
+      }
+    }
+    return pairs;
+  };
+
+  window.egtphMergeDupRecords = async function(spId, silent){
+    var pairs = egtphFindDupRecords(spId).filter(function(p){ return !p.unsafe; });
+    var done = 0, moved = 0;
+    for (var i=0;i<pairs.length;i++){
+      var keep = pairs[i].keep, dup = pairs[i].dup;
+      if (!keep || !dup || keep.id === dup.id) continue;
+      if (!(typeof prices!=='undefined') || !prices.some(function(p){ return p.id===dup.id; })) continue;
+
+      // الروابط تنتقل إلى السجل المُبقى
+      var links = prices.filter(function(p){ return p && p.type==='truck_link' && p.supRecId===dup.id; });
+      for (var k=0;k<links.length;k++){
+        links[k].supRecId = keep.id; links[k].supplierId = keep.supplierId;
+        links[k]._saved = new Date().toISOString();
+        await dbP('prices', links[k]); moved++;
+      }
+      // الفواتير اليدوية تنتقل بالاسم الجديد؛ التلقائية تُحذف وتُولَّد من جديد
+      var vs = invsOf(dup.id);
+      for (var j=0;j<vs.length;j++){
+        if (vs[j].autoFrom) {
+          window._supInvs = window._supInvs.filter(function(x){ return x.id!==vs[j].id; });
+          await dbD('sup_invoices', vs[j].id);
+        } else {
+          vs[j].supRecId = keep.id; vs[j].account = keep.name;
+          if (vs[j].projectName === dup.name) vs[j].projectName = keep.name;
+          vs[j]._saved = new Date().toISOString();
+          await dbP('sup_invoices', vs[j]); moved++;
+        }
+      }
+      // الدفعات والتسبيقات
+      var ps = paysOf(dup.id);
+      for (var m=0;m<ps.length;m++){
+        ps[m].supRecId = keep.id; ps[m].account = keep.name;
+        ps[m]._saved = new Date().toISOString();
+        await dbP('sup_pays', ps[m]); moved++;
+      }
+      // احذف السجل المكرّر
+      prices = prices.filter(function(p){ return p.id!==dup.id; });
+      await dbD('prices', dup.id);
+      done++;
+
+      // أعد توليد الفواتير التلقائية للسجلات المرتبطة
+      var affected = [];
+      prices.filter(function(p){ return p && p.type==='truck_link' && p.supRecId===keep.id; })
+            .forEach(function(l){ if (affected.indexOf(l.recordId)===-1) affected.push(l.recordId); });
+      for (var a=0;a<affected.length;a++){
+        try { await egtphSyncCosts(affected[a], true); } catch(_) {}
+      }
+    }
+    if (done && !silent) {
+      try { T('🧹 دُمج '+done+' سجل مكرّر ونُقلت '+moved+' حركة','success'); } catch(_) {}
+    }
+    return {merged:done, moved:moved};
+  };
+
+  window.egtphMergeDupAll = async function(silent){
+    var tot = {merged:0, moved:0};
+    var sps = (typeof suppliers!=='undefined'?suppliers:[]);
+    for (var i=0;i<sps.length;i++){
+      var r = await egtphMergeDupRecords(sps[i].id, true);
+      tot.merged += r.merged; tot.moved += r.moved;
+    }
+    if (tot.merged && !silent) { try { T('🧹 دُمج '+tot.merged+' سجل مكرّر تلقائياً','success'); } catch(_) {} }
+    return tot;
+  };
+
+  // ── تلقائي: عند الإقلاع، وعند فتح ملف أي مورد، وبعد كل ربط شاحنة ──
+  setTimeout(function(){ try { egtphMergeDupAll(true); } catch(_) {} }, 9000);
+
+  var lastDedup = {};
+  var baseDetail = window.renderSupDetail;
+  if (typeof baseDetail === 'function') {
+    window.renderSupDetail = function(spId){
+      var out = baseDetail.apply(this, arguments);
+      setTimeout(function(){
+        try {
+          if (lastDedup[spId] && Date.now() - lastDedup[spId] < 4000) return;
+          lastDedup[spId] = Date.now();
+          if (!egtphFindDupRecords(spId).some(function(p){ return !p.unsafe; })) return;
+          egtphMergeDupRecords(spId, true).then(function(r){
+            if (r && r.merged) {
+              try { T('🧹 دُمج '+r.merged+' سجل مكرّر تلقائياً','success'); } catch(_) {}
+              renderSupDetail(spId);
+            }
+          });
+        } catch(_) {}
+      }, 300);
+      return out;
+    };
+  }
+
+  var baseSync = window.egtphSyncCosts;
+  if (typeof baseSync === 'function') {
+    var busy = false;
+    window.egtphSyncCosts = async function(recId, force){
+      var out = await baseSync.apply(this, arguments);
+      if (!busy) {
+        busy = true;
+        try {
+          var sps = {};
+          (typeof prices!=='undefined'?prices:[])
+            .filter(function(p){ return p && p.type==='truck_link' && p.recordId===recId; })
+            .forEach(function(l){ sps[l.supplierId] = 1; });
+          for (var id in sps) { await egtphMergeDupRecords(id, true); }
+        } catch(_) {} finally { busy = false; }
+      }
+      return out;
+    };
+  }
+
+  // ── يظهر في فحص السلامة كبند قابل للإصلاح ──
+  var baseCheck = window.egtphHealthCheck;
+  if (typeof baseCheck === 'function') {
+    window.egtphHealthCheck = function(){
+      var R = baseCheck.apply(this, arguments);
+      var dups = [], unsafe = [];
+      (typeof suppliers!=='undefined'?suppliers:[]).forEach(function(s){
+        egtphFindDupRecords(s.id).forEach(function(p){
+          (p.unsafe ? unsafe : dups).push(s.name+': «'+p.dup.name+'» ≈ «'+p.keep.name+'»');
+        });
+      });
+      R.push({ level: dups.length?'warn':'ok', title:'سجلات مورد مكرّرة', items:dups,
+               fix: dups.length ? {kind:'mergeDup'} : null });
+      if (unsafe.length) R.push({ level:'warn', title:'سجلات متشابهة بفواتير يدوية (تحتاج قرارك)', items:unsafe, fix:null });
+      return R;
+    };
+  }
+  var baseFix = window.egtphHealthFix;
+  if (typeof baseFix === 'function') {
+    window.egtphHealthFix = async function(){
+      var n = await baseFix.apply(this, arguments);
+      try { var r = await egtphMergeDupAll(true); n += r.merged; } catch(_) {}
+      return n;
+    };
   }
 })();
 </script>
