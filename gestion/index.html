@@ -2201,10 +2201,11 @@ function renderTripStats() {
   const s = tripStatsState();
   const allTruckRecords = records.filter(r=>r.type==='trucks');
   const scopedRecords = _tsRecords(s);
+  const clientRecords = records.filter(r=>r.type==='trucks' && (!s.clientId || r.clientId===s.clientId));
 
   // A record always belongs to one client. Do not keep an orphan selection
   // after the user changes that client.
-  s.recordIds = (s.recordIds||[]).filter(id=>scopedRecords.some(r=>r.id===id));
+  s.recordIds = (s.recordIds||[]).filter(id=>clientRecords.some(r=>r.id===id));
   if (s.recordId && !scopedRecords.some(r=>r.id===s.recordId)) {
     s.recordId='';
     s.material='';
@@ -2270,7 +2271,7 @@ function renderTripStats() {
         <div class="fg ts-wide" style="margin:0"><label>السجل / السجلات</label>
           <div class="ts-truck-chips">
             <button class="rtab ${!s.recordIds.length?'on':''}" onclick="clearTripStatsRecords()">${s.clientId?'كل سجلات العميل':'كل السجلات'}</button>
-            ${scopedRecords.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar'))
+            ${clientRecords.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar'))
               .map(r=>`<button class="rtab ${s.recordIds.includes(r.id)?'on':''}" onclick="toggleTripStatsRecord('${r.id}')">📋 ${esc(r.name)}</button>`).join('')
               || '<span style="font-size:10.5px;color:var(--tx3)">اختر العميل لتظهر سجلاته</span>'}
           </div>
@@ -13068,7 +13069,8 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
           + ((r.remain>0) ? ('<button class="btn btn-grn btn-xs" onclick="event.stopPropagation();egtphSettleRec(\''+spId+'\',\''+String(rid||r.name).replace(/'/g,"")+'\')">✅ تسديد</button>') : '')
           + '<button class="btn btn-grn btn-xs" onclick="event.stopPropagation();'+payFn+'\'pay\')">＋ دفعة</button>'
           + '<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();'+payFn+'\'adv\')">＋ تسبيق</button>'
-          + (rid ? '<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();egtphNewSupRec(\''+spId+'\',\''+rid+'\')">✎</button>'
+          + (rid ? ('<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();egtphNewSupRec(\''+spId+'\',\''+rid+'\')">✎</button>'
+                 + '<button class="del-btn btn-xs" style="padding:4px 7px;font-size:9.5px" onclick="event.stopPropagation();egtphDeleteSupRec(\''+spId+'\',\''+rid+'\')">🗑</button>')
                  : (r.name!==GEN ? '<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();egtphRenameAccount(\''+spId+'\',\''+String(r.name).replace(/'/g,"")+'\')">✎</button>' : ''))
           + '</div></div>'
           + '<div class="sa-vals">'
@@ -13163,6 +13165,49 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
         sp.archived = true; sp._saved = new Date().toISOString(); await dbP('suppliers', sp);
         CM(); T('🗄 أُرشف «'+sp.name+'»','success'); nav('suppliers');
       }, 'أرشفة');
+  };
+
+  // حذف سجل مورد مع نقل حركاته إلى «عام» أو حذفها
+  window.egtphDeleteSupRec = function(spId, srId){
+    var sr = (typeof prices!=='undefined'?prices:[]).find(function(p){ return p && p.type==='sup_rec' && p.id===srId; });
+    if (!sr) return T('السجل غير موجود','error');
+    var invs2 = (window._supInvs||[]).filter(function(v){ return v.supRecId===srId; });
+    var pays2 = (typeof supPays!=='undefined'?supPays:[]).filter(function(x){ return x.supRecId===srId; });
+    var autos = invs2.filter(function(v){ return v.autoFrom; });
+    var man   = invs2.filter(function(v){ return !v.autoFrom; });
+    var links = (typeof prices!=='undefined'?prices:[]).filter(function(p){
+      return p && (p.type==='truck_link' || p.type==='record_link') && p.supRecId===srId; });
+    var tot = man.reduce(function(t,v){ return t+num(v.total); },0)
+            + pays2.reduce(function(t,x){ return t+num(x.amount); },0);
+    OM('🗑 حذف سجل «'+e(sr.name)+'»',
+      '<div style="font-size:11.5px;line-height:1.9;color:var(--tx2)">'
+      + 'الحركات المرتبطة: <b>'+man.length+'</b> فاتورة يدوية · <b>'+pays2.length+'</b> دفعة'
+      + (autos.length?(' · <b>'+autos.length+'</b> فاتورة مولَّدة تلقائياً'):'')
+      + (links.length?(' · <b>'+links.length+'</b> ربط'):'')
+      + '</div>'
+      + (man.length||pays2.length ? ('<div class="fg" style="margin-top:10px"><label>ماذا نفعل بالحركات اليدوية ('+money(tot)+')؟</label>'
+        + '<select id="dl-mode">'
+        + '<option value="move">↪️ انقلها إلى «عام» (لا يضيع أي مبلغ)</option>'
+        + '<option value="del">🗑 احذفها نهائياً</option>'
+        + '</select></div>') : '')
+      + (links.length ? '<div class="hint" style="color:var(--orange)">⚠️ سيُلغى الربط، وتُحذف الفواتير المولَّدة تلقائياً.</div>' : ''),
+      async function(){
+        var mode = (document.getElementById('dl-mode')||{}).value || 'move';
+        for (var i=0;i<links.length;i++){ prices = prices.filter(function(p){ return p.id!==links[i].id; }); await dbD('prices', links[i].id); }
+        for (var a=0;a<autos.length;a++){ window._supInvs = window._supInvs.filter(function(x){ return x.id!==autos[a].id; }); await dbD('sup_invoices', autos[a].id); }
+        for (var j=0;j<man.length;j++){
+          if (mode==='del'){ window._supInvs = window._supInvs.filter(function(x){ return x.id!==man[j].id; }); await dbD('sup_invoices', man[j].id); }
+          else { man[j].supRecId=''; man[j].account=''; man[j]._saved=new Date().toISOString(); await dbP('sup_invoices', man[j]); }
+        }
+        for (var k=0;k<pays2.length;k++){
+          if (mode==='del'){ supPays = supPays.filter(function(x){ return x.id!==pays2[k].id; }); await dbD('sup_pays', pays2[k].id); }
+          else { pays2[k].supRecId=''; pays2[k].account=''; pays2[k]._saved=new Date().toISOString(); await dbP('sup_pays', pays2[k]); }
+        }
+        prices = prices.filter(function(p){ return p.id!==srId; });
+        await dbD('prices', srId);
+        CM(); T(mode==='del' ? '🗑 حُذف السجل وحركاته' : '🗑 حُذف السجل ونُقلت حركاته إلى «عام»','success');
+        renderSupDetail(spId);
+      }, 'حذف السجل');
   };
 
   // إعادة تسمية سجل حر (غير معرّف) — مثل الناتج عن الدمج
@@ -15357,6 +15402,22 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
 #eg-subacc .sa-qty span{font-size:9.5px;color:var(--tx2);background:rgba(34,211,238,.08);
   border:1px solid rgba(34,211,238,.3);border-radius:6px;padding:3px 7px}
 #eg-subacc .sa-qty b{color:var(--cyan);font-family:'Inter';direction:ltr}
+
+/* ══ عرض سجلات المورد كبطاقات مرتّبة بخط واضح ══ */
+#eg-subacc .sa-row{padding:13px 12px}
+#eg-subacc .sa-n{font-size:15px!important;font-weight:900;line-height:1.5}
+#eg-subacc .sa-n>div:first-of-type{font-size:9.5px!important}
+#eg-subacc .sa-price{font-size:11px!important;background:rgba(201,168,76,.14);
+  border:1px solid rgba(201,168,76,.35);border-radius:6px;padding:2px 7px;margin-right:6px}
+#eg-subacc .sa-vals{grid-template-columns:repeat(3,1fr);padding:10px 6px;border-radius:10px}
+#eg-subacc .sa-v b{font-size:14px!important;letter-spacing:-.3px}
+#eg-subacc .sa-v span{font-size:9.5px!important;color:var(--tx3)}
+#eg-subacc .sa-btns{margin-top:8px}
+#eg-subacc .sa-btns button{padding:6px 9px!important;font-size:10.5px!important;border-radius:8px}
+#eg-subacc .sa-qty span,#eg-subacc .sa-items .it{font-size:10.5px!important;padding:4px 8px}
+#eg-subacc .sa-row.tot{background:rgba(201,168,76,.07)}
+#eg-subacc .sa-row.tot .sa-n{color:var(--gold2)}
+#eg-subacc .sa-row+.sa-row{border-top:2px solid var(--bdr)}
 </style>
 <script id="egtph-diff-js">
 /* EGTPH — التناقضات: مقارنة الكميات بين سجل العميل وسجل المورد المربوط (كميات فقط). */
@@ -15513,6 +15574,393 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     }
     return baseNav.apply(this, arguments);
   };
+})();
+</script>
+
+<style id="egtph-tssup-css">
+#eg-tssup{margin:10px 0 0}
+#eg-tssup .lbl{font-size:10.5px;color:var(--tx2);font-weight:800;margin:0 0 5px}
+#eg-tssup .chips{display:flex;gap:5px;flex-wrap:wrap}
+#eg-tssup .chips button{padding:7px 11px;border-radius:9px;border:1px solid var(--bdr);
+  background:var(--bg3);color:var(--tx2);font-family:inherit;font-size:11px;font-weight:800;cursor:pointer}
+#eg-tssup .chips button.on{background:var(--gdim);border-color:var(--gold);color:var(--gold2)}
+#eg-tssup .hint{font-size:9.5px;color:var(--tx3);margin-top:5px;line-height:1.6}
+#eg-tscost{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:0 13px 14px}
+#eg-tscost>div{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--rs);padding:10px 5px;text-align:center}
+#eg-tscost b{display:block;font-family:'Inter';font-size:14px;font-weight:900;direction:ltr}
+#eg-tscost span{font-size:9px;color:var(--tx3)}
+</style>
+<script id="egtph-tssup-js">
+/* EGTPH — إحصائيات الرحلات: تصفية حسب المورد وسجلاته، مع تكلفة وربح النطاق. */
+(function(){
+  'use strict';
+  if (window.__egtphTsSup) return;
+  window.__egtphTsSup = true;
+
+  function e(s){ return (typeof esc==='function') ? esc(String(s==null?'':s)) : String(s==null?'':s); }
+  function num(v){ return parseFloat(v)||0; }
+  function money(v){ return (typeof fDA==='function') ? fDA(num(v)) : String(v); }
+  function fn(v){ return (typeof fN==='function') ? fN(num(v)) : String(v); }
+
+  var S = { supplierId:'', supRecIds:[] };
+  window.egtphTsSupState = S;
+
+  window.egtphTsSetSupplier = function(id){
+    S.supplierId = (S.supplierId===id) ? '' : id;
+    S.supRecIds = [];
+    renderTripStats();
+  };
+  window.egtphTsToggleSupRec = function(id){
+    var i = S.supRecIds.indexOf(id);
+    if (i>=0) S.supRecIds.splice(i,1); else S.supRecIds.push(id);
+    renderTripStats();
+  };
+  window.egtphTsClearSupRecs = function(){ S.supRecIds = []; renderTripStats(); };
+
+  // خريطة (سجل عميل + شاحنة) ← سجل المورد
+  function linkMap(){
+    var map = {};
+    (typeof records!=='undefined'?records:[]).forEach(function(r){
+      var links = (typeof egtphTruckLinks==='function') ? egtphTruckLinks(r.id) : [];
+      links.forEach(function(l){
+        var sr = (typeof prices!=='undefined'?prices:[]).find(function(p){ return p && p.type==='sup_rec' && p.id===l.supRecId; });
+        map[r.id+'|'+l.truck] = { supplierId:l.supplierId, supRecId:l.supRecId,
+                                  cost:(l.price!=null?num(l.price):(sr?num(sr.price):0)) };
+      });
+    });
+    return map;
+  }
+
+  // تصفية صفوف الإحصاء حسب المورد/سجله
+  var baseRows = window._tsRows;
+  window._tsRows = function(st){
+    var rows = baseRows.apply(this, arguments);
+    if (!S.supplierId) return rows;
+    var map = linkMap();
+    return rows.filter(function(x){
+      var l = map[x.recordId+'|'+x.truck];
+      if (!l || l.supplierId !== S.supplierId) return false;
+      if (S.supRecIds.length && S.supRecIds.indexOf(l.supRecId) === -1) return false;
+      return true;
+    });
+  };
+
+  // حقن واجهة المورد + مؤشرات التكلفة
+  function inject(){
+    if (document.getElementById('eg-tssup')) return;
+    var host = document.querySelector('.ts-truck-chips');
+    if (!host) return;
+    var wrap = host.closest('.fg') || host.parentNode;
+    var sps = (typeof suppliers!=='undefined'?suppliers:[]).filter(function(s){ return !s.mergedInto && !s.archived; })
+      .filter(function(s){
+        return (typeof prices!=='undefined'?prices:[]).some(function(p){
+          return p && (p.type==='truck_link'||p.type==='record_link') && p.supplierId===s.id; });
+      });
+    var recs = S.supplierId && typeof egtphSupRecords==='function' ? egtphSupRecords(S.supplierId) : [];
+    var html = '<div id="eg-tssup">'
+      + '<div class="lbl">🏭 المورد المرتبط</div><div class="chips">'
+      + '<button class="'+(S.supplierId?'':'on')+'" onclick="egtphTsSetSupplier(\'\')">كل الموردين</button>'
+      + (sps.length ? sps.map(function(s){
+          return '<button class="'+(S.supplierId===s.id?'on':'')+'" onclick="egtphTsSetSupplier(\''+e(s.id)+'\')">🏭 '+e(s.name)+'</button>';
+        }).join('') : '<span style="font-size:10px;color:var(--tx3)">لا يوجد مورد مربوط بعد — اربط سجلاً من ملف العميل.</span>')
+      + '</div>'
+      + (S.supplierId ? ('<div class="lbl" style="margin-top:9px">📋 سجل المورد</div><div class="chips">'
+          + '<button class="'+(S.supRecIds.length?'':'on')+'" onclick="egtphTsClearSupRecs()">كل سجلاته</button>'
+          + recs.map(function(r){
+              return '<button class="'+(S.supRecIds.indexOf(r.id)>=0?'on':'')+'" onclick="egtphTsToggleSupRec(\''+e(r.id)+'\')">📋 '+e(r.name)+'</button>';
+            }).join('') + '</div>') : '')
+      + '<div class="hint">عند اختيار مورد تُحسب الرحلات المنقولة بشاحناته فقط، ويظهر أسفل الصفحة تكلفتها وربحها.</div>'
+      + '</div>';
+    wrap.insertAdjacentHTML('beforeend', html);
+
+    // مؤشرات التكلفة والربح للنطاق المعروض
+    if (!document.getElementById('eg-tscost')) {
+      var st = (typeof tripStatsState==='function') ? tripStatsState() : {};
+      var rows = window._tsRows(st);
+      var map = linkMap(), cost = 0, rev = 0, linked = 0;
+      rows.forEach(function(x){
+        rev += num(x.amount);
+        var l = map[x.recordId+'|'+x.truck];
+        if (l) { cost += num(x.qty)*num(l.cost); linked++; }
+      });
+      if (linked) {
+        var prof = rev - cost, pct = rev>0 ? Math.round((prof/rev)*100) : 0;
+        var box = '<div id="eg-tscost">'
+          + '<div><b style="color:var(--gold2)">'+money(rev)+'</b><span>إيراد النطاق</span></div>'
+          + '<div><b style="color:var(--orange)">'+money(cost)+'</b><span>تكلفة الموردين</span></div>'
+          + '<div><b style="color:'+(prof>=0?'var(--green)':'var(--red)')+'">'+money(prof)+'</b><span>الربح ('+pct+'%)</span></div>'
+          + '</div>';
+        var kg = document.querySelector('.kgrid');
+        if (kg) kg.insertAdjacentHTML('afterend', box);
+      }
+    }
+  }
+
+  var baseRender = window.renderTripStats;
+  window.renderTripStats = function(){
+    var out = baseRender.apply(this, arguments);
+    setTimeout(inject, 0);
+    return out;
+  };
+})();
+</script>
+
+<style id="egtph-tbl-css">
+.eg-tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.eg-tbl th{background:var(--bg4);color:var(--tx2);font-size:10px;font-weight:900;
+  padding:9px 8px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--bdr)}
+.eg-tbl td{padding:10px 8px;border-bottom:1px solid var(--bdr);vertical-align:middle}
+.eg-tbl tr:last-child td{border-bottom:0}
+.eg-tbl .n{font-family:'Inter';font-variant-numeric:tabular-nums;direction:ltr;text-align:left;font-weight:800;white-space:nowrap}
+.eg-tbl .nm{font-size:13.5px;font-weight:900;line-height:1.4}
+.eg-tbl .sub{font-size:9.5px;color:var(--tx3);font-weight:400;margin-top:2px}
+.eg-tbl .price{font-family:'Inter';font-size:10.5px;color:var(--gold2);background:rgba(201,168,76,.14);
+  border:1px solid rgba(201,168,76,.35);border-radius:6px;padding:2px 7px;direction:ltr;display:inline-block;margin-top:3px}
+.eg-tbl tr.act td{padding:0 8px 10px;border-bottom:2px solid var(--bdr)}
+.eg-tbl .acts{display:flex;gap:5px;flex-wrap:wrap}
+.eg-tbl .acts button{padding:6px 9px;font-size:10.5px;border-radius:8px;border:1px solid var(--bdr);
+  background:var(--bg3);color:var(--tx2);font-family:inherit;font-weight:800;cursor:pointer}
+.eg-tbl .acts .g{background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.4);color:#86efac}
+.eg-tbl .acts .b{background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.4);color:#93c5fd}
+.eg-tbl .acts .r{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.35);color:#fca5a5}
+.eg-tbl tr.tot td{background:rgba(201,168,76,.08);font-weight:900}
+.eg-tbl .tag{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:20px;
+  color:var(--gold2);background:rgba(201,168,76,.13);border:1px solid rgba(201,168,76,.32);white-space:nowrap}
+.eg-tbl .qty{font-family:'Inter';color:var(--cyan);direction:ltr}
+.eg-sec{margin:0 13px 12px;background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--rm);overflow:hidden}
+.eg-sec>.h{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg4);border-bottom:1px solid var(--bdr)}
+.eg-sec>.h .t{flex:1;font-size:12px;font-weight:900}
+.eg-sec .wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+</style>
+<script id="egtph-tbl-js">
+/* EGTPH — عرض جدولي منظّم: سجلات المورد · فواتير الشراء · المدفوعات والتسبيقات. */
+(function(){
+  'use strict';
+  if (window.__egtphTbl) return;
+  window.__egtphTbl = true;
+
+  function e(s){ return (typeof esc==='function') ? esc(String(s==null?'':s)) : String(s==null?'':s); }
+  function num(v){ return parseFloat(v)||0; }
+  function money(v){ return (typeof fDA==='function') ? fDA(num(v)) : String(v); }
+  function fn(v){ return (typeof fN==='function') ? fN(num(v)) : String(v); }
+  function dt(v){ return (typeof fD==='function') ? fD(v) : (v||''); }
+  function invAmt(v){
+    var it = Array.isArray(v.items)?v.items:[];
+    if (!it.length) return num(v.total);
+    return it.reduce(function(s,i){ return s + (i && i.priceStatus==='pending' ? 0 : num(i.qty)*num(i.unitPrice)); },0);
+  }
+  function recName(v){
+    var sr = v.supRecId ? (typeof prices!=='undefined'?prices:[]).find(function(p){ return p && p.type==='sup_rec' && p.id===v.supRecId; }) : null;
+    return sr ? sr.name : (v.account || v.projectName || 'عام');
+  }
+
+  // ── ١) سجلات المورد كجدول ──
+  function recordsTable(spId){
+    var rows = (typeof egtphSupAccountTotals==='function') ? egtphSupAccountTotals(spId) : [];
+    if (!rows.length) return '';
+    var gI=0,gP=0;
+    rows.forEach(function(r){ gI+=num(r.invoiced); gP+=num(r.paid); });
+    var gB = gI-gP;
+    var body = rows.map(function(r){
+      var rid = r.recId||'';
+      var st = (r.credit>0) ? {t:money(r.credit),c:'var(--blue)'}
+             : (r.remain>0) ? {t:money(r.remain),c:'var(--red)'}
+             : (r.invoiced||r.paid) ? {t:'✓ مسدّد',c:'var(--green)'} : {t:'—',c:'var(--tx3)'};
+      var icon = r.kind==='project' ? '🏗' : (rid?'🔧':'📁');
+      var qty = '';
+      try {
+        var m = {};
+        (window._supInvs||[]).forEach(function(v){
+          if (v.supplierId!==spId) return;
+          if (recName(v) !== r.name) return;
+          (v.items||[]).forEach(function(it){
+            if (!it||!it.name) return;
+            var k = it.name+'|'+(it.unit||'');
+            m[k] = m[k] || {n:it.name,u:it.unit||'',q:0};
+            m[k].q += num(it.qty);
+          });
+        });
+        qty = Object.keys(m).map(function(k){
+          return '<span class="qty">'+e(m[k].n)+' '+fn(m[k].q)+' '+e(m[k].u)+'</span>'; }).join(' · ');
+      } catch(_) {}
+      var payFn = rid ? ("egtphPayForRec('"+spId+"','"+rid+"',") : ("egtphPayForAccount('"+spId+"','"+String(r.name).replace(/'/g,"")+"',");
+      var acts = '<div class="acts">'
+        + (rid && r.kind!=='project' ? '<button class="b" onclick="egtphAddQty(\''+spId+'\',\''+rid+'\')">＋ كمية</button>' : '')
+        + (rid && r.kind==='project' ? '<button class="b" onclick="egtphInvForRec(\''+spId+'\',\''+rid+'\')">＋ فاتورة</button>' : '')
+        + (r.remain>0 ? '<button class="g" onclick="egtphSettleRec(\''+spId+'\',\''+String(rid||r.name).replace(/'/g,"")+'\')">✅ تسديد</button>' : '')
+        + '<button class="g" onclick="'+payFn+'\'pay\')">＋ دفعة</button>'
+        + '<button onclick="'+payFn+'\'adv\')">＋ تسبيق</button>'
+        + (rid ? '<button onclick="egtphNewSupRec(\''+spId+'\',\''+rid+'\')">✎ تعديل</button>'
+               + '<button class="r" onclick="egtphDeleteSupRec(\''+spId+'\',\''+rid+'\')">🗑 حذف</button>'
+               : '<button onclick="egtphRenameAccount(\''+spId+'\',\''+String(r.name).replace(/'/g,"")+'\')">✎ تعديل الاسم</button>')
+        + '</div>';
+      return '<tr><td><div class="nm">'+icon+' '+e(r.name)+'</div>'
+        + '<div class="sub">'+r.nInv+' فاتورة · '+r.nPay+' دفعة'+(qty?(' · '+qty):'')+'</div>'
+        + (r.price!=null?('<div class="price">'+money(r.price)+'/'+e(r.unit||'وحدة')+'</div>'):'')
+        + '</td>'
+        + '<td class="n" style="color:var(--gold2)">'+money(r.invoiced)+'</td>'
+        + '<td class="n" style="color:var(--green)">'+money(r.paid)+'</td>'
+        + '<td class="n" style="color:'+st.c+'">'+st.t+'</td></tr>'
+        + '<tr class="act"><td colspan="4">'+acts+'</td></tr>';
+    }).join('');
+    return '<div class="wrap"><table class="eg-tbl">'
+      + '<thead><tr><th>السجل</th><th style="text-align:left">الفواتير</th><th style="text-align:left">المدفوع</th><th style="text-align:left">الحالة</th></tr></thead>'
+      + '<tbody>'+body
+      + '<tr class="tot"><td>∑ المجموع العام</td>'
+      + '<td class="n" style="color:var(--gold2)">'+money(gI)+'</td>'
+      + '<td class="n" style="color:var(--green)">'+money(gP)+'</td>'
+      + '<td class="n" style="color:'+(gB>0?'var(--red)':gB<0?'var(--blue)':'var(--green)')+'">'
+      +   (gB===0?'✓ مسدّد':money(Math.abs(gB)))+'</td></tr>'
+      + '</tbody></table></div>';
+  }
+
+  // ── ٢) فواتير الشراء كجدول ──
+  function invoicesTable(spId){
+    var list = (window._supInvs||[]).filter(function(v){ return v.supplierId===spId; })
+      .sort(function(a,b){ return String(b.date||'').localeCompare(String(a.date||'')); });
+    if (!list.length) return '<div style="padding:16px;text-align:center;color:var(--tx3);font-size:11px">لا توجد فواتير</div>';
+    var tot = list.reduce(function(s,v){ return s+invAmt(v); },0);
+    return '<div class="wrap"><table class="eg-tbl">'
+      + '<thead><tr><th>التاريخ</th><th>السجل</th><th>الأصناف</th><th style="text-align:left">الكمية</th><th style="text-align:left">المبلغ</th><th></th></tr></thead><tbody>'
+      + list.map(function(v){
+          var it = v.items||[];
+          var names = it.map(function(i){ return i.name||''; }).filter(Boolean).join(' · ') || (v.ref||'—');
+          var q = it.reduce(function(s,i){ return s+num(i.qty); },0);
+          var u = (it[0]&&it[0].unit)||'';
+          var auto = v.autoFrom ? ' <span class="tag" style="color:#86efac;background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.35)">⚙️ تلقائية</span>' : '';
+          return '<tr><td class="n">'+e(dt(v.date))+'</td>'
+            + '<td><span class="tag">📁 '+e(recName(v))+'</span>'+auto+'</td>'
+            + '<td style="font-size:10.5px">'+e(names)+'</td>'
+            + '<td class="n qty">'+fn(q)+(u?(' '+e(u)):'')+'</td>'
+            + '<td class="n" style="color:var(--gold2)">'+money(invAmt(v))+'</td>'
+            + '<td><div class="acts">'
+            + (v.autoFrom ? '' : '<button onclick="editSupInvoice(\''+v.id+'\',\''+spId+'\')">✎</button>')
+            + '</div></td></tr>';
+        }).join('')
+      + '<tr class="tot"><td colspan="4">∑ المجموع</td><td class="n" style="color:var(--gold2)">'+money(tot)+'</td><td></td></tr>'
+      + '</tbody></table></div>';
+  }
+
+  // ── ٣) المدفوعات والتسبيقات كجدول ──
+  function paysTable(spId){
+    var list = (typeof supPays!=='undefined'?supPays:[]).filter(function(x){ return x.supplierId===spId; })
+      .sort(function(a,b){ return String(b.date||'').localeCompare(String(a.date||'')); });
+    if (!list.length) return '<div style="padding:16px;text-align:center;color:var(--tx3);font-size:11px">لا توجد مدفوعات أو تسبيقات</div>';
+    var tot = list.reduce(function(s,x){ return s+num(x.amount); },0);
+    return '<div class="wrap"><table class="eg-tbl">'
+      + '<thead><tr><th>التاريخ</th><th>النوع</th><th>السجل</th><th>الطريقة</th><th style="text-align:left">المبلغ</th></tr></thead><tbody>'
+      + list.map(function(x){
+          var kind = (x.kind==='advance') ? '<span style="color:#93c5fd">💳 تسبيق</span>' : '<span style="color:#86efac">💵 دفعة</span>';
+          return '<tr><td class="n">'+e(dt(x.date))+'</td>'
+            + '<td style="font-size:11px">'+kind+'</td>'
+            + '<td><span class="tag">📁 '+e(recName(x))+'</span></td>'
+            + '<td style="font-size:10.5px;color:var(--tx2)">'+e(x.method||'—')+(x.note?('<div class="sub">'+e(x.note)+'</div>'):'')+'</td>'
+            + '<td class="n" style="color:var(--green)">'+money(x.amount)+'</td></tr>';
+        }).join('')
+      + '<tr class="tot"><td colspan="4">∑ المجموع</td><td class="n" style="color:var(--green)">'+money(tot)+'</td></tr>'
+      + '</tbody></table></div>';
+  }
+
+  function section(id, title, inner, actions){
+    return '<div class="eg-sec" id="'+id+'"><div class="h"><span class="t">'+title+'</span>'
+      + (actions||'') + '</div>'+inner+'</div>';
+  }
+
+  var base = window.renderSupDetail;
+  window.renderSupDetail = function(spId){
+    var out = base.apply(this, arguments);
+    setTimeout(function(){
+      try {
+        var root = document.getElementById('content'); if (!root) return;
+        // (أ) استبدل جسم لوحة السجلات بجدول
+        var panel = document.getElementById('eg-subacc');
+        if (panel && !panel.querySelector('.eg-tbl')) {
+          var head = panel.querySelector('.sa-hd');
+          var tbl = recordsTable(spId);
+          if (tbl) panel.innerHTML = (head ? head.outerHTML : '') + tbl;
+        }
+        // (ب) الفواتير والمدفوعات كجدولين بعد اللوحة
+        if (!document.getElementById('eg-sec-inv')) {
+          var html = section('eg-sec-inv','🧾 فواتير الشراء', invoicesTable(spId),
+                       '<button class="btn btn-gold btn-xs" onclick="openSupInvoice(\''+spId+'\')">＋ فاتورة</button>')
+                   + section('eg-sec-pay','💸 المدفوعات والتسبيقات', paysTable(spId),
+                       '<button class="btn btn-grn btn-xs" onclick="addSupPay(\''+spId+'\')">＋ دفعة</button>'
+                     + '<button class="btn btn-sec btn-xs" onclick="addSupAdvance(\''+spId+'\')">＋ تسبيق</button>');
+          var anchor = panel || root.querySelector('.cl-hdr');
+          var host = document.createElement('div'); host.innerHTML = html;
+          while (host.firstChild) {
+            if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(host.firstChild, anchor.nextSibling);
+            else root.appendChild(host.firstChild);
+            anchor = document.getElementById('eg-sec-inv') || anchor;
+          }
+          // أخفِ القسمين الأصليين لتفادي التكرار
+          Array.prototype.forEach.call(root.querySelectorAll('.cp'), function(c){
+            var t = c.innerText || '';
+            if (/فواتير الشراء/.test(t) && !c.querySelector('.eg-tbl')) c.style.display='none';
+            if (/المدفوعات والتسبيقات/.test(t) && !c.querySelector('.eg-tbl')) c.style.display='none';
+          });
+        }
+      } catch(_) {}
+    }, 120);
+    return out;
+  };
+})();
+</script>
+
+<script id="egtph-livesync-js">
+/* EGTPH — التوليد الفوري: أي إدخال كمية في خانة شاحنة يُحدّث فاتورة المورد فوراً
+   دون انتظار إعادة رسم الصفحة. */
+(function(){
+  'use strict';
+  if (window.__egtphLiveSync) return;
+  window.__egtphLiveSync = true;
+
+  var timer = null, pending = {};
+  function schedule(recId){
+    if (!recId) return;
+    pending[recId] = 1;
+    clearTimeout(timer);
+    timer = setTimeout(async function(){
+      var ids = Object.keys(pending); pending = {};
+      for (var i=0;i<ids.length;i++){
+        try {
+          if (typeof egtphTruckLinks !== 'function') continue;
+          if (!egtphTruckLinks(ids[i]).length) continue;
+          var n = await egtphSyncCosts(ids[i]);
+          if (n) {
+            try { T('⚙️ حُدّثت فاتورة المورد تلقائياً','success'); } catch(_) {}
+            // حدّث لوحة التكلفة إن كانت معروضة
+            var box = document.getElementById('eg-cost');
+            if (box && typeof activeRid!=='undefined' && activeRid===ids[i] && typeof openCid!=='undefined' && openCid) {
+              renderCD(openCid);
+            }
+          }
+        } catch(_) {}
+      }
+    }, 700);
+  }
+
+  ['updateTruck','saveTruckDay','saveEditTruckDay','updateRecMat'].forEach(function(fname){
+    var base = window[fname];
+    if (typeof base !== 'function') return;
+    window[fname] = function(){
+      var recId = arguments[0];
+      var out = base.apply(this, arguments);
+      if (out && typeof out.then === 'function') out.then(function(){ schedule(recId); });
+      else schedule(recId);
+      return out;
+    };
+  });
+
+  // احتياط: أي حفظ لإدخال شاحنة في قاعدة البيانات يستدعي المزامنة
+  var baseP = window.dbP;
+  if (typeof baseP === 'function') {
+    window.dbP = function(store, obj){
+      var r = baseP.apply(this, arguments);
+      try { if (store==='entries' && obj && obj.type==='truck') schedule(obj.recordId); } catch(_) {}
+      return r;
+    };
+  }
 })();
 </script>
 
