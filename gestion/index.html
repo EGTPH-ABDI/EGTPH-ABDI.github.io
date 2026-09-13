@@ -15767,6 +15767,13 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
 .eg-tbl .tag{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:20px;
   color:var(--gold2);background:rgba(201,168,76,.13);border:1px solid rgba(201,168,76,.32);white-space:nowrap}
 .eg-tbl .qty{font-family:'Inter';color:var(--cyan);direction:ltr}
+.eg-tbl .mats{margin-top:7px;border:1px solid var(--bdr);border-radius:8px;overflow:hidden;background:rgba(34,211,238,.05)}
+.eg-tbl .ml{display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid var(--bdr)}
+.eg-tbl .ml:last-child{border-bottom:0}
+.eg-tbl .ml .mn{flex:1;min-width:0;font-size:10.5px;color:var(--tx2);direction:ltr;unicode-bidi:isolate;
+  text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eg-tbl .ml .mq{font-family:'Inter';font-size:11px;font-weight:900;color:var(--cyan);
+  direction:ltr;unicode-bidi:isolate;white-space:nowrap}
 .eg-sec{margin:0 13px 12px;background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--rm);overflow:hidden}
 .eg-sec>.h{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg4);border-bottom:1px solid var(--bdr)}
 .eg-sec>.h .t{flex:1;font-size:12px;font-weight:900}
@@ -15822,8 +15829,10 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
             m[k].q += num(it.qty);
           });
         });
-        qty = Object.keys(m).map(function(k){
-          return '<span class="qty">'+e(m[k].n)+' '+fn(m[k].q)+' '+e(m[k].u)+'</span>'; }).join(' · ');
+        var ks = Object.keys(m);
+        qty = ks.length ? ('<div class="mats">' + ks.map(function(k){
+          return '<div class="ml"><span class="mn">'+e(m[k].n)+'</span>'
+               + '<span class="mq">'+fn(m[k].q)+(m[k].u?(' '+e(m[k].u)):'')+'</span></div>'; }).join('') + '</div>') : '';
       } catch(_) {}
       var payFn = rid ? ("egtphPayForRec('"+spId+"','"+rid+"',") : ("egtphPayForAccount('"+spId+"','"+String(r.name).replace(/'/g,"")+"',");
       var acts = locked ? '' : '<div class="acts">'
@@ -15837,7 +15846,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
                : '<button onclick="egtphRenameAccount(\''+spId+'\',\''+String(r.name).replace(/'/g,"")+'\')">✎ تعديل الاسم</button>')
         + '</div>';
       return '<tr><td><div class="nm">'+icon+' '+e(r.name)+'</div>'
-        + '<div class="sub">'+r.nInv+' فاتورة · '+r.nPay+' دفعة'+(qty?(' · '+qty):'')+'</div>'
+        + '<div class="sub">'+r.nInv+' فاتورة · '+r.nPay+' دفعة</div>' + qty
         + (r.price!=null?('<div class="price">'+money(r.price)+'/'+e(r.unit||'وحدة')+'</div>'):'')
         + '</td>'
         + '<td class="n" style="color:var(--gold2)">'+money(r.invoiced)+'</td>'
@@ -16024,6 +16033,342 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       return r;
     };
   }
+})();
+</script>
+
+<script id="egtph-scrollmem-js">
+/* EGTPH — حفظ موضع التمرير: الرجوع من ملف مورد/عميل يعيدك إلى مكانك في القائمة. */
+(function(){
+  'use strict';
+  if (window.__egtphScrollMem) return;
+  window.__egtphScrollMem = true;
+
+  var POS = {};
+  function box(){ return document.getElementById('content') || document.scrollingElement || document.documentElement; }
+  function y(){
+    var b = box();
+    return (b && b.scrollTop) || window.pageYOffset || document.documentElement.scrollTop || 0;
+  }
+  function setY(v){
+    var b = box();
+    if (b && b.scrollHeight > b.clientHeight + 10) b.scrollTop = v;
+    else window.scrollTo(0, v);
+  }
+  function restore(key){
+    var v = POS[key]; if (!v) return;
+    var tries = 0;
+    (function step(){
+      setY(v);
+      if (++tries < 10 && Math.abs(y()-v) > 20) setTimeout(step, 100);
+    })();
+  }
+
+  // احفظ موضع القائمة قبل فتح ملف، واسترجعه عند العودة
+  ['renderSupDetail','renderCD','openCD'].forEach(function(fname){
+    var base = window[fname];
+    if (typeof base !== 'function') return;
+    window[fname] = function(){
+      var key = (fname==='renderSupDetail') ? 'suppliers' : 'clients';
+      if (y() > 40 && !POS['_in_'+key]) POS[key] = y();
+      POS['_in_'+key] = 1;
+      var out = base.apply(this, arguments);
+      setTimeout(function(){ setY(0); }, 0);
+      return out;
+    };
+  });
+  ['renderSuppliers','renderClients'].forEach(function(fname){
+    var base = window[fname];
+    if (typeof base !== 'function') return;
+    window[fname] = function(p){
+      var key = (fname==='renderSuppliers') ? 'suppliers' : 'clients';
+      var out = base.apply(this, arguments);
+      var opening = p && (p.sid || p.cid);
+      if (!opening) {
+        POS['_in_'+key] = 0;
+        setTimeout(function(){ restore(key); }, 120);
+      }
+      return out;
+    };
+  });
+})();
+</script>
+
+<style id="egtph-grid-css">
+/* ══ جدول الرحلات: خط أكبر · رأس ثابت · إبراز الشاحنة الجاري الإدخال فيها ══ */
+.tw table th{position:sticky;top:0;z-index:4;background:var(--bg4)!important;
+  font-size:11.5px!important;font-weight:900;padding:9px 7px!important}
+.tw table td:first-child,.tw table th:first-child{position:sticky;right:0;z-index:3;
+  background:var(--bg3)!important;box-shadow:-6px 0 10px -8px rgba(0,0,0,.8)}
+.tw table th:first-child{z-index:5}
+input.ti{font-size:15px!important;height:42px!important;font-weight:800!important;
+  border-radius:9px!important;letter-spacing:.3px}
+input.ti:focus{outline:2px solid var(--gold)!important;outline-offset:1px;
+  background:rgba(201,168,76,.10)!important}
+.eg-col-on{background:rgba(201,168,76,.08)!important}
+.eg-row-on{background:rgba(59,130,246,.08)!important}
+.eg-head-on{background:linear-gradient(180deg,rgba(201,168,76,.35),rgba(201,168,76,.15))!important;
+  color:#fff!important}
+#eg-cellbar{position:fixed;left:0;right:0;z-index:99998;display:none;
+  padding:8px 12px;background:rgba(16,22,38,.97);border-bottom:1px solid rgba(201,168,76,.45);
+  box-shadow:0 4px 16px rgba(0,0,0,.5);backdrop-filter:blur(8px)}
+#eg-cellbar.on{display:block}
+#eg-cellbar .t{font-size:13px;font-weight:900;color:var(--gold2);line-height:1.5}
+#eg-cellbar .s{font-size:10.5px;color:var(--tx2);margin-top:2px}
+#eg-cellbar .n{font-family:'Inter';direction:ltr;unicode-bidi:isolate}
+</style>
+<script id="egtph-grid-js">
+/* EGTPH — تسهيل الإدخال في جدول الرحلات: يبيّن لك أي شاحنة وأي يوم تكتب فيه. */
+(function(){
+  'use strict';
+  if (window.__egtphGrid) return;
+  window.__egtphGrid = true;
+
+  function e(s){ return (typeof esc==='function') ? esc(String(s==null?'':s)) : String(s==null?'':s); }
+  function isTripCell(el){
+    return el && el.tagName==='INPUT' && el.classList && el.classList.contains('ti')
+        && (String(el.getAttribute('onchange')||'').indexOf('updateTruck(')!==-1
+            || String(el.id||'').indexOf('etd_')===0);
+  }
+  function bar(){
+    var b = document.getElementById('eg-cellbar');
+    if (!b) {
+      b = document.createElement('div'); b.id = 'eg-cellbar';
+      b.innerHTML = '<div class="t"></div><div class="s"></div>';
+      document.body.appendChild(b);
+    }
+    return b;
+  }
+  function place(){
+    var b = document.getElementById('eg-cellbar');
+    if (!b || !b.classList.contains('on')) return;
+    var top = 0;
+    try {
+      var hdr = document.querySelector('.topbar, .app-top, header');
+      top = hdr ? Math.max(0, hdr.getBoundingClientRect().bottom) : 0;
+    } catch(_) {}
+    b.style.top = top + 'px';
+  }
+  function clear(){
+    Array.prototype.forEach.call(document.querySelectorAll('.eg-col-on,.eg-row-on,.eg-head-on'), function(x){
+      x.classList.remove('eg-col-on'); x.classList.remove('eg-row-on'); x.classList.remove('eg-head-on');
+    });
+  }
+
+  function describe(inp){
+    // من الجدول: اسم الشاحنة من رأس العمود، والتاريخ من أول خانة في الصف
+    var td = inp.closest ? inp.closest('td') : null;
+    var tr = td ? td.parentNode : null;
+    var table = td ? td.closest('table') : null;
+    var truck = '', date = '', mat = '';
+    if (td && tr && table) {
+      var idx = Array.prototype.indexOf.call(tr.children, td);
+      var head = table.querySelector('thead tr');
+      if (head && head.children[idx]) {
+        truck = (head.children[idx].textContent || '').trim();
+        head.children[idx].classList.add('eg-head-on');
+      }
+      var first = tr.children[0];
+      if (first) { date = (first.textContent || '').trim().split('\n')[0]; first.classList.add('eg-row-on'); }
+      // أبرز العمود كله
+      Array.prototype.forEach.call(table.querySelectorAll('tbody tr'), function(row){
+        if (row.children[idx]) row.children[idx].classList.add('eg-col-on');
+      });
+      var mrow = tr.querySelector('td:nth-child(2)');
+      if (mrow) mat = (mrow.textContent||'').trim().split('\n')[0];
+    }
+    // نافذة تعديل اليوم: الاسم فوق الخانة
+    if (!truck && String(inp.id||'').indexOf('etd_')===0) {
+      var lbl = inp.parentNode && inp.parentNode.querySelector('div');
+      if (lbl) truck = (lbl.getAttribute('title') || lbl.textContent || '').trim();
+    }
+    return {truck:truck, date:date, mat:mat};
+  }
+
+  document.addEventListener('focusin', function(ev){
+    if (!isTripCell(ev.target)) { clear(); var b0=document.getElementById('eg-cellbar'); if (b0) b0.classList.remove('on'); return; }
+    clear();
+    var d = describe(ev.target);
+    var b = bar();
+    b.querySelector('.t').innerHTML = '🚛 <span class="n">'+e(d.truck||'شاحنة')+'</span>';
+    b.querySelector('.s').innerHTML = (d.date?('📅 <span class="n">'+e(d.date)+'</span>'):'')
+      + (d.mat?(' · 📦 '+e(d.mat)):'');
+    b.classList.add('on'); place();
+    setTimeout(place, 150);
+  });
+  document.addEventListener('focusout', function(ev){
+    if (!isTripCell(ev.target)) return;
+    setTimeout(function(){
+      if (!isTripCell(document.activeElement)) {
+        clear();
+        var b = document.getElementById('eg-cellbar'); if (b) b.classList.remove('on');
+      }
+    }, 120);
+  });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', place);
+    window.visualViewport.addEventListener('scroll', place);
+  }
+  window.addEventListener('scroll', place, true);
+})();
+</script>
+
+<style id="egtph-grid2-css">
+/* صف الإجمالي ثابت أسفل الجدول */
+.tw table tr.eg-tot td{position:sticky;bottom:0;z-index:3;
+  background:linear-gradient(0deg,var(--bg4),rgba(31,45,68,.92))!important;
+  border-top:2px solid var(--gold)!important;font-weight:900}
+.tw table tr.eg-tot td:first-child{z-index:4}
+/* تلوين الأيام */
+.tw table tr.eg-saved td:first-child{box-shadow:inset 4px 0 0 var(--green),-6px 0 10px -8px rgba(0,0,0,.8)}
+.tw table tr.eg-open  td:first-child{box-shadow:inset 4px 0 0 var(--gold),-6px 0 10px -8px rgba(0,0,0,.8)}
+/* أدوات الجدول */
+#eg-gridbar{display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin:0 13px 8px}
+#eg-gridbar button{padding:6px 11px;border-radius:8px;border:1px solid var(--bdr);
+  background:var(--bg2);color:var(--tx2);font-family:inherit;font-size:11px;font-weight:800;cursor:pointer}
+#eg-gridbar button.on{background:var(--gdim);border-color:var(--gold);color:var(--gold2)}
+#eg-gridbar .lbl{font-size:10px;color:var(--tx3);margin-left:3px}
+/* تكبير/تصغير */
+body[data-gz="lg"] input.ti{font-size:17px!important;height:48px!important;min-width:66px}
+body[data-gz="lg"] .tw table th{font-size:13px!important}
+body[data-gz="lg"] .tw table td{font-size:13px!important}
+body[data-gz="sm"] input.ti{font-size:13px!important;height:36px!important}
+body[data-gz="sm"] .tw table th{font-size:10.5px!important}
+.eg-colhide{display:none!important}
+</style>
+<script id="egtph-grid2-js">
+/* EGTPH — إضافات جدول الرحلات: إجمالي ثابت · تكبير · تنقّل بالأسهم ·
+   إخفاء الشاحنات الفارغة · تلوين الأيام المحفوظة والمفتوحة. */
+(function(){
+  'use strict';
+  if (window.__egtphGrid2) return;
+  window.__egtphGrid2 = true;
+
+  var MEM = { zoom:'md', hideEmpty:false };
+  try {
+    MEM.zoom = localStorage.getItem('egtph_gz') || 'md';
+    MEM.hideEmpty = localStorage.getItem('egtph_ghide') === '1';
+  } catch(_) {}
+  function save(){ try{ localStorage.setItem('egtph_gz',MEM.zoom); localStorage.setItem('egtph_ghide',MEM.hideEmpty?'1':'0'); }catch(_){} }
+
+  window.egtphGridZoom = function(dir){
+    var order = ['sm','md','lg'], i = order.indexOf(MEM.zoom);
+    i = Math.max(0, Math.min(order.length-1, i + dir));
+    MEM.zoom = order[i]; save(); apply();
+    try { T(dir>0?'🔍 تكبير الجدول':'🔍 تصغير الجدول','success',1200); } catch(_) {}
+  };
+  window.egtphGridHideEmpty = function(){
+    MEM.hideEmpty = !MEM.hideEmpty; save(); apply();
+    try { T(MEM.hideEmpty?'🙈 أُخفيت الشاحنات الفارغة':'👁 ظهرت كل الشاحنات','success',1400); } catch(_) {}
+  };
+
+  function gridTables(){
+    return Array.prototype.filter.call(document.querySelectorAll('.tw table'), function(t){
+      return t.querySelector('input.ti') || /الإجمالي/.test(t.innerText||'');
+    });
+  }
+
+  function apply(){
+    try { document.body.setAttribute('data-gz', MEM.zoom); } catch(_) {}
+    gridTables().forEach(function(t){
+      // صف الإجمالي
+      Array.prototype.forEach.call(t.querySelectorAll('tbody tr'), function(tr){
+        var f = tr.children[0];
+        if (f && /الإجمالي/.test(f.textContent||'')) tr.classList.add('eg-tot');
+        // تلوين اليوم
+        var txt = tr.innerText || '';
+        tr.classList.remove('eg-saved','eg-open');
+        if (tr.querySelector('input.ti')) tr.classList.add('eg-open');
+        else if (/محفوظ/.test(txt)) tr.classList.add('eg-saved');
+      });
+      // إخفاء أعمدة الشاحنات الفارغة
+      var head = t.querySelector('thead tr');
+      if (!head) return;
+      var cols = head.children.length;
+      for (var c=2;c<cols;c++){
+        var empty = true;
+        Array.prototype.forEach.call(t.querySelectorAll('tbody tr'), function(tr){
+          if (tr.classList.contains('eg-tot')) return;
+          var td = tr.children[c]; if (!td) return;
+          var inp = td.querySelector('input');
+          var v = inp ? String(inp.value||'').trim() : String(td.textContent||'').trim();
+          if (v && v!=='0') empty = false;
+        });
+        var hide = MEM.hideEmpty && empty;
+        if (head.children[c]) head.children[c].classList.toggle('eg-colhide', hide);
+        Array.prototype.forEach.call(t.querySelectorAll('tbody tr'), function(tr){
+          if (tr.children[c]) tr.children[c].classList.toggle('eg-colhide', hide);
+        });
+      }
+    });
+  }
+
+  function injectBar(){
+    if (document.getElementById('eg-gridbar')) return;
+    var tw = document.querySelector('.tw'); if (!tw) return;
+    var wrap = tw.closest('.cp') || tw.parentNode;
+    var b = document.createElement('div');
+    b.id = 'eg-gridbar';
+    b.innerHTML = '<span class="lbl">الجدول</span>'
+      + '<button onclick="egtphGridZoom(1)">A+</button>'
+      + '<button onclick="egtphGridZoom(-1)">A−</button>'
+      + '<button id="eg-hide-btn" class="'+(MEM.hideEmpty?'on':'')+'" onclick="egtphGridHideEmpty()">🙈 إخفاء الفارغة</button>';
+    wrap.parentNode.insertBefore(b, wrap);
+  }
+
+  // تنقّل بالأسهم داخل نفس الشاحنة
+  var LAST = null;
+  document.addEventListener('focusin', function(ev){
+    if (ev.target && ev.target.classList && ev.target.classList.contains('ti')) LAST = ev.target;
+  });
+  window.egtphCellMove = function(dir){
+    dir = (parseFloat(dir) > 0) ? 1 : (parseFloat(dir) < 0 ? -1 : 0);
+    if (!dir) return;
+    var el = document.activeElement;
+    if (!el || !el.classList || !el.classList.contains('ti')) el = LAST;   // اللمس قد يُفقد التركيز
+    if (!el || !el.isConnected || !el.classList.contains('ti')) return;
+    var td = el.closest('td'), tr = td && td.parentNode, t = td && td.closest('table');
+    if (!td || !tr || !t) return;
+    var idx = Array.prototype.indexOf.call(tr.children, td);
+    var rows = Array.prototype.slice.call(t.querySelectorAll('tbody tr'));
+    var r = rows.indexOf(tr);
+    for (var i = r + dir; i >= 0 && i < rows.length; i += dir) {
+      var cand = rows[i].children[idx];
+      var inp = cand && cand.querySelector('input.ti');
+      if (inp) { LAST = inp; inp.scrollIntoView({block:'center'}); inp.focus(); try { inp.select(); } catch(_) {} return; }
+    }
+    // لا نفتح يوماً محفوظاً تلقائياً — قرار الفتح يبقى لك
+    try { T(dir>0?'آخر يوم في هذه الشاحنة':'أول يوم في هذه الشاحنة','warning',1200); } catch(_) {}
+  };
+
+  // أزرار الأسهم داخل شريط العمليات
+  function addArrows(){
+    var bar = document.getElementById('egtph-opbar');
+    if (!bar || bar.querySelector('[data-act="up"]')) return;
+    ['up','down'].forEach(function(k){
+      var btn = document.createElement('button');
+      btn.type='button'; btn.dataset.act=k; btn.textContent = (k==='up'?'↑':'↓');
+      var DIR = (k==='up') ? -1 : 1;
+      btn.setAttribute('data-egdir', String(DIR));
+      btn.addEventListener('touchstart', function(ev){ ev.preventDefault(); ev.stopPropagation(); }, {passive:false});
+      btn.addEventListener('touchend', function(ev){
+        ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation();
+        window.egtphCellMove(DIR);
+      }, {passive:false});
+      btn.addEventListener('mousedown', function(ev){ ev.preventDefault(); });
+      btn.addEventListener('click', function(ev){
+        ev.preventDefault(); ev.stopPropagation(); window.egtphCellMove(DIR);
+      });
+      bar.insertBefore(btn, bar.firstChild);
+    });
+  }
+  document.addEventListener('focusin', function(ev){
+    if (ev.target && ev.target.classList && ev.target.classList.contains('ti')) setTimeout(addArrows, 60);
+  });
+
+  var t2 = null;
+  function schedule(){ clearTimeout(t2); t2 = setTimeout(function(){ injectBar(); apply(); }, 250); }
+  try { new MutationObserver(schedule).observe(document.body, {childList:true, subtree:true}); } catch(_) {}
+  setTimeout(function(){ injectBar(); apply(); }, 1500);
 })();
 </script>
 
