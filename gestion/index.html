@@ -2608,9 +2608,12 @@ function renderCD(cid) {
           const rt = getRT(r.id);
           const rs = window.getRecordSettlement ? window.getRecordSettlement(r.id) : {paid:0,remain:rt.amount};
           const ic = {trucks:'🚛', machines:'🏗', stock:'📦'};
-          return `<button class="rtab ${r.id===activeRid?'on':''}" data-rid="${r.id}" onclick="activeRid='${r.id}';renderCD('${cid}')">
-            ${ic[r.type]||'📄'} ${esc(r.name)}
-            <span style="font-size:9px;opacity:.6;margin-right:3px">${fDA(rt.amount)} · سُدّد ${fDA(rs.paid||0)}</span>
+          const remain = (rt.amount||0) - (rs.paid||0);
+          return `<button class="rtab eg-reccard ${r.id===activeRid?'on':''}" data-rid="${r.id}" onclick="activeRid='${r.id}';renderCD('${cid}')">
+            <span class="rc-nm">${ic[r.type]||'📄'} ${esc(r.name)}</span>
+            <span class="rc-v"><b>${fDA(rt.amount)}</b><i>الإجمالي</i></span>
+            <span class="rc-v"><b style="color:var(--green)">${fDA(rs.paid||0)}</b><i>المسدَّد</i></span>
+            <span class="rc-v"><b style="color:${remain>0?'var(--red)':'var(--green)'}">${remain>0?fDA(remain):'✓'}</b><i>${remain>0?'المتبقي':'مسدَّد'}</i></span>
           </button>`;
         }).join('')}
       </div>
@@ -12174,8 +12177,8 @@ if (document.readyState === 'loading') {
 
 
 <style id="egtph-trip-opbar-css">
-#egtph-opbar{position:fixed;left:0;right:0;top:0;z-index:99999;display:none;
-  gap:6px;padding:6px 8px;align-items:center;justify-content:center;flex-wrap:nowrap;
+#egtph-opbar{flex-wrap:wrap;position:fixed;left:0;right:0;top:0;z-index:99999;display:none;
+  gap:6px;padding:6px 8px;align-items:center;justify-content:center;flex-wrap:wrap!important;
   background:rgba(16,22,38,.97);border-top:1px solid rgba(240,185,11,.35);
   box-shadow:0 -6px 20px rgba(0,0,0,.45);backdrop-filter:blur(8px);direction:ltr;
   touch-action:manipulation;-webkit-user-select:none;user-select:none}
@@ -14522,14 +14525,19 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       if (!v.autoFrom) return false;
       var rec = RC.find(function(r){ return r.id===v.autoFrom; });
       var sr  = PR.find(function(p){ return p && p.type==='sup_rec' && p.id===v.supRecId; });
-      var lnk = PR.some(function(p){ return p && p.type==='truck_link' && p.recordId===v.autoFrom && p.supRecId===v.supRecId; });
+      var lnk = false;
+      try {
+        lnk = (typeof egtphTruckLinks==='function')
+          ? egtphTruckLinks(v.autoFrom).some(function(l){ return l.supRecId===v.supRecId; })
+          : PR.some(function(p){ return p && p.type==='truck_link' && p.recordId===v.autoFrom && p.supRecId===v.supRecId; });
+      } catch(_) {}
       return !rec || !sr || !lnk;
     });
     add(autoOrphan.length?'warn':'ok','فواتير تلقائية بلا رابط', autoOrphan.map(function(v){ return v.id; }),
       autoOrphan.length ? {kind:'cleanAuto'} : null);
 
     // ٦) روابط الشاحنات المعطوبة
-    var badLinks = PR.filter(function(p){ return p && p.type==='truck_link'; }).filter(function(l){
+    var badLinks = PR.filter(function(p){ return p && p.type==='truck_link' && !p.fromRecordLink; }).filter(function(l){
       var rec = RC.some(function(r){ return r.id===l.recordId; });
       var sr  = PR.some(function(p){ return p && p.type==='sup_rec' && p.id===l.supRecId; });
       return !rec || !sr;
@@ -16115,6 +16123,24 @@ input.ti:focus{outline:2px solid var(--gold)!important;outline-offset:1px;
 #eg-cellbar .t{font-size:13px;font-weight:900;color:var(--gold2);line-height:1.5}
 #eg-cellbar .s{font-size:10.5px;color:var(--tx2);margin-top:2px}
 #eg-cellbar .n{font-family:'Inter';direction:ltr;unicode-bidi:isolate}
+
+/* ══ بطاقات سجلات العميل: كتابة كبيرة وتنظيم واضح ══ */
+.rtabs{display:grid;grid-template-columns:1fr;gap:8px}
+button.rtab.eg-reccard{display:grid!important;grid-template-columns:1fr;gap:7px;
+  width:100%;text-align:right;padding:12px 13px!important;border-radius:12px!important;
+  background:var(--bg2)!important;border:1px solid var(--bdr)!important;white-space:normal!important}
+button.rtab.eg-reccard.on{border-color:var(--gold)!important;background:rgba(201,168,76,.10)!important;
+  box-shadow:0 0 0 1px rgba(201,168,76,.35) inset}
+button.rtab.eg-reccard .rc-nm{font-size:16px;font-weight:900;color:var(--tx);line-height:1.45}
+button.rtab.eg-reccard.on .rc-nm{color:var(--gold2)}
+button.rtab.eg-reccard{grid-template-areas:"nm nm nm" "a b c";grid-template-columns:repeat(3,1fr)}
+button.rtab.eg-reccard .rc-nm{grid-area:nm}
+button.rtab.eg-reccard .rc-v{display:flex;flex-direction:column;align-items:center;gap:2px;
+  background:rgba(255,255,255,.04);border:1px solid var(--bdr);border-radius:9px;padding:7px 4px}
+button.rtab.eg-reccard .rc-v b{font-family:'Inter';font-size:13px;font-weight:900;direction:ltr;
+  unicode-bidi:isolate;color:var(--gold2)}
+button.rtab.eg-reccard .rc-v i{font-style:normal;font-size:9.5px;color:var(--tx3)}
+@media (min-width:700px){ .rtabs{grid-template-columns:1fr 1fr} }
 </style>
 <script id="egtph-grid-js">
 /* EGTPH — تسهيل الإدخال في جدول الرحلات: يبيّن لك أي شاحنة وأي يوم تكتب فيه. */
@@ -16369,6 +16395,165 @@ body[data-gz="sm"] .tw table th{font-size:10.5px!important}
   function schedule(){ clearTimeout(t2); t2 = setTimeout(function(){ injectBar(); apply(); }, 250); }
   try { new MutationObserver(schedule).observe(document.body, {childList:true, subtree:true}); } catch(_) {}
   setTimeout(function(){ injectBar(); apply(); }, 1500);
+})();
+</script>
+
+<script id="egtph-cellname-js">
+/* EGTPH — اسم الشاحنة داخل شريط العمليات نفسه (فوق لوحة المفاتيح مباشرة). */
+(function(){
+  'use strict';
+  if (window.__egtphCellName) return;
+  window.__egtphCellName = true;
+
+  function e(s){ return (typeof esc==='function') ? esc(String(s==null?'':s)) : String(s==null?'':s); }
+  function isTrip(el){
+    return el && el.tagName==='INPUT' && el.classList && el.classList.contains('ti');
+  }
+  function info(inp){
+    var td = inp.closest && inp.closest('td');
+    var tr = td && td.parentNode, table = td && td.closest('table');
+    var truck='', date='';
+    if (td && tr && table) {
+      var idx = Array.prototype.indexOf.call(tr.children, td);
+      var head = table.querySelector('thead tr');
+      if (head && head.children[idx]) truck = (head.children[idx].getAttribute('title') || head.children[idx].textContent || '').trim();
+      if (tr.children[0]) date = (tr.children[0].textContent||'').trim().split('\n')[0];
+    }
+    if (!truck && String(inp.id||'').indexOf('etd_')===0) {
+      var p2 = inp.parentNode, lb = p2 && p2.querySelector('div');
+      if (lb) truck = (lb.getAttribute('title') || lb.textContent || '').trim();
+    }
+    return {truck:truck, date:date};
+  }
+  function show(inp){
+    var bar = document.getElementById('egtph-opbar');
+    if (!bar) return;
+    var lab = bar.querySelector('.eg-cellname');
+    if (!lab) {
+      lab = document.createElement('span');
+      lab.className = 'eg-cellname';
+      lab.style.cssText = 'order:-1;flex:0 0 100%;width:100%;display:flex;align-items:center;gap:8px;'
+        + 'padding:5px 10px 2px;font-family:Tajawal,sans-serif;line-height:1.3;overflow:hidden;'
+        + 'border-bottom:1px solid rgba(255,255,255,.10);margin-bottom:4px';
+      bar.insertBefore(lab, bar.firstChild);
+    }
+    var d = info(inp);
+    lab.innerHTML = '<span style="font-size:14px;font-weight:900;color:#e8c97a;direction:ltr;'
+      + 'unicode-bidi:isolate;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0">🚛 '
+      + e(d.truck||'—')+'</span>'
+      + (d.date ? ('<span style="font-size:11px;font-weight:800;color:#8b9ab5;direction:ltr;'
+        + 'unicode-bidi:isolate;white-space:nowrap">📅 '+e(d.date)+'</span>') : '');
+  }
+  document.addEventListener('focusin', function(ev){
+    if (isTrip(ev.target)) { show(ev.target); setTimeout(function(){ show(ev.target); }, 200); }
+  });
+  document.addEventListener('focusout', function(){
+    setTimeout(function(){
+      if (isTrip(document.activeElement)) return;
+      var lab = document.querySelector('#egtph-opbar .eg-cellname');
+      if (lab) lab.remove();
+    }, 150);
+  });
+})();
+</script>
+
+<style id="egtph-rectbl-css">
+#eg-rectbl{border:1px solid var(--bdr);border-radius:13px;overflow:hidden;background:var(--bg2)}
+#eg-rectbl .rh{display:flex;align-items:center;gap:8px;padding:10px 12px;
+  background:linear-gradient(90deg,rgba(201,168,76,.16),transparent);border-bottom:1px solid var(--bdr)}
+#eg-rectbl .rh .t{flex:1;font-size:12.5px;font-weight:900;color:var(--gold2)}
+#eg-rectbl .rh .c{font-size:10px;color:var(--tx3)}
+#eg-rectbl table{width:100%;border-collapse:collapse}
+#eg-rectbl th{background:var(--bg4);color:var(--tx2);font-size:10px;font-weight:900;
+  padding:8px 8px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--bdr)}
+#eg-rectbl th.num{text-align:left}
+#eg-rectbl td{padding:11px 8px;border-bottom:1px solid var(--bdr);vertical-align:middle;cursor:pointer}
+#eg-rectbl tr.rrow:last-child td{border-bottom:0}
+#eg-rectbl .nm{font-size:15px;font-weight:900;line-height:1.4;color:var(--tx)}
+#eg-rectbl .sub{font-size:9.5px;color:var(--tx3);margin-top:3px}
+#eg-rectbl .num{font-family:'Inter';font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate;
+  text-align:left;font-weight:900;font-size:13px;white-space:nowrap}
+#eg-rectbl .bar{height:4px;border-radius:4px;background:rgba(255,255,255,.08);margin-top:7px;overflow:hidden}
+#eg-rectbl .bar i{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#15803d)}
+#eg-rectbl tr.on td{background:rgba(201,168,76,.10)}
+#eg-rectbl tr.on td:first-child{box-shadow:inset 4px 0 0 var(--gold)}
+#eg-rectbl tr.on .nm{color:var(--gold2)}
+#eg-rectbl tr.rrow:active td{background:rgba(255,255,255,.05)}
+#eg-rectbl tr.tot td{background:rgba(201,168,76,.08);font-weight:900;cursor:default}
+#eg-rectbl .chip{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:20px;white-space:nowrap;
+  border:1px solid rgba(34,197,94,.35);color:#86efac;background:rgba(34,197,94,.10)}
+#eg-rectbl .chip.due{border-color:rgba(239,68,68,.35);color:#fca5a5;background:rgba(239,68,68,.10)}
+</style>
+<script id="egtph-rectbl-js">
+/* EGTPH — سجلات العميل في جدول مصمَّم: اسم كبير · أرقام مرتّبة · شريط تقدّم · إجمالي. */
+(function(){
+  'use strict';
+  if (window.__egtphRecTbl) return;
+  window.__egtphRecTbl = true;
+
+  function e(s){ return (typeof esc==='function') ? esc(String(s==null?'':s)) : String(s==null?'':s); }
+  function num(v){ return parseFloat(v)||0; }
+  function money(v){ return (typeof fDA==='function') ? fDA(num(v)) : String(v); }
+  function fn(v){ return (typeof fN==='function') ? fN(num(v)) : String(v); }
+
+  function build(cid){
+    var rs = (typeof records!=='undefined'?records:[]).filter(function(r){ return r.clientId===cid; });
+    if (!rs.length) return '';
+    var ic = {trucks:'🚛', machines:'🏗', stock:'📦'};
+    var gT=0, gP=0;
+    var body = rs.map(function(r){
+      var rt = (typeof getRT==='function') ? getRT(r.id) : {amount:0, trips:0, kg:0, hours:0};
+      var st = (typeof window.getRecordSettlement==='function') ? window.getRecordSettlement(r.id) : {paid:0};
+      var tot = num(rt.amount), paid = num(st.paid), rem = tot - paid;
+      gT += tot; gP += paid;
+      var pct = tot>0 ? Math.max(0, Math.min(100, Math.round((paid/tot)*100))) : 0;
+      var qty = [];
+      if (num(rt.trips)) qty.push(fn(rt.trips)+' رحلة');
+      if (num(rt.kg))    qty.push(fn(rt.kg)+' kg');
+      if (num(rt.hours)) qty.push(fn(rt.hours)+' ساعة');
+      var on = (typeof activeRid!=='undefined' && activeRid===r.id);
+      return '<tr class="rrow'+(on?' on':'')+'" data-rid="'+e(r.id)+'">'
+        + '<td><div class="nm">'+(ic[r.type]||'📄')+' '+e(r.name)+'</div>'
+        +   '<div class="sub">'+(qty.join(' · ')||'—')
+        +     ' · <span class="chip'+(rem>0?' due':'')+'">'+(rem>0?('متبقٍ '+money(rem)):'✓ مسدَّد')+'</span></div>'
+        +   '<div class="bar"><i style="width:'+pct+'%"></i></div></td>'
+        + '<td class="num" style="color:var(--gold2)">'+money(tot)+'</td>'
+        + '<td class="num" style="color:var(--green)">'+money(paid)+'</td>'
+        + '<td class="num" style="color:'+(rem>0?'var(--red)':'var(--green)')+'">'+(rem>0?money(rem):'✓')+'</td>'
+        + '</tr>';
+    }).join('');
+    var gR = gT - gP;
+    return '<div id="eg-rectbl">'
+      + '<div class="rh"><span class="t">📋 سجلات العميل</span><span class="c">'+rs.length+' سجل</span></div>'
+      + '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table>'
+      + '<thead><tr><th>السجل</th><th class="num">الإجمالي</th><th class="num">المسدَّد</th><th class="num">المتبقي</th></tr></thead>'
+      + '<tbody>' + body
+      + '<tr class="tot"><td>∑ المجموع</td>'
+      +   '<td class="num" style="color:var(--gold2)">'+money(gT)+'</td>'
+      +   '<td class="num" style="color:var(--green)">'+money(gP)+'</td>'
+      +   '<td class="num" style="color:'+(gR>0?'var(--red)':'var(--green)')+'">'+(gR>0?money(gR):'✓')+'</td></tr>'
+      + '</tbody></table></div></div>';
+  }
+
+  var base = window.renderCD;
+  window.renderCD = function(cid){
+    var out = base.apply(this, arguments);
+    setTimeout(function(){
+      try {
+        var host = document.querySelector('#content .rtabs');
+        if (!host || host.dataset.egDone === cid) return;
+        var html = build(cid); if (!html) return;
+        host.innerHTML = html;
+        host.dataset.egDone = cid;
+        host.querySelectorAll('tr.rrow').forEach(function(tr){
+          tr.addEventListener('click', function(){
+            try { activeRid = tr.dataset.rid; renderCD(cid); } catch(_) {}
+          });
+        });
+      } catch(_) {}
+    }, 30);
+    return out;
+  };
 })();
 </script>
 
