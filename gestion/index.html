@@ -2638,7 +2638,7 @@ function renderCD(cid) {
           <div style="font-size:10px;color:var(--tx3)">${fD(p.date)}${window.financeMethodLabel?' · '+esc(window.financeMethodLabel(p)):''}${window.financeAllocationLabel?' · '+esc(window.financeAllocationLabel(p,cid)):''}${p.note?' · '+esc(p.note):''}</div>
           ${fEntryT(p.createdAt)?`<div style="font-size:9px;color:var(--teal,#0e9488)">🕒 وقت الإدخال الفعلي: ${fEntryT(p.createdAt)}</div>`:''}
         </div>
-        <div style="display:flex;align-items:center;gap:4px" ${isSecLocked('pay:'+cid)?'style="display:none"':''}>
+        <div style="display:${isSecLocked('pay:'+cid)?'none':'flex'};align-items:center;gap:4px">
           <button class="btn btn-sec btn-xs" onclick="editPay('${p.id}','${cid}')" title="تعديل الدفعة">✏</button>
           <button class="del-btn" onclick="delPay('${p.id}','${cid}')" title="حذف نهائي">🗑</button>
         </div>
@@ -2663,7 +2663,7 @@ function renderCD(cid) {
           <div style="font-size:10px;color:var(--tx3)">${fD(a.date)} · ${esc(a.type||'تسبيق')}${window.financeMethodLabel?' · '+esc(window.financeMethodLabel(a)):''}${window.financeAllocationLabel?' · '+esc(window.financeAllocationLabel(a,cid)):''}${a.note?' · '+esc(a.note):''}</div>
           ${fEntryT(a.createdAt)?`<div style="font-size:9px;color:var(--teal,#0e9488)">🕒 وقت الإدخال الفعلي: ${fEntryT(a.createdAt)}</div>`:''}
         </div>
-        <div style="display:flex;align-items:center;gap:4px" ${isSecLocked('adv:'+cid)?'style="display:none"':''}>
+        <div style="display:${isSecLocked('adv:'+cid)?'none':'flex'};align-items:center;gap:4px">
           <button class="btn btn-sec btn-xs" onclick="editAdv('${a.id}','${cid}',false)" title="تعديل ${esc(a.type||'التسبيق')}">✏</button>
           <button class="del-btn" onclick="delAdv('${a.id}','${cid}',false)" title="حذف نهائي">🗑</button>
         </div>
@@ -9140,8 +9140,8 @@ if (document.readyState === 'loading') {
     const action = !lockedPay ? `<button class="btn btn-grn btn-sm" onclick="addPay('${cid}',{scope:'record',recordId:'${rec.id}'})">＋ دفعة لهذا السجل</button>` : '';
     const rowHtml=s.rows.length ? s.rows.map(x=>{
       const edit = x.source==='payment'
-        ? (!lockedPay?`<button class="btn btn-sec btn-xs" onclick="editPay('${x.item.id}','${cid}')">✏</button>`:'')
-        : (!lockedAdv?`<button class="btn btn-sec btn-xs" onclick="editAdv('${x.item.id}','${cid}',false)">✏</button>`:'');
+        ? (!lockedPay?`<button class="btn btn-sec btn-xs" onclick="editPay('${x.item.id}','${cid}')">✏</button> <button class="del-btn" title="حذف" onclick="delPay('${x.item.id}','${cid}')">🗑</button>`:'')
+        : (!lockedAdv?`<button class="btn btn-sec btn-xs" onclick="editAdv('${x.item.id}','${cid}',false)">✏</button> <button class="del-btn" title="حذف" onclick="delAdv('${x.item.id}','${cid}',false)">🗑</button>`:'');
       return `<tr><td>${fD(x.date)}</td><td class="tl">${esc(x.kind)}</td><td>${esc(methodLabel(x.item))}</td><td class="num" style="color:var(--green)">${fDA(x.amount)}</td><td class="tl">${x.note?esc(x.note):'—'}</td><td>${edit}</td></tr>`;
     }).join('') : `<tr><td colspan="6" style="padding:12px;color:var(--tx3);text-align:center">لا توجد دفعات مرتبطة بهذا السجل. الدفعات العامة تبقى ضمن رصيد العميل فقط.</td></tr>`;
     return `<div class="cp" style="margin:11px 13px 0;border-color:rgba(40,217,110,.26)">
@@ -11498,7 +11498,7 @@ if (document.readyState === 'loading') {
     const lockedPay=isSecLocked('pay:'+cid),lockedAdv=isSecLocked('adv:'+cid);
     const action=!lockedPay?`<button class="btn btn-grn btn-sm" onclick="addPay('${cid}',{scope:'record',recordId:'${rec.id}'})">＋ دفعة لهذا السجل</button>`:'';
     const rowHtml=s.rows?.length?s.rows.map(x=>{
-      const edit=x.source==='payment'?(!lockedPay?`<button class="btn btn-sec btn-xs" onclick="editPay('${x.item.id}','${cid}')">✏</button>`:''):(!lockedAdv?`<button class="btn btn-sec btn-xs" onclick="editAdv('${x.item.id}','${cid}',false)">✏</button>`:'');
+      const edit=x.source==='payment'?(!lockedPay?`<button class="btn btn-sec btn-xs" onclick="editPay('${x.item.id}','${cid}')">✏</button> <button class="del-btn" title="حذف" onclick="delPay('${x.item.id}','${cid}')">🗑</button>`:''):(!lockedAdv?`<button class="btn btn-sec btn-xs" onclick="editAdv('${x.item.id}','${cid}',false)">✏</button> <button class="del-btn" title="حذف" onclick="delAdv('${x.item.id}','${cid}',false)">🗑</button>`:'');
       const method=window.financeMethodLabel?window.financeMethodLabel(x.item):(x.method||'—');
       return `<tr><td>${dateText(x.date)}</td><td class="tl">${html(x.kind)}</td><td>${html(method)}</td><td class="num" style="color:var(--green)">${money(x.amount)}</td><td class="tl">${x.note?html(x.note):'—'}</td><td>${edit}</td></tr>`;
     }).join(''):`<tr><td colspan="6" style="padding:12px;color:var(--tx3);text-align:center">لا توجد دفعات مرتبطة بهذا السجل. الدفعات العامة تظهر أدناه ولا تُخصم من السجل حتى تخصيصها.</td></tr>`;
@@ -13762,7 +13762,8 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       '<div class="fg"><label>التاريخ *</label><input type="date" id="sq-d" value="'+(typeof today==='function'?today():'')+'"></div>'
       + '<div class="fgr">'
       +   '<div class="fg"><label>الكمية ('+e(r.priceUnit||'وحدة')+') *</label><input type="number" id="sq-q" step="0.01" min="0" placeholder="0"></div>'
-      +   '<div class="fg"><label>السعر (من السجل)</label><input type="text" value="'+money(r.price)+'" disabled></div>'
+      +   '<div class="fg"><label>السعر لهذا اليوم</label><input type="number" id="sq-p" step="0.01" min="0" value="'
+      +     ((typeof window.egtphCostPrice==='function') ? window.egtphCostPrice(null, r, (typeof today==='function'?today():'')) : num(r.price))+'"></div>'
       + '</div>'
       + '<div class="fg"><label>رقم الوصل / الفاتورة</label><input type="text" id="sq-ref" placeholder="اختياري"></div>'
       + '<div id="sq-tot" class="hint">المجموع: 0,00</div>',
@@ -13771,21 +13772,30 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
         if (q <= 0) return T('أدخل الكمية','error');
         var d = document.getElementById('sq-d').value || (typeof today==='function'?today():'');
         var ref = (document.getElementById('sq-ref').value||'').trim();
-        var total = q * num(r.price);
+        var up = num((document.getElementById('sq-p')||{}).value);
+        if (!(up > 0)) up = num(r.price);
+        var total = Math.round(q * up * 100) / 100;
         var inv = { id:(typeof uid==='function'?uid():'inv_'+Date.now()), supplierId:spId,
           date:d, ref:ref, invoiceNo:ref, blNo:'', note:'', supRecId:r.id, account:r.name,
-          items:[{ name:r.name, unit:r.priceUnit||'وحدة', qty:q, unitPrice:num(r.price), priceStatus:'confirmed' }],
+          items:[{ name:r.name, unit:r.priceUnit||'وحدة', qty:q, unitPrice:up, priceStatus:'confirmed' }],
           total: total, createdAt:new Date().toISOString() };
         if (!window._supInvs) window._supInvs = [];
         window._supInvs.push(inv);
         var ok = await dbP('sup_invoices', inv);
         if (!ok) { window._supInvs = window._supInvs.filter(function(x){ return x.id!==inv.id; }); return T('فشل الحفظ','error'); }
-        CM(); T('✓ '+q+' '+(r.priceUnit||'')+' × '+money(r.price)+' = '+money(total),'success');
+        CM(); T('✓ '+q+' '+(r.priceUnit||'')+' × '+money(up)+' = '+money(total),'success');
         renderSupDetail(spId);
       }, 'تسجيل');
     setTimeout(function(){
       var q = document.getElementById('sq-q'), t = document.getElementById('sq-tot');
-      if (q && t) q.addEventListener('input', function(){ t.textContent = 'المجموع: ' + money(num(q.value)*num(r.price)); });
+      var pf = document.getElementById('sq-p'), df = document.getElementById('sq-d'), touched = false;
+      function upd(){ if (t) t.textContent = 'المجموع: ' + money(num(q && q.value)*num(pf ? pf.value : r.price)); }
+      if (q) q.addEventListener('input', upd);
+      if (pf) pf.addEventListener('input', function(){ touched = true; upd(); });
+      if (df && pf) df.addEventListener('change', function(){
+        if (touched || typeof window.egtphCostPrice!=='function') return;
+        pf.value = window.egtphCostPrice(null, r, df.value); upd();
+      });
       if (q) q.focus();
     }, 80);
   };
@@ -13909,10 +13919,11 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       var sr = supRecOf(l.supRecId); if (!sr) return;
       var g = groups[l.supRecId] || (groups[l.supRecId] = {supplierId:sr.supplierId, name:sr.name, items:{}, last:'', trucks:[]});
       if (g.trucks.indexOf(l.truck)===-1) g.trucks.push(l.truck);
-      var price = (l.price != null) ? num(l.price) : num(sr.price);
+      var basePrice = (l.price != null) ? num(l.price) : num(sr.price);
       (typeof entries!=='undefined'?entries:[]).forEach(function(en){
         if (en.recordId!==recId || en.type!=='truck') return;
         var q = num((en.cols||{})[l.truck]); if (!q) return;
+        var price = (typeof window.egtphCostPrice==='function') ? window.egtphCostPrice(l, sr, en.date) : basePrice;
         var mat = (typeof prices!=='undefined'?prices:[]).find(function(p){ return p.id===en.materialId; });
         var mname = (mat && mat.name) ? mat.name : sr.name;
         var unit  = (mat && mat.priceUnit) ? mat.priceUnit : (sr.priceUnit||'وحدة');
@@ -13985,12 +13996,22 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       var sp = (l && typeof suppliers!=='undefined') ? suppliers.find(function(x){ return x.id===l.supplierId; }) : null;
       var price = l ? ((l.price!=null)?num(l.price):(sr?num(sr.price):0)) : 0;
       var q = qtyOf[t] || 0;
+      var tCost = 0, pset = {};
+      if (l && sr) {
+        (typeof entries!=='undefined'?entries:[]).forEach(function(en){
+          if (en.recordId!==recId || en.type!=='truck') return;
+          var qq = num((en.cols||{})[t]); if (!qq) return;
+          var pp = (typeof window.egtphCostPrice==='function') ? window.egtphCostPrice(l, sr, en.date) : price;
+          tCost += qq*pp; pset[pp] = 1;
+        });
+      }
+      var mixed = Object.keys(pset).length > 1;
       var warns = audit.filter(function(a){ return a.truck===t; })
                        .map(function(a){ return '<span class="warn">⚠️ '+e(a.msg)+'</span>'; }).join('');
       return '<div class="tr"><span class="tn">🚛 '+e(t)+'</span>'
         + '<span class="lk">' + (sr
             ? ('→ <b>'+e(sp?sp.name:'')+'</b> · '+e(sr.name)+' · '+money(price)+'/'+e(sr.priceUnit||'وحدة')
-               + '<br><span class="qty">'+fn(q)+' × '+money(price)+' = '+money(q*price)+'</span>')
+               + '<br><span class="qty">'+fn(q)+(mixed ? (' · أسعار حسب اليوم = '+money(tCost)) : (' × '+money(price)+' = '+money(tCost||q*price)))+'</span>')
             : ('شاحنتي — بلا تكلفة مورد' + (q?('<br><span class="qty">'+fn(q)+'</span>'):''))) + warns + '</span>'
         + '<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();egtphLinkTruck(\''+recId+'\',\''+String(t).replace(/'/g,"")+'\')">'
         + (sr?'✎ تعديل':'🔗 ربط')+'</button></div>';
@@ -15635,7 +15656,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       var links = (typeof egtphTruckLinks==='function') ? egtphTruckLinks(r.id) : [];
       links.forEach(function(l){
         var sr = (typeof prices!=='undefined'?prices:[]).find(function(p){ return p && p.type==='sup_rec' && p.id===l.supRecId; });
-        map[r.id+'|'+l.truck] = { supplierId:l.supplierId, supRecId:l.supRecId,
+        map[r.id+'|'+l.truck] = { supplierId:l.supplierId, supRecId:l.supRecId, link:l, sr:sr,
                                   cost:(l.price!=null?num(l.price):(sr?num(sr.price):0)) };
       });
     });
@@ -15693,7 +15714,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       rows.forEach(function(x){
         rev += num(x.amount);
         var l = map[x.recordId+'|'+x.truck];
-        if (l) { cost += num(x.qty)*num(l.cost); linked++; }
+        if (l) { cost += num(x.qty)*((typeof window.egtphCostPrice==='function' && l.sr) ? window.egtphCostPrice(l.link, l.sr, x.date) : num(l.cost)); linked++; }
       });
       if (linked) {
         // تفصيل حسب المورد ← سجله ← المادة
@@ -15705,7 +15726,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
           var k = l.supplierId+'|'+l.supRecId+'|'+(x.material||'');
           byS[k] = byS[k] || { sup:(sp?sp.name:'—'), rec:(sr?sr.name:'—'), mat:(x.material||'—'),
                                unit:(x.unit||''), qty:0, cost:0, rev:0 };
-          byS[k].qty += num(x.qty); byS[k].cost += num(x.qty)*num(l.cost); byS[k].rev += num(x.amount);
+          byS[k].qty += num(x.qty); byS[k].cost += num(x.qty)*((typeof window.egtphCostPrice==='function' && l.sr) ? window.egtphCostPrice(l.link, l.sr, x.date) : num(l.cost)); byS[k].rev += num(x.amount);
         });
         var det = Object.keys(byS).map(function(k){ return byS[k]; })
                     .sort(function(a,b){ return b.qty-a.qty; });
@@ -15845,6 +15866,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       var payFn = rid ? ("egtphPayForRec('"+spId+"','"+rid+"',") : ("egtphPayForAccount('"+spId+"','"+String(r.name).replace(/'/g,"")+"',");
       var acts = locked ? '' : '<div class="acts">'
         + (rid && r.kind!=='project' ? '<button class="b" onclick="egtphAddQty(\''+spId+'\',\''+rid+'\')">＋ كمية</button>' : '')
+        + (rid && r.kind!=='project' ? '<button onclick="egtphSupRecRules(\''+spId+'\',\''+rid+'\')">💲 أسعار الأيام</button>' : '')
         + (rid && r.kind==='project' ? '<button class="b" onclick="egtphInvForRec(\''+spId+'\',\''+rid+'\')">＋ فاتورة</button>' : '')
         + (r.remain>0 ? '<button class="g" onclick="egtphSettleRec(\''+spId+'\',\''+String(rid||r.name).replace(/'/g,"")+'\')">✅ تسديد</button>' : '')
         + '<button class="g" onclick="'+payFn+'\'pay\')">＋ دفعة</button>'
@@ -15856,6 +15878,11 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       return '<tr><td><div class="nm">'+icon+' '+e(r.name)+'</div>'
         + '<div class="sub">'+r.nInv+' فاتورة · '+r.nPay+' دفعة</div>' + qty
         + (r.price!=null?('<div class="price">'+money(r.price)+'/'+e(r.unit||'وحدة')+'</div>'):'')
+        + (function(){
+            var srx = rid ? (typeof prices!=='undefined'?prices:[]).find(function(pp){ return pp && pp.id===rid; }) : null;
+            var nR = (srx && Array.isArray(srx.priceRules)) ? srx.priceRules.length : 0;
+            return nR ? ('<div class="price" style="color:#fdba74;border-color:rgba(249,115,22,.45);background:rgba(249,115,22,.12);margin-right:4px">💲 '+nR+' سعر خاص</div>') : '';
+          })()
         + '</td>'
         + '<td class="n" style="color:var(--gold2)">'+money(r.invoiced)+'</td>'
         + '<td class="n" style="color:var(--green)">'+money(r.paid)+'</td>'
@@ -15879,6 +15906,8 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       .sort(function(a,b){ return String(b.date||'').localeCompare(String(a.date||'')); });
     if (!list.length) return '<div style="padding:16px;text-align:center;color:var(--tx3);font-size:11px">لا توجد فواتير</div>';
     var tot = list.reduce(function(s,v){ return s+invAmt(v); },0);
+    var locked = false;
+    try { locked = (typeof isSecLocked==='function') && isSecLocked('sup:'+spId); } catch(_) {}
     return '<div class="wrap"><table class="eg-tbl">'
       + '<thead><tr><th>التاريخ</th><th>السجل</th><th>الأصناف</th><th style="text-align:left">الكمية</th><th style="text-align:left">المبلغ</th><th></th></tr></thead><tbody>'
       + list.map(function(v){
@@ -15893,7 +15922,10 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
             + '<td class="n qty">'+fn(q)+(u?(' '+e(u)):'')+'</td>'
             + '<td class="n" style="color:var(--gold2)">'+money(invAmt(v))+'</td>'
             + '<td><div class="acts">'
-            + (v.autoFrom ? '' : '<button onclick="editSupInvoice(\''+v.id+'\',\''+spId+'\')">✎</button>')
+            + (locked ? '' : (v.autoFrom
+                ? '<button class="r" title="حذف (يلغي الربط)" onclick="egtphDeleteAutoInvoice(\''+v.id+'\',\''+spId+'\')">🗑</button>'
+                : '<button onclick="editSupInvoice(\''+v.id+'\',\''+spId+'\')">✎</button>'
+                + '<button class="r" onclick="delSupInvoice(\''+v.id+'\',\''+spId+'\')">🗑</button>'))
             + '</div></td></tr>';
         }).join('')
       + '<tr class="tot"><td colspan="4">∑ المجموع</td><td class="n" style="color:var(--gold2)">'+money(tot)+'</td><td></td></tr>'
@@ -15906,17 +15938,23 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       .sort(function(a,b){ return String(b.date||'').localeCompare(String(a.date||'')); });
     if (!list.length) return '<div style="padding:16px;text-align:center;color:var(--tx3);font-size:11px">لا توجد مدفوعات أو تسبيقات</div>';
     var tot = list.reduce(function(s,x){ return s+num(x.amount); },0);
+    var locked = false;
+    try { locked = (typeof isSecLocked==='function') && isSecLocked('sup:'+spId); } catch(_) {}
     return '<div class="wrap"><table class="eg-tbl">'
-      + '<thead><tr><th>التاريخ</th><th>النوع</th><th>السجل</th><th>الطريقة</th><th style="text-align:left">المبلغ</th></tr></thead><tbody>'
+      + '<thead><tr><th>التاريخ</th><th>النوع</th><th>السجل</th><th>الطريقة</th><th style="text-align:left">المبلغ</th><th></th></tr></thead><tbody>'
       + list.map(function(x){
           var kind = (x.kind==='advance') ? '<span style="color:#93c5fd">💳 تسبيق</span>' : '<span style="color:#86efac">💵 دفعة</span>';
           return '<tr><td class="dt">'+e(dt(x.date))+'</td>'
             + '<td style="font-size:11px">'+kind+'</td>'
             + '<td><span class="tag">📁 '+e(recName(x))+'</span></td>'
             + '<td style="font-size:10.5px;color:var(--tx2)">'+e(x.method||'—')+(x.note?('<div class="sub">'+e(x.note)+'</div>'):'')+'</td>'
-            + '<td class="n" style="color:var(--green)">'+money(x.amount)+'</td></tr>';
+            + '<td class="n" style="color:var(--green)">'+money(x.amount)+'</td>'
+            + '<td><div class="acts">'
+            + (locked ? '' : ('<button onclick="editSupPay(\''+x.id+'\',\''+spId+'\')">✎</button>'
+                + '<button class="r" onclick="delSupPay(\''+x.id+'\',\''+spId+'\')">🗑</button>'))
+            + '</div></td></tr>';
         }).join('')
-      + '<tr class="tot"><td colspan="4">∑ المجموع</td><td class="n" style="color:var(--green)">'+money(tot)+'</td></tr>'
+      + '<tr class="tot"><td colspan="4">∑ المجموع</td><td class="n" style="color:var(--green)">'+money(tot)+'</td><td></td></tr>'
       + '</tbody></table></div>';
   }
 
@@ -16044,62 +16082,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
 })();
 </script>
 
-<script id="egtph-scrollmem-js">
-/* EGTPH — حفظ موضع التمرير: الرجوع من ملف مورد/عميل يعيدك إلى مكانك في القائمة. */
-(function(){
-  'use strict';
-  if (window.__egtphScrollMem) return;
-  window.__egtphScrollMem = true;
-
-  var POS = {};
-  function box(){ return document.getElementById('content') || document.scrollingElement || document.documentElement; }
-  function y(){
-    var b = box();
-    return (b && b.scrollTop) || window.pageYOffset || document.documentElement.scrollTop || 0;
-  }
-  function setY(v){
-    var b = box();
-    if (b && b.scrollHeight > b.clientHeight + 10) b.scrollTop = v;
-    else window.scrollTo(0, v);
-  }
-  function restore(key){
-    var v = POS[key]; if (!v) return;
-    var tries = 0;
-    (function step(){
-      setY(v);
-      if (++tries < 10 && Math.abs(y()-v) > 20) setTimeout(step, 100);
-    })();
-  }
-
-  // احفظ موضع القائمة قبل فتح ملف، واسترجعه عند العودة
-  ['renderSupDetail','renderCD','openCD'].forEach(function(fname){
-    var base = window[fname];
-    if (typeof base !== 'function') return;
-    window[fname] = function(){
-      var key = (fname==='renderSupDetail') ? 'suppliers' : 'clients';
-      if (y() > 40 && !POS['_in_'+key]) POS[key] = y();
-      POS['_in_'+key] = 1;
-      var out = base.apply(this, arguments);
-      setTimeout(function(){ setY(0); }, 0);
-      return out;
-    };
-  });
-  ['renderSuppliers','renderClients'].forEach(function(fname){
-    var base = window[fname];
-    if (typeof base !== 'function') return;
-    window[fname] = function(p){
-      var key = (fname==='renderSuppliers') ? 'suppliers' : 'clients';
-      var out = base.apply(this, arguments);
-      var opening = p && (p.sid || p.cid);
-      if (!opening) {
-        POS['_in_'+key] = 0;
-        setTimeout(function(){ restore(key); }, 120);
-      }
-      return out;
-    };
-  });
-})();
-</script>
+<!-- egtph-scrollmem-js أُزيل: حلّ محلّه egtph-scrollkeep-js -->
 
 <style id="egtph-grid-css">
 /* ══ جدول الرحلات: خط أكبر · رأس ثابت · إبراز الشاحنة الجاري الإدخال فيها ══ */
@@ -16334,7 +16317,10 @@ body[data-gz="sm"] .tw table th{font-size:10.5px!important}
     var wrap = tw.closest('.cp') || tw.parentNode;
     var b = document.createElement('div');
     b.id = 'eg-gridbar';
-    b.innerHTML = '<span class="lbl">الجدول</span>'
+    var curRec = (typeof activeRid!=='undefined' && activeRid && typeof records!=='undefined')
+      ? records.find(function(r){ return r.id===activeRid; }) : null;
+    b.innerHTML = '<span class="lbl" style="font-weight:900;color:var(--gold2)">'
+      + (curRec ? ('📂 '+(typeof esc==='function'?esc(curRec.name):curRec.name)) : 'الجدول') + '</span>'
       + '<button onclick="egtphGridZoom(1)">A+</button>'
       + '<button onclick="egtphGridZoom(-1)">A−</button>'
       + '<button id="eg-hide-btn" class="'+(MEM.hideEmpty?'on':'')+'" onclick="egtphGridHideEmpty()">🙈 إخفاء الفارغة</button>';
@@ -16475,9 +16461,12 @@ body[data-gz="sm"] .tw table th{font-size:10.5px!important}
   text-align:left;font-weight:900;font-size:13px;white-space:nowrap}
 #eg-rectbl .bar{height:4px;border-radius:4px;background:rgba(255,255,255,.08);margin-top:7px;overflow:hidden}
 #eg-rectbl .bar i{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#15803d)}
-#eg-rectbl tr.on td{background:rgba(201,168,76,.10)}
-#eg-rectbl tr.on td:first-child{box-shadow:inset 4px 0 0 var(--gold)}
-#eg-rectbl tr.on .nm{color:var(--gold2)}
+#eg-rectbl tr.on td{background:linear-gradient(90deg,rgba(201,168,76,.10),rgba(201,168,76,.22))}
+#eg-rectbl tr.on td:first-child{box-shadow:inset 6px 0 0 var(--gold)}
+#eg-rectbl tr.on .nm{color:var(--gold2);font-size:16px}
+#eg-rectbl tr.rrow:not(.on){opacity:.82}
+#eg-rectbl .open-pill{display:inline-block;vertical-align:middle;margin-right:6px;font-size:9.5px;font-weight:900;
+  color:#1a1408;background:linear-gradient(135deg,#e8c97a,#c9a84c);border-radius:20px;padding:2px 8px}
 #eg-rectbl tr.rrow:active td{background:rgba(255,255,255,.05)}
 #eg-rectbl tr.tot td{background:rgba(201,168,76,.08);font-weight:900;cursor:default}
 #eg-rectbl .chip{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:20px;white-space:nowrap;
@@ -16513,7 +16502,8 @@ body[data-gz="sm"] .tw table th{font-size:10.5px!important}
       if (num(rt.hours)) qty.push(fn(rt.hours)+' ساعة');
       var on = (typeof activeRid!=='undefined' && activeRid===r.id);
       return '<tr class="rrow'+(on?' on':'')+'" data-rid="'+e(r.id)+'">'
-        + '<td><div class="nm">'+(ic[r.type]||'📄')+' '+e(r.name)+'</div>'
+        + '<td><div class="nm">'+(on?'📂':(ic[r.type]||'📄'))+' '+e(r.name)
+        +   (on?' <span class="open-pill">● مفتوح</span>':'')+'</div>'
         +   '<div class="sub">'+(qty.join(' · ')||'—')
         +     ' · <span class="chip'+(rem>0?' due':'')+'">'+(rem>0?('متبقٍ '+money(rem)):'✓ مسدَّد')+'</span></div>'
         +   '<div class="bar"><i style="width:'+pct+'%"></i></div></td>'
@@ -16553,6 +16543,389 @@ body[data-gz="sm"] .tw table th{font-size:10.5px!important}
       } catch(_) {}
     }, 30);
     return out;
+  };
+})();
+</script>
+
+<style id="egtph-dayprice-css">
+.eg-dp-wrap{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.eg-dp-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;padding:2px 7px;
+  border-radius:20px;white-space:nowrap;font-family:inherit}
+.eg-dp-badge.sell{color:#fde68a;background:rgba(201,168,76,.16);border:1px solid rgba(201,168,76,.45)}
+.eg-dp-badge.cost{color:#fdba74;background:rgba(249,115,22,.14);border:1px solid rgba(249,115,22,.45)}
+.eg-dp-badge b{font-family:'Inter';direction:ltr;unicode-bidi:isolate}
+button.eg-dp-btn{margin-top:6px;padding:5px 10px;border-radius:8px;font-size:10.5px;font-weight:900;cursor:pointer;
+  border:1px solid rgba(201,168,76,.55);background:rgba(201,168,76,.14);color:var(--gold2);font-family:inherit}
+#eg-dp-form .blk{border:1px solid var(--bdr);border-radius:10px;padding:9px 10px;margin-bottom:9px}
+#eg-dp-form .blk h4{margin:0 0 7px;font-size:11.5px;font-weight:900;color:var(--gold2)}
+#eg-dp-form .blk.cost h4{color:#fdba74}
+#eg-rules .rl{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--bdr);font-size:11px}
+#eg-rules .rl:last-child{border-bottom:0}
+#eg-rules .rl .d{flex:1;font-family:'Inter';direction:ltr;unicode-bidi:isolate;text-align:right}
+#eg-rules .rl .p{font-family:'Inter';font-weight:900;color:#fdba74;direction:ltr}
+#eg-rules .empty{padding:14px;text-align:center;color:var(--tx3);font-size:10.5px}
+</style>
+<script id="egtph-dayprice-js">
+/* EGTPH — سعر خاص ليوم معيّن:
+   • عند العميل: سعر بيع خاص لليوم (يستعمل آلية السعر الخاص الموجودة في البرنامج).
+   • عند المورد: أسعار تكلفة حسب التاريخ داخل سجل المورد (يوم واحد أو فترة).
+   أولوية سعر التكلفة: سعر شاحنة محدّد ← سعر اليوم/الفترة ← سعر ربط السجل ← سعر سجل المورد. */
+(function(){
+  'use strict';
+  if (window.__egtphDayPrice) return;
+  window.__egtphDayPrice = true;
+
+  function e(s){ return (typeof esc==='function') ? esc(String(s==null?'':s)) : String(s==null?'':s); }
+  function num(v){ return parseFloat(v)||0; }
+  function money(v){ return (typeof fDA==='function') ? fDA(num(v)) : String(v); }
+  function dshow(d){ return (typeof fD==='function') ? fD(d) : d; }
+  function uid2(){ return (typeof uid==='function') ? uid() : String(Date.now())+Math.random().toString(36).slice(2); }
+  function supRecOf(id){ return (typeof prices!=='undefined'?prices:[]).find(function(p){ return p && p.type==='sup_rec' && p.id===id; }); }
+  function spanDays(r){
+    if (!r.to) return 1e9;
+    return Math.round((new Date(r.to) - new Date(r.from)) / 86400000);
+  }
+
+  // ── القاعدة الأنسب لتاريخ معيّن: الأضيق مدةً ثم الأحدث بدايةً ──
+  window.egtphRuleFor = function(sr, date){
+    if (!sr || !date || !Array.isArray(sr.priceRules) || !sr.priceRules.length) return null;
+    var d = String(date);
+    var hits = sr.priceRules.filter(function(r){
+      return r && r.from && String(r.from) <= d && (!r.to || d <= String(r.to));
+    });
+    if (!hits.length) return null;
+    hits.sort(function(a,b){
+      var s = spanDays(a) - spanDays(b); if (s) return s;
+      var f = String(b.from).localeCompare(String(a.from)); if (f) return f;
+      return String(b.createdAt||'').localeCompare(String(a.createdAt||''));
+    });
+    return hits[0];
+  };
+
+  // ── سعر التكلفة الفعلي لسطر في يوم معيّن ──
+  window.egtphCostPrice = function(l, sr, date){
+    if (l && l.price != null && !l.fromRecordLink) return num(l.price);   // سعر شاحنة محدّد
+    var r = window.egtphRuleFor(sr, date);
+    if (r) return num(r.price);                                             // سعر اليوم/الفترة
+    if (l && l.price != null) return num(l.price);                          // سعر ربط السجل
+    return num(sr && sr.price);                                             // سعر سجل المورد
+  };
+
+  // أعد توليد الفواتير التلقائية لكل سجل عميل يستعمل سجل المورد هذا
+  async function resyncFor(srId){
+    var n = 0;
+    var recs = (typeof records!=='undefined'?records:[]);
+    for (var i=0;i<recs.length;i++){
+      var links = (typeof egtphTruckLinks==='function') ? egtphTruckLinks(recs[i].id) : [];
+      if (links.some(function(l){ return l.supRecId===srId; })) {
+        try { await egtphSyncCosts(recs[i].id, true); n++; } catch(_) {}
+      }
+    }
+    return n;
+  }
+  window.egtphResyncSupRec = resyncFor;
+
+  // ── إدارة أسعار الأيام داخل سجل المورد ──
+  window.egtphSupRecRules = function(spId, srId){
+    var sr = supRecOf(srId); if (!sr) return T('السجل غير موجود','error');
+    var rules = (sr.priceRules||[]).slice().sort(function(a,b){ return String(b.from).localeCompare(String(a.from)); });
+    var td = (typeof today==='function') ? today() : '';
+    var list = rules.length ? rules.map(function(r){
+      var when = (r.to && r.to===r.from) ? ('يوم '+dshow(r.from))
+               : r.to ? ('من '+dshow(r.from)+' إلى '+dshow(r.to))
+               : ('من '+dshow(r.from)+' فصاعداً');
+      return '<div class="rl"><span class="d">📅 '+e(when)+'</span>'
+        + '<span class="p">'+money(r.price)+'/'+e(sr.priceUnit||'وحدة')+'</span>'
+        + '<button class="btn btn-sec btn-xs" onclick="egtphDelRule(\''+spId+'\',\''+srId+'\',\''+r.id+'\')">🗑</button></div>';
+    }).join('') : '<div class="empty">لا توجد أسعار خاصة — السعر العام للسجل يُطبَّق على كل الأيام.</div>';
+    OM('💲 أسعار الأيام — '+e(sr.name),
+      '<div class="hint" style="margin-bottom:8px">السعر العام للسجل: <b>'+money(sr.price)+'/'+e(sr.priceUnit||'وحدة')+'</b>. '
+      + 'أضف سعراً ليوم واحد أو لفترة؛ يُطبَّق على الكميات التي تتولّد من سجلات العملاء المربوطة، وعلى «＋ كمية».</div>'
+      + '<div id="eg-rules" style="border:1px solid var(--bdr);border-radius:10px;margin-bottom:10px">'+list+'</div>'
+      + '<div class="fgr">'
+      +   '<div class="fg"><label>من *</label><input type="date" id="rl-f" value="'+td+'"></div>'
+      +   '<div class="fg"><label>إلى</label><input type="date" id="rl-t" value="'+td+'"></div>'
+      + '</div>'
+      + '<div class="hint" style="margin:-4px 0 8px">نفس التاريخين = يوم واحد · اترك «إلى» فارغاً ليبقى السعر سارياً من ذلك اليوم فصاعداً.</div>'
+      + '<div class="fg"><label>السعر *</label><input type="number" id="rl-p" step="0.01" min="0" placeholder="'+num(sr.price)+'"></div>',
+      async function(){
+        var f = document.getElementById('rl-f').value, t = document.getElementById('rl-t').value;
+        var pv = document.getElementById('rl-p').value;
+        if (!f) return T('اختر تاريخ البداية','error');
+        if (t && t < f) return T('تاريخ النهاية قبل البداية','error');
+        if (pv === '' || !(num(pv) >= 0)) return T('أدخل السعر','error');
+        if (!Array.isArray(sr.priceRules)) sr.priceRules = [];
+        // استبدل قاعدة بنفس المدى تماماً بدل التكرار
+        sr.priceRules = sr.priceRules.filter(function(r){ return !(r.from===f && (r.to||'')===(t||'')); });
+        sr.priceRules.push({ id:'pr_'+uid2(), from:f, to:t||'', price:num(pv), createdAt:new Date().toISOString() });
+        sr._saved = new Date().toISOString();
+        var ok = await dbP('prices', sr);
+        if (!ok) return T('فشل الحفظ','error');
+        var n = await resyncFor(sr.id);
+        CM(); T('💲 حُفظ السعر'+(n?(' وحُدّثت '+n+' فاتورة تلقائية'):''),'success');
+        renderSupDetail(spId);
+      }, 'إضافة السعر');
+  };
+  window.egtphDelRule = async function(spId, srId, ruleId){
+    var sr = supRecOf(srId); if (!sr) return;
+    sr.priceRules = (sr.priceRules||[]).filter(function(r){ return r.id!==ruleId; });
+    sr._saved = new Date().toISOString();
+    await dbP('prices', sr);
+    await resyncFor(srId);
+    T('🗑 حُذف السعر الخاص','success');
+    CM(); renderSupDetail(spId);
+    setTimeout(function(){ egtphSupRecRules(spId, srId); }, 250);
+  };
+
+  // ── سعر اليوم من ملف العميل: بيع للعميل + تكلفة المورد المربوط ──
+  function linkedSupRecs(recId){
+    var out = [], seen = {};
+    var links = (typeof egtphTruckLinks==='function') ? egtphTruckLinks(recId) : [];
+    links.forEach(function(l){
+      if (seen[l.supRecId]) return; seen[l.supRecId] = 1;
+      var sr = supRecOf(l.supRecId); if (sr) out.push(sr);
+    });
+    return out;
+  }
+  function locked(recId, date, type){
+    try { return (typeof isDayLocked==='function') && isDayLocked(recId, date, type); } catch(_) { return false; }
+  }
+
+  window.egtphDayPrice = function(recId, date, cid, type){
+    type = type || 'truck';
+    if (locked(recId, date, type)) return T('🔒 هذا اليوم محفوظ — اضغط «فتح للتعديل» أولاً ثم غيّر سعره','warning',4000);
+    var P = window.EGTPHRecordPricing;
+    if (!P) return T('آلية الأسعار غير متاحة','error');
+    var defType = (type==='machine') ? 'unit_def' : 'mat_def';
+    var key = (type==='machine') ? 'unitId' : 'materialId';
+    var defs = (typeof prices!=='undefined'?prices:[]).filter(function(p){ return p.recordId===recId && p.type===defType; })
+                 .sort(function(a,b){ return (a.order||0)-(b.order||0); });
+    var dayEs = (typeof entries!=='undefined'?entries:[]).filter(function(x){ return x.recordId===recId && x.date===date && x.type===type; });
+    var sell = defs.map(function(d){
+      var en = dayEs.find(function(x){ return x[key]===d.id; });
+      var v = (en && P.isDayOverride(en)) ? num(en.unitPrice) : '';
+      return '<div class="fg"><label>'+e(d.name)+'</label>'
+        + '<input type="number" step="0.01" min="0" id="dp_s_'+e(d.id)+'" value="'+v+'" placeholder="السعر العام '+num(d.price)+'"></div>';
+    }).join('');
+    var srs = linkedSupRecs(recId);
+    var cost = srs.map(function(sr){
+      var r = (sr.priceRules||[]).find(function(x){ return x.from===date && x.to===date; });
+      var sp = (typeof suppliers!=='undefined'?suppliers:[]).find(function(s){ return s.id===sr.supplierId; });
+      return '<div class="fg"><label>🏭 '+e(sp?sp.name:'')+' · '+e(sr.name)+'</label>'
+        + '<input type="number" step="0.01" min="0" id="dp_c_'+e(sr.id)+'" value="'+(r?num(r.price):'')+'" placeholder="سعر السجل '+num(sr.price)+'"></div>';
+    }).join('');
+    OM('💲 سعر يوم '+dshow(date),
+      '<div id="eg-dp-form">'
+      + '<div class="blk"><h4>💰 سعر البيع للعميل — هذا اليوم فقط</h4>'+(sell||'<div class="hint">لا توجد مواد في هذا السجل.</div>')+'</div>'
+      + (cost ? '<div class="blk cost"><h4>🏭 سعر التكلفة عند المورد — هذا اليوم فقط</h4>'+cost+'</div>' : '')
+      + '<div class="hint">اترك الخانة فارغة ليعود اليوم إلى السعر العام. لا يتغيّر أي يوم آخر.</div>'
+      + '</div>',
+      async function(){
+        var changedSell = 0, changedCost = 0;
+        for (var i=0;i<defs.length;i++){
+          var d = defs[i];
+          var inp = document.getElementById('dp_s_'+d.id); if (!inp) continue;
+          var raw = String(inp.value||'').trim();
+          var en = dayEs.find(function(x){ return x[key]===d.id; });
+          if (!en) {
+            if (raw==='') continue;
+            en = (type==='machine')
+              ? {id:uid2(), recordId:recId, type:'machine', date:date, unitId:d.id, hours:0, dest:'', createdAt:new Date().toISOString()}
+              : {id:uid2(), recordId:recId, type:'truck', date:date, materialId:d.id, cols:{}, dest:'', createdAt:new Date().toISOString()};
+            entries.push(en);
+          }
+          var before = P.isDayOverride(en) ? num(en.unitPrice) : null;
+          P.setDayOverride(en, raw);
+          var after = P.isDayOverride(en) ? num(en.unitPrice) : null;
+          if (before !== after) {
+            en._saved = new Date().toISOString();
+            var ok = await dbP('entries', en);
+            if (!ok) return T('فشل حفظ سعر البيع','error');
+            changedSell++;
+          }
+        }
+        for (var j=0;j<srs.length;j++){
+          var sr = srs[j];
+          var ci = document.getElementById('dp_c_'+sr.id); if (!ci) continue;
+          var cv = String(ci.value||'').trim();
+          var had = (sr.priceRules||[]).find(function(x){ return x.from===date && x.to===date; });
+          var hadV = had ? num(had.price) : null;
+          var newV = (cv==='') ? null : num(cv);
+          if (hadV === newV) continue;
+          sr.priceRules = (sr.priceRules||[]).filter(function(x){ return !(x.from===date && x.to===date); });
+          if (newV !== null) sr.priceRules.push({id:'pr_'+uid2(), from:date, to:date, price:newV, createdAt:new Date().toISOString()});
+          sr._saved = new Date().toISOString();
+          await dbP('prices', sr);
+          changedCost++;
+        }
+        if (changedCost || changedSell) { try { await egtphSyncCosts(recId, true); } catch(_) {} }
+        try { if (typeof scheduleAutoSaveFile==='function') scheduleAutoSaveFile(); } catch(_) {}
+        CM();
+        T((changedSell||changedCost) ? ('💲 حُفظ سعر يوم '+dshow(date)) : 'لم يتغيّر شيء', (changedSell||changedCost)?'success':'');
+        renderCD(cid);
+      }, 'حفظ سعر اليوم');
+  };
+
+  // ── شارات ٪ زر «سعر اليوم» في صفوف الأيام ──
+  var RX = /(editTruckDay|unlockDay|lockDay|editMachDay|delTruckDay|delMachDay|saveTruckDay|saveDay)\(\s*'([^']+)'\s*,\s*'(\d{4}-\d{2}-\d{2})'/;
+  function decorate(){
+    var root = document.getElementById('content'); if (!root) return;
+    var cid = (typeof openCid!=='undefined' && openCid) ? openCid : null;
+    var P = window.EGTPHRecordPricing;
+    Array.prototype.forEach.call(root.querySelectorAll('table tbody tr'), function(tr){
+      var cell = tr.children[0]; if (!cell || cell.querySelector('.eg-dp-mark')) return;
+      var btns = cell.querySelectorAll('button[onclick]');
+      var m = null, type = 'truck';
+      for (var i=0;i<btns.length;i++){
+        var oc = btns[i].getAttribute('onclick')||'';
+        var mm = oc.match(RX);
+        if (mm) { m = mm; if (/Mach|'machine'/.test(oc)) type = 'machine'; break; }
+      }
+      if (!m) return;
+      var recId = m[2], date = m[3];
+      var rec = (typeof records!=='undefined'?records:[]).find(function(r){ return r.id===recId; });
+      if (!rec) return;
+      var ccid = cid || rec.clientId;
+      var html = '';
+      // بيع
+      var es = (typeof entries!=='undefined'?entries:[]).filter(function(x){ return x.recordId===recId && x.date===date && x.type===type; });
+      if (P) es.forEach(function(x){
+        if (!P.isDayOverride(x)) return;
+        var d = (typeof prices!=='undefined'?prices:[]).find(function(p){ return p.id===(type==='machine'?x.unitId:x.materialId); });
+        html += '<span class="eg-dp-badge sell" title="سعر بيع خاص بهذا اليوم">💲 '+e(d?d.name:'')+' <b>'+money(x.unitPrice)+'</b></span>';
+      });
+      // تكلفة
+      linkedSupRecs(recId).forEach(function(sr){
+        var r = window.egtphRuleFor(sr, date);
+        if (r) html += '<span class="eg-dp-badge cost" title="سعر تكلفة المورد في هذا اليوم">🏭 <b>'+money(r.price)+'</b></span>';
+      });
+      var mark = document.createElement('div');
+      mark.className = 'eg-dp-mark';
+      mark.innerHTML = (html ? '<div class="eg-dp-wrap">'+html+'</div>' : '')
+        + (locked(recId, date, type) ? ''
+           : '<button type="button" class="eg-dp-btn" onclick="event.stopPropagation();egtphDayPrice(\''+recId+'\',\''+date+'\',\''+ccid+'\',\''+type+'\')">💲 سعر اليوم</button>');
+      cell.appendChild(mark);
+    });
+  }
+  window.egtphDecorateDayPrices = decorate;
+  var tmr = null;
+  function schedule(){ clearTimeout(tmr); tmr = setTimeout(decorate, 220); }
+  try { new MutationObserver(schedule).observe(document.getElementById('content') || document.body, {childList:true, subtree:true}); } catch(_) {}
+  setTimeout(decorate, 1800);
+})();
+</script>
+
+<script id="egtph-scrollkeep-js">
+/* EGTPH — ثبات موضع الصفحة:
+   • إعادة رسم نفس الملف (تعديل يوم، تسديد، حفظ…) تُبقيك في مكانك.
+   • فتح ملف جديد يبدأ من أعلاه.
+   • الرجوع إلى القائمة يعيدك إلى الموضع الذي تركته. */
+(function(){
+  'use strict';
+  if (window.__egtphScrollKeep) return;
+  window.__egtphScrollKeep = true;
+
+  function box(){ return document.getElementById('content'); }
+  function getY(){ var b = box(); return b ? b.scrollTop : (window.pageYOffset || 0); }
+  function setY(v){ var b = box(); if (b) b.scrollTop = v; else window.scrollTo(0, v); }
+
+  var CUR = null, LISTPOS = {}, token = 0, userMoved = false;
+  ['touchstart','wheel','keydown','mousedown'].forEach(function(ev){
+    document.addEventListener(ev, function(e){
+      // لمس زر داخل نافذة أو شريط العمليات لا يُعدّ تمريراً
+      var t = e.target;
+      if (t && t.closest && (t.closest('#mov') || t.closest('#egtph-opbar'))) return;
+      userMoved = true;
+    }, {passive:true, capture:true});
+  });
+  // أبقِ الموضع ثابتاً لبرهة، لأن اللوحات تُحقن بعد الرسم فتغيّر الطول
+  function hold(v){
+    var my = ++token, t0 = Date.now();
+    userMoved = false;
+    (function step(){
+      if (my !== token || userMoved) return;
+      if (Math.abs(getY() - v) > 2) setY(v);
+      if (Date.now() - t0 < 1200) setTimeout(step, 80);
+    })();
+  }
+  window.egtphHoldScroll = function(){ hold(getY()); };
+
+  function wrap(name, keyFn, kind){
+    var base = window[name];
+    if (typeof base !== 'function' || base.__egKeep) return;
+    var w = function(){
+      var key = keyFn.apply(null, arguments);
+      var y = getY(), prev = CUR;
+      if (key && kind === 'detail' && prev && prev !== key && prev.indexOf('list:') === 0) LISTPOS[prev] = y;
+      var out = base.apply(this, arguments);
+      if (!key) return out;
+      if (kind === 'list') {
+        CUR = key;
+        hold(prev === key ? y : (LISTPOS[key] || 0));
+      } else {
+        if (prev === key) hold(y);
+        else { CUR = key; hold(0); }
+      }
+      return out;
+    };
+    w.__egKeep = true;
+    window[name] = w;
+  }
+
+  function install(){
+    wrap('renderCD', function(cid){ return cid ? ('cd:'+cid) : null; }, 'detail');
+    wrap('renderSupDetail', function(sid){ return sid ? ('sup:'+sid) : null; }, 'detail');
+    wrap('renderClients', function(p){ return (p && (p.cid || p.sid)) ? null : 'list:clients'; }, 'list');
+    wrap('renderSuppliers', function(p){ return (p && (p.cid || p.sid)) ? null : 'list:suppliers'; }, 'list');
+    var baseNav = window.nav;
+    if (typeof baseNav === 'function' && !baseNav.__egKeep) {
+      var nw = function(v){
+        if (v !== 'clients' && v !== 'suppliers') {
+          if (CUR && CUR.indexOf('list:') === 0) LISTPOS[CUR] = getY();
+          CUR = 'page:' + v;
+        }
+        return baseNav.apply(this, arguments);
+      };
+      nw.__egKeep = true;
+      window.nav = nw;
+    }
+  }
+  // يُركَّب بعد كل الوحدات الأخرى ليكون الغلاف الخارجي
+  setTimeout(install, 0);
+  setTimeout(install, 2500);
+
+  // ── حذف فاتورة مولَّدة تلقائياً = إلغاء ربط مصدرها (لا يُحذف أي يوم عند العميل) ──
+  window.egtphDeleteAutoInvoice = function(invId, spId){
+    var v = (window._supInvs||[]).find(function(x){ return x.id===invId; });
+    if (!v) return T('الفاتورة غير موجودة','error');
+    var rec = (typeof records!=='undefined'?records:[]).find(function(r){ return r.id===v.autoFrom; });
+    var sr  = (typeof prices!=='undefined'?prices:[]).find(function(p){ return p && p.type==='sup_rec' && p.id===v.supRecId; });
+    var nm  = function(x){ return (typeof esc==='function') ? esc(x) : x; };
+    OM('🗑 حذف فاتورة تلقائية',
+      '<div style="font-size:11.5px;line-height:1.9;color:var(--tx2)">'
+      + 'هذه الفاتورة تتولّد تلقائياً من سجل العميل <b>«'+nm(rec?rec.name:'محذوف')+'»</b>'
+      + (sr?(' إلى سجل المورد <b>«'+nm(sr.name)+'»</b>'):'')+'.<br>'
+      + 'حذفها يعني <b>إلغاء هذا الربط</b> — لو حُذفت وحدها لعادت عند أول إدخال.<br>'
+      + '<span style="color:var(--green)">لا يُحذف أي يوم ولا أي كمية من ملف العميل.</span></div>',
+      async function(){
+        if (rec && sr) {
+          var kill = (typeof prices!=='undefined'?prices:[]).filter(function(p){
+            return p && (p.type==='record_link' || p.type==='truck_link') && p.recordId===rec.id && p.supRecId===sr.id;
+          });
+          for (var i=0;i<kill.length;i++){
+            prices = prices.filter(function(p){ return p.id!==kill[i].id; });
+            await dbD('prices', kill[i].id);
+          }
+          try { await egtphSyncCosts(rec.id, true); } catch(_) {}
+        }
+        if ((window._supInvs||[]).some(function(x){ return x.id===invId; })) {
+          window._supInvs = window._supInvs.filter(function(x){ return x.id!==invId; });
+          await dbD('sup_invoices', invId);
+        }
+        try { await egtphCleanupAuto(true); } catch(_) {}
+        CM(); T('🗑 حُذفت الفاتورة وأُلغي الربط','success');
+        renderSupDetail(spId);
+      }, 'حذف وإلغاء الربط');
   };
 })();
 </script>
