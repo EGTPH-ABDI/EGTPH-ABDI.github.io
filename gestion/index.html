@@ -1304,18 +1304,20 @@ const dbD = (s,k) => {
 const dbC = s     => _tx(s,'readwrite',(st)     => { st.clear(); }, undefined);
 
 // ── Helpers ──
-const uid   = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+// معرّف فريد: الوقت + عدّاد متزايد + 6 أحرف عشوائية (لا تكرار حتى لعدة عناصر في نفس الجزء من الثانية)
+let _uidN = 0;
+const uid   = () => Date.now().toString(36) + (_uidN = (_uidN + 1) % 1296).toString(36).padStart(2,'0') + Math.random().toString(36).slice(2).padEnd(6,'0').slice(0,6);
 const today = () => { const d=new Date(); const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); };
 const fD    = d => { if (!d) return '—'; const loc=(typeof getAppLanguage==='function'&&getAppLanguage()==='fr')?'fr-DZ':'ar-DZ'; return new Date(d+'T00:00:00').toLocaleDateString(loc,{day:'2-digit',month:'2-digit',year:'numeric'}); };
 // وقت الإدخال الفعلي للعملية (من createdAt) — يُستعمل في قوائم المدفوعات/التسبيقات
 const fEntryT = iso => { if(!iso) return ''; try{ const d=new Date(iso); if(isNaN(d.getTime()))return ''; const loc=(typeof getAppLanguage==='function'&&getAppLanguage()==='fr')?'fr-DZ':'ar-DZ'; return d.toLocaleDateString(loc,{day:'2-digit',month:'2-digit',year:'numeric'})+' '+formatTime(d); }catch(e){ return ''; } };
-const fDA   = n => { const v = parseFloat(n)||0; return v.toLocaleString('fr-DZ',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+const fDA   = n => { const v = parseFloat(n)||0; const a = Math.abs(v); /* نصف السنتيم يُقرَّب للأعلى رغم ضجيج الفاصلة العائمة (…,434999 → …,44) */ const c = (v<0?-1:1) * Math.round(Number((a*100).toPrecision(15)))/100; return (c===0?0:c).toLocaleString('fr-DZ',{minimumFractionDigits:2,maximumFractionDigits:2}); };
 const fN    = n => (parseFloat(n)||0).toLocaleString('fr-DZ',{maximumFractionDigits:2});
 // وحدة الوزن: kg / tonne — تُعرض منفصلة عن عدد الرحلات
 const WEIGHT_UNITS = { kg:1, tonne:1000 };
 function matUnitOf(e){
   try{
-    const d = prices.find(p => p.id===e.materialId && p.recordId===e.recordId && (p.type==='mat_def'||p.type==='unit_def'));
+    const d = egtphPricesById(e.materialId).find(p => p.recordId===e.recordId && (p.type==='mat_def'||p.type==='unit_def'));
     return (d && d.priceUnit) ? d.priceUnit : (e.type==='machine' ? 'heure' : 'رحلة');
   }catch(_){ return e.type==='machine' ? 'heure' : 'رحلة'; }
 }
@@ -1323,48 +1325,114 @@ function isWeightUnit(u){ return Object.prototype.hasOwnProperty.call(WEIGHT_UNI
 function toKg(qty,u){ return (parseFloat(qty)||0) * (WEIGHT_UNITS[u]||1); }
 const fT = kg => ((parseFloat(kg)||0)/1000).toLocaleString('fr-DZ',{minimumFractionDigits:2,maximumFractionDigits:3});
 // ── تحويل المبلغ إلى أحرف عربية ──
-function amountToWords(n) {
-  n = Math.round(parseFloat(n)||0);
-  if (typeof getAppLanguage==='function' && getAppLanguage()==='fr' && typeof amountToFrenchWords==='function') return amountToFrenchWords(n);
-  if (n === 0) return 'صفر دينار جزائري';
+function amountToWords(v) {
+  // المبلغ بالدينار والسنتيم معاً (لا تقريب للدينار: 7 400,80 ≠ 7 401)
+  const raw = parseFloat(v) || 0;
+  const cAll = Math.round(Number((Math.abs(raw)*100).toPrecision(15)));
+  const dinars = Math.floor(cAll / 100), cents = cAll % 100, neg = raw < 0 && cAll > 0;
+  if (typeof getAppLanguage==='function' && getAppLanguage()==='fr' && typeof amountToFrenchWords==='function') {
+    let fr = amountToFrenchWords(dinars);
+    if (cents) fr += ' et ' + cents + ' centime' + (cents>1?'s':'');
+    return (neg ? 'moins ' : '') + fr;
+  }
   const ones = ['','واحد','اثنان','ثلاثة','أربعة','خمسة','ستة','سبعة','ثمانية','تسعة',
                 'عشرة','أحد عشر','اثنا عشر','ثلاثة عشر','أربعة عشر','خمسة عشر',
                 'ستة عشر','سبعة عشر','ثمانية عشر','تسعة عشر'];
   const tens = ['','عشرة','عشرون','ثلاثون','أربعون','خمسون','ستون','سبعون','ثمانون','تسعون'];
-  const hundreds = ['','مائة','مئتا','ثلاثمائة','أربعمائة','خمسمائة','ستمائة','سبعمائة','ثمانمائة','تسعمائة'];
   const hundredsAlone = ['','مائة','مائتان','ثلاثمائة','أربعمائة','خمسمائة','ستمائة','سبعمائة','ثمانمائة','تسعمائة'];
-
   function group(num) {
     if (!num) return '';
     if (num < 20) return ones[num];
     const t = Math.floor(num/10), o = num%10;
     return o ? ones[o] + ' و' + tens[t] : tens[t];
   }
-  // groupH للاستخدام قبل وحدة (ألف/مليون) — مئتا ألف لا مائتان
-  function groupH(num, beforeUnit) {
+  // 1..999 — قبل المعدود مباشرة «مائتا ألف» (إضافة)، وإلا «مائتان»
+  function words3(num, beforeUnit) {
     const h = Math.floor(num/100), rest = num%100;
-    const hStr = beforeUnit && h ? hundreds[h] : (h ? hundredsAlone[h] : '');
+    const hStr = h ? ((h===2 && !rest && beforeUnit) ? 'مائتا' : hundredsAlone[h]) : '';
     const rStr = group(rest);
     if (!hStr) return rStr;
     if (!rStr) return hStr;
     return hStr + ' و' + rStr;
   }
-
-  const parts = [];
-  const milliards = Math.floor(n/1000000000);
-  const millions  = Math.floor((n%1000000000)/1000000);
-  const thousands = Math.floor((n%1000000)/1000);
-  const remainder = n%1000;
-
-  if (milliards) parts.push(groupH(milliards, false) + ' مليار');
-  if (millions)  parts.push(millions===1 ? 'مليون' : millions===2 ? 'مليونان' : groupH(millions,false)+' ملايين');
-  if (thousands) parts.push(thousands===1 ? 'ألف' : thousands===2 ? 'ألفان' : groupH(thousands,true)+' ألف');
-  if (remainder) parts.push(groupH(remainder, false));
-
-  return parts.join(' و') + ' دينار جزائري';
+  // ألف/مليون/مليار: 1 مفرد، 2 مثنى، 3–10 جمع، وما عداها مفرد (مائة ألف، ثلاثة عشر ألف، مائة وثلاثة آلاف)
+  function scale(count, one, two, plural) {
+    if (count === 1) return one;
+    if (count === 2) return two;
+    const last2 = count % 100;
+    const noun = (last2 >= 3 && last2 <= 10) ? plural : one;
+    return words3(count, true) + ' ' + noun;
+  }
+  function spell(n) {
+    if (!n) return 'صفر';
+    const parts = [];
+    const milliards = Math.floor(n/1000000000);
+    const millions  = Math.floor((n%1000000000)/1000000);
+    const thousands = Math.floor((n%1000000)/1000);
+    const remainder = n%1000;
+    if (milliards) parts.push(milliards >= 1000 ? spell(milliards) + ' مليار' : scale(milliards, 'مليار', 'ملياران', 'مليارات'));
+    if (millions)  parts.push(scale(millions, 'مليون', 'مليونان', 'ملايين'));
+    if (thousands) parts.push(scale(thousands, 'ألف', 'ألفان', 'آلاف'));
+    if (remainder) parts.push(words3(remainder, false));
+    return parts.join(' و');
+  }
+  let out = spell(dinars) + ' دينار جزائري';
+  if (cents) out += ' و' + group(cents) + ' سنتيم';
+  return (neg ? 'سالب ' : '') + out;
 }
 
 const esc   = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// مفتاح معرّف فريد لكل اسم (أسماء عربية مختلفة لا تتصادم كما كان مع استبدال الحروف بـ _)
+// نافذة تعديل اليوم: نتحقق من كل الخانات قبل أي تغيير، حتى لا يبقى يوم نصف ممسوح في الذاكرة
+function egtphEtdInvalid(){
+  const calc = window.EGTPHTripArithmetic && window.EGTPHTripArithmetic.calc;
+  if (!calc) return false;
+  return Array.from(document.querySelectorAll('input[id^="etd_"]')).some(el => { const r = calc(el.value); return !(r && r.ok); });
+}
+// بحث عربي متسامح: أ/إ/آ=ا، ى=ي، ة=ه، ؤ=و، ئ=ي، بلا تشكيل ولا تطويل، أرقام عربية=لاتينية
+const egtphSearchNorm = s => String(s==null?'':s)
+  .replace(/[\u064B-\u065F\u0670\u0640]/g,'')
+  .replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/ؤ/g,'و').replace(/ئ/g,'ي')
+  .replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0)-0x0660))
+  .replace(/\s+/g,' ').trim().toLowerCase();
+// ساعات الآلة: 7.5 أو 7,5 أو ٧٫٥ أو 7:30 (ساعة:دقيقة) — null إذا كان غير مفهوم (لا نحفظ صفراً بصمت)
+function egtphParseHours(v){
+  let t = String(v==null?'':v).trim()
+    .replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0)-0x0660))
+    .replace(/[\u06F0-\u06F9]/g, d => String(d.charCodeAt(0)-0x06F0))
+    .replace(/[\u066B,]/g, '.').replace(/\s+/g,'');
+  if (t === '') return 0;
+  let m = t.match(/^(\d{1,3}):([0-5]?\d)$/);
+  if (m) return Math.round((+m[1] + (+m[2])/60) * 100) / 100;
+  if (!/^\d*\.?\d+$|^\d+\.$/.test(t)) return null;
+  const x = parseFloat(t);
+  return (isFinite(x) && x >= 0) ? x : null;
+}
+// حفظ البيانات داخل ملف HTML: «;» داخل ملاحظة، أو «$1»، أو «وسم نهاية السكربت» لا تُفسد الملف المحفوظ
+const egtphEmbedSafe = json => String(json).replace(/<\/(script)/gi, '<\\/$1').replace(/<\!--/g, '<\\!--');
+const egtphEmbedData = (html, json) => String(html).replace(/(<script id="embedded-data-script">)[\s\S]*?(<\/script>)/,
+  (m, a, b) => a + '\nconst __EMBEDDED_DATA__ = ' + egtphEmbedSafe(json) + ';\n' + b);
+// ── فهارس للسرعة مع بيانات كبيرة (أيام كل سجل، الأسعار حسب المعرّف) ──
+// تُعاد تلقائياً عند أي تغيير: مصفوفة جديدة، طول مختلف، أول/آخر عنصر مختلف، كتابة في قاعدة البيانات، أو بعد ثانية ونصف
+let _egIdxVer = 0;
+function egtphIdxBump(){ _egIdxVer++; }
+function _egIdx(arr, keyOf, cache){
+  const n = arr ? arr.length : 0, a = n ? arr[0] : null, b = n ? arr[n-1] : null, now = Date.now();
+  const k = cache.k;
+  if (!cache.m || !k || k.arr !== arr || k.n !== n || k.a !== a || k.b !== b || k.v !== _egIdxVer || now - k.t > 1500) {
+    const m = new Map();
+    for (let i = 0; i < n; i++) { const x = arr[i]; if (!x) continue; const key = keyOf(x); let l = m.get(key); if (!l) m.set(key, l = []); l.push(x); }
+    cache.m = m; cache.k = { arr, n, a, b, v:_egIdxVer, t:now };
+  }
+  return cache.m;
+}
+const _egEC = {}, _egPC = {}, _egEMPTY = Object.freeze([]);
+// قراءة فقط — لا تعدّل المصفوفة المُرجعة
+function egtphEntriesOf(recId){ try { return _egIdx(entries, x => x.recordId, _egEC).get(recId) || _egEMPTY; } catch(_) { return (typeof entries!=='undefined'?entries:[]).filter(e => e && e.recordId === recId); } }
+function egtphPricesById(id){ try { return _egIdx(prices, x => x.id, _egPC).get(id) || _egEMPTY; } catch(_) { return (typeof prices!=='undefined'?prices:[]).filter(p => p && p.id === id); } }
+const egtphIdKey = s => Array.from(String(s==null?'':s)).map(c=>c.codePointAt(0).toString(36)).join('-');
+// نصّ داخل '...' في onclick="...": هروب جافاسكربت ثم هروب HTML (أسماء فيها ' أو " أو \)
+const jsA   = s => esc(String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r?\n/g,'\\n'));
 
 // ── Default Data ──
 const DT = ['020454-214-02','05963-209-02','003538-225-02','003537-225-02','2026'];
@@ -1600,7 +1668,17 @@ function OM(title, body, okFn, okLbl='تأكيد', footer=true) {
   if (footer) {
     const btn = document.getElementById('mok');
     btn.textContent = okLbl; btn.className = 'btn btn-gold';
-    _mok = okFn; btn.onclick = () => { if (_mok) { const r = _mok(); if (r && typeof r.catch === 'function') r.catch(e => { console.error('Modal action error:', e); T('خطأ غير متوقع','error'); }); } };
+    // نقرتان سريعتان على «حفظ» لا تنشئان عمليتين: الزر يتوقف حتى ينتهي الحفظ
+    _mok = okFn; btn.disabled = false; btn.removeAttribute('data-busy');
+    btn.onclick = () => {
+      if (!_mok || btn.getAttribute('data-busy') === '1') return;
+      const r = _mok();
+      if (r && typeof r.then === 'function') {
+        btn.setAttribute('data-busy','1'); btn.disabled = true;
+        const done = () => { if (btn.getAttribute('data-busy') === '1') { btn.removeAttribute('data-busy'); btn.disabled = false; } };
+        r.then(done, e => { done(); console.error('Modal action error:', e); T('خطأ غير متوقع','error'); });
+      }
+    };
     document.getElementById('mcancel').onclick = CM;
   }
   document.getElementById('mov').classList.add('show');
@@ -1971,8 +2049,8 @@ function _tsFirstTripDate(s) {
   return first;
 }
 function _tsMaterialName(e) {
-  const p = prices.find(x=>x.id===e.materialId && x.recordId===e.recordId && x.type==='mat_def')
-         || prices.find(x=>x.id===e.materialId);
+  const L = egtphPricesById(e.materialId);
+  const p = L.find(x=>x.recordId===e.recordId && x.type==='mat_def') || L[0];
   return (p?.name || 'مادة غير معرّفة').toString();
 }
 function _tsTruckNames(s, scopedEntries) {
@@ -2134,6 +2212,8 @@ function _tsRows(s) {
     const rec = recordMap.get(e.recordId);
     const client = clientMap.get(rec.clientId);
     const pricing = _tsEntryPricing(e);
+    const unitE = (typeof matUnitOf==='function' ? matUnitOf(e) : 'رحلة');           // مرة واحدة لكل يوم لا لكل شاحنة
+    const isW = (typeof isWeightUnit==='function') && isWeightUnit(unitE);
     Object.entries(e.cols||{}).forEach(([truck, rawQty])=>{
       const qty = parseFloat(rawQty)||0;
       if (!qty) return;
@@ -2145,13 +2225,16 @@ function _tsRows(s) {
         pending:pricing.pending,
         legacyPrice:pricing.legacy,
         material, materialId:e.materialId||'', recordId:rec.id, recordName:rec.name||'—',
-        unit:(typeof matUnitOf==='function' ? matUnitOf(e) : 'رحلة'),
-        kg:((typeof matUnitOf==='function' && typeof isWeightUnit==='function' && isWeightUnit(matUnitOf(e))) ? toKg(qty,matUnitOf(e)) : 0),
+        unit:unitE,
+        kg:(isW ? toKg(qty,unitE) : 0),
         clientId:rec.clientId, clientName:client?.name||'عميل محذوف', dest:e.dest||''
       });
     });
   });
-  return rows.sort((a,b)=>(b.date||'').localeCompare(a.date||'') || a.truck.localeCompare(b.truck,'ar'));
+  // ترتيب الشاحنات بالعربية يُحسب مرة واحدة لكل اسم (لا لكل صف) — نفس الترتيب وأسرع بكثير
+  const _coll = new Intl.Collator('ar'), _rank = new Map();
+  [...new Set(rows.map(r=>r.truck))].sort(_coll.compare).forEach((t,i)=>_rank.set(t,i));
+  return rows.sort((a,b)=>{ const da=a.date||'', db=b.date||''; return (db<da?-1:db>da?1:0) || (_rank.get(a.truck)-_rank.get(b.truck)); });
 }
 function _tsGroup(rows, keyFn) {
   const map = new Map();
@@ -3056,6 +3139,7 @@ async function delStockItem(sid) {
 }
 
 async function delTruckDate(recId, date, cid) {
+  if (isDayLocked(recId, date, 'truck')) return T('🔒 هذا اليوم محفوظ ومقفل — افتح القفل أولاً ثم احذفه','warning');
   const ok = await confirmDel(`حذف بيانات يوم ${fD(date)}؟`); if (!ok) return;
   const toDel = entries.filter(e=>e.recordId===recId && e.date===date && e.type==='truck');
   for (const e of toDel) await dbD('entries', e.id);
@@ -3380,9 +3464,16 @@ async function editTruck(idx) {
       if (e.type==='truck' && e.cols && oldName in e.cols) {
         e.cols[val] = e.cols[oldName];
         delete e.cols[oldName];
+        if (e.colsT && oldName in e.colsT) { e.colsT[val] = e.colsT[oldName]; delete e.colsT[oldName]; }
         await dbP('entries', e);
       }
     }
+    // ربط الشاحنة بمورد يتبع الاسم الجديد (وإلا ضاعت تكلفة المورد بصمت)
+    const relinked = {};
+    for (const p of prices) {
+      if (p && p.type==='truck_link' && p.truck===oldName) { p.truck = val; relinked[p.recordId] = 1; await dbP('prices', p); }
+    }
+    try { for (const rid in relinked) if (typeof egtphSyncCosts==='function') await egtphSyncCosts(rid, true); } catch(_) {}
     CM(); renderSettings(); T('✅ تم تحديث الشاحنة','success');
   }, 'حفظ');
   setTimeout(()=>document.getElementById('et-p')?.focus(), 80);
@@ -3550,7 +3641,7 @@ function renderTR(rec, cid) {
             tbody += `<td><input class="ti ${v?'hv':''}" type="text" inputmode="decimal" value="${v||''}"
               title="يمكن إدخال رقم أو عملية بسيطة مثل 14+10 أو 10-5"
               oninput="this.classList.toggle('hv',!!this.value)"
-              onchange="updateTruck('${rec.id}','${date}','${mat.id}','${tr.replace(/'/g,"\'")}',this.value,'${cid}')"></td>`;
+              onchange="updateTruck('${rec.id}','${date}','${mat.id}','${jsA(tr)}',this.value,'${cid}')"></td>`;
           }
         });
         tbody += `<td data-rowqty="${rec.id}|${date}|${mat.id}" style="font-weight:800;color:var(--gold2);font-family:'JetBrains Mono'">${qty||''}</td>`;
@@ -3765,7 +3856,7 @@ function renderMR(rec, cid) {
           ${locked
             ? `<td style="text-align:center;font-family:'JetBrains Mono';font-size:12px;color:var(--tx2)">${hrs||''}</td>`
             : `<td><input class="ti ${e.hours?'hv':''}" type="number" min="0" step="0.5" value="${e.hours||''}"
-                onchange="updateMachE('${e.id}',this.value,'${cid}')"></td>`
+                onchange="if(this.validity&&this.validity.badInput){T('⚠️ اكتب الساعات بالأرقام، مثل 7.5 أو 7:30','warning');this.value='${e.hours||''}';return;}updateMachE('${e.id}',this.value,'${cid}')"></td>`
           }
           <td class="num" style="color:var(--gold2)">${price?fDA(price):''}</td>
           <td class="num" style="color:var(--green)">${amt?fDA(amt):''}</td>
@@ -3890,7 +3981,9 @@ async function addMachDay(recId, cid) {
 async function updateMachE(eid, value, cid) {
   const e = entries.find(x=>x.id===eid); if (!e) return;
   if (isDayLocked(e.recordId, e.date, 'machine')) return;
-  e.hours = parseFloat(value)||0; await dbP('entries',e);
+  const h = egtphParseHours(value);
+  if (h === null) { T('⚠️ اكتب الساعات بالأرقام، مثل 7.5 أو 7:30 — لم يُحفظ شيء','warning'); try { renderCD(cid); } catch(_) {} return; }
+  e.hours = h; await dbP('entries',e);
   refreshRecordTotals(e.recordId, cid);
 }
 
@@ -3902,6 +3995,7 @@ async function delMachE(eid, cid) {
 }
 
 async function delMachDate(recId, date, cid) {
+  if (isDayLocked(recId, date, 'machine')) return T('🔒 هذا اليوم محفوظ ومقفل — افتح القفل أولاً ثم احذفه','warning');
   const ok = await confirmDel(`حذف بيانات يوم ${fD(date)}؟`); if (!ok) return;
   const toDel = entries.filter(e=>e.recordId===recId && e.date===date && e.type==='machine');
   for (const e of toDel) await dbD('entries',e.id);
@@ -4341,7 +4435,7 @@ async function editTruckDay(recId, date, cid) {
     const e = dayEs.find(x => x.materialId===mat.id) || { cols:{} };
     let truckInputs = trucks.map(tr => {
       const v = e.cols?.[tr] || '';
-      const tid = 'etd_' + mat.id.replace(/[^a-z0-9]/gi,'_') + '_' + tr.replace(/[^a-z0-9]/gi,'_');
+      const tid = 'etd_' + egtphIdKey(mat.id)+'_'+egtphIdKey(tr);
       return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:54px">
         <div style="font-size:8px;color:var(--tx3);text-align:center;max-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(tr)}">${esc(tr.length>9?tr.slice(0,9)+'…':tr)}</div>
         <input id="${tid}" type="text" inputmode="decimal" value="${v}" class="ti" style="width:52px;text-align:center">
@@ -4370,6 +4464,7 @@ async function editTruckDay(recId, date, cid) {
       const clash = entries.some(e => e.recordId===recId && e.date===newDate && e.type==='truck');
       if (clash) return T('يوجد يوم بهذا التاريخ بالفعل', 'error');
     }
+    if (egtphEtdInvalid()) return T('⚠️ أدخل عملية صحيحة في رحلات الشاحنات','warning');
 
     for (const mat of recMats) {
       let e = entries.find(x => x.recordId===recId && x.date===date && x.materialId===mat.id && x.type==='truck');
@@ -4377,10 +4472,10 @@ async function editTruckDay(recId, date, cid) {
         e = { id:uid(), recordId:recId, type:'truck', date:newDate, materialId:mat.id, cols:{}, dest:'', ..._truckEntryPriceSnapshot(recId,mat.id,newDate), createdAt:new Date().toISOString() };
         entries.push(e);
       }
-      // تحديث الشاحنات
-      e.cols = {};
+      // تحديث الشاحنات (خانات شاحنات غير موجودة في القائمة تبقى كما هي)
+      e.cols = Object.fromEntries(Object.entries(e.cols||{}).filter(([k])=>!trucks.includes(k)));
       trucks.forEach(tr => {
-        const tid = 'etd_' + mat.id.replace(/[^a-z0-9]/gi,'_') + '_' + tr.replace(/[^a-z0-9]/gi,'_');
+        const tid = 'etd_' + egtphIdKey(mat.id)+'_'+egtphIdKey(tr);
         const raw = document.getElementById(tid)?.value;
         const parsed = (window.EGTPHTripArithmetic && window.EGTPHTripArithmetic.calc) ? window.EGTPHTripArithmetic.calc(raw) : {ok:true,value:parseFloat(raw)||0};
         if (!parsed.ok) { T('⚠️ أدخل عملية صحيحة في رحلات الشاحنات','warning'); return; }
@@ -6191,6 +6286,10 @@ async function mergeBK(data) {
       if (tb && _tombT(tb) > _modOf(inc)) continue; // محذوف — لا يُعاد إدراجه
       const ex = map.get(inc.id);
       if (!ex) { map.set(inc.id, inc); await _dbP(store, inc); stats.added++; }
+      else if (store==='entries' && typeof window.egtphCellMerge==='function' && (ex.cols || inc.cols)) {
+        // يوم شاحنات: دمج خانةً بخانة — رقم أُدخل في جهاز لا يمحوه جهاز آخر عدّل خانة غيرها
+        if (window.egtphCellMerge(ex, inc, _modOf(inc) > _modOf(ex))) { await _dbP(store, ex); stats.updated++; } else stats.kept++;
+      }
       else if (_modOf(inc) > _modOf(ex)) { Object.assign(ex, inc); await _dbP(store, ex); stats.updated++; } // الأحدث يغلب
       else stats.kept++;
     }
@@ -7440,10 +7539,7 @@ async function _buildEmbeddedHtml() {
   };
   const htmlSource = document.documentElement.outerHTML;
   const dataJson   = JSON.stringify(snapshot);
-  const updated    = htmlSource.replace(
-    /(<script id="embedded-data-script">[\s\S]*?const __EMBEDDED_DATA__ = )[\s\S]*?(;[\s\S]*?<\/script>)/,
-    `$1${dataJson};$2`
-  );
+  const updated    = egtphEmbedData(htmlSource, dataJson);
   return { updated, snapshot };
 }
 
@@ -8020,7 +8116,7 @@ function printInvoiceRecord(rec, c, inclSigns) {
   var qrData = [
     'EGTPH ABDI YOUSSOUF ISLAM',
     'N: '+(info.num||'—'),
-    'Date: '+(info.date||now.toISOString().slice(0,10)),
+    'Date: '+(info.date||today()),
     'Client: '+c.name,
     'Total HT: '+fDA(total),
     'Net: '+fDA(net)
@@ -8085,7 +8181,7 @@ function printInvoiceRecord(rec, c, inclSigns) {
         +'<div style="font-size:7px;color:#aaa;margin-top:3px">Scan to verify</div></div>'
       : '';
     var html = '<div style="position:relative">'
-      + printHeader((info.type||'SITUATION')+' — '+c.name, fD(info.date||now.toISOString().slice(0,10)))
+      + printHeader((info.type||'SITUATION')+' — '+c.name, fD(info.date||today()))
       + qrSection + '</div>'
       + infoTbl + itemsTbl + payTbl + sumTbl + wordsBox + signs
       + '<div class="foot"><span>EGTPH GP v13</span><span>'+now.toLocaleDateString('fr-DZ')+'</span></div></body></html>';
@@ -8113,9 +8209,9 @@ async function buildAndPrintClient(cid, type, opts={}) {
   body += `<div class="cl-info">
     <div>
       <div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">العميل</div>
-      <div style="font-size:16px;font-weight:900;color:#0f2942;margin-bottom:3px">${c.name}</div>
-      ${c.phone?`<div style="font-size:10px;color:#555">📞 ${c.phone}</div>`:''}
-      ${c.address?`<div style="font-size:10px;color:#555;margin-top:1px">📍 ${c.address}</div>`:''}
+      <div style="font-size:16px;font-weight:900;color:#0f2942;margin-bottom:3px">${esc(c.name)}</div>
+      ${c.phone?`<div style="font-size:10px;color:#555">📞 ${esc(c.phone)}</div>`:''}
+      ${c.address?`<div style="font-size:10px;color:#555;margin-top:1px">📍 ${esc(c.address)}</div>`:''}
     </div>
     <div style="text-align:left">
       <div style="font-size:9px;color:#888;margin-bottom:3px">${new Date().toLocaleDateString('fr-DZ')}</div>
@@ -8133,19 +8229,22 @@ async function buildAndPrintClient(cid, type, opts={}) {
     const rt = getRT(rec.id);
     const recMats  = prices.filter(p=>p.recordId===rec.id&&p.type==='mat_def').sort((a,b)=>(a.order||0)-(b.order||0));
     const recUnits = prices.filter(p=>p.recordId===rec.id&&p.type==='unit_def').sort((a,b)=>(a.order||0)-(b.order||0));
-    body += `<div class="sec">${rec.type==='trucks'?'🚛':rec.type==='machines'?'🏗':'📦'} ${rec.name}</div>`;
+    body += `<div class="sec">${rec.type==='trucks'?'🚛':rec.type==='machines'?'🏗':'📦'} ${esc(rec.name)}</div>`;
 
     if (rec.type==='trucks') {
       const trEs = es.filter(e=>e.type==='truck');
       const dates = [...new Set(trEs.map(e=>e.date))].sort();
-      body += `<table><thead><tr><th>المادة</th><th>الرحلات</th><th>السعر/رحلة</th><th>المبلغ</th></tr></thead><tbody>`;
+      const _pu = m => m.priceUnit || 'رحلة', _allTrips = recMats.every(m => _pu(m)==='رحلة'), _uTot = {};
+      body += `<table><thead><tr><th>المادة</th><th>${_allTrips?'الرحلات':'الكمية'}</th><th>${_allTrips?'السعر/رحلة':'سعر الوحدة'}</th><th>المبلغ</th></tr></thead><tbody>`;
       recMats.forEach(mat=>{
         const qty = trEs.filter(e=>e.materialId===mat.id).reduce((s,e)=>s+Object.values(e.cols||{}).reduce((a,b)=>a+(parseFloat(b)||0),0),0);
         if (!qty) return;
         const dayEntries=trEs.filter(e=>e.materialId===mat.id), amount=dayEntries.reduce((z,e)=>z+(calcE(e).amount||0),0), values=[...new Set(dayEntries.filter(e=>calcE(e).qty>0).map(e=>calcE(e).price))], price=values.length===1?values[0]:null;
-        body += `<tr><td>${mat.name}</td><td class="c">${qty}</td><td class="c">${price==null?'متعدد':fDA(price)}</td><td class="c amt">${fDA(amount)}</td></tr>`;
+        _uTot[_pu(mat)] = (_uTot[_pu(mat)]||0) + qty;
+        body += `<tr><td>${esc(mat.name)}</td><td class="c">${fN(qty)}${_allTrips?'':' '+esc(_pu(mat))}</td><td class="c">${price==null?'متعدد':fDA(price)+(_allTrips?'':' / '+esc(_pu(mat)))}</td><td class="c amt">${fDA(amount)}</td></tr>`;
       });
-      body += `<tr class="tot"><td><strong>الإجمالي</strong></td><td class="c"><strong>${fN(rt.trips)} رحلة</strong></td><td></td><td class="r amt"><strong>${fDA(rt.amount)}</strong></td></tr><tr class="words-row"><td colspan="4">بالأحرف: ${amountToWords(rt.amount)}</td></tr></tbody></table>`;
+      const _qTxt = Object.keys(_uTot).map(u => fN(_uTot[u])+' '+esc(u)).join(' + ') || (fN(rt.trips)+' رحلة');
+      body += `<tr class="tot"><td><strong>الإجمالي</strong></td><td class="c"><strong>${_qTxt}</strong></td><td></td><td class="r amt"><strong>${fDA(rt.amount)}</strong></td></tr><tr class="words-row"><td colspan="4">بالأحرف: ${amountToWords(rt.amount)}</td></tr></tbody></table>`;
       if (inclTrucks) {
         body += `<table style="font-size:10px"><thead><tr><th>الشاحنة</th><th>الرحلات</th><th>المبلغ</th></tr></thead><tbody>`;
         trucks.forEach(tr=>{
@@ -8162,7 +8261,7 @@ async function buildAndPrintClient(cid, type, opts={}) {
           const e=trEs.find(x=>x.date===date&&x.materialId===mat.id);
           const qty=Object.values(e?.cols||{}).reduce((s,v)=>s+(parseFloat(v)||0),0);
           if (!qty) return;
-          body += `<tr><td>${fD(date)}</td><td>${mat.name}</td>${trucks.map(tr=>`<td class="c">${e?.cols?.[tr]||''}</td>`).join('')}<td>${e?.dest||''}</td><td class="c amt">${qty}</td></tr>`;
+          body += `<tr><td>${fD(date)}</td><td>${esc(mat.name)}</td>${trucks.map(tr=>`<td class="c">${e?.cols?.[tr]||''}</td>`).join('')}<td>${e?.dest||''}</td><td class="c amt">${qty}</td></tr>`;
         }));
         body += `</tbody></table>`;
       }
@@ -8212,7 +8311,7 @@ async function buildAndPrintClient(cid, type, opts={}) {
 
   const docType = type==='invoice'?'فاتورة رسمية':(type==='record'?'كشف سجل محدد':'كشف حساب');
   const html = printHeader(docType+' — '+c.name, now.toLocaleDateString('fr-DZ')) + body +
-    (inclSigns?`<div class="signs"><div class="sbox">المسلِّم<div class="sline">عبدي يوسف إسلام</div></div><div class="sbox">المستلم<div class="sline">${c.name}</div></div></div>`:'') +
+    (inclSigns?`<div class="signs"><div class="sbox">المسلِّم<div class="sline">عبدي يوسف إسلام</div></div><div class="sbox">المستلم<div class="sline">${esc(c.name)}</div></div></div>`:'') +
     `<div class="foot"><span>EGTPH GP v13 — EGTPH Gestion Pro — نظام الإدارة الشامل</span><span>${now.toLocaleDateString('fr-DZ',{day:'2-digit',month:'2-digit',year:'numeric'})}</span></div></body></html>`;
   openPrintWin(html);
   await logA('طباعة فاتورة: '+c.name);
@@ -8220,15 +8319,15 @@ async function buildAndPrintClient(cid, type, opts={}) {
 
 function printClientSummary(c, recs, inclSigns) {
   const t = getCT(c.id);
-  let body = `<div style="font-size:16px;font-weight:900;margin-bottom:10px">${c.name}</div>`;
+  let body = `<div style="font-size:16px;font-weight:900;margin-bottom:10px">${esc(c.name)}</div>`;
   body += `<table><thead><tr><th>السجل</th><th>النوع</th><th>الكمية</th><th>المبلغ</th></tr></thead><tbody>`;
   recs.forEach(r=>{const rt=getRT(r.id);const ic={trucks:'🚛',machines:'🏗',stock:'📦'};
-    body+=`<tr><td>${ic[r.type]||'📄'} ${r.name}</td><td>${r.type==='trucks'?'شاحنات':r.type==='machines'?'آلات':'مخزون'}</td><td class="c">${r.type==='trucks'?fN(rt.trips)+' رحلة':r.type==='machines'?fN(rt.hours)+' ساعة':'—'}</td><td class="c amt">${fDA(rt.amount)}</td></tr>`;
+    body+=`<tr><td>${ic[r.type]||'📄'} ${esc(r.name)}</td><td>${r.type==='trucks'?'شاحنات':r.type==='machines'?'آلات':'مخزون'}</td><td class="c">${r.type==='trucks'?fN(rt.trips)+' رحلة':r.type==='machines'?fN(rt.hours)+' ساعة':'—'}</td><td class="c amt">${fDA(rt.amount)}</td></tr>`;
   });
   body += `<tr class="tot"><td colspan="3"><strong>الإجمالي</strong></td><td class="c amt"><strong>${fDA(t.tot)}</strong></td></tr></tbody></table>`;
   body += `<div class="bil"><div class="bx gn"><div class="bx-l">المدفوع</div><div class="bx-v">${fDA(t.totalPaid)}</div></div><div class="bx rd"><div class="bx-l">المتبقي</div><div class="bx-v">${fDA(t.remain)}</div></div></div>`;
   const html = printHeader('ملخص العميل — '+c.name)+body+
-    (inclSigns?`<div class="signs"><div class="sbox">المسلِّم<div class="sline">عبدي يوسف إسلام</div></div><div class="sbox">المستلم<div class="sline">${c.name}</div></div></div>`:'')+
+    (inclSigns?`<div class="signs"><div class="sbox">المسلِّم<div class="sline">عبدي يوسف إسلام</div></div><div class="sbox">المستلم<div class="sline">${esc(c.name)}</div></div></div>`:'')+
     `<div class="foot">EGTPH GP v13 · ${new Date().toLocaleString('fr-DZ')}</div></body></html>`;
   openPrintWin(html);
 }
@@ -8238,7 +8337,7 @@ function printAllClientsReport() {
   body += `<table><thead><tr><th>العميل</th><th>السجلات</th><th>الرحلات</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th></tr></thead><tbody>`;
   let gTot=0,gPaid=0;
   clients.forEach(c=>{const t=getCT(c.id);const rs=records.filter(r=>r.clientId===c.id);gTot+=t.tot;gPaid+=t.totalPaid;
-    body+=`<tr><td style="font-weight:700">${c.name}</td><td class="c">${rs.length}</td><td class="c">${fN(t.trips)}</td><td class="c amt">${fDA(t.tot)}</td><td class="c" style="color:#1d6f42">${fDA(t.totalPaid)}</td><td class="c" style="color:${t.remain>0?'#c0392b':'#1d6f42'}">${fDA(t.remain)}</td></tr>`;
+    body+=`<tr><td style="font-weight:700">${esc(c.name)}</td><td class="c">${rs.length}</td><td class="c">${fN(t.trips)}</td><td class="c amt">${fDA(t.tot)}</td><td class="c" style="color:#1d6f42">${fDA(t.totalPaid)}</td><td class="c" style="color:${t.remain>0?'#c0392b':'#1d6f42'}">${fDA(t.remain)}</td></tr>`;
   });
   body += `<tr class="tot"><td colspan="3"><strong>الإجمالي</strong></td><td class="c amt"><strong>${fDA(gTot)}</strong></td><td class="c amt"><strong>${fDA(gPaid)}</strong></td><td class="c amt"><strong>${fDA(Math.max(0,gTot-gPaid))}</strong></td></tr></tbody></table>`;
   openPrintWin(printHeader('تقرير جميع العملاء')+body+`<div class="foot">EGTPH GP v13 · ${new Date().toLocaleString('fr-DZ')}</div></body></html>`);
@@ -8250,7 +8349,7 @@ function printDebtReport() {
   if (!unpaid.length) { body += `<p style="color:#888;padding:14px">لا توجد ديون متبقية ✅</p>`; }
   else {
     body += `<table><thead><tr><th>العميل</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th></tr></thead><tbody>`;
-    unpaid.forEach(c=>{const t=getCT(c.id);body+=`<tr><td style="font-weight:700">${c.name}</td><td class="c">${fDA(t.tot)}</td><td class="c" style="color:#1d6f42">${fDA(t.totalPaid)}</td><td class="c amt" style="color:#c0392b;font-weight:900">${fDA(t.remain)}</td></tr>`;});
+    unpaid.forEach(c=>{const t=getCT(c.id);body+=`<tr><td style="font-weight:700">${esc(c.name)}</td><td class="c">${fDA(t.tot)}</td><td class="c" style="color:#1d6f42">${fDA(t.totalPaid)}</td><td class="c amt" style="color:#c0392b;font-weight:900">${fDA(t.remain)}</td></tr>`;});
     const total=unpaid.reduce((s,c)=>s+getCT(c.id).remain,0);
     body += `<tr class="tot"><td colspan="3"><strong>إجمالي الديون</strong></td><td class="c amt"><strong>${fDA(total)}</strong></td></tr></tbody></table>`;
   }
@@ -8428,8 +8527,8 @@ async function printEverything() {
       <div class="cl-info">
         <div>
           <div style="font-size:9px;color:#888;text-transform:uppercase;margin-bottom:2px">العميل</div>
-          <div style="font-size:15px;font-weight:900;color:#0f2942">${c.name}</div>
-          ${c.phone?`<div style="font-size:10px;color:#555">📞 ${c.phone}</div>`:''}
+          <div style="font-size:15px;font-weight:900;color:#0f2942">${esc(c.name)}</div>
+          ${c.phone?`<div style="font-size:10px;color:#555">📞 ${esc(c.phone)}</div>`:''}
         </div>
         <div style="text-align:left">
           <div class="bil" style="margin-bottom:0;justify-content:flex-end">
@@ -8449,7 +8548,7 @@ async function printEverything() {
       const ic = {trucks:'🚛',machines:'🏗',stock:'📦',invoice:'📄'};
 
       body += `<div style="margin-bottom:10px;margin-right:8px;border-right:3px solid #c9a84c;padding-right:8px">
-        <div style="font-size:11px;font-weight:800;color:#0f2942;margin-bottom:5px">${ic[rec.type]||'📄'} ${rec.name}${rec.startDate?' — من '+fD(rec.startDate):''}</div>`;
+        <div style="font-size:11px;font-weight:800;color:#0f2942;margin-bottom:5px">${ic[rec.type]||'📄'} ${esc(rec.name)}${rec.startDate?' — من '+fD(rec.startDate):''}</div>`;
 
       if (rec.type==='trucks') {
         const trEs = es.filter(e=>e.type==='truck');
@@ -8458,7 +8557,7 @@ async function printEverything() {
           const qty=trEs.filter(e=>e.materialId===mat.id).reduce((s,e)=>s+Object.values(e.cols||{}).reduce((a,b)=>a+(parseFloat(b)||0),0),0);
           if (!qty) return;
           const dayEntries=trEs.filter(e=>e.materialId===mat.id), amount=dayEntries.reduce((z,e)=>z+(calcE(e).amount||0),0), values=[...new Set(dayEntries.filter(e=>calcE(e).qty>0).map(e=>calcE(e).price))], price=values.length===1?values[0]:null;
-          body+=`<tr><td class="tl">${mat.name}</td><td class="c">${qty}</td><td class="c">${price==null?'متعدد':fDA(price)}</td><td class="c amt">${fDA(amount)}</td></tr>`;
+          body+=`<tr><td class="tl">${esc(mat.name)}</td><td class="c">${fN(qty)}</td><td class="c">${price==null?'متعدد':fDA(price)}</td><td class="c amt">${fDA(amount)}</td></tr>`;
         });
         body += `<tr class="tot"><td colspan="3"><strong>الإجمالي</strong></td><td class="c amt"><strong>${fDA(rt.amount)}</strong></td></tr></tbody></table>`;
 
@@ -8530,7 +8629,7 @@ async function printEverything() {
 
       body+=`<div style="margin-bottom:14px;page-break-inside:avoid">
         <div class="cl-info"><div>
-          <div style="font-size:14px;font-weight:900;color:#0f2942">${s.name}</div>
+          <div style="font-size:14px;font-weight:900;color:#0f2942">${esc(s.name)}</div>
           ${s.type?`<div style="font-size:10px;color:#555">${s.type}${s.product?' · '+s.product:''}</div>`:''}
         </div><div style="text-align:left">
           <div class="bil" style="margin:0"><div class="bx gd" style="min-width:70px"><div class="bx-l">الدين</div><div class="bx-v" style="font-size:11px">${fDA(debtS)}</div></div><div class="bx rd" style="min-width:70px"><div class="bx-l">المتبقي</div><div class="bx-v" style="font-size:11px">${fDA(remS)}</div></div></div>
@@ -8540,7 +8639,7 @@ async function printEverything() {
         body+=`<div style="margin-right:8px;border-right:3px solid #c9a84c;padding-right:8px;margin-bottom:8px">
           <div style="font-size:10px;font-weight:700;margin-bottom:4px">فاتورة ${vi+1} — ${fD(v.date)} — ${fDA(v.total)}</div>
           <table style="font-size:9px"><thead><tr><th class="tl">الصنف</th><th class="c">الوحدة</th><th class="c">الكمية</th><th class="c">السعر</th><th class="c">المجموع</th></tr></thead><tbody>`;
-        v.items.forEach(it=>body+=`<tr><td class="tl">${it.name}</td><td class="c">${it.unit}</td><td class="c">${fN(it.qty)}</td><td class="c">${fDA(it.unitPrice)}</td><td class="c amt">${fDA(it.qty*it.unitPrice)}</td></tr>`);
+        v.items.forEach(it=>body+=`<tr><td class="tl">${esc(it.name)}</td><td class="c">${esc(it.unit)}</td><td class="c">${fN(it.qty)}</td><td class="c">${fDA(it.unitPrice)}</td><td class="c amt">${fDA(it.qty*it.unitPrice)}</td></tr>`);
         body+=`<tr class="tot"><td colspan="4"><strong>الإجمالي</strong></td><td class="c amt"><strong>${fDA(v.total)}</strong></td></tr></tbody></table></div>`;
       });
 
@@ -8692,7 +8791,7 @@ if (document.readyState === 'loading') {
   window.getCT = function(cid){
     let tot=0,trips=0,hours=0,kg=0,pendingLines=0,pendingQty=0;
     const pendingEntries=[];
-    records.filter(r=>r.clientId===cid).forEach(rec=>entries.filter(e=>e.recordId===rec.id).forEach(e=>{
+    records.filter(r=>r.clientId===cid).forEach(rec=>egtphEntriesOf(rec.id).forEach(e=>{
       const cv=calcE(e); tot+=cv.amount;
       if(e.type==='truck'){ const u=matUnitOf(e); if(isWeightUnit(u)) kg+=toKg(cv.qty,u); else trips+=cv.qty; }
       if(e.type==='machine') hours+=cv.qty;
@@ -8706,7 +8805,7 @@ if (document.readyState === 'loading') {
 
   window.getRT = function(rid){
     let amount=0,trips=0,hours=0,kg=0,pendingLines=0,pendingQty=0;
-    entries.filter(e=>e.recordId===rid).forEach(e=>{
+    egtphEntriesOf(rid).forEach(e=>{
       const cv=calcE(e); amount+=cv.amount;
       if(e.type==='truck'){ trips+=cv.qty; const u=matUnitOf(e); if(isWeightUnit(u)) kg+=toKg(cv.qty,u); }
       if(e.type==='machine') hours+=cv.qty;
@@ -9469,8 +9568,8 @@ if (document.readyState === 'loading') {
   const escAttr = v => String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
   const defFor = e => {
     if (!e) return null;
-    if (e.type==='truck') return prices.find(p=>p.id===e.materialId && p.recordId===e.recordId && p.type==='mat_def') || prices.find(p=>p.id===e.materialId) || null;
-    if (e.type==='machine') return prices.find(p=>p.id===e.unitId && p.recordId===e.recordId && p.type==='unit_def') || prices.find(p=>p.id===e.unitId) || null;
+    if (e.type==='truck') { const L=egtphPricesById(e.materialId); return L.find(p=>p.recordId===e.recordId && p.type==='mat_def') || L[0] || null; }
+    if (e.type==='machine') { const L=egtphPricesById(e.unitId); return L.find(p=>p.recordId===e.recordId && p.type==='unit_def') || L[0] || null; }
     return null;
   };
   const isDayOverride = e => !!(e && (e.priceScope==='day_override' || e.dayPriceOverride===true));
@@ -9605,7 +9704,7 @@ if (document.readyState === 'loading') {
       const e=dayEs.find(x=>x.materialId===mat.id)||{cols:{}};
       const defaultInfo=mat.priceStatus==='pending'?tx('غير متفق عليه','en attente'):fDA(n(mat.price));
       const priceValue=isDayOverride(e)?n(e.unitPrice):'';
-      const trucksHtml=trucks.map(tr=>{const v=e.cols?.[tr]||'';const id='etd_'+mat.id.replace(/[^a-z0-9]/gi,'_')+'_'+tr.replace(/[^a-z0-9]/gi,'_');return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:54px"><div style="font-size:8px;color:var(--tx3);text-align:center;max-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escAttr(tr)+'">'+esc(tr.length>9?tr.slice(0,9)+'…':tr)+'</div><input id="'+id+'" type="text" inputmode="decimal" value="'+v+'" class="ti" style="width:52px;text-align:center"></div>';}).join('');
+      const trucksHtml=trucks.map(tr=>{const v=e.cols?.[tr]||'';const id='etd_'+egtphIdKey(mat.id)+'_'+egtphIdKey(tr);return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:54px"><div style="font-size:8px;color:var(--tx3);text-align:center;max-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escAttr(tr)+'">'+esc(tr.length>9?tr.slice(0,9)+'…':tr)+'</div><input id="'+id+'" type="text" inputmode="decimal" value="'+v+'" class="ti" style="width:52px;text-align:center"></div>';}).join('');
       const priceId='etdp_'+mat.id.replace(/[^a-z0-9]/gi,'_');
       return '<div style="margin-bottom:12px;border-bottom:1px solid var(--bdr);padding-bottom:10px"><div style="font-size:11px;font-weight:700;color:var(--gold2);margin-bottom:5px">📦 '+esc(mat.name)+'</div><div class="fg" style="margin-bottom:8px"><label>'+tx('سعر خاص لهذا اليوم فقط','Prix spécial pour ce jour uniquement')+'</label><input id="'+priceId+'" type="number" min="0" step="0.01" value="'+priceValue+'" placeholder="'+escAttr(tx('السعر العام: ','Prix général : ')+defaultInfo)+'"><div class="hint">'+tx('فارغ = استعمال سعر السجل العام في كل الأيام.','Vide = utilisation du prix général du dossier.')+'</div></div><div style="display:flex;flex-wrap:wrap;gap:6px">'+trucksHtml+'</div></div>';
     }).join('');
@@ -9614,11 +9713,12 @@ if (document.readyState === 'loading') {
       const newDate=document.getElementById('etd-date')?.value;if(!newDate)return T(tx('اختر تاريخًا','Choisissez une date'),'error');
       if(newDate!==date && entries.some(e=>e.recordId===recId&&e.date===newDate&&e.type==='truck'))return T(tx('يوجد يوم بهذا التاريخ بالفعل','Une journée existe déjà à cette date'),'error');
       const newDest=document.getElementById('etd-dest')?.value.trim()||'';
+      if(egtphEtdInvalid())return T(tx('⚠️ أدخل عملية صحيحة في رحلات الشاحنات','⚠️ Saisie invalide dans les voyages camion'),'warning');
       try{
         for(const mat of recMats){
           let e=entries.find(x=>x.recordId===recId&&x.date===date&&x.materialId===mat.id&&x.type==='truck');
           if(!e){e=makeDefaultTruckEntry(recId,newDate,mat.id);entries.push(e);}
-          e.cols={};for(const tr of trucks){const id='etd_'+mat.id.replace(/[^a-z0-9]/gi,'_')+'_'+tr.replace(/[^a-z0-9]/gi,'_');const inputEl=document.getElementById(id);const raw=inputEl?.value;const parsed=(window.EGTPHTripArithmetic&&window.EGTPHTripArithmetic.calc)?window.EGTPHTripArithmetic.calc(raw):{ok:true,value:n(raw),display:String(n(raw)||'')};if(!parsed.ok){T(tx('⚠️ أدخل عملية صحيحة في رحلات الشاحنات','⚠️ Saisie invalide dans les voyages camion'),'warning');return;}if(inputEl)inputEl.value=parsed.display;const v=n(parsed.value);if(v>0)e.cols[tr]=v;}
+          e.cols=Object.fromEntries(Object.entries(e.cols||{}).filter(([k])=>!trucks.includes(k)));for(const tr of trucks){const id='etd_'+egtphIdKey(mat.id)+'_'+egtphIdKey(tr);const inputEl=document.getElementById(id);const raw=inputEl?.value;const parsed=(window.EGTPHTripArithmetic&&window.EGTPHTripArithmetic.calc)?window.EGTPHTripArithmetic.calc(raw):{ok:true,value:n(raw),display:String(n(raw)||'')};if(!parsed.ok){T(tx('⚠️ أدخل عملية صحيحة في رحلات الشاحنات','⚠️ Saisie invalide dans les voyages camion'),'warning');return;}if(inputEl)inputEl.value=parsed.display;const v=n(parsed.value);if(v>0)e.cols[tr]=v;}
           e.date=newDate;e.dest=newDest;setDayOverride(e,document.getElementById('etdp_'+mat.id.replace(/[^a-z0-9]/gi,'_'))?.value);
           const ok=await dbP('entries',e);if(!ok)return T(tx('فشل الحفظ','Échec de l’enregistrement'),'error');
         }
@@ -9655,7 +9755,7 @@ if (document.readyState === 'loading') {
       const newDate=document.getElementById('emd-date')?.value;if(!newDate)return T(tx('اختر تاريخًا','Choisissez une date'),'error');
       if(newDate!==date&&entries.some(e=>e.recordId===recId&&e.date===newDate&&e.type==='machine'))return T(tx('يوجد يوم بهذا التاريخ بالفعل','Une journée existe déjà à cette date'),'error');
       try{
-        for(const u of units){const safe=u.id.replace(/[^a-z0-9]/gi,'_'),hrs=n(document.getElementById('emd_'+safe)?.value),existingId=document.getElementById('emd_eid_'+safe)?.value;let e=entries.find(x=>x.id===existingId)||entries.find(x=>x.recordId===recId&&x.date===date&&x.unitId===u.id&&x.type==='machine');
+        if([...document.querySelectorAll('#mov input[id^="emd_"][type=number]')].some(x=>x.validity&&x.validity.badInput))return T('⚠️ اكتب الساعات بالأرقام، مثل 7.5','warning');for(const u of units){const safe=u.id.replace(/[^a-z0-9]/gi,'_'),hrs=n(document.getElementById('emd_'+safe)?.value),existingId=document.getElementById('emd_eid_'+safe)?.value;let e=entries.find(x=>x.id===existingId)||entries.find(x=>x.recordId===recId&&x.date===date&&x.unitId===u.id&&x.type==='machine');
           if(hrs>0){if(!e){e=makeDefaultMachineEntry(recId,newDate,u.id,hrs,'');entries.push(e);}else{e.hours=hrs;e.date=newDate;}setDayOverride(e,document.getElementById('emdp_'+safe)?.value);const ok=await dbP('entries',e);if(!ok)return T(tx('فشل الحفظ','Échec de l’enregistrement'),'error');}
           else if(e){entries=entries.filter(x=>x.id!==e.id);await dbD('entries',e.id);}
         }
@@ -9751,6 +9851,11 @@ if (document.readyState === 'loading') {
       if (!local) {
         map.set(item.id, item);
         await dbP(store, item);
+        continue;
+      }
+      // Truck days merge cell by cell (each truck cell carries its own edit time).
+      if (store==='entries' && typeof window.egtphCellMerge==='function' && (local.cols || item.cols)) {
+        if (window.egtphCellMerge(local, item, sourceTime(item) > sourceTime(local))) { map.set(item.id, local); await dbP(store, local); }
         continue;
       }
       // The newer object wins. Exact ties deliberately preserve the local object.
@@ -9921,7 +10026,23 @@ if (document.readyState === 'loading') {
       _sysWrite--;
     }
   }
-  window.applyBK = applyBKV131;
+  // عناصر مكرّرة بنفس المعرّف في ملف/سحابة: نُبقي نسخة واحدة (الأخيرة، كما تفعل قاعدة البيانات)
+  // وإلا عُدّت مرتين في الذاكرة ثم تغيّرت الأرقام بعد إعادة الفتح
+  function uniqById(list){
+    if (!Array.isArray(list)) return list;
+    const m = new Map(), free = [];
+    for (const x of list) { if (x && x.id != null) m.set(x.id, x); else free.push(x); }
+    return free.length ? Array.from(m.values()).concat(free.filter(x => x && typeof x === 'object')) : Array.from(m.values());
+  }
+  window.egtphUniqById = uniqById;
+  window.applyBK = function(data){
+    if (data && typeof data === 'object') {
+      data = Object.assign({}, data);
+      ['clients','records','entries','payments','advances','materials','stockItems','stockMoves','suppliers','supPays','prices','lockedDays','supInvoices','activity','trashItems']
+        .forEach(k => { if (Array.isArray(data[k])) data[k] = uniqById(data[k]); });
+    }
+    return applyBKV131(data);
+  };
 
   // Preserve deletion history and activity in JSON exports, so a full restore has the
   // same semantic state as the device it came from.
@@ -9952,10 +10073,7 @@ if (document.readyState === 'loading') {
       supInvoices:stampData(window._supInvs||[]),trucksConfig:trucks,machinesConfig:machines
     };
     const htmlSource = document.documentElement.outerHTML;
-    const updated = htmlSource.replace(
-      /(<script id="embedded-data-script">[\s\S]*?const __EMBEDDED_DATA__ = )[\s\S]*?(;[\s\S]*?<\/script>)/,
-      `$1${JSON.stringify(snapshot)};$2`
-    );
+    const updated = htmlSource.replace(/(<script id="embedded-data-script">)[\s\S]*?(<\/script>)/, (m,a,b) => a + '\nconst __EMBEDDED_DATA__ = ' + egtphEmbedSafe(JSON.stringify(snapshot)) + ';\n' + b);
     return {updated,snapshot};
   };
 
@@ -10947,6 +11065,13 @@ if (document.readyState === 'loading') {
 
   function _egtphTripCalc(raw){
     var text = String(raw == null ? '' : raw).trim()
+      // أرقام عربية/فارسية (لوحة مفاتيح iPhone بالعربية) ← أرقام عادية، و«٫» فاصلة عشرية
+      .replace(/[\u0660-\u0669]/g, function(d){ return String(d.charCodeAt(0) - 0x0660); })
+      .replace(/[\u06F0-\u06F9]/g, function(d){ return String(d.charCodeAt(0) - 0x06F0); })
+      .replace(/\u066B/g, '.');
+    // «12,500» غامض (اثنا عشر ألفاً وخمسمئة؟ أم 12.5؟) — يُرفض بدل حفظه خطأً
+    if (/^\d{1,3}(,\d{3})+$/.test(text.replace(/\s+/g,''))) return { ok:false, reason:'ambiguous' };
+    text = text
       .replace(/,/g,'.')
       .replace(/[×x]/g,'*')
       .replace(/[÷]/g,'/');
@@ -10972,6 +11097,8 @@ if (document.readyState === 'loading') {
     if (/[+\-*/]{2,}/.test(text)) return { ok:false, reason:'syntax' };
     if (/\(\)/.test(text) || /[+\-*/]\)/.test(text) || /\([*/]/.test(text)) return { ok:false, reason:'syntax' };
 
+    // أصفار في البداية (07، 05+3) عادية في الكتابة؛ الوضع الصارم يرفضها كأرقام ثُمانية
+    text = text.replace(/(^|[^0-9.])0+(?=\d)/g, '$1');
     var value;
     try {
       value = Function('"use strict"; return (' + text + ');')();
@@ -11020,7 +11147,7 @@ if (document.readyState === 'loading') {
     var wrapped = async function(recId, date, matId, truck, value, cid){
       var result = _egtphTripCalc(value);
       if (!result.ok) {
-        try { T('⚠️ أدخل رقماً أو عملية صحيحة: 14+10، 10-5، أو 14++ فقط. الخلط مثل +*14 غير مقبول.','warning'); } catch(_) {}
+        try { T(result.reason==='ambiguous' ? '⚠️ الرقم «'+value+'» غامض: اكتب 12500 بلا فاصلة، أو 12.5 للعدد العشري' : '⚠️ أدخل رقماً أو عملية صحيحة: 14+10، 10-5، أو 14++ فقط. الخلط مثل +*14 غير مقبول.','warning'); } catch(_) {}
         return;
       }
       return originalUpdateTruck.call(this, recId, date, matId, truck, result.value, cid);
@@ -12852,7 +12979,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     all.forEach(function(x){ counts[x.type] = (counts[x.type]||0)+1; });
     var chips = '<span class="eg-chip'+(SUPF.type?'':' on')+'" onclick="egtphSupFilter(\'type\',\'\')">الكل <i>'+all.length+'</i></span>'
       + Object.keys(counts).sort(function(a,b){ return counts[b]-counts[a]; }).map(function(t){
-          return '<span class="eg-chip'+(SUPF.type===t?' on':'')+'" onclick="egtphSupFilter(\'type\',\''+String(t).replace(/'/g,"")+'\')">'
+          return '<span class="eg-chip'+(SUPF.type===t?' on':'')+'" onclick="egtphSupFilter(\'type\',\''+jsA(t)+'\')">'
             + (TYPE_IC[t]||'🏭')+' '+e(t)+' <i>'+counts[t]+'</i></span>'; }).join('');
     return '<div class="eg-chips">'+chips+'</div>'
       + '<div class="eg-chips">'
@@ -13060,7 +13187,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
                : (r.invoiced>0 || r.paid>0) ? {t:'✓ مسدّد', l:'الحالة', c:'var(--green)'}
                : {t:'—', l:'الحالة', c:'var(--tx3)'};
         var rid = r.recId || '';
-        var payFn = rid ? ('egtphPayForRec(\''+spId+'\',\''+rid+'\',') : ('egtphPayForAccount(\''+spId+'\',\''+String(r.name).replace(/'/g,"")+'\',');
+        var payFn = rid ? ('egtphPayForRec(\''+spId+'\',\''+rid+'\',') : ('egtphPayForAccount(\''+spId+'\',\''+jsA(r.name)+'\',');
         return '<div class="sa-row'+(rid?'':' legacy')+'"><div class="sa-n">'+(r.kind==='project'?'🏗':(rid?'🔧':'📁'))+' '+e(r.name)
           + (r.price!=null ? ' <span class="sa-price">'+money(r.price)+'/'+e(r.unit||'وحدة')+'</span>' : '')
           + '<div style="font-size:9px;color:var(--tx3);font-weight:400">'
@@ -13069,12 +13196,12 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
           + (rid ? (r.kind==='project'
                 ? '<button class="btn btn-sec btn-xs qty" onclick="event.stopPropagation();egtphInvForRec(\''+spId+'\',\''+rid+'\')">＋ فاتورة</button>'
                 : '<button class="btn btn-sec btn-xs qty" onclick="event.stopPropagation();egtphAddQty(\''+spId+'\',\''+rid+'\')">＋ كمية</button>') : '')
-          + ((r.remain>0) ? ('<button class="btn btn-grn btn-xs" onclick="event.stopPropagation();egtphSettleRec(\''+spId+'\',\''+String(rid||r.name).replace(/'/g,"")+'\')">✅ تسديد</button>') : '')
+          + ((r.remain>0) ? ('<button class="btn btn-grn btn-xs" onclick="event.stopPropagation();egtphSettleRec(\''+spId+'\',\''+jsA(rid||r.name)+'\')">✅ تسديد</button>') : '')
           + '<button class="btn btn-grn btn-xs" onclick="event.stopPropagation();'+payFn+'\'pay\')">＋ دفعة</button>'
           + '<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();'+payFn+'\'adv\')">＋ تسبيق</button>'
           + (rid ? ('<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();egtphNewSupRec(\''+spId+'\',\''+rid+'\')">✎</button>'
                  + '<button class="del-btn btn-xs" style="padding:4px 7px;font-size:9.5px" onclick="event.stopPropagation();egtphDeleteSupRec(\''+spId+'\',\''+rid+'\')">🗑</button>')
-                 : (r.name!==GEN ? '<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();egtphRenameAccount(\''+spId+'\',\''+String(r.name).replace(/'/g,"")+'\')">✎</button>' : ''))
+                 : (r.name!==GEN ? '<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();egtphRenameAccount(\''+spId+'\',\''+jsA(r.name)+'\')">✎</button>' : ''))
           + '</div></div>'
           + '<div class="sa-vals">'
           +   '<div class="sa-v"><b style="color:var(--gold2)">'+money(r.invoiced)+'</b><span>الفواتير</span></div>'
@@ -13087,7 +13214,6 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     return '<div id="eg-subacc">'
       + '<div class="sa-hd"><span class="t">📋 سجلات المورد (خدمة · سعر)</span>'
       + '<span class="acts"><button class="btn btn-gold btn-xs" onclick="egtphNewSupRec(\''+spId+'\')">＋ سجل</button>'
-      + '<button class="btn btn-sec btn-xs" onclick="egtphMergeDupRecords(\''+spId+'\').then(function(){renderSupDetail(\''+spId+'\')})">🧹</button>'
       + '<button class="btn btn-sec btn-xs" onclick="egtphArchiveSupplier(\''+spId+'\')">🗄</button>'
       + '<button class="btn btn-sec btn-xs" onclick="egtphAssignAccounts(\''+spId+'\')">🏷 توزيع</button>'
       + '<button class="btn btn-sec btn-xs" onclick="egtphMergeSupplier(\''+spId+'\')">🔗 دمج</button></span></div>'
@@ -13695,6 +13821,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
         if (!name) return T(k==='project' ? 'اكتب اسم المشروع' : 'اكتب اسم الخدمة / المادة','error');
         if (k==='service' && price <= 0) return T('أدخل سعراً صحيحاً','error');
         var oldName = r ? r.name : '';
+        var oldPrice = r ? r.price : null;
         var obj = r || { id: nowId(), type:'sup_rec', supplierId: spId, createdAt: new Date().toISOString() };
         obj.kind = k; obj.name = name; obj.price = (k==='project' ? null : price);
         obj.priceUnit = (k==='project' ? '' : unit); obj.note = note;
@@ -13729,7 +13856,17 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
             ps[j2].account = name; ps[j2]._saved = new Date().toISOString(); await dbP('sup_pays', ps[j2]);
           }
         }
-        CM(); T(r ? ('✓ عُدّل السجل'+(oldName&&oldName!==name?' وحُدّثت حركاته':'')) : '✓ سجل «'+name+'» أُنشئ بسعر '+money(price), 'success');
+        // تغيّر السعر ← أعد حساب الفواتير التلقائية بالسعر الجديد فوراً
+        var priceChanged = r && k!=='project' && Math.abs(num(oldPrice) - num(price)) > 0.000001;
+        if (priceChanged) {
+          // روابط تحمل نسخة من السعر القديم نفسه ليست سعراً خاصاً — تتبع السعر الجديد
+          var cp = (typeof prices!=='undefined'?prices:[]).filter(function(pp){
+            return pp && (pp.type==='record_link' || pp.type==='truck_link') && pp.supRecId===obj.id
+                && pp.price!=null && Math.abs(num(pp.price) - num(oldPrice)) < 0.000001; });
+          for (var c2=0;c2<cp.length;c2++){ cp[c2].price = null; cp[c2]._saved = new Date().toISOString(); await dbP('prices', cp[c2]); }
+        }
+        if (r && typeof egtphResyncSupRec==='function') { try { await egtphResyncSupRec(obj.id); } catch(_) {} }
+        CM(); T(r ? ('✓ عُدّل السجل'+(oldName&&oldName!==name?' وحُدّثت حركاته':'')+(priceChanged?' · أُعيد حساب فواتيره بالسعر الجديد':'')) : '✓ سجل «'+name+'» أُنشئ بسعر '+money(price), 'success');
         renderSupDetail(spId);
       }, r ? 'حفظ التعديل' : 'إنشاء');
   };
@@ -13913,10 +14050,13 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
   window.egtphSyncCosts = async function(recId, force){
     var links = egtphTruckLinks(recId);
     var rec = (typeof records!=='undefined'?records:[]).find(function(r){ return r.id===recId; });
+    // سجل العميل حُذف (أو نُقل للسلة): تكلفة المورد تبقى كما هي — المورد عمل فعلاً (قرار المستخدم)
     if (!rec) return 0;
     var groups = {};   // supRecId → {supplierId, items:{key:{name,unit,qty,price}}, last, trucks:[]}
     links.forEach(function(l){
       var sr = supRecOf(l.supRecId); if (!sr) return;
+      // مورد محذوف (في السلة): لا تُنشأ له فواتير
+      if (typeof suppliers!=='undefined' && !suppliers.some(function(x){ return x && x.id===sr.supplierId; })) return;
       var g = groups[l.supRecId] || (groups[l.supRecId] = {supplierId:sr.supplierId, name:sr.name, items:{}, last:'', trucks:[]});
       if (g.trucks.indexOf(l.truck)===-1) g.trucks.push(l.truck);
       var basePrice = (l.price != null) ? num(l.price) : num(sr.price);
@@ -13940,11 +14080,12 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       var g = groups[srid];
       var items = Object.keys(g.items).map(function(k){
         var it = g.items[k];
-        return { name: it.name, unit: it.unit, qty: it.qty, unitPrice: it.price, priceStatus:'confirmed' };
+        // نفس التطبيع المحفوظ (6 أرقام عشرية) حتى لا تُعاد كتابة فاتورة لم تتغيّر عند كل فتح
+        return { name: it.name, unit: it.unit, qty: Math.round(it.qty*1e6)/1e6, unitPrice: Math.round(num(it.price)*1e6)/1e6, priceStatus:'confirmed' };
       }).filter(function(i){ return i.qty > 0; });
       var invId = 'auto_' + recId + '_' + srid;
       keep[invId] = true;
-      var total = items.reduce(function(s,i){ return s + i.qty*i.unitPrice; }, 0);
+      var total = Math.round(items.reduce(function(s,i){ return s + i.qty*i.unitPrice; }, 0) * 1e6) / 1e6;
       var ex = (window._supInvs||[]).find(function(v){ return v.id===invId; });
       if (!items.length) {
         if (ex) { window._supInvs = window._supInvs.filter(function(v){ return v.id!==invId; }); await dbD('sup_invoices', invId); n++; }
@@ -14013,7 +14154,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
             ? ('→ <b>'+e(sp?sp.name:'')+'</b> · '+e(sr.name)+' · '+money(price)+'/'+e(sr.priceUnit||'وحدة')
                + '<br><span class="qty">'+fn(q)+(mixed ? (' · أسعار حسب اليوم = '+money(tCost)) : (' × '+money(price)+' = '+money(tCost||q*price)))+'</span>')
             : ('شاحنتي — بلا تكلفة مورد' + (q?('<br><span class="qty">'+fn(q)+'</span>'):''))) + warns + '</span>'
-        + '<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();egtphLinkTruck(\''+recId+'\',\''+String(t).replace(/'/g,"")+'\')">'
+        + '<button class="btn btn-sec btn-xs" onclick="event.stopPropagation();egtphLinkTruck(\''+recId+'\',\''+jsA(t)+'\')">'
         + (sr?'✎ تعديل':'🔗 ربط')+'</button></div>';
     }).join('');
 
@@ -14151,8 +14292,10 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     try {
       var changed = false;
       (window._supInvs||[]).filter(function(v){ return v.autoFrom===recId; }).forEach(function(v){
-        (v.items||[]).forEach(function(it){ it.qty = r2(it.qty); it.unitPrice = r2(it.unitPrice); });
-        var t = r2((v.items||[]).reduce(function(s,i){ return s + num(i.qty)*num(i.unitPrice); }, 0));
+        // الكمية والسعر يبقيان كما هما (3 أرقام عشرية للطن، أسعار مثل 0,333 للكيلو) — نزيل ضجيج الفاصلة فقط.
+        // المجموع = مجموع الأصناف بالضبط (كما يحسبه حساب المورد)، والتقريب للسنتيم عند العرض فقط — مثل حساب العميل.
+        (v.items||[]).forEach(function(it){ it.qty = Math.round(num(it.qty)*1e6)/1e6; it.unitPrice = Math.round(num(it.unitPrice)*1e6)/1e6; });
+        var t = Math.round((v.items||[]).reduce(function(s,i){ return s + num(i.qty)*num(i.unitPrice); }, 0) * 1e6) / 1e6;
         if (v.total !== t) { v.total = t; changed = true; }
       });
       if (changed) {
@@ -14170,6 +14313,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     for (var i=0;i<list.length;i++){
       var v = list[i];
       var rec = (typeof records!=='undefined'?records:[]).find(function(r){ return r.id===v.autoFrom; });
+      if (!rec) continue;   // سجل العميل محذوف: تكلفة المورد تبقى (لا تُحذف مع العميل)
       var sr  = (typeof prices!=='undefined'?prices:[]).find(function(p){ return p && p.type==='sup_rec' && p.id===v.supRecId; });
       var links = (typeof egtphTruckLinks==='function' && rec) ? egtphTruckLinks(rec.id) : [];
       var stillLinked = links.some(function(l){ return l.supRecId===v.supRecId; });
@@ -14322,7 +14466,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       + (sell?(' سعر بيعك للعميل: <b>'+money(sell)+'/'+e(unit)+'</b>'):'')+'</div></div>'
       + '<div class="fg"><label>الوحدة</label><input type="text" id="cl-u" value="'+e(unit)+'" readonly style="opacity:.7">'
       + '<div class="hint">مأخوذة من مادة سجل العميل حتى لا تختلف الوحدتان.</div></div>'
-      + '<div style="text-align:left"><button class="btn btn-sec btn-xs" onclick="egtphUnlinkTruck(\''+recId+'\',\''+String(truck).replace(/'/g,"")+'\')">✕ إلغاء الربط</button></div>',
+      + '<div style="text-align:left"><button class="btn btn-sec btn-xs" onclick="egtphUnlinkTruck(\''+recId+'\',\''+jsA(truck)+'\')">✕ إلغاء الربط</button></div>',
       async function(){
         var spId = document.getElementById('cl-sup').value;
         var choice = document.getElementById('cl-rec').value;
@@ -14697,6 +14841,8 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     for (var i=0;i<nodes.length;i++){
       var el = nodes[i];
       if (el.closest('#eg-viewbar') || el.classList.contains('eg-chips')) continue;
+      // عناصر التصميم الجديد تتمرّر بنفسها (شريط الأيام، أزرار التصفية) — بلا مؤشر
+      if (el.closest('.u2-chips,.u2-strip,.u2-mats,#u2-tabs,.u2-seg,.u2-tr,.u2-sum,.u2-acts')) { el.classList.remove('eg-scrollhint'); continue; }
       var over = el.scrollWidth - el.clientWidth;
       if (over <= 8) { el.classList.remove('eg-scrollhint'); continue; }
       var ox = getComputedStyle(el).overflowX;
@@ -15269,7 +15415,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
   };
   function trucksOf(recId){
     var set = [];
-    (typeof entries!=='undefined'?entries:[]).forEach(function(en){
+    egtphEntriesOf(recId).forEach(function(en){
       if (en.recordId!==recId || en.type!=='truck') return;
       Object.keys(en.cols||{}).forEach(function(t){ if (set.indexOf(t)===-1) set.push(t); });
     });
@@ -15463,9 +15609,9 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
   // كميات سجل العميل حسب المادة (للشاحنات المربوطة فقط)
   function clientQty(recId, trucks){
     var out = {};
-    (typeof entries!=='undefined'?entries:[]).forEach(function(en){
+    egtphEntriesOf(recId).forEach(function(en){
       if (en.recordId!==recId || en.type!=='truck') return;
-      var mat = (typeof prices!=='undefined'?prices:[]).find(function(p){ return p.id===en.materialId; });
+      var mat = egtphPricesById(en.materialId)[0];
       var name = (mat && mat.name) || '—', unit = (mat && mat.priceUnit) || '';
       var k = name+'|'+unit;
       Object.keys(en.cols||{}).forEach(function(t){
@@ -15863,17 +16009,17 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
           return '<div class="ml"><span class="mn">'+e(m[k].n)+'</span>'
                + '<span class="mq">'+fn(m[k].q)+(m[k].u?(' '+e(m[k].u)):'')+'</span></div>'; }).join('') + '</div>') : '';
       } catch(_) {}
-      var payFn = rid ? ("egtphPayForRec('"+spId+"','"+rid+"',") : ("egtphPayForAccount('"+spId+"','"+String(r.name).replace(/'/g,"")+"',");
+      var payFn = rid ? ("egtphPayForRec('"+spId+"','"+rid+"',") : ("egtphPayForAccount('"+spId+"','"+jsA(r.name)+"',");
       var acts = locked ? '' : '<div class="acts">'
         + (rid && r.kind!=='project' ? '<button class="b" onclick="egtphAddQty(\''+spId+'\',\''+rid+'\')">＋ كمية</button>' : '')
         + (rid && r.kind!=='project' ? '<button onclick="egtphSupRecRules(\''+spId+'\',\''+rid+'\')">💲 أسعار الأيام</button>' : '')
         + (rid && r.kind==='project' ? '<button class="b" onclick="egtphInvForRec(\''+spId+'\',\''+rid+'\')">＋ فاتورة</button>' : '')
-        + (r.remain>0 ? '<button class="g" onclick="egtphSettleRec(\''+spId+'\',\''+String(rid||r.name).replace(/'/g,"")+'\')">✅ تسديد</button>' : '')
+        + (r.remain>0 ? '<button class="g" onclick="egtphSettleRec(\''+spId+'\',\''+jsA(rid||r.name)+'\')">✅ تسديد</button>' : '')
         + '<button class="g" onclick="'+payFn+'\'pay\')">＋ دفعة</button>'
         + '<button onclick="'+payFn+'\'adv\')">＋ تسبيق</button>'
         + (rid ? '<button onclick="egtphNewSupRec(\''+spId+'\',\''+rid+'\')">✎ تعديل</button>'
                + '<button class="r" onclick="egtphDeleteSupRec(\''+spId+'\',\''+rid+'\')">🗑 حذف</button>'
-               : '<button onclick="egtphRenameAccount(\''+spId+'\',\''+String(r.name).replace(/'/g,"")+'\')">✎ تعديل الاسم</button>')
+               : '<button onclick="egtphRenameAccount(\''+spId+'\',\''+jsA(r.name)+'\')">✎ تعديل الاسم</button>')
         + '</div>';
       return '<tr><td><div class="nm">'+icon+' '+e(r.name)+'</div>'
         + '<div class="sub">'+r.nInv+' فاتورة · '+r.nPay+' دفعة</div>' + qty
@@ -15889,7 +16035,8 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
         + '<td class="n" style="color:'+st.c+'">'+st.t+'</td></tr>'
         + (acts ? ('<tr class="act"><td colspan="4">'+acts+'</td></tr>') : '');
     }).join('');
-    return '<div class="wrap"><table class="eg-tbl">'
+    return ((typeof egtphDupBanner==='function') ? egtphDupBanner(spId) : '')
+      + '<div class="wrap"><table class="eg-tbl">'
       + '<thead><tr><th>السجل</th><th style="text-align:left">الفواتير</th><th style="text-align:left">المدفوع</th><th style="text-align:left">الحالة</th></tr></thead>'
       + '<tbody>'+body
       + '<tr class="tot"><td>∑ المجموع العام</td>'
@@ -16048,9 +16195,11 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
           if (n) {
             try { T('⚙️ حُدّثت فاتورة المورد تلقائياً','success'); } catch(_) {}
             // حدّث لوحة التكلفة إن كانت معروضة
+            // لا نعيد رسم الصفحة أثناء الكتابة في خانة — وإلا ضاع الرقم الذي يُكتب الآن
             var box = document.getElementById('eg-cost');
             if (box && typeof activeRid!=='undefined' && activeRid===ids[i] && typeof openCid!=='undefined' && openCid) {
-              renderCD(openCid);
+              if (typeof window.egtphRedrawWhenIdle === 'function') window.egtphRedrawWhenIdle();
+              else if (typeof safeRerender === 'function') safeRerender();
             }
           }
         } catch(_) {}
@@ -16186,6 +16335,13 @@ button.rtab.eg-reccard .rc-v i{font-style:normal;font-size:9.5px;color:var(--tx3
       if (mrow) mat = (mrow.textContent||'').trim().split('\n')[0];
     }
     // نافذة تعديل اليوم: الاسم فوق الخانة
+    // الإدخال السريع (التصميم الجديد): اسم الشاحنة من سطرها، والتاريخ من اليوم المختار
+    if (!truck && inp.closest && inp.closest('.u2-tr')) {
+      truck = inp.closest('.u2-tr').getAttribute('data-truck') || '';
+      var qb = document.getElementById('u2-trips');
+      var qd = qb ? (qb.getAttribute('data-date')||'') : '';
+      if (qd) date = qd.split('-').reverse().join('/');   // بلا علامات اتجاه حتى لا ينقلب التاريخ
+    }
     if (!truck && String(inp.id||'').indexOf('etd_')===0) {
       var lbl = inp.parentNode && inp.parentNode.querySelector('div');
       if (lbl) truck = (lbl.getAttribute('title') || lbl.textContent || '').trim();
@@ -16338,6 +16494,15 @@ body[data-gz="sm"] .tw table th{font-size:10.5px!important}
     var el = document.activeElement;
     if (!el || !el.classList || !el.classList.contains('ti')) el = LAST;   // اللمس قد يُفقد التركيز
     if (!el || !el.isConnected || !el.classList.contains('ti')) return;
+    // الإدخال السريع: ↑↓ تنتقل بين الشاحنات في نفس اليوم
+    var qbox = el.closest && el.closest('#u2-trips');
+    if (qbox) {
+      var ins = Array.prototype.slice.call(qbox.querySelectorAll('.u2-tr input.ti'));
+      var k = ins.indexOf(el) + dir;
+      if (k >= 0 && k < ins.length) { LAST = ins[k]; ins[k].scrollIntoView({block:'center'}); ins[k].focus(); try { ins[k].select(); } catch(_) {} return; }
+      try { T(dir>0?'آخر شاحنة في هذا اليوم':'أول شاحنة في هذا اليوم','warning',1200); } catch(_) {}
+      return;
+    }
     var td = el.closest('td'), tr = td && td.parentNode, t = td && td.closest('table');
     if (!td || !tr || !t) return;
     var idx = Array.prototype.indexOf.call(tr.children, td);
@@ -16404,6 +16569,13 @@ body[data-gz="sm"] .tw table th{font-size:10.5px!important}
       var head = table.querySelector('thead tr');
       if (head && head.children[idx]) truck = (head.children[idx].getAttribute('title') || head.children[idx].textContent || '').trim();
       if (tr.children[0]) date = (tr.children[0].textContent||'').trim().split('\n')[0];
+    }
+    // الإدخال السريع (التصميم الجديد): اسم الشاحنة من سطرها، والتاريخ من اليوم المختار
+    if (!truck && inp.closest && inp.closest('.u2-tr')) {
+      truck = inp.closest('.u2-tr').getAttribute('data-truck') || '';
+      var qb = document.getElementById('u2-trips');
+      var qd = qb ? (qb.getAttribute('data-date')||'') : '';
+      if (qd) date = qd.split('-').reverse().join('/');   // بلا علامات اتجاه حتى لا ينقلب التاريخ
     }
     if (!truck && String(inp.id||'').indexOf('etd_')===0) {
       var p2 = inp.parentNode, lb = p2 && p2.querySelector('div');
@@ -16930,4 +17102,1948 @@ button.eg-dp-btn{margin-top:6px;padding:5px 10px;border-radius:8px;font-size:10.
 })();
 </script>
 
+<style id="egtph-recmerge-css">
+#eg-subacc .origin{display:inline-block;margin-top:5px;padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:800;line-height:1.5}
+#eg-subacc .origin.lk{background:rgba(59,130,246,.14);color:#93c5fd;border:1px solid rgba(59,130,246,.35)}
+#eg-subacc .origin.mn{background:rgba(148,163,184,.12);color:var(--tx2);border:1px solid rgba(148,163,184,.3)}
+#eg-dupbar2{margin:10px 12px;padding:11px 12px;border-radius:12px;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.45)}
+#eg-dupbar.dl{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.5)}
+#eg-dupbar.dl .t{color:#fca5a5}
+#eg-dupbar2 .t{font-size:12.5px;font-weight:900;color:#fdba74;margin-bottom:6px}
+#eg-dupbar2 .p{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 0;border-top:1px dashed rgba(249,115,22,.3);font-size:12px;line-height:1.7}
+#eg-dupbar2 .p .sp{flex:1;min-width:180px}
+#eg-dupbar2 button{border-radius:9px;padding:7px 11px;font-size:11.5px;font-weight:800;cursor:pointer;font-family:inherit}
+#eg-dupbar2 .go{background:linear-gradient(135deg,#f59e0b,#d97706);color:#111;border:0}
+#eg-dupbar2 .no{background:transparent;color:var(--tx3);border:1px solid var(--bdr2)}
+#eg-dupbar{margin:10px 12px;padding:11px 12px;border-radius:12px;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.45)}
+#eg-dupbar .t{font-size:12.5px;font-weight:900;color:#fdba74;margin-bottom:6px}
+#eg-dupbar .p{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 0;border-top:1px dashed rgba(249,115,22,.3);font-size:12px;line-height:1.7}
+#eg-dupbar .p:first-of-type{border-top:0}
+#eg-dupbar .p b{color:var(--tx)}
+#eg-dupbar .p .sp{flex:1;min-width:180px}
+#eg-dupbar button{border-radius:9px;padding:7px 11px;font-size:11.5px;font-weight:800;cursor:pointer;font-family:inherit}
+#eg-dupbar .go{background:linear-gradient(135deg,#f59e0b,#d97706);color:#111;border:0}
+#eg-dupbar .no{background:transparent;color:var(--tx3);border:1px solid var(--bdr2)}
+.eg-mg .card{border:1px solid var(--bdr2);border-radius:11px;padding:10px 11px;margin-bottom:9px;background:var(--bg3)}
+.eg-mg .card .h{font-size:12.5px;font-weight:900;margin-bottom:5px}
+.eg-mg .card .r{font-size:11.5px;color:var(--tx2);line-height:1.9}
+.eg-mg .card .r b{color:var(--tx)}
+.eg-mg .arrow{text-align:center;font-size:18px;margin:-2px 0 7px}
+.eg-mg .warn{border-radius:10px;padding:9px 11px;margin-top:8px;font-size:11.5px;line-height:1.8}
+.eg-mg .warn.o{background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.45);color:#fdba74}
+.eg-mg .warn.g{background:rgba(40,217,110,.10);border:1px solid rgba(40,217,110,.35);color:var(--green)}
+.eg-mg .warn.b{background:rgba(59,130,246,.10);border:1px solid rgba(59,130,246,.35);color:#93c5fd}
+</style>
+<script id="egtph-recmerge-js">
+/* EGTPH — سجلات المورد المكرّرة:
+   • تحت كل سجل: من أين جاء (يتبع سجل عميل / يدوي).
+   • تنبيه عندما يبدو سجلان لنفس سجل العميل.
+   • دمج سجلين في سجل واحد: تنتقل الفواتير اليدوية والدفعات والروابط وأسعار الأيام،
+     وتُعاد الفواتير التلقائية، مع فحص الكميات قبل الدمج. */
+(function(){
+  'use strict';
+  if (window.__egtphRecMerge) return;
+  window.__egtphRecMerge = true;
+
+  function e(s){ return (typeof esc==='function') ? esc(String(s==null?'':s)) : String(s==null?'':s); }
+  function num(v){ return parseFloat(v)||0; }
+  function money(v){ return (typeof fDA==='function') ? fDA(num(v)) : String(v); }
+  function fn(v){ return (typeof fN==='function') ? fN(num(v)) : String(v); }
+  function dt(v){ return (typeof fD==='function') ? fD(v) : (v||''); }
+  function P(){ return (typeof prices!=='undefined') ? prices : []; }
+  function srOf(id){ return P().find(function(p){ return p && p.type==='sup_rec' && p.id===id; }); }
+  function recOf(id){ return (typeof records!=='undefined'?records:[]).find(function(r){ return r.id===id; }); }
+  function cliOf(id){ return (typeof clients!=='undefined'?clients:[]).find(function(c){ return c.id===id; }); }
+  function srList(spId){ return (typeof egtphSupRecords==='function') ? egtphSupRecords(spId) : []; }
+  function kindOf(r){ return r.kind || 'service'; }
+
+  // ── سجلات العميل المربوطة فعلاً بسجل المورد ──
+  function linkedRecIds(sr){
+    var out = [];
+    P().forEach(function(p){
+      if (p && (p.type==='record_link' || p.type==='truck_link') && p.supRecId===sr.id && p.recordId && out.indexOf(p.recordId)===-1) out.push(p.recordId);
+    });
+    if (sr.linkedRecordId && recOf(sr.linkedRecordId) && out.indexOf(sr.linkedRecordId)===-1) out.push(sr.linkedRecordId);
+    return out.filter(function(id){ return !!recOf(id); });
+  }
+  // سجل عميل يُذكر اسمه داخل اسم سجل المورد (للسجلات اليدوية القديمة)
+  function nameGuess(sr){
+    var nm = ' '+String(sr.name||'').replace(/[—–\-·]/g,' ').replace(/\s+/g,' ')+' ';
+    var best = null;
+    (typeof records!=='undefined'?records:[]).forEach(function(r){
+      var rn = String(r.name||'').trim(); if (rn.length < 3) return;
+      if (nm.indexOf(' '+rn+' ') !== -1 && (!best || rn.length > String(best.name).length)) best = r;
+    });
+    return best ? best.id : null;
+  }
+  function recLabel(id){
+    var r = recOf(id); if (!r) return '';
+    var c = cliOf(r.clientId);
+    return r.name + (c ? (' — '+c.name) : '');
+  }
+
+  // ── حركات سجل المورد ──
+  function belongs(o, sr){
+    if (!o || o.supplierId !== sr.supplierId) return false;
+    if (o.supRecId) return o.supRecId === sr.id;
+    return String(o.account||'').trim() === sr.name || String(o.projectName||'').trim() === sr.name;
+  }
+  function stats(sr){
+    var invs = (window._supInvs||[]).filter(function(v){ return belongs(v, sr); });
+    var pays = (typeof supPays!=='undefined'?supPays:[]).filter(function(x){ return belongs(x, sr); });
+    var s = { auto:[], man:[], pays:pays, autoQ:0, manQ:0, autoAmt:0, manAmt:0, paid:0, manDates:[] };
+    invs.forEach(function(v){
+      var q = (v.items||[]).reduce(function(t,i){ return t + num(i && i.qty); },0);
+      var a = (v.items&&v.items.length) ? v.items.reduce(function(t,i){ return t + (i && i.priceStatus==='pending' ? 0 : num(i.qty)*num(i.unitPrice)); },0) : num(v.total);
+      if (v.autoFrom) { s.auto.push(v); s.autoQ += q; s.autoAmt += a; }
+      else { s.man.push(v); s.manQ += q; s.manAmt += a; if (v.date) s.manDates.push(v.date); }
+    });
+    pays.forEach(function(x){ s.paid += num(x.amount); });
+    return s;
+  }
+  // الأيام التي تُولَّد منها فواتيره التلقائية (من سجل العميل)
+  function autoDays(srIds, recId){
+    var links = (typeof egtphTruckLinks==='function') ? egtphTruckLinks(recId) : [];
+    var trucks = links.filter(function(l){ return srIds.indexOf(l.supRecId) !== -1; }).map(function(l){ return l.truck; });
+    var min = '', max = '', q = 0;
+    (typeof entries!=='undefined'?entries:[]).forEach(function(en){
+      if (en.recordId!==recId || en.type!=='truck') return;
+      var d = 0; trucks.forEach(function(t){ d += num((en.cols||{})[t]); });
+      if (!d) return; q += d;
+      var x = String(en.date||''); if (!x) return;
+      if (!min || x < min) min = x; if (!max || x > max) max = x;
+    });
+    return {min:min, max:max, q:q};
+  }
+  function recQty(recId){
+    var q = 0;
+    (typeof entries!=='undefined'?entries:[]).forEach(function(en){
+      if (en.recordId!==recId || en.type!=='truck') return;
+      Object.keys(en.cols||{}).forEach(function(t){ q += num(en.cols[t]); });
+    });
+    return q;
+  }
+
+  // ── أصل السجل (يُعرض تحت اسمه في الجدول) ──
+  window.egtphRecOriginHtml = function(spId, srId){
+    var sr = srOf(srId); if (!sr) return '';
+    if (kindOf(sr)==='project') return '';
+    var ids = linkedRecIds(sr);
+    if (ids.length) return '<div class="origin lk">🔗 يتبع سجل العميل: '+ids.map(function(id){ return e(recLabel(id)); }).join(' · ')+'</div>';
+    var g = nameGuess(sr);
+    return '<div class="origin mn">✍️ سجل يدوي — غير مربوط'+(g?(' (اسمه يشبه «'+e(recLabel(g))+'»)'):'')+'</div>';
+  };
+
+  // ── اكتشاف السجلات المكرّرة ──
+  var DKEY = 'egtph_dup_ok';
+  function dismissed(){ try { return JSON.parse(localStorage.getItem(DKEY)||'[]'); } catch(_) { return []; } }
+  function pairKey(a,b){ return [a,b].sort().join('|'); }
+  window.egtphDupPairs = function(spId){
+    var list = srList(spId).filter(function(r){ return kindOf(r)!=='project'; });
+    var ok = dismissed(), out = [];
+    var info = list.map(function(r){
+      var ids = linkedRecIds(r), g = ids.length ? null : nameGuess(r);
+      return { r:r, ids:ids, all: ids.concat(g ? [g] : []) };
+    });
+    for (var i=0;i<info.length;i++) for (var j=i+1;j<info.length;j++){
+      var A = info[i], B = info[j];
+      if (!A.ids.length && !B.ids.length) continue;          // سجلان يدويان: لا نخمّن
+      var common = A.all.filter(function(x){ return B.all.indexOf(x) !== -1; });
+      if (!common.length) continue;
+      if (ok.indexOf(pairKey(A.r.id,B.r.id)) !== -1) continue;
+      // المقترح: ادمج اليدوي في المربوط، وإلا الأحدث في الأقدم
+      var from = B.r, into = A.r;
+      if (A.ids.length && !B.ids.length) { from = B.r; into = A.r; }
+      else if (!A.ids.length && B.ids.length) { from = A.r; into = B.r; }
+      out.push({ from:from, into:into, recId:common[0] });
+    }
+    return out;
+  };
+  window.egtphDupBanner = function(spId){
+    var locked = false;
+    try { locked = (typeof isSecLocked==='function') && isSecLocked('sup:'+spId); } catch(_) {}
+    var pairs = egtphDupPairs(spId); if (!pairs.length) return '';
+    return '<div id="eg-dupbar"><div class="t">⚠️ سجل قديم مكرّر</div>'
+      + pairs.map(function(p){
+          return '<div class="p"><span class="sp">القديم «<b>'+e(p.from.name)+'</b>» يكرّر «<b>'+e(p.into.name)+'</b>»'+(p.recId?(' — كلاهما لـ «'+e(recLabel(p.recId))+'»'):'')+'</span>'
+            + (locked ? '' : ('<button class="go" onclick="egtphMergeRecDlg(\''+spId+'\',\''+p.from.id+'\',\''+p.into.id+'\')">🗑 احذف القديم «'+e(p.from.name)+'»</button>'
+            + '<button class="no" onclick="egtphDupDismiss(\''+spId+'\',\''+p.from.id+'\',\''+p.into.id+'\')">ليسا مكرّرين</button>'))
+            + '</div>';
+        }).join('') + '</div>';
+  };
+  window.egtphDupDismiss = function(spId, a, b){
+    try { var l = dismissed(); var k = pairKey(a,b); if (l.indexOf(k)===-1) l.push(k); localStorage.setItem(DKEY, JSON.stringify(l)); } catch(_) {}
+    T('✓ لن يظهر هذا التنبيه لهذين السجلين','success');
+    renderSupDetail(spId);
+  };
+
+  // ── نافذة الدمج ──
+  function card(sr, s, tag){
+    var ids = linkedRecIds(sr);
+    return '<div class="card"><div class="h">'+tag+' «'+e(sr.name)+'»</div><div class="r">'
+      + (ids.length ? ('🔗 يتبع: <b>'+ids.map(function(id){ return e(recLabel(id)); }).join(' · ')+'</b><br>') : '✍️ سجل يدوي — غير مربوط بسجل عميل<br>')
+      + (kindOf(sr)!=='project' ? ('السعر: <b>'+money(sr.price)+'/'+e(sr.priceUnit||'وحدة')+'</b>'+((sr.priceRules||[]).length?(' · '+sr.priceRules.length+' سعر خاص'):'')+'<br>') : '')
+      + 'فواتير تلقائية: <b>'+s.auto.length+'</b>'+(s.autoQ?(' ('+fn(s.autoQ)+' · '+money(s.autoAmt)+')'):'')+'<br>'
+      + 'فواتير يدوية: <b>'+s.man.length+'</b>'+(s.manQ?(' ('+fn(s.manQ)+' · '+money(s.manAmt)+')'):'')
+      + (s.manDates.length?(' · بتاريخ '+s.manDates.map(dt).join('، ')):'')+'<br>'
+      + 'دفعات وتسبيقات: <b>'+s.pays.length+'</b> ('+money(s.paid)+')'
+      + '</div></div>';
+  }
+  function checks(from, into){
+    var sf = stats(from), si = stats(into), out = '';
+    if (kindOf(from)!=='project' && Math.abs(num(from.price)-num(into.price)) > 0.0001 && sf.auto.length) {
+      out += '<div class="warn o">⚠️ السعران مختلفان: «'+e(from.name)+'» '+money(from.price)+' و«'+e(into.name)+'» '+money(into.price)
+        + '. بعد الحذف تُحسب الكميات التلقائية بسعر «'+e(into.name)+'». الفواتير اليدوية تبقى بأسعارها. '
+        + 'إن أردت سعراً مختلفاً لأيام معيّنة استعمل «💲 أسعار الأيام».</div>';
+    }
+    var recIds = linkedRecIds(from).concat(linkedRecIds(into)).filter(function(x,i,a){ return a.indexOf(x)===i; });
+    var man = sf.man.concat(si.man), manQ = sf.manQ + si.manQ;
+    if (man.length && recIds.length) {
+      recIds.forEach(function(rid){
+        var d = autoDays([from.id, into.id], rid), total = recQty(rid);
+        var inside = man.filter(function(v){ return v.date && d.min && v.date >= d.min && v.date <= d.max; });
+        var over = d.q + manQ > total + 0.001 && (inside.length > 0 || man.some(function(v){ return !v.date; }));
+        out += '<div class="warn '+((inside.length||over)?'o':'g')+'">'
+          + '📊 سجل العميل «'+e(recLabel(rid))+'»: الكمية كلها <b>'+fn(total)+'</b>'
+          + (d.min?(' · عند هذا المورد تلقائياً <b>'+fn(d.q)+'</b> (من '+dt(d.min)+' إلى '+dt(d.max)+')'):'')
+          + ' · فواتير يدوية <b>'+fn(manQ)+'</b>.<br>'
+          + (over ? '⚠️ المجموع ('+fn(d.q+manQ)+') أكبر من كمية سجل العميل — الفاتورة اليدوية على الأرجح <b>مكرّرة</b> مع التلقائية، لذلك اخترنا لها «تُحذف معه» أدناه.'
+            : inside.length ? '⚠️ تاريخ الفاتورة اليدوية داخل أيام الربط — على الأرجح لنفس الرحلات، لذلك اخترنا لها «تُحذف معه» أدناه.'
+            : '✓ تاريخ الفواتير اليدوية خارج أيام الربط — غالباً ليست مكرّرة.')
+          + '</div>';
+      });
+    }
+    out += '<div class="warn b">ℹ️ لا يُحذف أي يوم ولا أي كمية عند العميل.</div>';
+    return out;
+  }
+
+  window.egtphMergeRecDlg = function(spId, fromId, intoId){
+    var from = srOf(fromId); if (!from) return T('السجل غير موجود','error');
+    if (typeof isSecLocked==='function' && isSecLocked('sup:'+spId)) return T('🔒 حساب المورد مقفل — افتح القفل أولاً','error');
+    var others = srList(spId).filter(function(r){ return r.id!==fromId && kindOf(r)===kindOf(from); });
+    if (!others.length) return T('لا يوجد سجل آخر من نفس النوع عند هذا المورد','warning');
+    var pick = intoId && others.some(function(r){ return r.id===intoId; }) ? intoId : null;
+    if (!pick) {
+      var pr = egtphDupPairs(spId).find(function(p){ return p.from.id===fromId || p.into.id===fromId; });
+      if (pr) pick = (pr.from.id===fromId) ? pr.into.id : pr.from.id;
+    }
+    if (!pick) pick = others[0].id;
+    var sf0 = stats(from);
+    OM('🗑 حذف السجل القديم',
+      '<div class="eg-mg">'
+      + card(from, sf0, '🗑 يُحذف:')
+      + '<div class="fg"><label>✅ السجل الذي يبقى'+(sf0.pays.length?(' — تنتقل إليه الدفعات ('+sf0.pays.length+' · '+money(sf0.paid)+')'):'')+'</label><select id="mg-into" onchange="egtphMergeRecUpd(\''+fromId+'\')">'
+      + others.map(function(r){ return '<option value="'+e(r.id)+'"'+(r.id===pick?' selected':'')+'>'+e(r.name)+(kindOf(r)!=='project'?(' · '+money(r.price)+'/'+(r.priceUnit||'وحدة')):'')+'</option>'; }).join('')
+      + '</select></div>'
+      + '<div id="mg-info"></div>'
+      + (sf0.man.length ? ('<div class="fg" style="margin-top:9px"><label>🧾 فاتورته اليدوية ('+sf0.man.length+' · '+money(sf0.manAmt)+')</label>'
+        + '<select id="mg-man"><option value="del">🗑 تُحذف معه (مكرّرة مع الفاتورة التلقائية)</option>'
+        + '<option value="move">↪️ تبقى وتنتقل (ليست مكرّرة)</option></select></div>') : '')
+      + (sf0.pays.length ? '<div class="hint">💸 الدفعات والتسبيقات لا تُحذف أبداً — هي مال دُفع فعلاً، فتنتقل إلى السجل الباقي.</div>' : '')
+      + '</div>',
+      async function(){
+        var into = document.getElementById('mg-into').value;
+        var mm = document.getElementById('mg-man');
+        await egtphMergeRecs(spId, fromId, into, { delManual: !!(mm && mm.value==='del') });
+      }, '🗑 احذف القديم');
+    setTimeout(function(){ egtphMergeRecUpd(fromId); }, 40);
+  };
+  window.egtphMergeRecUpd = function(fromId){
+    var sel = document.getElementById('mg-into'), box = document.getElementById('mg-info');
+    if (!sel || !box) return;
+    var from = srOf(fromId), into = srOf(sel.value); if (!from || !into) return;
+    box.innerHTML = checks(from, into);
+    var mm = document.getElementById('mg-man');
+    if (mm && !mm.__touched) {
+      mm.value = dupLikely(from, into) ? 'del' : 'move';
+      mm.onchange = function(){ mm.__touched = true; };
+    }
+  };
+  // هل الفواتير اليدوية للسجل القديم مكرّرة على الأرجح مع التلقائية؟
+  function dupLikely(from, into){
+    var sf = stats(from); if (!sf.man.length) return false;
+    var recIds = linkedRecIds(from).concat(linkedRecIds(into)).filter(function(x,i,a){ return a.indexOf(x)===i; });
+    var manQ = sf.manQ + stats(into).manQ;
+    return recIds.some(function(rid){
+      var d = autoDays([from.id, into.id], rid), total = recQty(rid);
+      // التاريخ هو الدليل الأقوى: فاتورة داخل أيام الربط = مكرّرة على الأرجح
+      if (sf.man.some(function(v){ return v.date && d.min && v.date >= d.min && v.date <= d.max; })) return true;
+      // بلا تاريخ: نحكم بالكمية
+      var undated = sf.man.filter(function(v){ return !v.date; });
+      return undated.length > 0 && (d.q + manQ > total + 0.001);
+    });
+  }
+  window.egtphMergeRecSwap = function(spId, fromId){
+    var sel = document.getElementById('mg-into'); if (!sel) return;
+    var other = sel.value; CM();
+    setTimeout(function(){ egtphMergeRecDlg(spId, other, fromId); }, 120);
+  };
+
+  // ── التنفيذ ──
+  window.egtphMergeRecs = async function(spId, fromId, intoId, opts){
+    opts = opts || {};
+    var from = srOf(fromId), into = srOf(intoId);
+    if (!from || !into || fromId===intoId) return T('اختر سجلين مختلفين','error');
+    if (from.supplierId !== into.supplierId) return T('السجلان ليسا لنفس المورد','error');
+    var now = new Date().toISOString(), moved = 0, affected = [], delMan = 0;
+    function aff(id){ if (id && affected.indexOf(id)===-1) affected.push(id); }
+    linkedRecIds(from).forEach(aff); linkedRecIds(into).forEach(aff);
+
+    // ١) الروابط
+    var links = P().filter(function(p){ return p && (p.type==='truck_link' || p.type==='record_link') && p.supRecId===fromId; });
+    for (var i=0;i<links.length;i++){
+      var l = links[i];
+      // إن كان سجل العميل مربوطاً أصلاً بالسجل المُبقى بنفس النوع، احذف الربط المكرّر
+      var twin = P().find(function(p){ return p && p!==l && p.type===l.type && p.recordId===l.recordId && p.supRecId===intoId
+                                         && (l.type==='record_link' || p.truck===l.truck); });
+      if (twin) { prices = prices.filter(function(p){ return p.id!==l.id; }); await dbD('prices', l.id); }
+      else { l.supRecId = intoId; l.supplierId = into.supplierId; l._saved = now; await dbP('prices', l); }
+      moved++;
+    }
+    // ٢) الفواتير: التلقائية تُحذف وتُعاد، واليدوية تنتقل
+    var invs = (window._supInvs||[]).filter(function(v){ return belongs(v, from); });
+    for (var j=0;j<invs.length;j++){
+      var v = invs[j];
+      if (v.autoFrom) {
+        aff(v.autoFrom);
+        window._supInvs = window._supInvs.filter(function(x){ return x.id!==v.id; });
+        await dbD('sup_invoices', v.id);
+      } else if (opts.delManual) {
+        window._supInvs = window._supInvs.filter(function(x){ return x.id!==v.id; });
+        await dbD('sup_invoices', v.id); delMan++;
+      } else {
+        v.supRecId = intoId; v.account = into.name;
+        if (String(v.projectName||'').trim() === from.name) v.projectName = into.name;
+        v._saved = now; await dbP('sup_invoices', v); moved++;
+      }
+    }
+    // ٣) الدفعات والتسبيقات
+    var ps = (typeof supPays!=='undefined'?supPays:[]).filter(function(x){ return belongs(x, from); });
+    for (var k=0;k<ps.length;k++){
+      ps[k].supRecId = intoId; ps[k].account = into.name; ps[k]._saved = now;
+      await dbP('sup_pays', ps[k]); moved++;
+    }
+    // ٤) أسعار الأيام: قواعد السجل المُبقى تغلب عند نفس الفترة
+    var fr = Array.isArray(from.priceRules) ? from.priceRules : [];
+    if (fr.length) {
+      var ir = Array.isArray(into.priceRules) ? into.priceRules.slice() : [];
+      fr.forEach(function(r){
+        if (!ir.some(function(x){ return (x.from||'')===(r.from||'') && (x.to||'')===(r.to||''); })) ir.push(r);
+      });
+      into.priceRules = ir;
+    }
+    into._saved = now; await dbP('prices', into);
+    // ٥) احذف السجل المدموج
+    prices = prices.filter(function(p){ return p.id!==fromId; });
+    await dbD('prices', fromId);
+    // ٦) أعد توليد الفواتير التلقائية
+    for (var a=0;a<affected.length;a++){ try { await egtphSyncCosts(affected[a], true); } catch(_) {} }
+    try { await egtphCleanupAuto(true); } catch(_) {}
+    try { if (typeof scheduleAutoSaveFile==='function') scheduleAutoSaveFile(); } catch(_) {}
+    try { if (typeof logA==='function') await logA('حذف سجل مورد قديم «'+from.name+'» ونقل حركاته إلى «'+into.name+'»', moved+' حركة منقولة'+(delMan?(' · '+delMan+' فاتورة يدوية محذوفة'):'')); } catch(_) {}
+    CM(); T('🗑 حُذف «'+from.name+'»'+(delMan?(' مع '+delMan+' فاتورة مكرّرة'):'')+' · انتقلت دفعاته إلى «'+into.name+'»','success');
+    renderSupDetail(spId);
+    return {moved:moved, deletedManual:delMan};
+  };
+
+  // ── إيقاف الدمج الصامت القديم: كان ينقل روابط الشاحنات فقط ويترك ربط السجل
+  //    معلّقاً بسجل محذوف، فتختفي الفاتورة التلقائية. الآن لا دمج إلا بقرارك. ──
+  var baseFind = window.egtphFindDupRecords;
+  function oldPairs(spId){
+    try { return (typeof baseFind==='function') ? baseFind(spId) : []; } catch(_) { return []; }
+  }
+  var basePairs = window.egtphDupPairs;
+  window.egtphDupPairs = function(spId){
+    var out = basePairs(spId), ok = dismissed();
+    oldPairs(spId).forEach(function(p){
+      if (!p || !p.keep || !p.dup) return;
+      if (kindOf(p.keep)==='project' || kindOf(p.dup)==='project') return;
+      if (ok.indexOf(pairKey(p.keep.id,p.dup.id)) !== -1) return;
+      if (out.some(function(x){ return pairKey(x.from.id,x.into.id)===pairKey(p.keep.id,p.dup.id); })) return;
+      out.push({ from:p.dup, into:p.keep, recId:null, byName:true });
+    });
+    return out;
+  };
+  window.egtphFindDupRecords = function(){ return []; };
+  window.egtphMergeDupRecords = async function(spId, silent){
+    return {merged:0, moved:0};
+  };
+
+  // ── إصلاح ما تركه الدمج الصامت: سجل عميل مربوط بسجل مورد لم يعد موجوداً ──
+  function dangling(spId){
+    return P().filter(function(p){
+      return p && p.type==='record_link' && (!spId || p.supplierId===spId) && p.supRecId && !srOf(p.supRecId) && recOf(p.recordId);
+    }).map(function(rl){
+      var cands = srList(rl.supplierId).filter(function(r){
+        return kindOf(r)!=='project' && (r.linkedRecordId===rl.recordId || linkedRecIds(r).indexOf(rl.recordId)!==-1 || nameGuess(r)===rl.recordId);
+      });
+      return { rl:rl, cands:cands };
+    });
+  }
+  window.egtphDanglingLinks = dangling;
+  window.egtphRelink = async function(spId, rlId, srId){
+    var rl = P().find(function(p){ return p && p.id===rlId; }), sr = srOf(srId);
+    if (!rl || !sr) return T('تعذّر إعادة الربط','error');
+    rl.supRecId = srId; rl.supplierId = sr.supplierId; rl._saved = new Date().toISOString();
+    if (!(await dbP('prices', rl))) return T('فشل الحفظ','error');
+    try { await egtphSyncCosts(rl.recordId, true); } catch(_) {}
+    try { if (typeof scheduleAutoSaveFile==='function') scheduleAutoSaveFile(); } catch(_) {}
+    T('🔗 أُعيد ربط «'+recLabel(rl.recordId)+'» بـ «'+sr.name+'» وعادت فاتورته التلقائية','success');
+    renderSupDetail(spId);
+  };
+  var baseBanner = window.egtphDupBanner;
+  window.egtphDupBanner = function(spId){
+    var locked = false;
+    try { locked = (typeof isSecLocked==='function') && isSecLocked('sup:'+spId); } catch(_) {}
+    var dl = dangling(spId), html = '';
+    if (dl.length) {
+      html = '<div id="eg-dupbar" class="dl"><div class="t">⚠️ ربط مفقود — فواتير تلقائية لا تُحسب</div>'
+        + dl.map(function(d){
+            return '<div class="p"><span class="sp">سجل العميل «<b>'+e(recLabel(d.rl.recordId))+'</b>» مربوط بسجل مورد حُذف (من دمج قديم)، لذلك لا تُولَّد فاتورته.</span>'
+              + (locked ? '' : (d.cands.length
+                  ? d.cands.map(function(c){ return '<button class="go" onclick="egtphRelink(\''+spId+'\',\''+d.rl.id+'\',\''+c.id+'\')">🔗 أعد ربطه بـ «'+e(c.name)+'»</button>'; }).join('')
+                  : '<span style="font-size:11px;color:var(--tx3)">أعد ربطه من ملف العميل: زر «🔗 ربط الآن».</span>'))
+              + '</div>';
+          }).join('') + '</div>';
+    }
+    return html;   // أُلغي تنبيه «السجل القديم المكرّر» بطلب المستخدم
+  };
+  var baseDel = window.egtphDeleteSupRec;
+  if (typeof baseDel === 'function') {
+    // أُلغي: زر 🗑 حذف يعمل كما كان (بلا نافذة «حذف القديم»)
+  }
+  var baseHC = window.egtphHealthCheck;
+  if (typeof baseHC === 'function') {
+    window.egtphHealthCheck = function(){
+      var R = baseHC.apply(this, arguments);
+      var dl = dangling(null);
+      R.push({ level: dl.length?'warn':'ok', title:'سجلات عملاء مربوطة بسجل مورد محذوف',
+               items: dl.map(function(d){ return recLabel(d.rl.recordId); }), fix:null });
+      return R;
+    };
+  }
+
+  // ── تصحيح ذاتي: عند فتح ملف مورد تُعاد مطابقة فواتيره التلقائية مع الأسعار الحالية
+  //    (فاتورة قديمة بقيت بسعر سابق تُصحَّح دون أن تفعل شيئاً) ──
+  var healAt = {};
+  var baseRSD = window.renderSupDetail;
+  if (typeof baseRSD === 'function') {
+    window.renderSupDetail = function(spId){
+      var out = baseRSD.apply(this, arguments);
+      if (spId && !(healAt[spId] && Date.now() - healAt[spId] < 5000)) {
+        healAt[spId] = Date.now();
+        setTimeout(async function(){
+          try {
+            var ids = srList(spId).map(function(r){ return r.id; }), changed = 0, done = {};
+            var recs = (typeof records!=='undefined'?records:[]);
+            for (var i=0;i<recs.length;i++){
+              var links = (typeof egtphTruckLinks==='function') ? egtphTruckLinks(recs[i].id) : [];
+              if (!links.some(function(l){ return ids.indexOf(l.supRecId)!==-1; }) || done[recs[i].id]) continue;
+              done[recs[i].id] = 1;
+              var before = JSON.stringify((window._supInvs||[]).filter(function(v){ return v.autoFrom===recs[i].id; }).map(function(v){ return [v.id,v.total]; }));
+              await egtphSyncCosts(recs[i].id, false);
+              var after = JSON.stringify((window._supInvs||[]).filter(function(v){ return v.autoFrom===recs[i].id; }).map(function(v){ return [v.id,v.total]; }));
+              if (before !== after) changed++;
+            }
+            if (changed) {
+              T('🔄 صُحّحت '+changed+' فاتورة تلقائية لتطابق الأسعار الحالية','success');
+              if (typeof scheduleAutoSaveFile==='function') scheduleAutoSaveFile();
+              var cur = document.querySelector('#eg-subacc');
+              if (cur) window.renderSupDetail(spId);   // يمرّ بثبات الموضع
+            }
+          } catch(_) {}
+        }, 400);
+      }
+      return out;
+    };
+  }
+})();
+</script>
+
+<script id="egtph-inputsafe-js">
+/* EGTPH — حماية الأرقام المُدخلة:
+   ١) الرقم المكتوب في خانة يُحفظ قبل أي إعادة رسم أو زر (على iPhone لمس زر لا يُخرج من الخانة).
+   ٢) لا إعادة رسم للصفحة أثناء الكتابة.
+   ٣) كل خانة شاحنة تحمل وقت تعديلها، فالدمج بين الأجهزة يتم خانةً بخانة لا يوماً كاملاً.
+   ٤) نسختان مفتوحتان على نفس الجهاز لا تكتب إحداهما أرقاماً قديمة فوق الأخرى. */
+(function(){
+  'use strict';
+  if (window.__egtphInputSafe) return;
+  window.__egtphInputSafe = true;
+
+  // ───────── ١) حفظ الخانة المفتوحة قبل أي إجراء ─────────
+  function savable(el){
+    if (!el || !el.tagName) return false;
+    var t = el.tagName;
+    if (t !== 'INPUT' && t !== 'TEXTAREA' && t !== 'SELECT') return false;
+    if (!el.getAttribute || !el.getAttribute('onchange')) return false;
+    if (el.closest && el.closest('#mov')) return false;       // خانات النوافذ تُحفظ بزرّها
+    return el.isConnected !== false;
+  }
+  function baseOf(el){ return (el.__egCommitted !== undefined) ? el.__egCommitted : el.defaultValue; }
+  document.addEventListener('focusin', function(e){
+    var el = e.target; if (savable(el)) el.__egCommitted = el.value;
+  }, true);
+  // تغيير حقيقي من المتصفح بعد حفظنا المسبق لنفس القيمة: لا داعي لحفظ مكرّر
+  document.addEventListener('change', function(e){
+    var el = e.target;
+    if (e.isTrusted && el && el.__egSynth !== undefined && el.value === el.__egSynth) {
+      el.__egSynth = undefined; e.stopImmediatePropagation();
+    }
+  }, true);
+  document.addEventListener('change', function(e){
+    var el = e.target; if (el && el.tagName) el.__egCommitted = el.value;
+  }, false);
+
+  function commit(){
+    var el = document.activeElement;
+    if (!savable(el)) return false;
+    if (String(el.value) === String(baseOf(el))) return false;
+    el.__egCommitted = el.value;
+    try { el.dispatchEvent(new Event('change', {bubbles:true})); } catch(_) {}
+    el.__egSynth = el.value;
+    return true;
+  }
+  window.egtphCommitActive = commit;
+
+  // لمس أي زر/مكان خارج الخانة ← احفظها أولاً (عدا شريط الأدوات فوق لوحة المفاتيح)
+  function onPointer(e){
+    var el = document.activeElement, t = e.target;
+    if (!savable(el) || !t || el === t || (el.contains && el.contains(t))) return;
+    if (t.closest && (t.closest('#egtph-opbar') || t.closest('[data-keepfocus]'))) return;
+    if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return; // الانتقال لخانة أخرى يحفظ طبيعياً
+    commit();
+  }
+  document.addEventListener('pointerdown', onPointer, true);
+  document.addEventListener('touchstart', onPointer, {capture:true, passive:true});
+  document.addEventListener('mousedown', onPointer, true);
+  // الخروج من التطبيق أو إغلاقه
+  document.addEventListener('visibilitychange', function(){ if (document.hidden) commit(); });
+  window.addEventListener('pagehide', commit);
+  window.addEventListener('beforeunload', commit);
+
+  // أي إعادة رسم أو تنقّل يسبقه حفظ الخانة المفتوحة
+  ['renderCD','renderSupDetail','nav','openCD','lockDay','unlockDay','editTruckDay','editMachDay',
+   'egtphDayPrice','changeDayDate','delTruckDay','delDay','renderTripStats'].forEach(function(name){
+    var base = window[name];
+    if (typeof base !== 'function' || base.__egCommit) return;
+    var w = function(){ try { commit(); } catch(_) {} return base.apply(this, arguments); };
+    w.__egCommit = true;
+    window[name] = w;
+  });
+
+  // ───────── ٢) إعادة الرسم فقط حين لا تكتب ─────────
+  function busy(){
+    var el = document.activeElement;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) return true;
+    var m = document.getElementById('mov');
+    return !!(m && m.classList.contains('show'));
+  }
+  var wantRedraw = false;
+  function redraw(){
+    try {
+      if (typeof V !== 'undefined' && V === 'clients' && typeof openCid !== 'undefined' && openCid) renderCD(openCid);
+      else if (typeof safeRerender === 'function') safeRerender();
+    } catch(_) {}
+  }
+  window.egtphRedrawWhenIdle = function(){
+    if (busy()) { wantRedraw = true; return; }
+    wantRedraw = false; redraw();
+  };
+  document.addEventListener('focusout', function(){
+    setTimeout(function(){ if (wantRedraw && !busy()) { wantRedraw = false; redraw(); } }, 300);
+  });
+
+  // ───────── ٣) وقت تعديل لكل خانة شاحنة ─────────
+  var snap = new Map();          // id → آخر خانات معروفة (JSON)
+  var snapReady = false;
+  function initSnap(){
+    try {
+      if (typeof entries === 'undefined' || !Array.isArray(entries)) return;
+      entries.forEach(function(e){ if (e && e.id && e.type === 'truck' && !snap.has(e.id)) snap.set(e.id, JSON.stringify(e.cols||{})); });
+      snapReady = true;
+    } catch(_) {}
+  }
+  setTimeout(initSnap, 1200); setTimeout(initSnap, 4000);
+
+  function sysWriting(){ try { return (typeof _sysWrite !== 'undefined') && _sysWrite > 0; } catch(_) { return false; } }
+  function stampCells(obj){
+    var cur = obj.cols || {};
+    var curJ = JSON.stringify(cur);
+    if (!sysWriting()) {
+      var prevJ = snap.get(obj.id), prev = null;
+      try { prev = prevJ ? JSON.parse(prevJ) : null; } catch(_) { prev = null; }
+      if (!prev || prevJ !== curJ) {
+        var now = Date.now(), T0 = obj.colsT && typeof obj.colsT === 'object' ? obj.colsT : {};
+        var keys = Object.keys(cur); if (prev) Object.keys(prev).forEach(function(k){ if (keys.indexOf(k)===-1) keys.push(k); });
+        keys.forEach(function(k){
+          var a = prev ? prev[k] : undefined, b = cur[k];
+          if (!prev || String(a) !== String(b)) T0[k] = now;
+        });
+        obj.colsT = T0;
+      }
+    }
+    snap.set(obj.id, curJ);
+  }
+
+  // دمج خانةً بخانة: لكل شاحنة يغلب الأحدث تعديلاً؛ الخانات القديمة بلا وقت تتبع النسخة الأحدث
+  window.egtphCellMerge = function(ex, inc, incNewer){
+    if (!ex || !inc) return false;
+    // خانة 0 = خانة فارغة: حذف الأصفار وحده لا يُعدّ تعديلاً (وإلا أُعيدت الكتابة في كل مزامنة)
+    var nz = function(o){ var r = {}; Object.keys(o||{}).forEach(function(k){ var v = o[k]; if (v != null && v !== '' && +v !== 0) r[k] = v; }); return r; };
+    var before = JSON.stringify(Object.assign({}, ex, { cols: nz(ex.cols) }));
+    var A = ex.cols || {}, At = ex.colsT || {}, B = inc.cols || {}, Bt = inc.colsT || {};
+    var keys = {};
+    [A, At, B, Bt].forEach(function(o){ Object.keys(o||{}).forEach(function(k){ keys[k] = 1; }); });
+    var cols = {}, colsT = {};
+    Object.keys(keys).forEach(function(k){
+      var ta = +At[k] || 0, tb = +Bt[k] || 0;
+      var useB = (ta || tb) ? (tb > ta) : !!incNewer;
+      var src = useB ? B : A, ts = useB ? tb : ta;
+      if (src[k] != null && src[k] !== '' && +src[k] !== 0) cols[k] = src[k];
+      if (ts) colsT[k] = ts;
+    });
+    if (incNewer) Object.assign(ex, inc);
+    ex.cols = cols; ex.colsT = colsT;
+    if (ex.id && ex.type === 'truck') snap.set(ex.id, JSON.stringify(cols));
+    return JSON.stringify(ex) !== before;
+  };
+
+  // ───────── ٤) نسختان مفتوحتان على نفس الجهاز ─────────
+  var TAB = Math.random().toString(36).slice(2);
+  var bc = null;
+  try { if ('BroadcastChannel' in window) bc = new BroadcastChannel('egtph_v13_live'); } catch(_) { bc = null; }
+  var SYNCED = { entries:1, records:1, clients:1, payments:1, advances:1, prices:1, suppliers:1,
+                 sup_pays:1, sup_invoices:1, locked_days:1, materials:1, stock_items:1, stock_moves:1 };
+  function arrOf(s){
+    try {
+      switch (s) {
+        case 'entries': return entries;       case 'records': return records;
+        case 'clients': return clients;       case 'payments': return payments;
+        case 'advances': return advances;     case 'prices': return prices;
+        case 'suppliers': return suppliers;   case 'sup_pays': return supPays;
+        case 'sup_invoices': return window._supInvs; case 'locked_days': return lockedDays;
+        case 'materials': return materials;   case 'stock_items': return stockItems;
+        case 'stock_moves': return stockMoves;
+      }
+    } catch(_) {}
+    return null;
+  }
+  var applying = false, dirty = false;
+  function mark(){ try { localStorage.setItem('egtph_lastwrite', Date.now()+'|'+TAB); } catch(_) {} }
+  function isOurDB(store){ try { return store && store.transaction && store.transaction.db && store.transaction.db.name === 'egtph_v13'; } catch(_) { return false; } }
+
+  var P0 = IDBObjectStore.prototype.put, D0 = IDBObjectStore.prototype.delete;
+  IDBObjectStore.prototype.put = function(obj){
+    var ours = isOurDB(this), s = this.name;
+    if (ours && s === 'entries' && obj && obj.id && obj.type === 'truck') { try { stampCells(obj); } catch(_) {} }
+    var req = P0.apply(this, arguments);
+    if (ours && !applying && SYNCED[s] && obj && obj.id) {
+      mark();
+      if (bc) { try { bc.postMessage({tab:TAB, s:s, o:obj}); } catch(_) {} }
+    }
+    return req;
+  };
+  IDBObjectStore.prototype.delete = function(key){
+    var ours = isOurDB(this), s = this.name;
+    var req = D0.apply(this, arguments);
+    if (ours && !applying && SYNCED[s] && key != null && typeof key !== 'object') {
+      mark();
+      if (bc) { try { bc.postMessage({tab:TAB, s:s, id:key, del:true}); } catch(_) {} }
+    }
+    return req;
+  };
+  if (bc) bc.onmessage = function(ev){
+    var d = ev && ev.data; if (!d || d.tab === TAB || !d.s) return;
+    var arr = arrOf(d.s); if (!Array.isArray(arr)) return;
+    applying = true;
+    try {
+      if (d.del) {
+        var i = arr.findIndex(function(x){ return x && x.id === d.id; });
+        if (i >= 0) arr.splice(i, 1);
+      } else if (d.o && d.o.id) {
+        var ex = arr.find(function(x){ return x && x.id === d.o.id; });
+        if (ex) { Object.keys(ex).forEach(function(k){ if (!(k in d.o)) delete ex[k]; }); Object.assign(ex, d.o); }
+        else arr.push(d.o);
+        if (d.s === 'entries' && d.o.type === 'truck') snap.set(d.o.id, JSON.stringify(d.o.cols||{}));
+      }
+    } finally { applying = false; }
+    dirty = true;
+    if (!document.hidden) window.egtphRedrawWhenIdle();
+  };
+  // عودة إلى نسخة كانت في الخلفية: إن كتبت نسخة أخرى بعدها، نقرأ من الذاكرة الدائمة قبل أي إدخال
+  var seenWrite = Date.now();
+  async function reloadIfStale(){
+    var lw = ''; try { lw = localStorage.getItem('egtph_lastwrite') || ''; } catch(_) {}
+    var parts = lw.split('|'), t = +parts[0] || 0, who = parts[1] || '';
+    if (!t || who === TAB || t <= seenWrite) { if (dirty) { dirty = false; window.egtphRedrawWhenIdle(); } return; }
+    seenWrite = t;
+    if (typeof dbA !== 'function') return;
+    applying = true;
+    try {
+      var stores = Object.keys(SYNCED);
+      for (var i=0;i<stores.length;i++){
+        var arr = arrOf(stores[i]); if (!Array.isArray(arr)) continue;
+        var list = await dbA(stores[i]);
+        if (!Array.isArray(list)) continue;
+        arr.length = 0; Array.prototype.push.apply(arr, list);
+      }
+      snap = new Map(); initSnap();
+      try { egtphIdxBump(); } catch(_) {}
+    } catch(_) {} finally { applying = false; }
+    dirty = false;
+    window.egtphRedrawWhenIdle();
+  }
+  window.egtphReloadIfStale = reloadIfStale;
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) reloadIfStale(); });
+  window.addEventListener('focus', function(){ reloadIfStale(); });
+  window.addEventListener('pageshow', function(){ reloadIfStale(); });
+  // ───────── ٥) فاتورة المورد تتبع الأرقام دائماً، مهما كان مصدر التغيير ─────────
+  //  (خانة، نافذة تعديل اليوم، يوم جديد/محذوف، نافذة أخرى، جهاز آخر عبر السحابة، ملف مستورد)
+  var recOfEntry = new Map(), pendRec = {}, syncTimer = null;
+  function invSig(recId){
+    try { return JSON.stringify((window._supInvs||[]).filter(function(v){ return v.autoFrom===recId; })
+      .map(function(v){ return [v.id, v.total]; }).sort()); } catch(_) { return ''; }
+  }
+  function schedRec(recId){
+    if (!recId) return;
+    pendRec[recId] = 1;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(runSync, 900);
+  }
+  async function runSync(){
+    var ids = Object.keys(pendRec); pendRec = {};
+    if (typeof egtphTruckLinks !== 'function' || typeof egtphSyncCosts !== 'function') return;
+    var changed = false;
+    for (var i=0;i<ids.length;i++){
+      try {
+        if (!egtphTruckLinks(ids[i]).length && !(window._supInvs||[]).some(function(v){ return v.autoFrom===ids[i]; })) continue;
+        var before = invSig(ids[i]);
+        await egtphSyncCosts(ids[i]);
+        if (invSig(ids[i]) !== before) changed = true;
+      } catch(_) {}
+    }
+    if (changed && document.getElementById('eg-cost')) window.egtphRedrawWhenIdle();
+  }
+  window.egtphScheduleCostSync = schedRec;
+  function noteEntry(obj){
+    if (!obj || !obj.id) return;
+    if (obj.recordId) recOfEntry.set(obj.id, obj.recordId);
+    if (!applying && obj.type === 'truck') schedRec(obj.recordId);
+  }
+  var P1 = IDBObjectStore.prototype.put, D1 = IDBObjectStore.prototype.delete;
+  IDBObjectStore.prototype.put = function(obj){
+    var req = P1.apply(this, arguments);
+    try { if (this.name === 'entries' && isOurDB(this)) noteEntry(obj); } catch(_) {}
+    return req;
+  };
+  IDBObjectStore.prototype.delete = function(key){
+    var rid = null;
+    try {
+      if (this.name === 'entries' && isOurDB(this) && key != null) {
+        rid = recOfEntry.get(key);
+        if (!rid && typeof entries !== 'undefined') { var e0 = entries.find(function(x){ return x && x.id === key; }); rid = e0 && e0.recordId; }
+      }
+    } catch(_) {}
+    var req = D1.apply(this, arguments);
+    if (rid && !applying) schedRec(rid);
+    return req;
+  };
+  // عند الإقلاع: صحّح أي فاتورة تلقائية بقيت بأرقام قديمة
+  function bootResync(){
+    try {
+      if (typeof entries === 'undefined' || typeof records === 'undefined') return;
+      entries.forEach(function(e){ if (e && e.id && e.recordId) recOfEntry.set(e.id, e.recordId); });
+      records.forEach(function(r){ if (r && r.id && (r.type === 'trucks' || !r.type)) schedRec(r.id); });
+    } catch(_) {}
+  }
+  setTimeout(bootResync, 7000);
+})();
+</script>
+
+<script id="egtph-cellfit-js">
+/* EGTPH — خانة الشاحنة تتّسع حسب طول الرقم (أثناء الكتابة وبعد الحفظ) */
+(function(){
+  'use strict';
+  if (window.__egtphCellFit) return;
+  window.__egtphCellFit = true;
+
+  function isCell(el){
+    if (!el || !el.classList || !el.classList.contains('ti') || el.tagName !== 'INPUT') return false;
+    var oc = el.getAttribute('onchange') || '';
+    return /updateTruck\(|updateMachE\(/.test(oc) || /^(etd_|emd)/.test(el.id || '');
+  }
+  function fit(el){
+    if (!isCell(el)) return;
+    var n = Math.max(String(el.value == null ? '' : el.value).length, 2);
+    var base = (el.closest && el.closest('#u2-trips')) ? 74 : ((document.body && document.body.getAttribute('data-gz') === 'lg') ? 66 : 46);
+    var w = 'max(' + base + 'px, calc(' + (n + 1.4) + 'ch + 18px))';
+    if (el.__egFit !== w) { el.style.minWidth = w; el.__egFit = w; }
+  }
+  function fitAll(root){
+    var scope = (root && root.querySelectorAll) ? root : document;
+    var list = scope.querySelectorAll('input.ti');
+    for (var i = 0; i < list.length; i++) fit(list[i]);
+  }
+  window.egtphFitCells = fitAll;
+
+  document.addEventListener('input',   function(e){ fit(e.target); }, true);
+  document.addEventListener('focusin', function(e){ fit(e.target); }, true);
+  document.addEventListener('change',  function(e){ fit(e.target); }, false);   // بعد تحويل 14+10 إلى 24
+  document.addEventListener('blur',    function(e){ setTimeout(function(){ fit(e.target); }, 0); }, true);
+
+  var t = null;
+  var mo = new MutationObserver(function(){
+    if (t) return;
+    t = setTimeout(function(){ t = null; fitAll(); }, 50);
+  });
+  function start(){ fitAll(); try { mo.observe(document.body, {childList:true, subtree:true}); } catch(_) {} }
+  if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+  // تغيير حجم الجدول (＋A / −A) يغيّر الحدّ الأدنى
+  try { new MutationObserver(function(){ fitAll(); }).observe(document.body, {attributes:true, attributeFilter:['data-gz']}); } catch(_) {}
+})();
+</script>
+<style id="egtph-ui2-css">
+/* ══ EGTPH v2 — التصميم الجديد (الاقتراح ٤): شريط سفلي + شاشات مبسّطة ══ */
+#eg-bnav{display:none}
+@media (max-width:720px){
+  #eg-bnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:450;
+    background:rgba(10,17,32,.97);border-top:1px solid var(--bdr2,rgba(255,255,255,.14));
+    padding:7px 4px calc(8px + env(safe-area-inset-bottom));backdrop-filter:blur(10px)}
+  #eg-bnav button{flex:1;background:none;border:0;color:var(--tx3);font-family:inherit;font-size:10.5px;font-weight:800;
+    display:flex;flex-direction:column;align-items:center;gap:3px;padding:3px 0;cursor:pointer;position:relative}
+  #eg-bnav button i{font-style:normal;font-size:21px;line-height:1;filter:grayscale(1);opacity:.7}
+  #eg-bnav button.on{color:var(--gold2)}
+  #eg-bnav button.on i{filter:none;opacity:1}
+  #eg-bnav button em{position:absolute;top:0;left:calc(50% - 22px);font-style:normal;font-size:9.5px;font-weight:900;
+    background:var(--red);color:#fff;border-radius:999px;padding:0 5px;line-height:15px}
+  body.eg-typing #eg-bnav{display:none}
+  .content{padding-bottom:96px!important;scroll-padding-bottom:96px}
+  body.eg-typing .content{padding-bottom:24px!important}
+  /* القائمة الجانبية عُوِّضت بالشريط السفلي و«المزيد» */
+  .tb-menu{display:none!important}
+  #theme-btn,#lang-btn{display:none!important}
+  .topbar #save-indicator{display:none!important}
+  .topbar button[onclick="saveToFile()"],.topbar button[onclick="exportToExcel()"]{display:none!important}
+}
+body.light-mode #eg-bnav{background:rgba(255,255,255,.97)}
+
+/* مكوّنات مشتركة */
+.u2{max-width:720px;margin:0 auto}
+.u2-hd{display:flex;align-items:center;gap:10px;padding:2px 2px 8px}
+.u2-hd .t{flex:1;min-width:0}.u2-hd .t b{font-size:19px;font-weight:900;display:block;line-height:1.35}
+.u2-hd .t small{font-size:12px;color:var(--tx3)}
+.u2-hd .t small b{display:inline;font-size:13.5px;line-height:1.5}
+.u2-ib{width:40px;height:40px;border-radius:12px;background:var(--bg2);border:1px solid var(--bdr);display:grid;place-items:center;
+  font-size:17px;color:var(--tx2);flex:none;cursor:pointer;font-family:inherit}
+.u2-ib.g{background:var(--gold);border-color:var(--gold);color:#111;font-weight:900}
+.u2-logo{width:42px;height:42px;border-radius:13px;border:1.5px solid var(--gold);display:grid;place-items:center;color:var(--gold2);font-weight:900;font-size:13px;flex:none}
+.u2-big{padding:14px;border-radius:16px;background:linear-gradient(135deg,rgba(40,62,110,.55),var(--bg2));border:1px solid rgba(212,168,67,.35);margin-bottom:9px}
+.u2-big small{font-size:12px;color:var(--tx2)}
+.u2-big .v{display:block;font-size:27px;font-weight:900;color:var(--gold2);margin:4px 0 8px;font-family:'Inter',sans-serif}
+.u2-big .s{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--tx2)}
+.u2-big .s b{font-size:13px;font-family:'Inter',sans-serif}
+.u2-k2{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:9px}
+.u2-k{background:var(--bg2);border:1px solid var(--bdr);border-radius:15px;padding:11px 12px;cursor:pointer}
+.u2-k small{font-size:12px;color:var(--tx2);display:block}.u2-k b{font-size:21px;font-weight:900;display:block;margin-top:4px;font-family:'Inter',sans-serif}
+.u2-qa{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:4px 0 4px}
+.u2-qa button{background:var(--bg2);border:1px solid var(--bdr);border-radius:14px;text-align:center;padding:11px 0 9px;font-size:11.5px;
+  font-weight:800;color:var(--tx2);font-family:inherit;cursor:pointer}
+.u2-qa button i{display:block;font-style:normal;font-size:22px;margin-bottom:5px}
+.u2-qa button.m{background:rgba(212,168,67,.14);border-color:rgba(212,168,67,.5);color:var(--gold2)}
+.u2-h2{display:flex;justify-content:space-between;align-items:center;padding:14px 4px 7px}
+.u2-h2 b{font-size:15px}.u2-h2 span{font-size:12px;color:var(--tx3)}
+.u2-h2 button{background:none;border:0;color:var(--gold2);font-family:inherit;font-weight:800;font-size:12.5px;cursor:pointer}
+.u2-row{display:flex;align-items:center;gap:11px;margin-bottom:8px;padding:11px 12px;background:var(--bg2);border:1px solid var(--bdr);
+  border-radius:14px;cursor:pointer;width:100%;text-align:right;font-family:inherit;color:var(--tx)}
+.u2-av{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;font-weight:900;font-size:15px;flex:none;background:var(--bg3);color:var(--gold2)}
+.u2-av.g{background:linear-gradient(135deg,var(--gold),#a47a22);color:#111}
+.u2-dot{width:9px;height:9px;border-radius:50%;background:var(--gold);flex:none}
+.u2-row .m{flex:1;min-width:0}.u2-row .m b{font-size:15px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.u2-row .m small{font-size:11.5px;color:var(--tx3)}
+.u2-row .a{text-align:left;flex:none}.u2-row .a b{font-size:15px;display:block;font-family:'Inter',sans-serif}.u2-row .a small{font-size:10.5px;color:var(--tx3)}
+.u2-pb{height:5px;border-radius:9px;background:rgba(255,255,255,.07);margin-top:6px;overflow:hidden}
+.u2-pb i{display:block;height:100%;border-radius:9px;background:var(--green)}
+.u2-n{direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums}
+.u2-empty{padding:16px;text-align:center;color:var(--tx3);font-size:12.5px;background:var(--bg2);border:1px dashed var(--bdr2);border-radius:14px}
+.u2-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.u2-tile{background:var(--bg2);border:1px solid var(--bdr);border-radius:15px;padding:14px 6px 11px;text-align:center;position:relative;
+  cursor:pointer;font-family:inherit;color:var(--tx)}
+.u2-tile i{display:block;font-style:normal;font-size:26px;margin-bottom:6px}.u2-tile b{font-size:12.5px}
+.u2-tile em{position:absolute;top:7px;left:8px;font-style:normal;font-size:10px;font-weight:900;background:var(--red);color:#fff;border-radius:999px;padding:1px 6px}
+.u2-list{background:var(--bg2);border:1px solid var(--bdr);border-radius:15px;overflow:hidden}
+.u2-li{display:flex;align-items:center;gap:11px;padding:13px;border:0;border-top:1px solid var(--bdr);font-size:14px;width:100%;
+  background:none;color:var(--tx);font-family:inherit;text-align:right;cursor:pointer}
+.u2-li:first-child{border-top:0}.u2-li i{font-style:normal;font-size:19px;width:26px;text-align:center}
+.u2-li span{flex:1;font-weight:700}.u2-li small{color:var(--tx3);font-size:12px}
+.u2-foot{text-align:center;font-size:11px;color:var(--tx3);padding:14px 0 4px}
+</style>
+<script id="egtph-ui2-js">
+/* EGTPH v2 — التصميم الجديد. طبقة عرض فقط: كل زر يستدعي نفس دوال البرنامج، ولا تُغيَّر أي عملية حساب. */
+(function(){
+  'use strict';
+  if (window.__egtphUI2) return;
+  window.__egtphUI2 = true;
+
+  function e(s){ return (typeof esc==='function') ? esc(String(s==null?'':s)) : String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function num(v){ return parseFloat(v)||0; }
+  function money(v){ return (typeof fDA==='function') ? fDA(num(v)) : String(v); }
+  function qn(v){ return (typeof fN==='function') ? fN(num(v)) : String(v); }
+  function N(s){ return '<span class="u2-n">'+s+'</span>'; }
+  function q(s){ return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r?\n/g,'\\n').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+  function todayISO(){ try { return today(); } catch(_) { return new Date().toISOString().slice(0,10); } }
+  var WD = ['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  var MO = ['جانفي','فيفري','مارس','أفريل','ماي','جوان','جويلية','أوت','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  function dateLong(iso){ var d = new Date(iso+'T12:00:00'); if (isNaN(d)) return iso||''; return WD[d.getDay()]+' '+d.getDate()+' '+MO[d.getMonth()]+' '+d.getFullYear(); }
+  function initials(name){ var p = String(name||'').trim().split(/\s+/).filter(Boolean).map(function(w){ return w.replace(/^ال(?=..)/,''); }); return ((p[0]||'').slice(0,1)+(p[1]||'').slice(0,1)) || '؟'; }
+  window.EGU2 = { e:e, num:num, money:money, qn:qn, N:N, q:q, todayISO:todayISO, dateLong:dateLong, initials:initials, WD:WD, MO:MO };
+
+  // ───── الشريط السفلي ─────
+  var TABS = [['dash','🏠','الرئيسية'],['clients','👥','العملاء'],['suppliers','🏭','الموردون'],['tripstats','📊','الإحصائيات'],['more','☰','المزيد']];
+  var MORE_VIEWS = ['more','collections','advances','stock','diff','print','ai','settings','trash'];
+  function tabOf(v){ return MORE_VIEWS.indexOf(v) !== -1 ? 'more' : v; }
+  function ensureBnav(){
+    var b = document.getElementById('eg-bnav');
+    if (b) return b;
+    b = document.createElement('nav'); b.id = 'eg-bnav';
+    b.innerHTML = TABS.map(function(t){ return '<button type="button" data-v="'+t[0]+'"><i>'+t[1]+'</i>'+t[2]+'</button>'; }).join('');
+    b.addEventListener('click', function(ev){
+      var btn = ev.target.closest && ev.target.closest('button[data-v]'); if (!btn) return;
+      var v = btn.getAttribute('data-v');
+      try { if (v === 'clients') { openCid = null; } if (v === 'suppliers') { openSpId = null; } } catch(_) {}
+      nav(v);
+      var c = document.getElementById('content'); if (c && v !== 'clients' && v !== 'suppliers') c.scrollTop = 0;
+    });
+    document.body.appendChild(b);
+    return b;
+  }
+  function markBnav(v){
+    var b = ensureBnav(), t = tabOf(v);
+    Array.prototype.forEach.call(b.querySelectorAll('button'), function(x){ x.classList.toggle('on', x.getAttribute('data-v') === t); });
+    var more = b.querySelector('button[data-v="more"]');
+    if (more) {
+      var n = 0; try { n = (typeof egtphDiffCount==='function') ? egtphDiffCount() : 0; } catch(_) {}
+      var old = more.querySelector('em'); if (old) old.remove();
+      if (n > 0) more.insertAdjacentHTML('beforeend','<em>'+n+'</em>');
+    }
+  }
+  window.egtphMarkBnav = markBnav;
+  // أثناء الكتابة يختفي الشريط حتى لا يغطّي لوحة المفاتيح
+  document.addEventListener('focusin', function(ev){
+    var t = ev.target && ev.target.tagName;
+    if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') document.body.classList.add('eg-typing');
+  });
+  document.addEventListener('focusout', function(){
+    setTimeout(function(){
+      var a = document.activeElement, t = a && a.tagName;
+      if (!(t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT')) document.body.classList.remove('eg-typing');
+    }, 120);
+  });
+
+  window.egtphDiffCount = function(){
+    try { return (typeof egtphDiffData==='function') ? egtphDiffData().filter(function(g){ return Math.abs(num(g.diff)) > 0.001; }).length : 0; }
+    catch(_) { return 0; }
+  };
+  function setTitle(t, s){
+    var a = document.getElementById('tb-ttl'), b = document.getElementById('tb-sub');
+    if (a) a.textContent = t; if (b) b.textContent = s || '';
+  }
+  window.EGU2.setTitle = setTitle;
+
+  // ───── التنقّل: «المزيد» شاشة جديدة، والباقي كما هو ─────
+  var baseNav = window.nav;
+  var navW = function(v, p){
+    if (v === 'more') {
+      try { if (typeof egtphCommitActive==='function') egtphCommitActive(); } catch(_) {}
+      V = 'more';
+      document.querySelectorAll('.si').forEach(function(b){ b.classList.remove('on'); });
+      var act = document.getElementById('tb-act'); if (act) act.innerHTML = '';
+      try { closeSB(); } catch(_) {}
+      renderMore();
+      markBnav('more');
+      return;
+    }
+    var r = baseNav.apply(this, arguments);
+    markBnav(v);
+    return r;
+  };
+  window.nav = navW;
+
+  // ───── الرئيسية ─────
+  function openDays(){
+    var out = [], seen = {};
+    (typeof entries!=='undefined'?entries:[]).forEach(function(en){
+      if (!en || !en.date || (en.type!=='truck' && en.type!=='machine')) return;
+      var k = en.recordId+'|'+en.date+'|'+en.type;
+      if (seen[k]) { seen[k].q += qtyOf(en); seen[k].n += nTrucks(en); return; }
+      var locked = false; try { locked = isDayLocked(en.recordId, en.date, en.type); } catch(_) {}
+      if (locked) return;
+      var rec = (typeof records!=='undefined'?records:[]).find(function(r){ return r.id===en.recordId; });
+      if (!rec) return;
+      var cl = (typeof clients!=='undefined'?clients:[]).find(function(c){ return c.id===rec.clientId; });
+      seen[k] = { rec:rec, cl:cl, date:en.date, type:en.type, q:qtyOf(en), n:nTrucks(en) };
+      out.push(seen[k]);
+    });
+    return out.sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); });
+  }
+  function qtyOf(en){
+    if (en.type==='machine') return num(en.hours);
+    var t = 0; Object.keys(en.cols||{}).forEach(function(k){ t += num(en.cols[k]); }); return t;
+  }
+  function nTrucks(en){ return en.type==='truck' ? Object.keys(en.cols||{}).filter(function(k){ return num(en.cols[k])>0; }).length : (num(en.hours)>0?1:0); }
+  window.EGU2.openDays = openDays;
+
+  var baseDash = window.renderDash;
+  window.egtphRenderOldDash = function(){ setTitle('لوحة التحكم التفصيلية','كل المؤشرات'); return baseDash.apply(this, arguments); };
+  window.renderDash = function(){
+    var c = document.getElementById('content'); if (!c) return;
+    setTitle('الرئيسية', dateLong(todayISO()));
+    var cls = (typeof clients!=='undefined'?clients:[]);
+    var due = 0, stats = cls.map(function(cl){ var t = getCT(cl.id); due += num(t.remain); return {cl:cl, t:t}; });
+    var supDue = 0;
+    (typeof suppliers!=='undefined'?suppliers:[]).forEach(function(s){
+      if (s.mergedInto) return;
+      try { supDue += num(supplierAccount(s.id).remain); } catch(_) {}
+    });
+    var ym = todayISO().slice(0,7), coll = 0;
+    (typeof payments!=='undefined'?payments:[]).forEach(function(p){ if (String(p.date||'').slice(0,7)===ym) coll += num(p.amount); });
+    (typeof advances!=='undefined'?advances:[]).forEach(function(a){ if (a.status!=='X' && String(a.date||'').slice(0,7)===ym) coll += num(a.amount); });
+    var td = todayISO(), tTrips = 0, tHours = 0;
+    (typeof entries!=='undefined'?entries:[]).forEach(function(en){
+      if (en.date !== td) return;
+      if (en.type==='truck') tTrips += qtyOf(en); else if (en.type==='machine') tHours += num(en.hours);
+    });
+    var od = openDays();
+    var top = stats.filter(function(x){ return num(x.t.remain) > 0.005; }).sort(function(a,b){ return b.t.remain - a.t.remain; }).slice(0,4);
+
+    var h = '<div class="u2">'
+      + '<div class="u2-hd"><div class="u2-logo">EG</div><div class="t"><b>EGTPH</b><small>مرحباً، عبدي يوسف إسلام</small></div>'
+      + '<button class="u2-ib" onclick="nav(\'clients\')" title="بحث">🔍</button></div>'
+      + '<div class="u2-big"><small>مجموع المستحق لكم عند العملاء</small><span class="v u2-n">'+money(due)+'</span>'
+      + '<div class="s"><span>للموردين عليكم <b class="u2-n" style="color:#fca5a5">'+money(supDue)+'</b></span>'
+      + '<span>تحصيل هذا الشهر <b class="u2-n" style="color:var(--green)">'+money(coll)+'</b></span></div></div>'
+      + '<div class="u2-k2">'
+      +   '<div class="u2-k" onclick="nav(\'tripstats\')"><small>رحلات اليوم'+(tHours?(' · '+qn(tHours)+' ساعة'):'')+'</small><b class="u2-n" style="color:var(--cyan)">'+qn(tTrips)+'</b></div>'
+      +   '<div class="u2-k" onclick="document.getElementById(\'u2-open\')&&document.getElementById(\'u2-open\').scrollIntoView({behavior:\'smooth\'})"><small>أيام مفتوحة لم تُحفظ</small><b class="u2-n" style="color:var(--gold2)">'+od.length+'</b></div>'
+      + '</div>'
+      + '<div class="u2-qa">'
+      +   '<button class="m" onclick="egtphGoTrips()"><i>🚛</i>رحلات اليوم</button>'
+      +   '<button onclick="nav(\'collections\')"><i>💵</i>التحصيلات</button>'
+      +   '<button onclick="nav(\'suppliers\')"><i>🧾</i>الموردون</button>'
+      +   '<button onclick="addClient()"><i>👤</i>عميل جديد</button>'
+      + '</div>'
+      + '<div class="u2-h2" id="u2-open"><b>✎ أيام مفتوحة</b><span>لم تُحفظ بعد</span></div>'
+      + (od.length ? od.slice(0,8).map(function(d){
+          return '<button class="u2-row" onclick="egtphOpenDay(\''+q(d.rec.clientId)+'\',\''+q(d.rec.id)+'\',\''+q(d.date)+'\')">'
+            + '<span class="u2-dot"></span><span class="m"><b>'+e(d.cl?d.cl.name:'')+' · '+e(d.rec.name)+'</b>'
+            + '<small>'+e(dateLong(d.date))+(d.type==='truck'?(' · '+d.n+' شاحنات'):' · آلات')+'</small></span>'
+            + '<span class="a"><b style="color:var(--gold2)">'+qn(d.q)+'</b><small>'+(d.type==='truck'?'رحلة':'ساعة')+'</small></span></button>';
+        }).join('') + (od.length>8?('<div class="u2-foot">+ '+(od.length-8)+' أيام أخرى</div>'):'')
+        : '<div class="u2-empty">✓ كل الأيام محفوظة</div>')
+      + '<div class="u2-h2"><b>💰 أكبر المستحقات</b><button onclick="nav(\'clients\')">الكل ‹</button></div>'
+      + (top.length ? top.map(function(x){
+          var pct = x.t.tot > 0 ? Math.min(100, Math.round(x.t.totalPaid / x.t.tot * 100)) : 0;
+          return '<button class="u2-row" onclick="openCD(\''+q(x.cl.id)+'\')"><span class="u2-av">'+e(initials(x.cl.name))+'</span>'
+            + '<span class="m"><b>'+e(x.cl.name)+'</b><div class="u2-pb"><i style="width:'+pct+'%"></i></div></span>'
+            + '<span class="a"><b style="color:var(--red)">'+money(x.t.remain)+'</b><small>'+pct+'% مسدّد</small></span></button>';
+        }).join('') : '<div class="u2-empty">✓ لا مستحقات على العملاء</div>')
+      + '<div class="u2-h2"><b></b><button onclick="egtphRenderOldDash()">📊 لوحة التحكم التفصيلية ‹</button></div>'
+      + '</div>';
+    c.innerHTML = h;
+    markBnav('dash');
+  };
+
+  // «رحلات اليوم»: أحدث يوم مفتوح، وإلا قائمة العملاء
+  window.egtphGoTrips = function(){
+    var od = openDays();
+    if (od.length) return egtphOpenDay(od[0].rec.clientId, od[0].rec.id, od[0].date);
+    nav('clients');
+  };
+  window.egtphOpenDay = function(cid, rid, date){
+    try { activeRid = rid; } catch(_) {}
+    window.__egU2Pick = { cid:cid, rid:rid, date:date, tab:'trips' };
+    nav('clients', { cid:cid });   // openCD يعيد اختيار السجل الأول — نمرّر السجل المطلوب مباشرة
+  };
+
+  // ───── المزيد ─────
+  function trashCount(){ var b = document.getElementById('trash-badge'); return b ? (parseInt(b.textContent,10)||0) : 0; }
+  function themeLabel(){
+    try { var t = (THEMES||[]).find(function(x){ return x.id===_currentTheme; }); return t ? t.label : ''; } catch(_) { return ''; }
+  }
+  function renderMore(){
+    var c = document.getElementById('content'); if (!c) return;
+    setTitle('المزيد','كل الشاشات والإعدادات');
+    var diffN = 0; try { diffN = (typeof egtphDiffCount==='function') ? egtphDiffCount() : 0; } catch(_) {}
+    var lang = ''; try { lang = (getAppLanguage()==='fr') ? 'Français' : 'العربية'; } catch(_) {}
+    var tile = function(v, ic, t, badge){ return '<button class="u2-tile" onclick="nav(\''+v+'\')">'+(badge?('<em>'+badge+'</em>'):'')+'<i>'+ic+'</i><b>'+t+'</b></button>'; };
+    var li = function(fn, ic, t, sub){ return '<button class="u2-li" onclick="'+fn+'"><i>'+ic+'</i><span>'+t+'</span><small>'+(sub||'‹')+'</small></button>'; };
+    c.innerHTML = '<div class="u2">'
+      + '<div class="u2-hd"><div class="t"><b>المزيد</b><small>عبدي يوسف إسلام · EGTPH</small></div></div>'
+      + '<div class="u2-h2"><b>العمليات</b></div>'
+      + '<div class="u2-tiles">'
+      +   tile('collections','💰','التحصيلات') + tile('advances','💳','التسبيقات') + tile('stock','📦','المخزون')
+      +   tile('diff','⚖️','التناقضات', diffN) + tile('print','🖨','الطباعة') + tile('ai','🤖','المساعد')
+      + '</div>'
+      + '<div class="u2-h2"><b>البيانات والأمان</b></div>'
+      + '<div class="u2-list">'
+      +   li('fbSyncNow()','☁️','مزامنة سحابية الآن', '')
+      +   li('saveToFile()','💾','حفظ نسخة في ملف', '')
+      +   li('exportToExcel()','📊','تصدير إلى Excel', '')
+      +   li('egtphHealthPanel()','🩺','فحص السلامة', '')
+      +   li('nav(\'trash\')','🗑','سلة المهملات', trashCount() ? String(trashCount()) : '')
+      + '</div>'
+      + '<div class="u2-h2"><b>الإعدادات</b></div>'
+      + '<div class="u2-list">'
+      +   li('toggleTheme();setTimeout(function(){nav(\'more\')},60)','🎨','الألوان', e(themeLabel()))
+      +   li('toggleLanguage();setTimeout(function(){nav(\'more\')},200)','🌐','اللغة', e(lang))
+      +   li('nav(\'settings\')','⚙️','الإعدادات والشاحنات والآلات', '')
+      +   li('egtphRenderOldDash()','📊','لوحة التحكم التفصيلية', '')
+      + '</div>'
+      + '<div class="u2-foot">EGTPH Gestion Pro</div>'
+      + '</div>';
+  }
+  window.egtphRenderMore = renderMore;
+
+  function boot(){ ensureBnav(); markBnav(typeof V!=='undefined'?V:'dash'); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+  setTimeout(boot, 800);
+})();
+</script>
+<style id="egtph-ui2-s2-css">
+/* ── ملف العميل: ترويسة + تبويبات ── */
+.u2-seg{display:flex;background:var(--bg2);border:1px solid var(--bdr);border-radius:13px;padding:4px;margin:0 0 10px;gap:2px}
+.u2-seg button{flex:1;text-align:center;padding:10px 0;font-size:13.5px;font-weight:800;color:var(--tx2);border-radius:10px;
+  background:none;border:0;font-family:inherit;cursor:pointer}
+.u2-seg button.on{background:var(--gold);color:#111}
+#content[data-u2tab] > .back-btn{display:none!important}
+#content[data-u2tab="trips"] > *:not([data-pane~="trips"]):not(#u2-cdh):not(#u2-tabs){display:none!important}
+#content[data-u2tab="rec"]   > *:not([data-pane~="rec"]):not(#u2-cdh):not(#u2-tabs){display:none!important}
+#content[data-u2tab="pay"]   > *:not([data-pane~="pay"]):not(#u2-cdh):not(#u2-tabs){display:none!important}
+#content[data-u2tab="acc"]   > *:not([data-pane~="acc"]):not(#u2-cdh):not(#u2-tabs){display:none!important}
+#u2-cdh,#u2-tabs,#u2-trips{max-width:720px;margin-left:auto;margin-right:auto}
+#u2-cdh .rem{font-weight:800}
+/* ── الإدخال السريع ── */
+.u2-rs{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:11px 13px;border-radius:13px;
+  background:rgba(212,168,67,.10);border:1px solid rgba(212,168,67,.45);font-family:inherit;color:var(--tx);cursor:pointer;margin-bottom:10px}
+.u2-rs b{font-size:15px;color:var(--gold2)}.u2-rs span{font-size:12px;color:var(--tx2)}
+.u2-mats{display:flex;gap:7px;flex-wrap:wrap;margin:-2px 0 10px}
+.u2-mats button{font-size:12.5px;font-weight:800;padding:7px 12px;border-radius:999px;background:var(--bg2);border:1px solid var(--bdr);color:var(--tx2);font-family:inherit;cursor:pointer}
+.u2-mats button.on{background:rgba(212,168,67,.15);border-color:var(--gold);color:var(--gold2)}
+.u2-strip{display:flex;gap:7px;overflow-x:auto;padding:2px 1px 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.u2-strip::-webkit-scrollbar{display:none}
+.u2-dd{flex:none;width:56px;text-align:center;padding:7px 0;border-radius:13px;background:var(--bg2);border:1px solid var(--bdr);
+  font-family:inherit;color:var(--tx);cursor:pointer}
+.u2-dd small{display:block;font-size:10px;color:var(--tx3)}.u2-dd b{font-size:19px;display:block;margin:1px 0;font-family:'Inter',sans-serif}
+.u2-dd i{font-style:normal;font-size:10px}
+.u2-dd.on{background:var(--gold);border-color:var(--gold)}.u2-dd.on small,.u2-dd.on b,.u2-dd.on i{color:#111}
+.u2-dd.add{border-style:dashed;color:var(--gold2);font-size:24px;font-weight:900}
+.u2-dayh{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 4px 8px}
+.u2-dayh b{font-size:15.5px}.u2-dayh .q{font-size:14px;color:var(--gold2);font-weight:900}
+.u2-chip{font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;margin-right:6px}
+.u2-chip.o{background:rgba(212,168,67,.16);color:var(--gold2)}.u2-chip.s{background:rgba(43,216,115,.13);color:var(--green)}
+.u2-tr{display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:9px 11px;background:var(--bg2);border:1px solid var(--bdr);border-radius:14px}
+.u2-tr.has{border-color:rgba(212,168,67,.28)}
+.u2-tr:focus-within{border-color:var(--gold);box-shadow:0 0 0 1px rgba(212,168,67,.35) inset;background:rgba(212,168,67,.06)}
+.u2-tr .tk{flex:1;min-width:0}.u2-tr .tk b{font-size:14.5px;display:block;direction:ltr;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.u2-tr .tk small{font-size:11px;color:var(--tx3)}
+.u2-stp{display:flex;align-items:center;gap:6px;flex:none}
+.u2-stp button{width:40px;height:42px;border-radius:11px;background:var(--bg3);border:1px solid var(--bdr);color:var(--tx2);font-size:21px;font-weight:900;
+  font-family:inherit;cursor:pointer;touch-action:manipulation}
+.u2-stp input.ti{width:74px!important;min-width:74px;flex:none;box-sizing:border-box;height:44px!important;border-radius:11px!important;background:var(--bg)!important;
+  border:1px solid var(--bdr2)!important;text-align:center!important;font-size:21px!important;font-weight:900!important;color:var(--tx)!important;
+  font-family:'Inter',sans-serif!important;padding:0 6px!important}
+.u2-tr.has .u2-stp input.ti{color:var(--gold2)!important}
+.u2-lockv{min-width:64px;height:42px;border-radius:11px;background:var(--bg3);display:grid;place-items:center;font-size:20px;font-weight:900;
+  color:var(--tx2);font-family:'Inter',sans-serif;padding:0 10px}
+.u2-sum{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:12px 14px;border-radius:14px;background:var(--bg3);font-size:13px;color:var(--tx2);margin:4px 0 10px}
+.u2-sum b{color:var(--tx);font-size:15px}
+.u2-save{width:100%;padding:15px 0;border-radius:14px;border:0;background:linear-gradient(135deg,var(--gold2),var(--gold));color:#111;
+  font-weight:900;font-size:15.5px;font-family:inherit;cursor:pointer}
+.u2-save.sec{background:var(--bg3);color:var(--tx);border:1px solid var(--bdr2)}
+.u2-acts{display:flex;gap:7px;margin-top:8px}
+.u2-acts button{flex:1;padding:10px 0;border-radius:11px;background:var(--bg2);border:1px solid var(--bdr);color:var(--tx2);
+  font-size:12px;font-weight:800;font-family:inherit;cursor:pointer}
+.u2-acts button.r{color:#fca5a5}
+/* ── قائمة العملاء ── */
+.u2-search{display:flex;align-items:center;gap:8px;padding:0 13px;border-radius:13px;background:var(--bg2);border:1px solid var(--bdr);margin-bottom:8px}
+.u2-search input{flex:1;background:none;border:0;outline:0;color:var(--tx);font-family:inherit;font-size:14.5px;padding:12px 0}
+.u2-chips{display:flex;gap:7px;overflow-x:auto;padding:0 0 4px;scrollbar-width:none}
+.u2-chips::-webkit-scrollbar{display:none}
+.u2-chips button{flex:none;font-size:12.5px;font-weight:800;padding:7px 12px;border-radius:999px;background:var(--bg2);border:1px solid var(--bdr);
+  color:var(--tx2);font-family:inherit;cursor:pointer}
+.u2-chips button.on{background:rgba(212,168,67,.15);border-color:var(--gold);color:var(--gold2)}
+.u2-pick{display:flex;flex-direction:column;gap:7px}
+.u2-pick button{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:12px;background:var(--bg3);border:1px solid var(--bdr);
+  color:var(--tx);font-family:inherit;text-align:right;cursor:pointer}
+.u2-pick button.on{border-color:var(--gold);background:rgba(212,168,67,.10)}
+.u2-pick button b{flex:1;font-size:14.5px}.u2-pick button small{font-size:12px;color:var(--tx2)}
+</style>
+<script id="egtph-ui2-s2-js">
+/* EGTPH v2 — قائمة العملاء وملف العميل (تبويبات + إدخال سريع). نفس دوال الحفظ القديمة. */
+(function(){
+  'use strict';
+  if (window.__egtphUI2s2) return;
+  window.__egtphUI2s2 = true;
+  var U = window.EGU2; if (!U) return;
+  var e = U.e, num = U.num, money = U.money, qn = U.qn, q = U.q;
+
+  var S = { tab:{}, date:{}, mat:{}, prevDates:{}, list:{ s:'', f:'all', sort:'due' } };
+  function defTab(){ try { return localStorage.getItem('egtph_u2_cdtab_default') || 'trips'; } catch(_) { return 'trips'; } }
+  function recsOf(cid){ return (typeof records!=='undefined'?records:[]).filter(function(r){ return r.clientId===cid; }); }
+  function matsOf(rid){ return (typeof prices!=='undefined'?prices:[]).filter(function(p){ return p.recordId===rid && p.type==='mat_def'; }); }
+  function truckEntries(rid){ return (typeof entries!=='undefined'?entries:[]).filter(function(x){ return x.recordId===rid && x.type==='truck'; }); }
+  function locked(rid, d){ try { return isDayLocked(rid, d, 'truck'); } catch(_) { return false; } }
+  function unitLabel(u){ u = String(u||'رحلة'); return u; }
+
+  // ══════════ قائمة العملاء ══════════
+  var baseRC = window.renderClients;
+  window.renderClients = function(p){
+    p = p || {};
+    if (p.cid) return baseRC.apply(this, arguments);
+    try { openCid = null; } catch(_) {}
+    renderList();
+    if (typeof egtphMarkBnav==='function') egtphMarkBnav('clients');
+  };
+  function clientRows(){
+    var od = U.openDays ? U.openDays() : [];
+    var openBy = {}; od.forEach(function(d){ openBy[d.rec.clientId] = (openBy[d.rec.clientId]||0) + 1; });
+    var last = {};
+    (typeof entries!=='undefined'?entries:[]).forEach(function(en){
+      var r = (typeof records!=='undefined'?records:[]).find(function(x){ return x.id===en.recordId; });
+      if (r && String(en.date||'') > String(last[r.clientId]||'')) last[r.clientId] = en.date;
+    });
+    return (typeof clients!=='undefined'?clients:[]).map(function(cl){
+      var t = getCT(cl.id);
+      return { cl:cl, t:t, nrec:recsOf(cl.id).length, open:openBy[cl.id]||0, last:last[cl.id]||'',
+               pct: t.tot > 0 ? Math.min(100, Math.round(t.totalPaid / t.tot * 100)) : (t.totalPaid>0?100:0) };
+    });
+  }
+  function renderList(){
+    var c = document.getElementById('content'); if (!c) return;
+    delete c.dataset.u2tab;
+    var rows = clientRows();
+    var nRec = rows.reduce(function(s,x){ return s + x.nrec; }, 0);
+    U.setTitle('العملاء', rows.length+' عملاء · '+nRec+' سجلاً');
+    var cnt = { all:rows.length, due:0, paid:0, open:0 };
+    rows.forEach(function(x){ if (x.t.remain > 0.005) cnt.due++; else cnt.paid++; if (x.open) cnt.open++; });
+    var sortLbl = { due:'الأكبر مستحقاً', name:'الاسم', recent:'آخر نشاط' }[S.list.sort];
+    c.innerHTML = '<div class="u2" id="u2-cl">'
+      + '<div class="u2-hd"><div class="t"><b>العملاء</b><small>'+rows.length+' عملاء · '+nRec+' سجلاً</small></div>'
+      + '<button class="u2-ib" style="width:auto;padding:0 11px;font-size:12px;font-weight:800" onclick="egtphU2Sort()">⇅ '+sortLbl+'</button>'
+      + '<button class="u2-ib g" onclick="addClient()" title="عميل جديد">＋</button></div>'
+      + '<div class="u2-search">🔍<input id="u2-q" type="search" placeholder="ابحث باسم العميل أو السجل…" value="'+e(S.list.s)+'" autocomplete="off"></div>'
+      + '<div class="u2-chips">'
+      +   chip('all','الكل',cnt.all) + chip('due','عليهم مستحقات',cnt.due) + chip('paid','مسدَّدون',cnt.paid) + chip('open','فيهم يوم مفتوح',cnt.open)
+      + '</div>'
+      + '<div id="u2-cl-rows"></div></div>';
+    var inp = document.getElementById('u2-q');
+    if (inp) inp.addEventListener('input', function(){ S.list.s = inp.value; fillRows(rows); });
+    fillRows(rows);
+  }
+  function chip(k, t, n){ return '<button class="'+(S.list.f===k?'on':'')+'" onclick="egtphU2Filter(\''+k+'\')">'+t+' '+n+'</button>'; }
+  function fillRows(rows){
+    var box = document.getElementById('u2-cl-rows'); if (!box) return;
+    var s = egtphSearchNorm(S.list.s);
+    var sd = String(S.list.s||'').replace(/[^0-9\u0660-\u0669]/g,'');
+    var list = rows.filter(function(x){
+      if (S.list.f==='due' && !(x.t.remain > 0.005)) return false;
+      if (S.list.f==='paid' && x.t.remain > 0.005) return false;
+      if (S.list.f==='open' && !x.open) return false;
+      if (!s) return true;
+      if (egtphSearchNorm(x.cl.name).indexOf(s) !== -1) return true;
+      if (sd.length >= 3 && egtphSearchNorm(x.cl.phone).replace(/\D/g,'').indexOf(egtphSearchNorm(sd)) !== -1) return true;
+      return recsOf(x.cl.id).some(function(r){ return egtphSearchNorm(r.name).indexOf(s) !== -1; });
+    });
+    list.sort(function(a,b){
+      if (S.list.sort==='name') return String(a.cl.name).localeCompare(String(b.cl.name),'ar');
+      if (S.list.sort==='recent') return String(b.last).localeCompare(String(a.last));
+      return (b.t.remain - a.t.remain) || String(a.cl.name).localeCompare(String(b.cl.name),'ar');
+    });
+    var tot = list.reduce(function(t,x){ return t + num(x.t.remain); }, 0);
+    box.innerHTML = '<div class="u2-h2"><b>'+list.length+' عميل</b><span class="u2-n">'+money(tot)+'</span></div>'
+      + (list.length ? list.map(function(x, i){
+          var paid = !(x.t.remain > 0.005);
+          return '<button class="u2-row" onclick="openCD(\''+q(x.cl.id)+'\')">'
+            + '<span class="u2-av'+(i===0&&!paid&&S.list.sort==='due'?' g':'')+'">'+e(U.initials(x.cl.name))+'</span>'
+            + '<span class="m"><b>'+e(x.cl.name)+'</b><small>'+x.nrec+' سجلات'+(x.open?(' · ✎ '+x.open+' يوم مفتوح'):'')+'</small>'
+            + '<div class="u2-pb"><i style="width:'+x.pct+'%"></i></div></span>'
+            + '<span class="a">'+(paid
+                ? (x.t.overpaid > 0.005 ? '<b style="color:var(--blue)">'+money(x.t.overpaid)+'</b><small>رصيد زائد</small>' : '<b style="color:var(--green)">✓ مسدَّد</b><small class="u2-n">'+money(x.t.tot)+'</small>')
+                : '<b style="color:var(--red)">'+money(x.t.remain)+'</b><small>من <span class="u2-n">'+money(x.t.tot)+'</span></small>')
+            + '</span></button>';
+        }).join('') : '<div class="u2-empty">لا نتائج</div>');
+  }
+  window.egtphU2Filter = function(k){ S.list.f = k; renderList(); };
+  window.egtphU2Sort = function(){ var o = ['due','name','recent']; S.list.sort = o[(o.indexOf(S.list.sort)+1)%o.length]; renderList(); };
+
+  // ══════════ ملف العميل ══════════
+  var baseCD = window.renderCD;
+  window.renderCD = function(cid){
+    var out = baseCD.apply(this, arguments);
+    try { decorate(cid); } catch(err) { try { console.error('ui2 cd', err); } catch(_) {} }
+    return out;
+  };
+  function paneOf(el){
+    if (!el || !el.classList) return 'rec';
+    if (el.classList.contains('back-btn')) return 'none';
+    if (el.classList.contains('cl-hdr')) return 'acc';
+    var h = el.querySelector && el.querySelector('.sh-t');
+    var t = h ? h.textContent : '';
+    if (/المدفوعات|التسبيقات/.test(t)) return 'pay';
+    return 'rec';
+  }
+  var mo = null;
+  function watch(c){
+    if (mo) return;
+    mo = new MutationObserver(function(list){
+      if (!c.dataset.u2tab) return;
+      list.forEach(function(m){ Array.prototype.forEach.call(m.addedNodes, function(n){
+        if (n.nodeType===1 && !n.hasAttribute('data-pane') && n.id!=='u2-cdh' && n.id!=='u2-tabs') n.setAttribute('data-pane', paneOf(n));
+      }); });
+    });
+    mo.observe(c, {childList:true});
+  }
+  function decorate(cid){
+    var c = document.getElementById('content'); if (!c) return;
+    var cl = (typeof clients!=='undefined'?clients:[]).find(function(x){ return x.id===cid; }); if (!cl) return;
+    watch(c);
+    Array.prototype.forEach.call(c.children, function(k){ if (!k.hasAttribute('data-pane')) k.setAttribute('data-pane', paneOf(k)); });
+    var pick = window.__egU2Pick && window.__egU2Pick.cid===cid ? window.__egU2Pick : null;
+    if (pick) { window.__egU2Pick = null; S.tab[cid] = pick.tab || 'trips'; if (pick.rid && pick.date) S.date[pick.rid] = pick.date; }
+    var rid = (typeof activeRid!=='undefined') ? activeRid : null;
+    var rec = (typeof records!=='undefined'?records:[]).find(function(r){ return r.id===rid; });
+    var tab = S.tab[cid] || defTab();
+    if (tab==='trips' && rec && rec.type!=='trucks' && !S.tab[cid]) tab = 'rec';
+    var t = getCT(cid);
+    var st = t.remain > 0.005 ? ('متبقٍّ <b class="rem u2-n" style="color:var(--red)">'+money(t.remain)+'</b>')
+           : t.overpaid > 0.005 ? ('رصيد زائد <b class="rem u2-n" style="color:var(--blue)">'+money(t.overpaid)+'</b>')
+           : '<b class="rem" style="color:var(--green)">✓ مسدَّد</b>';
+    var hd = document.createElement('div'); hd.id = 'u2-cdh'; hd.className = 'u2-hd';
+    hd.innerHTML = '<button class="u2-ib" onclick="nav(\'clients\')" title="رجوع">›</button>'
+      + '<span class="u2-av g">'+e(U.initials(cl.name))+'</span>'
+      + '<div class="t"><b>'+e(cl.name)+'</b><small>'+st+'</small></div>';
+    var tb = document.createElement('div'); tb.id = 'u2-tabs'; tb.className = 'u2-seg';
+    tb.innerHTML = [['trips','الرحلات'],['rec','السجلات'],['pay','الدفعات'],['acc','الحساب']].map(function(x){
+      return '<button type="button" data-t="'+x[0]+'">'+x[1]+'</button>'; }).join('');
+    tb.addEventListener('click', function(ev){ var b = ev.target.closest('button[data-t]'); if (b) egtphCDTab(b.getAttribute('data-t')); });
+    var tp = document.createElement('div'); tp.id = 'u2-trips'; tp.setAttribute('data-pane','trips');
+    c.insertBefore(tp, c.firstChild); c.insertBefore(tb, tp); c.insertBefore(hd, tb);
+    setTab(cid, tab, true);
+  }
+  function closeInput(){
+    try { if (typeof egtphCommitActive==='function') egtphCommitActive(); } catch(_) {}
+    var a = document.activeElement;
+    if (a && a !== document.body && (a.tagName==='INPUT' || a.tagName==='TEXTAREA' || a.tagName==='SELECT') && a.blur) a.blur();
+  }
+  function setTab(cid, t, silent){
+    var c = document.getElementById('content'); if (!c) return;
+    if (!silent) closeInput();   // تبديل التبويب يحفظ الخانة ويغلق لوحة المفاتيح
+    S.tab[cid] = t;
+    c.dataset.u2tab = t;
+    Array.prototype.forEach.call(document.querySelectorAll('#u2-tabs button'), function(b){ b.classList.toggle('on', b.getAttribute('data-t')===t); });
+    if (t === 'trips') renderTrips(cid);
+    if (!silent) c.scrollTop = 0;
+  }
+  window.egtphCDTab = function(t){ var cid = (typeof openCid!=='undefined') ? openCid : null; if (cid) setTab(cid, t, false); };
+
+  // ── الإدخال السريع ──
+  function renderTrips(cid){
+    var box = document.getElementById('u2-trips'); if (!box) return;
+    var crs = recsOf(cid);
+    var rid = (typeof activeRid!=='undefined') ? activeRid : null;
+    var rec = crs.find(function(r){ return r.id===rid; });
+    if (!rec) { box.innerHTML = '<div class="u2-empty">لا توجد سجلات لهذا العميل.<br><br><button class="u2-save" onclick="egtphCDTab(\'rec\')">📋 أضف سجلاً من تبويب «السجلات»</button></div>'; return; }
+    var mats = matsOf(rec.id);
+    var selBtn = '<button class="u2-rs" onclick="egtphU2PickRec(\''+q(cid)+'\')"><b>📂 '+e(rec.name)+(crs.length>1?' ▾':'')+'</b>'
+      + '<span>'+(mats.length ? mats.map(function(m){ return e(m.name)+' · <span class="u2-n">'+qn(m.price)+'</span> '+(m.priceUnit==='kg'?'للكيلو':m.priceUnit==='tonne'?'للطن':'دج/'+e(unitLabel(m.priceUnit))); }).join(' · ') : '')+'</span></button>';
+    if (rec.type !== 'trucks') {
+      box.innerHTML = selBtn + '<div class="u2-empty">هذا السجل '+(rec.type==='machines'?'للآلات (ساعات)':'ليس سجل شاحنات')+' — الإدخال فيه من تبويب «السجلات».<br><br>'
+        + '<button class="u2-save sec" onclick="egtphCDTab(\'rec\')">📋 فتح السجل</button></div>';
+      return;
+    }
+    if (!mats.length) {
+      box.innerHTML = selBtn + '<div class="u2-empty">أضف مادة وسعرها لهذا السجل أولاً.<br><br><button class="u2-save sec" onclick="egtphCDTab(\'rec\')">📋 إضافة مادة في «السجلات»</button></div>';
+      return;
+    }
+    var mid = S.mat[rec.id]; if (!mats.some(function(m){ return m.id===mid; })) mid = S.mat[rec.id] = mats[0].id;
+    var mat = mats.find(function(m){ return m.id===mid; });
+    var es = truckEntries(rec.id);
+    var dates = Array.from(new Set(es.map(function(x){ return x.date; }))).filter(Boolean).sort();
+    // يوم أُضيف للتو → اختره
+    var prev = S.prevDates[rec.id];
+    if (prev) { var nd = dates.filter(function(d){ return prev.indexOf(d)===-1; }); if (nd.length) S.date[rec.id] = nd[nd.length-1]; S.prevDates[rec.id] = null; }
+    var d = S.date[rec.id];
+    if (!d || dates.indexOf(d)===-1) {
+      var open = dates.filter(function(x){ return !locked(rec.id, x); });
+      d = open.length ? open[open.length-1] : dates[dates.length-1];
+      S.date[rec.id] = d;
+    }
+    var matChips = mats.length > 1 ? ('<div class="u2-mats">'+mats.map(function(m){
+      return '<button class="'+(m.id===mid?'on':'')+'" onclick="egtphU2Mat(\''+q(cid)+'\',\''+q(rec.id)+'\',\''+q(m.id)+'\')">'+e(m.name)+'</button>'; }).join('')+'</div>') : '';
+    var strip = '<div class="u2-strip" id="u2-strip">' + dates.slice(-30).map(function(x){
+        var dt = new Date(x+'T12:00:00'), lk = locked(rec.id, x);
+        return '<button class="u2-dd'+(x===d?' on':'')+'" data-d="'+e(x)+'" onclick="egtphU2Day(\''+q(cid)+'\',\''+q(rec.id)+'\',\''+q(x)+'\')">'
+          + '<small>'+U.WD[dt.getDay()].replace('ال','')+'</small><b>'+dt.getDate()+'</b><i>'+(lk?'🔒':'✎')+'</i></button>';
+      }).join('')
+      + '<button class="u2-dd add" onclick="egtphU2AddDay(\''+q(cid)+'\',\''+q(rec.id)+'\')" title="يوم جديد">＋</button></div>';
+    if (!d) {
+      box.innerHTML = selBtn + matChips + strip + '<div class="u2-empty">لا توجد أيام بعد في هذا السجل.<br><br>'
+        + '<button class="u2-save" onclick="egtphU2AddDay(\''+q(cid)+'\',\''+q(rec.id)+'\')">＋ يوم جديد</button></div>';
+      return;
+    }
+    var lk = locked(rec.id, d);
+    var en = es.find(function(x){ return x.date===d && x.materialId===mid; }) || { cols:{} };
+    var list = (typeof trucks!=='undefined' && Array.isArray(trucks)) ? trucks.slice() : [];
+    Object.keys(en.cols||{}).forEach(function(k){ if (list.indexOf(k)===-1 && num(en.cols[k])) list.push(k); });
+    var links = (typeof egtphTruckLinks==='function') ? egtphTruckLinks(rec.id) : [];
+    var rows = list.map(function(tr){
+      var v = (en.cols||{})[tr], has = num(v) !== 0;
+      var l = links.find(function(x){ return x.truck===tr; });
+      var sp = l ? (typeof suppliers!=='undefined'?suppliers:[]).find(function(s){ return s.id===l.supplierId; }) : null;
+      var sub = sp ? ('🏭 '+e(sp.name)) : 'غير مربوط بمورد';
+      var ctl = lk
+        ? '<div class="u2-lockv u2-n">'+(has?e(v):'—')+'</div>'
+        : '<div class="u2-stp"><button type="button" data-step="-1" aria-label="ناقص">−</button>'
+          + '<input class="ti'+(has?' hv':'')+'" type="text" inputmode="decimal" value="'+(has?e(v):'')+'" placeholder="0" autocomplete="off"'
+          + ' onchange="updateTruck(\''+q(rec.id)+'\',\''+q(d)+'\',\''+q(mid)+'\',\''+q(tr)+'\',this.value,\''+q(cid)+'\')">'
+          + '<button type="button" data-step="1" aria-label="زائد">＋</button></div>';
+      return '<div class="u2-tr'+(has?' has':'')+'" data-truck="'+e(tr)+'"><div class="tk"><b>'+e(tr)+'</b><small>'+sub+'</small></div>'+ctl+'</div>';
+    }).join('');
+    var btns = lk
+      ? '<button class="u2-save sec" onclick="unlockDay(\''+q(rec.id)+'\',\''+q(d)+'\',\'truck\',\''+q(cid)+'\')">🔓 فتح اليوم للتعديل</button>'
+        + '<div class="u2-acts"><button onclick="changeDayDate(\''+q(rec.id)+'\',\''+q(d)+'\',\'truck\',\''+q(cid)+'\')">📅 تغيير التاريخ</button></div>'
+      : '<button class="u2-save" onclick="lockDay(\''+q(rec.id)+'\',\''+q(d)+'\',\'truck\',\''+q(cid)+'\')">💾 حفظ اليوم وإقفاله</button>'
+        + '<div class="u2-acts">'
+        + (typeof egtphDayPrice==='function' ? '<button onclick="egtphDayPrice(\''+q(rec.id)+'\',\''+q(d)+'\',\''+q(cid)+'\',\'truck\')">💲 سعر اليوم</button>' : '')
+        + '<button onclick="editTruckDay(\''+q(rec.id)+'\',\''+q(d)+'\',\''+q(cid)+'\')">✏️ نافذة التعديل</button>'
+        + '<button class="r" onclick="delTruckDate(\''+q(rec.id)+'\',\''+q(d)+'\',\''+q(cid)+'\')">✕ حذف اليوم</button></div>';
+    box.innerHTML = selBtn + matChips + strip
+      + '<div class="u2-dayh"><b>'+e(U.dateLong(d))+'<span class="u2-chip '+(lk?'s':'o')+'">'+(lk?'🔒 محفوظ':'✎ مفتوح')+'</span></b>'
+      + '<span class="q" id="u2-dayq"></span></div>'
+      + rows
+      + '<div class="u2-sum" id="u2-sum"></div>'
+      + btns;
+    box.setAttribute('data-rid', rec.id); box.setAttribute('data-date', d); box.setAttribute('data-mid', mid); box.setAttribute('data-cid', cid);
+    updSum();
+    var sel = box.querySelector('.u2-dd.on');
+    if (sel) try { sel.scrollIntoView({block:'nearest', inline:'center'}); } catch(_) {}
+  }
+  function storedVal(rid, d, mid, tr){
+    var en = truckEntries(rid).find(function(x){ return x.date===d && x.materialId===mid; });
+    return en ? num((en.cols||{})[tr]) : 0;
+  }
+  function updSum(){
+    var box = document.getElementById('u2-trips'); if (!box) return;
+    var rid = box.getAttribute('data-rid'), d = box.getAttribute('data-date'), mid = box.getAttribute('data-mid');
+    if (!rid || !d) return;
+    var es = truckEntries(rid).filter(function(x){ return x.date===d; });
+    var en = es.find(function(x){ return x.materialId===mid; }) || { cols:{} };
+    var qty = 0, n = 0;
+    Object.keys(en.cols||{}).forEach(function(k){ var v = num(en.cols[k]); if (v) { qty += v; n++; } });
+    var amt = 0; es.forEach(function(x){ try { amt += num(calcE(x).amount); } catch(_) {} });
+    var mat = matsOf(rid).find(function(m){ return m.id===mid; });
+    var u = mat ? (mat.priceUnit||'رحلة') : 'رحلة';
+    var total = box.querySelectorAll('.u2-tr').length;
+    var dq = document.getElementById('u2-dayq'); if (dq) dq.innerHTML = '<span class="u2-n">'+qn(qty)+'</span> '+e(u);
+    var sm = document.getElementById('u2-sum');
+    if (sm) sm.innerHTML = '<span>مبلغ اليوم <b class="u2-n">'+money(amt)+'</b></span><span><b class="u2-n">'+n+'</b> شاحنات من <b class="u2-n">'+total+'</b></span>';
+    Array.prototype.forEach.call(box.querySelectorAll('.u2-tr'), function(r){
+      var tr = r.getAttribute('data-truck'), sv = num((en.cols||{})[tr]);
+      r.classList.toggle('has', sv !== 0);
+      // خانة غادرها المستخدم: تعرض دائماً القيمة المحفوظة (إدخال مرفوض يعود لقيمته)
+      var inp = r.querySelector('input.ti');
+      if (inp && document.activeElement !== inp) {
+        var want = sv ? String(sv) : '';
+        if (String(inp.value) !== want) { inp.value = want; inp.__egCommitted = want; }
+      }
+    });
+  }
+  window.egtphU2UpdSum = updSum;
+  // −/＋ : نفس مسار الحفظ (حدث change على الخانة)
+  document.addEventListener('click', function(ev){
+    var b = ev.target && ev.target.closest && ev.target.closest('#u2-trips .u2-stp button[data-step]');
+    if (!b) return;
+    var inp = b.parentNode.querySelector('input.ti'); if (!inp) return;
+    // نبدأ من القيمة المحفوظة (لا من نصّ الخانة الذي قد يكون مرفوضاً)
+    var box = document.getElementById('u2-trips'), row = b.closest('.u2-tr');
+    var cur = storedVal(box.getAttribute('data-rid'), box.getAttribute('data-date'), box.getAttribute('data-mid'), row ? row.getAttribute('data-truck') : '');
+    // إن كان في الخانة رقم صحيح لم يُحفظ بعد، نعتمده
+    try {
+      if (String(inp.value).trim() !== '' && window.EGTPHTripArithmetic) {
+        var r = EGTPHTripArithmetic.calc(inp.value); if (r && r.ok) cur = num(r.value);
+      }
+    } catch(_) {}
+    var nv = Math.max(0, Math.round((cur + num(b.getAttribute('data-step'))) * 1000) / 1000);
+    inp.value = nv ? String(nv) : '';
+    inp.__egCommitted = inp.value;
+    inp.dispatchEvent(new Event('change', {bubbles:true}));
+    setTimeout(updSum, 30);
+  });
+  document.addEventListener('change', function(ev){
+    if (ev.target && ev.target.closest && ev.target.closest('#u2-trips')) setTimeout(updSum, 30);
+  });
+
+  window.egtphU2Day = function(cid, rid, d){
+    try { if (typeof egtphCommitActive==='function') egtphCommitActive(); } catch(_) {}
+    S.date[rid] = d; renderTrips(cid);
+  };
+  window.egtphU2Mat = function(cid, rid, mid){
+    try { if (typeof egtphCommitActive==='function') egtphCommitActive(); } catch(_) {}
+    S.mat[rid] = mid; renderTrips(cid);
+  };
+  window.egtphU2AddDay = function(cid, rid){
+    S.prevDates[rid] = Array.from(new Set(truckEntries(rid).map(function(x){ return x.date; })));
+    addTruckDay(rid, cid);
+  };
+  window.egtphU2PickRec = function(cid){
+    var crs = recsOf(cid); if (crs.length < 2) return;
+    var cur = (typeof activeRid!=='undefined') ? activeRid : null;
+    OM('📂 اختر السجل', '<div class="u2-pick">' + crs.map(function(r){
+        var rt = getRT(r.id), s = (typeof getRecordSettlement==='function') ? getRecordSettlement(r.id) : null;
+        var icon = r.type==='trucks' ? '🚛' : r.type==='machines' ? '🚜' : '📦';
+        return '<button class="'+(r.id===cur?'on':'')+'" onclick="egtphU2SetRec(\''+q(cid)+'\',\''+q(r.id)+'\')">'
+          + '<span>'+icon+'</span><b>'+e(r.name)+'</b><small class="u2-n">'+(s ? (s.remain>0.005 ? money(s.remain) : '✓') : money(rt.amount))+'</small></button>';
+      }).join('') + '</div>', null, '', false);
+  };
+  window.egtphU2SetRec = function(cid, rid){
+    try { activeRid = rid; } catch(_) {}
+    CM(); renderCD(cid);
+  };
+})();
+</script>
+<style id="egtph-ui2-s3-css">
+#content[data-u2tab="inv"] > *:not([data-pane~="inv"]):not(#u2-sph):not(#u2-stabs){display:none!important}
+#u2-sph,#u2-stabs{max-width:720px;margin-left:auto;margin-right:auto}
+.u2-k3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 10px}
+.u2-k3 div{background:var(--bg2);border:1px solid var(--bdr);border-radius:13px;padding:9px 10px}
+.u2-k3 small{display:block;font-size:11px;color:var(--tx2)}.u2-k3 b{font-size:15px;font-weight:900;font-family:'Inter',sans-serif}
+/* سجلات المورد كبطاقات على الهاتف (نفس الأزرار) */
+@media (max-width:720px){
+  #eg-subacc{background:none!important;border:0!important;margin:0 0 12px!important}
+  #eg-subacc .sa-hd{background:var(--bg2);border:1px solid var(--bdr);border-radius:13px;margin-bottom:4px}
+  #eg-subacc .wrap{overflow:visible!important}
+  #eg-subacc table.eg-tbl,#eg-subacc table.eg-tbl tbody{display:block;width:100%;min-width:0!important}
+  #eg-subacc table.eg-tbl thead{display:none}
+  #eg-subacc table.eg-tbl tbody tr:not(.act){display:grid;grid-template-columns:repeat(3,1fr);margin-top:10px;
+    background:var(--bg2);border:1px solid var(--bdr);border-radius:15px;overflow:hidden}
+  #eg-subacc table.eg-tbl tbody tr:not(.act):has(+ tr.act){border-radius:15px 15px 0 0;border-bottom:0}
+  #eg-subacc table.eg-tbl tbody tr:not(.act) td{border:0;padding:9px 8px;text-align:center}
+  #eg-subacc table.eg-tbl tbody tr:not(.act) td:first-child{grid-column:1/-1;text-align:right;padding:12px 13px 8px;border-bottom:1px solid var(--bdr)}
+  #eg-subacc table.eg-tbl tbody tr:not(.act) td.n{text-align:center;border-left:1px solid var(--bdr);font-size:14px}
+  #eg-subacc table.eg-tbl tbody tr:not(.act) td.n:last-child{border-left:0}
+  #eg-subacc table.eg-tbl tbody tr:not(.act) td.n::before{display:block;font-family:inherit;font-size:10.5px;font-weight:700;color:var(--tx3);margin-bottom:3px}
+  #eg-subacc table.eg-tbl tbody tr:not(.act) td.n:nth-child(2)::before{content:'الفواتير'}
+  #eg-subacc table.eg-tbl tbody tr:not(.act) td.n:nth-child(3)::before{content:'المدفوع'}
+  #eg-subacc table.eg-tbl tbody tr:not(.act) td.n:nth-child(4)::before{content:'الحالة'}
+  #eg-subacc table.eg-tbl tbody tr.act{display:block;background:var(--bg2);border:1px solid var(--bdr);border-top:1px solid var(--bdr);
+    border-radius:0 0 15px 15px;padding:9px 10px 10px}
+  #eg-subacc table.eg-tbl tbody tr.act td{display:block;padding:0;border:0}
+  #eg-subacc .eg-tbl .acts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  #eg-subacc .eg-tbl .acts button{padding:10px 4px;font-size:12px;border-radius:10px}
+  #eg-subacc table.eg-tbl tbody tr.tot{background:rgba(212,168,67,.08);border-color:rgba(212,168,67,.4)}
+  #eg-subacc .eg-tbl .nm{font-size:15.5px}
+}
+/* الإحصائيات: النتائج أولاً، والنطاق يُطوى */
+#content.u2-stats{display:flex;flex-direction:column}
+#content.u2-stats > *{order:5;flex-shrink:0}
+#content.u2-stats > .ph{order:1}
+#content.u2-stats > .kgrid{order:2}
+#content.u2-stats > .u2-scope{order:3}
+#content.u2-stats > .cp.u2-scope.u2-fold > :not(:first-child){display:none!important}
+#content.u2-stats > .u2-scope > :first-child{cursor:pointer;position:relative}
+.u2-scopehint{font-size:11.5px;font-weight:800;color:var(--gold2);margin-right:auto;padding-right:10px}
+@media (max-width:720px){ #content.u2-stats > .ph p,#content.u2-stats > .ph .ph-sub{display:none} }
+</style>
+<script id="egtph-ui2-s3-js">
+/* EGTPH v2 — الموردون والإحصائيات. طبقة عرض فقط. */
+(function(){
+  'use strict';
+  if (window.__egtphUI2s3) return;
+  window.__egtphUI2s3 = true;
+  var U = window.EGU2; if (!U) return;
+  var e = U.e, num = U.num, money = U.money, q = U.q;
+  var S = { tab:{}, list:{ s:'', f:'all' } };
+
+  // ══════════ قائمة الموردين ══════════
+  function acc(id){ try { return supplierAccount(id); } catch(_) { return {totalDebt:0,paid:0,remain:0,overpaid:0}; } }
+  function nrec(id){ try { return (typeof egtphSupRecords==='function') ? egtphSupRecords(id).length : 0; } catch(_) { return 0; } }
+  var baseRS = window.renderSuppliers;
+  window.renderSuppliers = function(p){
+    p = p || {};
+    if (p.sid || p.cid || window._supSelMode) return baseRS.apply(this, arguments);
+    try { openSpId = null; } catch(_) {}
+    renderList();
+    if (typeof egtphMarkBnav==='function') egtphMarkBnav('suppliers');
+  };
+  function rows(){
+    return (typeof suppliers!=='undefined'?suppliers:[]).filter(function(s){ return s && !s.mergedInto; }).map(function(s){
+      var a = acc(s.id); return { s:s, a:a, n:nrec(s.id) };
+    });
+  }
+  function renderList(){
+    var c = document.getElementById('content'); if (!c) return;
+    delete c.dataset.u2tab; c.classList.remove('u2-stats');
+    var all = rows(), act = all.filter(function(x){ return !x.s.archived; });
+    var due = 0, cred = 0; act.forEach(function(x){ due += num(x.a.remain); cred += num(x.a.overpaid); });
+    var cnt = { all:act.length, due:act.filter(function(x){ return x.a.remain>0.005; }).length,
+                paid:act.filter(function(x){ return !(x.a.remain>0.005) && !(x.a.overpaid>0.005); }).length,
+                cred:act.filter(function(x){ return x.a.overpaid>0.005; }).length, arch:all.length-act.length };
+    U.setTitle('الموردون', act.length+' مورد');
+    var chip = function(k,t,n){ return (n||k==='all') ? '<button class="'+(S.list.f===k?'on':'')+'" onclick="egtphU2SupFilter(\''+k+'\')">'+t+' '+n+'</button>' : ''; };
+    c.innerHTML = '<div class="u2" id="u2-sl">'
+      + '<div class="u2-hd"><div class="t"><b>الموردون</b><small>'+act.length+' مورد</small></div>'
+      + '<button class="u2-ib" onclick="openAllSuppliersPeriodReport()" title="تقرير فترة">📅</button>'
+      + '<button class="u2-ib" onclick="supSelStart()" title="تحديد ومجموع">📊</button>'
+      + '<button class="u2-ib g" onclick="addSupplier()" title="مورد جديد">＋</button></div>'
+      + '<div class="u2-big"><small>ما عليكم للموردين</small><span class="v u2-n" style="color:#fca5a5">'+money(due)+'</span>'
+      + '<div class="s"><span>رصيد لكم عندهم <b class="u2-n" style="color:var(--blue)">'+money(cred)+'</b></span></div></div>'
+      + '<div class="u2-search">🔍<input id="u2-sq" type="search" placeholder="ابحث باسم المورد أو السجل…" value="'+e(S.list.s)+'" autocomplete="off"></div>'
+      + '<div class="u2-chips">'+chip('all','الكل',cnt.all)+chip('due','لهم مستحقات',cnt.due)+chip('paid','مسدَّدون',cnt.paid)+chip('cred','لكم رصيد',cnt.cred)+chip('arch','🗄 المؤرشفون',cnt.arch)+'</div>'
+      + '<div id="u2-sl-rows"></div></div>';
+    var inp = document.getElementById('u2-sq');
+    if (inp) inp.addEventListener('input', function(){ S.list.s = inp.value; fill(all); });
+    fill(all);
+  }
+  function fill(all){
+    var box = document.getElementById('u2-sl-rows'); if (!box) return;
+    var s = String(S.list.s||'').trim().toLowerCase();
+    var list = all.filter(function(x){
+      if (S.list.f==='arch') { if (!x.s.archived) return false; }
+      else if (x.s.archived) return false;
+      if (S.list.f==='due' && !(x.a.remain>0.005)) return false;
+      if (S.list.f==='paid' && (x.a.remain>0.005 || x.a.overpaid>0.005)) return false;
+      if (S.list.f==='cred' && !(x.a.overpaid>0.005)) return false;
+      if (!s) return true;
+      if (egtphSearchNorm(x.s.name).indexOf(egtphSearchNorm(s))!==-1) return true;
+      try { return egtphSupRecords(x.s.id).some(function(r){ return egtphSearchNorm(r.name).indexOf(egtphSearchNorm(s))!==-1; }); } catch(_) { return false; }
+    }).sort(function(a,b){ return (b.a.remain-a.a.remain) || (b.a.overpaid-a.a.overpaid) || String(a.s.name).localeCompare(String(b.s.name),'ar'); });
+    box.innerHTML = '<div class="u2-h2"><b>'+list.length+' مورد</b></div>' + (list.length ? list.map(function(x){
+        var st = x.a.remain>0.005 ? '<b style="color:var(--red)">'+money(x.a.remain)+'</b><small>متبقٍّ</small>'
+               : x.a.overpaid>0.005 ? '<b style="color:var(--blue)">'+money(x.a.overpaid)+'</b><small>رصيد لكم</small>'
+               : '<b style="color:var(--green)">✓ مسدَّد</b><small class="u2-n">'+money(x.a.totalDebt)+'</small>';
+        return '<button class="u2-row" onclick="renderSupDetail(\''+q(x.s.id)+'\')"><span class="u2-av">🏭</span>'
+          + '<span class="m"><b>'+e(x.s.name)+'</b><small>'+e(x.s.type||'مورد')+' · '+x.n+' سجلات</small></span>'
+          + '<span class="a">'+st+'</span></button>';
+      }).join('') : '<div class="u2-empty">لا نتائج</div>');
+  }
+  window.egtphU2SupFilter = function(k){ S.list.f = k; renderList(); };
+
+  // ══════════ ملف المورد ══════════
+  function paneOf(el){
+    if (!el || !el.classList) return 'acc';
+    if (el.classList.contains('back-btn')) return 'none';
+    if (el.id==='eg-subacc') return 'rec';
+    if (el.id==='eg-sec-inv') return 'inv';
+    if (el.id==='eg-sec-pay') return 'pay';
+    if (el.id==='eg-gridbar') return 'inv pay';
+    if (el.classList.contains('sup-credit-notice')) return 'rec acc';
+    return 'acc';
+  }
+  var mo = null, curSp = null;
+  function watch(c){
+    if (mo) return;
+    mo = new MutationObserver(function(list){
+      if (!c.dataset.u2tab || !c.querySelector('#u2-sph')) return;
+      list.forEach(function(m){ Array.prototype.forEach.call(m.addedNodes, function(n){
+        if (n.nodeType===1 && !n.hasAttribute('data-pane') && n.id!=='u2-sph' && n.id!=='u2-stabs') n.setAttribute('data-pane', paneOf(n));
+      }); });
+    });
+    mo.observe(c, {childList:true});
+  }
+  var baseSD = window.renderSupDetail;
+  window.renderSupDetail = function(spId){
+    var out = baseSD.apply(this, arguments);
+    try { decorate(spId); } catch(err) { try { console.error('ui2 sup', err); } catch(_) {} }
+    if (typeof egtphMarkBnav==='function') egtphMarkBnav('suppliers');
+    return out;
+  };
+  function decorate(spId){
+    var c = document.getElementById('content'); if (!c) return;
+    var sp = (typeof suppliers!=='undefined'?suppliers:[]).find(function(x){ return x.id===spId; }); if (!sp) return;
+    c.classList.remove('u2-stats');
+    curSp = spId; watch(c);
+    Array.prototype.forEach.call(c.children, function(k){ k.setAttribute('data-pane', paneOf(k)); });
+    var a = acc(spId);
+    var st = a.remain>0.005 ? ('متبقٍّ <b class="u2-n" style="color:var(--red)">'+money(a.remain)+'</b>')
+           : a.overpaid>0.005 ? ('رصيد لكم <b class="u2-n" style="color:var(--blue)">'+money(a.overpaid)+'</b>')
+           : '<b style="color:var(--green)">✓ لا دين</b>';
+    var hd = document.createElement('div'); hd.id = 'u2-sph'; hd.setAttribute('data-pane','rec inv pay acc');
+    hd.innerHTML = '<div class="u2-hd"><button class="u2-ib" onclick="nav(\'suppliers\')" title="رجوع">›</button>'
+      + '<span class="u2-av">🏭</span><div class="t"><b>'+e(sp.name)+'</b><small>'+e(sp.type||'مورد')+' · '+nrec(spId)+' سجلات · '+st+'</small></div></div>'
+      + '<div class="u2-k3"><div><small>الفواتير</small><b class="u2-n" style="color:var(--gold2)">'+money(a.totalDebt)+'</b></div>'
+      + '<div><small>المدفوع</small><b class="u2-n" style="color:var(--green)">'+money(a.paid)+'</b></div>'
+      + '<div><small>'+(a.overpaid>0.005?'رصيد لكم':'المتبقّي')+'</small><b class="u2-n" style="color:'+(a.remain>0.005?'var(--red)':a.overpaid>0.005?'var(--blue)':'var(--tx)')+'">'+money(a.remain||a.overpaid)+'</b></div></div>';
+    var tb = document.createElement('div'); tb.id = 'u2-stabs'; tb.className = 'u2-seg'; tb.setAttribute('data-pane','rec inv pay acc');
+    tb.innerHTML = [['rec','السجلات'],['inv','الفواتير'],['pay','الدفعات'],['acc','الحساب']].map(function(x){
+      return '<button type="button" data-t="'+x[0]+'">'+x[1]+'</button>'; }).join('');
+    tb.addEventListener('click', function(ev){ var b = ev.target.closest('button[data-t]'); if (b) egtphSupTab(b.getAttribute('data-t')); });
+    c.insertBefore(tb, c.firstChild); c.insertBefore(hd, tb);
+    setTab(spId, S.tab[spId] || defTab(), true);
+  }
+  function defTab(){ try { return localStorage.getItem('egtph_u2_suptab_default') || 'rec'; } catch(_) { return 'rec'; } }
+  function setTab(spId, t, silent){
+    var c = document.getElementById('content'); if (!c) return;
+    if (!silent) { try { if (typeof egtphCommitActive==='function') egtphCommitActive(); } catch(_) {}
+      var ae = document.activeElement; if (ae && ae !== document.body && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) && ae.blur) ae.blur(); }
+    S.tab[spId] = t; c.dataset.u2tab = t;
+    Array.prototype.forEach.call(document.querySelectorAll('#u2-stabs button'), function(b){ b.classList.toggle('on', b.getAttribute('data-t')===t); });
+    if (!silent) c.scrollTop = 0;
+  }
+  window.egtphSupTab = function(t){ if (curSp) setTab(curSp, t, false); };
+
+  // ══════════ الإحصائيات ══════════
+  function statsOpen(){ try { return localStorage.getItem('egtph_u2_stats_open')==='1'; } catch(_) { return false; } }
+  var baseTS = window.renderTripStats;
+  window.renderTripStats = function(){
+    var out = baseTS.apply(this, arguments);
+    try { decorateStats(); } catch(_) {}
+    return out;
+  };
+  function decorateStats(){
+    var c = document.getElementById('content'); if (!c) return;
+    delete c.dataset.u2tab;
+    c.classList.add('u2-stats');
+    U.setTitle('إحصائيات الرحلات', 'الرحلات · الإيراد · الموردون');
+    var scope = Array.prototype.find.call(c.children, function(k){ return k.classList && k.classList.contains('cp') && /نطاق الإحصاء/.test(k.textContent||''); });
+    if (!scope) return;
+    scope.classList.add('u2-scope');
+    scope.classList.toggle('u2-fold', !statsOpen());
+    var head = scope.firstElementChild;
+    if (head && !head.querySelector('.u2-scopehint')) {
+      head.style.display = 'flex'; head.style.alignItems = 'center';
+      head.insertAdjacentHTML('beforeend', '<span class="u2-scopehint">'+(statsOpen()?'▴ طيّ':'▾ تغيير العميل والفترة')+'</span>');
+      head.addEventListener('click', function(){
+        var open = scope.classList.contains('u2-fold');
+        try { localStorage.setItem('egtph_u2_stats_open', open ? '1' : '0'); } catch(_) {}
+        scope.classList.toggle('u2-fold', !open);
+        var h = head.querySelector('.u2-scopehint'); if (h) h.textContent = open ? '▴ طيّ' : '▾ تغيير العميل والفترة';
+      });
+    }
+  }
+  // مغادرة الإحصائيات تُعيد الترتيب العادي
+  var baseNav = window.nav;
+  window.nav = function(v){
+    var c = document.getElementById('content');
+    if (c && v !== 'tripstats') c.classList.remove('u2-stats');
+    if (c && v !== 'clients' && v !== 'suppliers') delete c.dataset.u2tab;
+    return baseNav.apply(this, arguments);
+  };
+})();
+</script>
+
+<script id="egtph-trashsync-js">
+/* EGTPH — استرجاع مورد من السلة: بلا فواتير مكرّرة، ثم تحديث تكاليفه من سجلات العملاء المربوطة */
+(function(){
+  'use strict';
+  if (typeof window.restoreTrash !== 'function' || window.__egTrashSync) return;
+  window.__egTrashSync = true;
+  var base = window.restoreTrash;
+  window.restoreTrash = async function(tid){
+    var item = (typeof trashItems!=='undefined' ? trashItems : []).find(function(t){ return t.id===tid; });
+    if (item && item.type==='supplier' && Array.isArray(item.invs) && window._supInvs) {
+      var ids = {}; item.invs.forEach(function(v){ if (v && v.id) ids[v.id] = 1; });
+      window._supInvs = window._supInvs.filter(function(v){ return !ids[v.id]; });   // لا نسختين لنفس الفاتورة
+    }
+    var r = await base.apply(this, arguments);
+    try {
+      if (item && item.type==='supplier' && item.data && typeof egtphSyncCosts==='function') {
+        var sid = item.data.id, recs = {};
+        (typeof prices!=='undefined'?prices:[]).forEach(function(p){
+          if (p && (p.type==='record_link' || p.type==='truck_link') && p.supplierId===sid && p.recordId) recs[p.recordId] = 1;
+        });
+        for (var rid in recs) await egtphSyncCosts(rid, true);
+      }
+    } catch(_) {}
+    return r;
+  };
+})();
+</script>
+
+<script id="egtph-truckkeep-js">
+/* EGTPH — لا رحلات مخفية: شاحنة لها رحلات مسجّلة لا تُحذف من القائمة، وأي شاحنة لها أرقام تعود للقائمة */
+(function(){
+  'use strict';
+  if (window.__egTruckKeep) return; window.__egTruckKeep = true;
+  function tripsOf(name){
+    var n = 0;
+    try { entries.forEach(function(e){ if (e && e.type==='truck' && e.cols && +e.cols[name]) n++; }); } catch(_) {}
+    return n;
+  }
+  function heal(){
+    try {
+      if (typeof trucks === 'undefined' || typeof entries === 'undefined' || !Array.isArray(trucks)) return 0;
+      var seen = {}, add = [];
+      trucks.forEach(function(t){ seen[t] = 1; });
+      entries.forEach(function(e){
+        if (!e || e.type !== 'truck' || !e.cols) return;
+        for (var k in e.cols) if (!seen[k] && +e.cols[k]) { seen[k] = 1; add.push(k); }
+      });
+      if (!add.length) return 0;
+      add.forEach(function(k){ trucks.push(k); });
+      try { dbP('settings', {id:'trucks', list:trucks}); } catch(_) {}
+      return add.length;
+    } catch(_) { return 0; }
+  }
+  window.egtphTruckHeal = heal;
+  // نسختان في الذاكرة لنفس العنصر (استرجاع من السلة فوق مزامنة، إلخ) = عدّ مزدوج — نُبقي واحدة
+  function dedupe(){
+    var fixed = 0;
+    try {
+      var lists = [];
+      try { lists.push(clients, records, entries, payments, advances, prices, suppliers, supPays, lockedDays); } catch(_) {}
+      if (Array.isArray(window._supInvs)) lists.push(window._supInvs);
+      lists.forEach(function(arr){
+        if (!Array.isArray(arr) || arr.length < 2) return;
+        var seen = new Map(), dup = false;
+        for (var i = 0; i < arr.length; i++) { var x = arr[i]; if (x && x.id != null) { if (seen.has(x.id)) dup = true; seen.set(x.id, x); } }
+        if (!dup) return;
+        var keep = []; seen.forEach(function(v){ keep.push(v); });
+        arr.splice.apply(arr, [0, arr.length].concat(keep)); fixed++;
+      });
+    } catch(_) {}
+    return fixed;
+  }
+  window.egtphDedupe = dedupe;
+  var _h = heal; heal = function(){ dedupe(); return _h(); };
+  if (typeof window.delTruck === 'function') {
+    var baseDel = window.delTruck;
+    window.delTruck = async function(name){
+      var n = tripsOf(name);
+      if (n) {
+        try { T('⚠️ لا يمكن حذف الشاحنة «'+name+'»: لها رحلات في '+n+' يوم. رحلاتها محسوبة في الحسابات، وحذفها يُخفيها فقط. غيّر اسمها بدل حذفها، أو احذف رحلاتها أولاً.', 'warning', 7000); } catch(_) {}
+        return;
+      }
+      return baseDel.apply(this, arguments);
+    };
+  }
+  setTimeout(heal, 3000); setTimeout(heal, 9000);
+  var baseNav = window.nav;
+  if (typeof baseNav === 'function') {
+    window.nav = function(){ heal(); return baseNav.apply(this, arguments); };
+  }
+  var baseCD = window.renderCD;
+  if (typeof baseCD === 'function') {
+    window.renderCD = function(){ heal(); return baseCD.apply(this, arguments); };
+  }
+})();
+</script>
+
+<style id="egtph-narrow-css">
+/* شاشات ضيقة (iPhone SE ‏320px): الشريط العلوي لا يدفع الصفحة جانباً */
+.main{overflow-x:clip!important}
+@media (max-width:400px){
+  .topbar{overflow-x:auto;scrollbar-width:none;gap:4px!important;padding-left:6px!important;padding-right:6px!important}
+  .topbar::-webkit-scrollbar{display:none}
+  .topbar > *{flex-shrink:0}
+  .topbar .tb-act{gap:4px!important}
+  .topbar .tb-act .btn{padding-left:8px!important;padding-right:8px!important}
+}
+/* خط أوضح: لا نصوص أصغر من 11px في الشاشات */
+#content [style*="font-size:8px"],#content [style*="font-size:8.5px"],#content [style*="font-size:9px"],#content [style*="font-size:9.5px"],#content [style*="font-size:10px"],
+#content .tag,#content .lk,#content .lk *,#content .qty,#content .warn,#content .kl,#content .ks,#content .cl-st .l,#content .open-pill,#content .chip.due,#content .pedit-u,
+#content .u2-dd small,#content .u2-dd i,#content .btn-xs,#content .del-btn{font-size:11px!important}
+/* أرقام كبيرة لا تدفع البطاقات خارج الشاشة */
+.u2-k3{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+.u2-k3 b{overflow-wrap:anywhere}
+@media (max-width:720px){
+  #eg-subacc table.eg-tbl tbody tr:not(.act){grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  #eg-subacc table.eg-tbl tbody tr:not(.act) td{min-width:0;overflow-wrap:anywhere}
+}
+@media (max-width:360px){ .u2-k3 b{font-size:13px!important} .u2-k3 div{padding:8px 6px!important} }
+#eg-tscost span,#content .rrow .sub,#content .rrow .chip,#content .reclink small,#content .prof span,#content .eg-tscost span,#content .sup-project-note,#content .sup-project-note *,
+#content .sup-project-sub,#content .sup-project-sub *,#content div.sub{font-size:11px!important}
+</style>
+
+<script id="egtph-badnum-js">
+/* EGTPH — خانة رقمية فيها كتابة غير مفهومة (مثل «1 200» أو «7,5» في بعض الهواتف) لا تُحفظ فارغة بصمت */
+(function(){
+  'use strict';
+  if (window.__egBadNum) return; window.__egBadNum = true;
+  document.addEventListener('change', function(ev){
+    var el = ev.target;
+    if (!el || el.tagName !== 'INPUT' || el.type !== 'number' || !el.validity || !el.validity.badInput) return;
+    ev.stopImmediatePropagation(); ev.stopPropagation();
+    try { el.value = el.defaultValue; } catch(_) {}
+    try { T('⚠️ الرقم غير مفهوم — اكتب أرقاماً فقط بلا مسافات (مثال: 1200 أو 7.5). لم يُحفظ شيء.', 'warning', 5000); } catch(_) {}
+  }, true);
+})();
+</script>
+
+<script id="egtph-lockedprice-js">
+/* EGTPH — تغيير سعر مادة/وحدة وفي السجل أيام محفوظة 🔒: البرنامج يسأل، والمستخدم يقرّر */
+(function(){
+  'use strict';
+  if (window.__egLockedPrice || typeof window.updateRecMat !== 'function') return;
+  window.__egLockedPrice = true;
+  var base = window.updateRecMat;
+  function num(v){ return parseFloat(v) || 0; }
+  function money(v){ return (typeof fDA==='function') ? fDA(v) : String(v); }
+  function esc2(v){ return (typeof esc==='function') ? esc(v) : String(v==null?'':v); }
+  function lockedDaysFor(recId, def){
+    var isMach = def.type === 'unit_def', typ = isMach ? 'machine' : 'truck';
+    return (typeof entries!=='undefined' ? entries : []).filter(function(e){
+      if (!e || e.recordId !== recId || e.type !== typ) return false;
+      if (isMach ? e.unitId !== def.id : e.materialId !== def.id) return false;
+      if (e.priceScope === 'day_override' || e.dayPriceOverride) return false;      // له سعر خاص أصلاً
+      var q = isMach ? num(e.hours) : Object.keys(e.cols||{}).reduce(function(t,k){ return t + num(e.cols[k]); }, 0);
+      if (!(q > 0)) return false;
+      try { return isDayLocked(recId, e.date, typ); } catch(_) { return false; }
+    });
+  }
+  window.updateRecMat = async function(recId, matId, field, value, cid){
+    if (field !== 'price') return base.apply(this, arguments);
+    var def = (typeof prices!=='undefined' ? prices : []).find(function(x){ return x && x.id===matId && x.recordId===recId; });
+    if (!def || def.lockedAt) return base.apply(this, arguments);
+    var raw = String(value==null?'':value).trim();
+    var oldPending = def.priceStatus === 'pending', oldPrice = num(def.price);
+    var newPending = raw === '', newPrice = newPending ? 0 : num(raw);
+    if (oldPending === newPending && Math.abs(oldPrice - newPrice) < 1e-9) return base.apply(this, arguments);
+    var days = lockedDaysFor(recId, def);
+    if (!days.length) return base.apply(this, arguments);
+    var args = arguments, self = this;
+    try { if (typeof renderCD==='function') renderCD(cid); } catch(_) {}    // الخانة تعود للسعر الحالي حتى تقرّر
+    var dates = Array.from(new Set(days.map(function(e){ return e.date; }))).sort();
+    var oldTxt = oldPending ? 'غير متفق عليه' : money(oldPrice);
+    var newTxt = newPending ? 'غير متفق عليه' : money(newPrice);
+    OM('🔒 أيام محفوظة بالسعر القديم',
+      '<div style="font-size:13px;line-height:1.9">«<b>'+esc2(def.name||'')+'</b>»: '+oldTxt+' ← <b>'+newTxt+'</b><br>'
+      + 'في هذا السجل <b>'+dates.length+'</b> يوم محفوظ 🔒 بهذه المادة'
+      + (dates.length<=6 ? ' ('+dates.map(function(d){ return (typeof fD==='function')?fD(d):d; }).join('، ')+')' : '') + '.</div>'
+      + '<div class="fg" style="margin-top:10px"><label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer">'
+      + '<input type="radio" name="eg-lp" value="keep" checked style="margin-top:4px"> <span><b>الأيام المحفوظة تبقى بالسعر القديم ('+oldTxt+')</b><br><small style="color:var(--tx3)">السعر الجديد للأيام غير المحفوظة فقط</small></span></label></div>'
+      + '<div class="fg"><label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer">'
+      + '<input type="radio" name="eg-lp" value="all" style="margin-top:4px"> <span><b>السعر الجديد لكل الأيام</b><br><small style="color:var(--tx3)">حتى الأيام المحفوظة — يتغيّر حسابها</small></span></label></div>',
+      async function(){
+        var pick = (document.querySelector('input[name="eg-lp"]:checked')||{}).value || 'keep';
+        if (pick === 'keep') {
+          var now = new Date().toISOString();
+          for (var i=0;i<days.length;i++){
+            var e = days[i];
+            e.unitPrice = oldPending ? 0 : oldPrice;
+            e.priceStatus = oldPending ? 'pending' : 'confirmed';
+            e.priceScope = 'day_override'; e.dayPriceOverride = true;
+            e.priceCapturedAt = now; e.priceEffectiveDate = e.date; e.priceSnapshotSource = 'locked_keep_old_price';
+            await dbP('entries', e);
+          }
+        }
+        CM();
+        await base.apply(self, args);
+        try { T(pick==='keep' ? ('✅ السعر الجديد مطبّق، و'+dates.length+' يوم محفوظ بقي بالسعر القديم') : '✅ السعر الجديد مطبّق على كل الأيام', 'success', 4500); } catch(_) {}
+      }, 'تطبيق');
+  };
+})();
+</script>
+
+<script id="egtph-idxbump-js">
+/* EGTPH — أي كتابة في أيام السجلات أو الأسعار تُحدّث فهارس السرعة فوراً */
+(function(){
+  'use strict';
+  if (window.__egIdxBump || typeof egtphIdxBump !== 'function') return; window.__egIdxBump = true;
+  var W = { entries:1, prices:1 };
+  ['put','add','delete','clear'].forEach(function(m){
+    var f = IDBObjectStore.prototype[m]; if (typeof f !== 'function') return;
+    IDBObjectStore.prototype[m] = function(){ try { if (W[this.name]) egtphIdxBump(); } catch(_) {} return f.apply(this, arguments); };
+  });
+})();
+</script>
 </body></html>
