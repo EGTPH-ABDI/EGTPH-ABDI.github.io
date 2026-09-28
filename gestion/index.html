@@ -13143,6 +13143,18 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       return r;
     }).sort(function(a,b){ return b.invoiced - a.invoiced; });
   };
+  // نفس مفتاح التجميع الذي تستعمله أرصدة السجلات — لتفصيل أصناف كل بطاقة بلا أي خلط بين السجلات
+  window.egtphSupInvKey = function(spId, o){
+    var _recs = (typeof egtphSupRecords==='function') ? egtphSupRecords(spId) : [];
+    if (o && o.supRecId) return o.supRecId;
+    if (o && o.projectName) {
+      var pr = _recs.find(function(x){ return (x.kind==='project') && x.name===String(o.projectName).trim(); });
+      if (pr) return pr.id;
+    }
+    var a = accOf(o);
+    var byName = _recs.find(function(x){ return x.name===a; });
+    return byName ? byName.id : a;
+  };
 
   // أصناف كل سجل: الكمية والمبلغ لكل مادة داخل المشروع/الخدمة
   function itemsBreakdown(spId, row){
@@ -15949,6 +15961,18 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
   text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .eg-tbl .ml .mq{font-family:'Inter';font-size:11px;font-weight:900;color:var(--cyan);
   direction:ltr;unicode-bidi:isolate;white-space:nowrap}
+/* سطر المادة: الاسم والكمية، وتحت الكمية سعر الوحدة، وبجانبه المبلغ */
+.eg-tbl .ml.ml2{display:block;padding:8px 11px}
+.eg-tbl .ml2 .mrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.eg-tbl .ml2 .mrow.s{margin-top:4px}
+.eg-tbl .ml2 .mn{font-size:13px!important;font-weight:700;color:var(--tx)}
+.eg-tbl .ml2 .mq{font-size:14px!important}
+.eg-tbl .ml2 .mp{font-size:12.5px!important;font-weight:800;color:var(--gold2);direction:rtl;unicode-bidi:isolate;white-space:nowrap}
+.eg-tbl .ml2 .mp bdi{font-family:'Inter'}
+.eg-tbl .ml2 .mp small{font-size:11px;font-weight:700;color:var(--tx3)}
+.eg-tbl .ml2 .mp.pend{color:#fdba74;font-family:inherit;direction:rtl}
+.eg-tbl .ml2 .ma{font-size:12px!important;color:var(--tx3);white-space:nowrap}
+.eg-tbl .ml2 .ma b{font-family:'Inter';font-size:12.5px;color:var(--tx);font-weight:800;margin-inline-start:3px}
 .eg-sec{margin:0 13px 12px;background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--rm);overflow:hidden}
 .eg-sec>.h{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg4);border-bottom:1px solid var(--bdr)}
 .eg-sec>.h .t{flex:1;font-size:12px;font-weight:900}
@@ -15994,20 +16018,36 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       var qty = '';
       try {
         var m = {};
+        var rkey = r.recId || r.name, noItems = 0, nNoItems = 0;
+        var spObj = (typeof suppliers!=='undefined'?suppliers:[]).find(function(x){ return x && x.id===spId; });
+        var initD = (!r.recId && r.name==='عام') ? num(spObj && spObj.initialDebt) : 0;
         (window._supInvs||[]).forEach(function(v){
           if (v.supplierId!==spId) return;
-          if (recName(v) !== r.name) return;
+          if ((typeof egtphSupInvKey==='function' ? egtphSupInvKey(spId, v) : recName(v)) !== rkey) return;
+          if (!Array.isArray(v.items) || !v.items.length) { noItems += num(v.total); nNoItems++; return; }
           (v.items||[]).forEach(function(it){
-            if (!it||!it.name) return;
-            var k = it.name+'|'+(it.unit||'');
-            m[k] = m[k] || {n:it.name,u:it.unit||'',q:0};
+            if (!it) return;
+            it = it.name ? it : Object.assign({}, it, {name:'صنف بلا اسم'});
+            // كل مادة بسعرها: نفس المادة بسعرين = سطران واضحان
+            var pend = it.priceStatus === 'pending', pr = pend ? 0 : Math.round(num(it.unitPrice)*1e6)/1e6;
+            var k = it.name+'|'+(it.unit||'')+'|'+(pend?'P':pr);
+            m[k] = m[k] || {n:it.name,u:it.unit||'',q:0,p:pr,pend:pend,a:0};
             m[k].q += num(it.qty);
+            if (!pend) m[k].a += num(it.qty)*num(it.unitPrice);
           });
         });
-        var ks = Object.keys(m);
+        var extra = (nNoItems ? '<div class="ml ml2"><div class="mrow s"><span class="ma">'+nNoItems+' فاتورة بمبلغ إجمالي بلا أصناف <b>'+money(noItems)+'</b></span></div></div>' : '')
+                  + (initD ? '<div class="ml ml2"><div class="mrow s"><span class="ma">دين سابق (رصيد افتتاحي) <b>'+money(initD)+'</b></span></div></div>' : '');
+        var ks = Object.keys(m).sort(function(a,b){ var x=m[a], y=m[b]; return String(x.n).localeCompare(String(y.n),'ar') || (x.p-y.p); });
         qty = ks.length ? ('<div class="mats">' + ks.map(function(k){
-          return '<div class="ml"><span class="mn">'+e(m[k].n)+'</span>'
-               + '<span class="mq">'+fn(m[k].q)+(m[k].u?(' '+e(m[k].u)):'')+'</span></div>'; }).join('') + '</div>') : '';
+          var x = m[k], u = x.u ? (' '+e(x.u)) : '';
+          return '<div class="ml ml2">'
+               + '<div class="mrow"><span class="mn">'+e(x.n)+'</span><span class="mq">'+fn(x.q)+u+'</span></div>'
+               + '<div class="mrow s">'
+               +   (x.pend ? '<span class="ma">المبلغ <b>—</b></span><span class="mp pend">⚠ سعر غير متفق عليه</span>'
+                           : '<span class="ma">المبلغ <b>'+money(x.a)+'</b></span><span class="mp"><small>سعر الوحدة</small> <bdi>'+money(x.p)+'</bdi>'+(x.u?(' / '+e(x.u)):'')+'</span>')
+               + '</div></div>'; }).join('')
+          + extra + '</div>') : (extra ? '<div class="mats">'+extra+'</div>' : '');
       } catch(_) {}
       var payFn = rid ? ("egtphPayForRec('"+spId+"','"+rid+"',") : ("egtphPayForAccount('"+spId+"','"+jsA(r.name)+"',");
       var acts = locked ? '' : '<div class="acts">'
@@ -18237,6 +18277,13 @@ body.light-mode #eg-bnav{background:rgba(255,255,255,.97)}
 .u2-dd i{font-style:normal;font-size:10px}
 .u2-dd.on{background:var(--gold);border-color:var(--gold)}.u2-dd.on small,.u2-dd.on b,.u2-dd.on i{color:#111}
 .u2-dd.add{border-style:dashed;color:var(--gold2);font-size:24px;font-weight:900}
+.u2-dd.all{border-style:dashed;color:var(--gold2)}.u2-dd.all b{font-size:17px}
+.u2-mo{flex:none;align-self:center;writing-mode:horizontal-tb;font-size:11px;font-weight:800;color:var(--gold2);text-align:center;line-height:1.3;padding:0 3px;border-inline-start:2px solid var(--gold);margin-inline-start:2px}
+.u2-dl-box{max-height:62vh;overflow-y:auto;margin:-4px -2px}
+.u2-dl-mo{position:sticky;top:0;background:var(--bg2);font-size:13px;font-weight:900;color:var(--gold2);padding:8px 4px 6px;z-index:1}
+.u2-dl{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:11px 12px;margin:0 0 6px;border-radius:12px;background:var(--bg3);border:1px solid var(--bdr);color:var(--tx);font-size:14px;font-weight:700;text-align:right;font-family:inherit}
+.u2-dl.on{border-color:var(--gold);background:rgba(212,175,55,.12)}
+.u2-dl b{font-size:14px;color:var(--gold2);white-space:nowrap}
 .u2-dayh{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 4px 8px}
 .u2-dayh b{font-size:15.5px}.u2-dayh .q{font-size:14px;color:var(--gold2);font-weight:900}
 .u2-chip{font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;margin-right:6px}
@@ -18480,12 +18527,17 @@ body.light-mode #eg-bnav{background:rgba(255,255,255,.97)}
     }
     var matChips = mats.length > 1 ? ('<div class="u2-mats">'+mats.map(function(m){
       return '<button class="'+(m.id===mid?'on':'')+'" onclick="egtphU2Mat(\''+q(cid)+'\',\''+q(rec.id)+'\',\''+q(m.id)+'\')">'+e(m.name)+'</button>'; }).join('')+'</div>') : '';
-    var strip = '<div class="u2-strip" id="u2-strip">' + dates.slice(-30).map(function(x){
-        var dt = new Date(x+'T12:00:00'), lk = locked(rec.id, x);
-        return '<button class="u2-dd'+(x===d?' on':'')+'" data-d="'+e(x)+'" onclick="egtphU2Day(\''+q(cid)+'\',\''+q(rec.id)+'\',\''+q(x)+'\')">'
+    // كل الأيام (لا آخر 30 فقط) مع اسم الشهر عند بداية كل شهر، وزر «📅 كل الأيام» لقائمة مرتّبة بالأشهر
+    var lastMo = '';
+    var strip = '<div class="u2-strip" id="u2-strip">' + dates.map(function(x){
+        var dt = new Date(x+'T12:00:00'), lk = locked(rec.id, x), mo = x.slice(0,7), sep = '';
+        if (mo !== lastMo) { lastMo = mo; sep = '<span class="u2-mo">'+e(U.MO[dt.getMonth()])+'<br>'+dt.getFullYear()+'</span>'; }
+        return sep + '<button class="u2-dd'+(x===d?' on':'')+'" data-d="'+e(x)+'" onclick="egtphU2Day(\''+q(cid)+'\',\''+q(rec.id)+'\',\''+q(x)+'\')">'
           + '<small>'+U.WD[dt.getDay()].replace('ال','')+'</small><b>'+dt.getDate()+'</b><i>'+(lk?'🔒':'✎')+'</i></button>';
       }).join('')
-      + '<button class="u2-dd add" onclick="egtphU2AddDay(\''+q(cid)+'\',\''+q(rec.id)+'\')" title="يوم جديد">＋</button></div>';
+      + '<button class="u2-dd add" onclick="egtphU2AddDay(\''+q(cid)+'\',\''+q(rec.id)+'\')" title="يوم جديد">＋</button>'
+      + (dates.length ? '<button class="u2-dd all" onclick="egtphU2AllDays(\''+q(cid)+'\',\''+q(rec.id)+'\')" title="كل الأيام"><small>كل الأيام</small><b>📅</b><i>'+dates.length+'</i></button>' : '')
+      + '</div>';
     if (!d) {
       box.innerHTML = selBtn + matChips + strip + '<div class="u2-empty">لا توجد أيام بعد في هذا السجل.<br><br>'
         + '<button class="u2-save" onclick="egtphU2AddDay(\''+q(cid)+'\',\''+q(rec.id)+'\')">＋ يوم جديد</button></div>';
@@ -18583,6 +18635,28 @@ body.light-mode #eg-bnav{background:rgba(255,255,255,.97)}
     if (ev.target && ev.target.closest && ev.target.closest('#u2-trips')) setTimeout(updSum, 30);
   });
 
+  // قائمة كل أيام السجل مرتّبة بالأشهر (الأحدث أولاً) — للوصول للأيام القديمة بسهولة
+  window.egtphU2AllDays = function(cid, rid){
+    var es = truckEntries(rid);
+    var byD = {};
+    es.forEach(function(x){
+      if (!x.date) return;
+      var t = byD[x.date] || (byD[x.date] = {q:{}});
+      var mat = (typeof prices!=='undefined'?prices:[]).find(function(p){ return p.id===x.materialId; });
+      var u = (mat && mat.priceUnit) || 'رحلة';
+      Object.keys(x.cols||{}).forEach(function(k){ t.q[u] = (t.q[u]||0) + num(x.cols[k]); });
+    });
+    var ds = Object.keys(byD).sort().reverse();
+    var cur = (S.date||{})[rid], html = '', mo = '';
+    ds.forEach(function(x){
+      var dt = new Date(x+'T12:00:00'), m = x.slice(0,7);
+      if (m !== mo) { mo = m; html += '<div class="u2-dl-mo">'+e(U.MO[dt.getMonth()]+' '+dt.getFullYear())+'</div>'; }
+      var qt = Object.keys(byD[x].q).filter(function(u){ return byD[x].q[u]; }).map(function(u){ return qn(byD[x].q[u])+' '+e(u); }).join(' + ') || '—';
+      html += '<button class="u2-dl'+(x===cur?' on':'')+'" onclick="CM();egtphU2Day(\''+q(cid)+'\',\''+q(rid)+'\',\''+q(x)+'\')">'
+        + '<span>'+(locked(rid, x)?'🔒':'✎')+' '+e(U.dateLong(x))+'</span><b class="u2-n">'+qt+'</b></button>';
+    });
+    OM('📅 كل أيام السجل ('+ds.length+')', '<div class="u2-dl-box">'+(html || '<div class="u2-empty">لا توجد أيام بعد.</div>')+'</div>', null, '', false);
+  };
   window.egtphU2Day = function(cid, rid, d){
     try { if (typeof egtphCommitActive==='function') egtphCommitActive(); } catch(_) {}
     S.date[rid] = d; renderTrips(cid);
