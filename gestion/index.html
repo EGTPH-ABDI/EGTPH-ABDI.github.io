@@ -1430,6 +1430,8 @@ const _egEC = {}, _egPC = {}, _egEMPTY = Object.freeze([]);
 // قراءة فقط — لا تعدّل المصفوفة المُرجعة
 function egtphEntriesOf(recId){ try { return _egIdx(entries, x => x.recordId, _egEC).get(recId) || _egEMPTY; } catch(_) { return (typeof entries!=='undefined'?entries:[]).filter(e => e && e.recordId === recId); } }
 function egtphPricesById(id){ try { return _egIdx(prices, x => x.id, _egPC).get(id) || _egEMPTY; } catch(_) { return (typeof prices!=='undefined'?prices:[]).filter(p => p && p.id === id); } }
+// رصيد نهائي: أقل من نصف سنتيم = صفر (مسدَّد)، وإلا نزيل ضجيج الفاصلة العائمة فقط (1e-10 …)
+function egtphBal(x){ x = +x || 0; return Math.abs(x) < 0.005 ? 0 : Math.round(x * 1e6) / 1e6; }
 const egtphIdKey = s => Array.from(String(s==null?'':s)).map(c=>c.codePointAt(0).toString(36)).join('-');
 // نصّ داخل '...' في onclick="...": هروب جافاسكربت ثم هروب HTML (أسماء فيها ' أو " أو \)
 const jsA   = s => esc(String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r?\n/g,'\\n'));
@@ -1584,7 +1586,7 @@ function getCT(cid) {
   // تسبيقات + دفعات من advances store (كلاهما يُحسب ضمن المدفوع)
   const adv  = advances.filter(a=>a.clientId===cid&&a.status!=='X').reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
   const totalPaid = paid + adv;
-  const balance   = tot - totalPaid;
+  const balance   = egtphBal(tot - totalPaid);
   return { tot, trips, hours, kg, paid, adv, totalPaid,
            remain: Math.max(0, balance),
            overpaid: Math.max(0, -balance),
@@ -8197,7 +8199,7 @@ async function buildAndPrintClient(cid, type, opts={}) {
   const t = selectedRecord ? (() => {
     const rt = getRT(selectedRecord.id);
     const rs = window.getRecordSettlement ? window.getRecordSettlement(selectedRecord.id) : {paid:0,remain:rt.amount};
-    const balance = rt.amount - (parseFloat(rs.paid)||0);
+    const balance = egtphBal(rt.amount - (parseFloat(rs.paid)||0));
     return {tot:rt.amount,trips:rt.trips,hours:rt.hours,totalPaid:parseFloat(rs.paid)||0,remain:Math.max(0,balance),overpaid:Math.max(0,-balance),balance};
   })() : getCT(cid);
   const scopeActivity = t.trips>0 ? fN(t.trips)+' رحلة' : (t.hours>0 ? fN(t.hours)+' ساعة' : '—');
@@ -8799,7 +8801,7 @@ if (document.readyState === 'loading') {
     }));
     const paid=payments.filter(p=>p.clientId===cid).reduce((s,p)=>s+n(p.amount),0);
     const adv=advances.filter(a=>a.clientId===cid&&a.status!=='X').reduce((s,a)=>s+n(a.amount),0);
-    const totalPaid=paid+adv, balance=tot-totalPaid;
+    const totalPaid=paid+adv, balance=egtphBal(tot-totalPaid);
     return {tot,trips,hours,kg,paid,adv,totalPaid,remain:Math.max(0,balance),overpaid:Math.max(0,-balance),balance,pendingLines,pendingQty,pendingEntries};
   };
 
@@ -8824,7 +8826,7 @@ if (document.readyState === 'loading') {
     }));
     const sp=suppliers.find(x=>x.id===spId), initDebt=n(sp?.initialDebt), totalDebt=invoiced+initDebt;
     const paid=supPays.filter(p=>p.supplierId===spId).reduce((s,p)=>s+n(p.amount),0);
-    return {totalDebt,paid,remain:Math.max(0,totalDebt-paid),invoiced,initDebt,pendingLines,pendingQty};
+    return {totalDebt,paid,remain:Math.max(0,egtphBal(totalDebt-paid)),invoiced,initDebt,pendingLines,pendingQty};
   };
 
   // New and edited record prices retain a real semantic state, not an ambiguous numeric zero.
@@ -9093,7 +9095,7 @@ if (document.readyState === 'loading') {
     const cash = rows.filter(x=>x.method==='نقداً').reduce((s,x)=>s+n(x.amount),0);
     const check = rows.filter(x=>x.method==='شيك').reduce((s,x)=>s+n(x.amount),0);
     const unknown = rows.filter(x=>!validMethod(x.method)).reduce((s,x)=>s+n(x.amount),0);
-    const balance = total - paid;
+    const balance = egtphBal(total - paid);
     return {
       total, paid, cash, check, unknown, rows,
       remain:Math.max(0,balance),
@@ -11345,7 +11347,7 @@ if (document.readyState === 'loading') {
     const initDebt = num(sp?.initialDebt);
     const totalDebt = invoiced + initDebt;
     const paid = (typeof supPays !== 'undefined' ? supPays : []).filter(p => p && p.supplierId === spId).reduce((s,p) => s + num(p.amount), 0);
-    const balance = totalDebt - paid;
+    const balance = egtphBal(totalDebt - paid);   // لا بقايا فاصلة عائمة: أقل من نصف سنتيم = مسدَّد
     return {
       totalDebt, paid, invoiced, initDebt, balance,
       remain:Math.max(0,balance),
@@ -13138,7 +13140,8 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       var r = map[k];
       return r.recId || r.invoiced || r.paid || k===GEN;
     }).map(function(k){
-      var r = map[k]; r.balance = r.invoiced - r.paid;
+      // الرصيد مقرَّب للسنتيم: بقايا الفاصلة العائمة (مثل 0,0000000001) لا تجعل سجلاً مسدَّداً يظهر «غير مسدَّد»
+      var r = map[k]; r.balance = egtphBal(r.invoiced - r.paid);
       r.remain = Math.max(0, r.balance); r.credit = Math.max(0, -r.balance);
       return r;
     }).sort(function(a,b){ return b.invoiced - a.invoiced; });
