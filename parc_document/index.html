@@ -175,6 +175,34 @@ table.pv-match th{position:sticky;top:0;background:var(--paper-2);z-index:1;font
 
 /* ===== PRINT ===== */
 #print-root{display:none}
+
+/* ===== Documents dans la liste + mise à jour par photo ===== */
+.dchips{display:flex;flex-wrap:wrap;gap:5px}
+.dchip{display:inline-flex;gap:5px;align-items:center;font-size:11.5px;line-height:1.35;border:1px solid var(--line-2);border-radius:7px;padding:3px 8px;background:#fff;color:var(--ink);white-space:nowrap}
+.dchip .k{font-weight:700}
+.dchip.ok{border-color:#b9d3c3;background:#eef6f1}
+.dchip.warn{border-color:#d9b96b;background:#fbf2df;font-weight:600}
+.dchip.bad{border:1.5px solid #9b3a2f;background:#f7e9e6;font-weight:700}
+.dchip.miss{border-style:dashed;color:var(--muted)}
+table.grid tr.has-docs td{border-bottom:0}
+table.grid tr.docrow td{border-top:0;padding-top:0;padding-bottom:9px}
+tr.flash td{animation:egFlash 2.6s ease}
+@keyframes egFlash{0%,45%{background:#f3e3b8}100%{background:transparent}}
+.scan-head{display:grid;grid-template-columns:130px 1fr;gap:14px;align-items:start}
+@media(max-width:560px){.scan-head{grid-template-columns:1fr}}
+.scan-img{width:100%;max-height:230px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff;display:block}
+.scan-busy{display:flex;gap:14px;align-items:center}.scan-busy .scan-img{width:92px;max-height:130px}
+.scan-hint{font-size:12px;color:var(--muted);margin-top:4px}
+.scan-hint.ok{color:var(--ok);font-weight:600}.scan-hint.warn{color:var(--warn);font-weight:600}
+.sc-row{border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-top:7px;display:grid;grid-template-columns:1fr auto;gap:5px 10px;align-items:center;background:#fff}
+.sc-row.diff{border-color:#d9b96b;background:#fffaf0}
+.sc-row .sc-cur{font-size:12px;color:var(--muted);text-align:end}
+.sc-row input.sc-val{grid-column:1/-1;width:100%;min-width:0;padding:7px 9px;border:1px solid var(--line-2);border-radius:7px;font-size:13px;background:#fff}
+.scan-note{font-size:12.5px;margin:10px 0 0;padding:8px 10px;border-radius:8px;border:1px solid var(--line)}
+.scan-note.ok{background:#eef6f1}.scan-note.warn{background:#fbf2df}.scan-note.bad{background:#f7e9e6}
+.contract-box{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px;background:#fff}
+.contract-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.eg-toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#11242a;color:#fff;padding:11px 18px;border-radius:10px;z-index:300;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.25);max-width:92vw;text-align:center}
 @media print{ .layout,.scrim{display:none!important} #print-root{display:block!important} @page{size:A4;margin:13mm} }
 #print-root{font-family:"Times New Roman",Georgia,serif;color:#000;direction:ltr;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 #print-root .radp{text-align:center;font-style:italic;font-size:13px;margin-bottom:8px}
@@ -438,6 +466,41 @@ Object.assign(T.ar,{
   pvOcrRowsFound:"تم اكتشاف {n} سطراً مرقماً",
   pvOcrMissingRegister:"يوجد {n} سطر/أسطر في المحضر لم تعد موجودة في سجل العتاد الحالي: {rows}.",
   pvOcrUnmatchedRefs:"تمت قراءة مراجع في المحضر لكنها غير موجودة في سجل العتاد الحالي: {refs}."
+});
+
+Object.assign(T.fr,{
+  scanBtn:"📷 Mise à jour par photo",scanTitle:"Mise à jour des documents par photo",
+  scanLoading:"Chargement du lecteur…",scanReading:"Lecture du document…",scanOf:"Photo {i}/{n}",
+  scanType:"Type de document",scanDetected:"Reconnu automatiquement",scanUnsure:"Type incertain — vérifiez-le",
+  scanVehicle:"Véhicule / engin concerné",scanChoose:"— Choisir —",scanNewVeh:"➕ Nouveau véhicule",
+  scanReasonMat:"Reconnu par le matricule",scanReasonSerie:"Reconnu par le N° de série",scanReasonOld:"Reconnu par l’ancien matricule",
+  scanNoMatch:"Aucun véhicule reconnu : choisissez-le dans la liste.",scanAmbig:"Plusieurs véhicules possibles : vérifiez.",
+  scanCurrent:"Actuel",scanEmpty:"vide",scanSavePhoto:"Enregistrer la photo dans la fiche du véhicule",
+  scanApply:"Mettre à jour",scanSkip:"Ignorer",scanUpToDate:"Déjà à jour : les informations lues sont identiques à celles enregistrées.",
+  scanNewInfo:"{n} information(s) nouvelle(s) cochée(s) pour la mise à jour.",scanOlder:"Ce document est plus ancien que celui déjà enregistré : rien n’est coché.",
+  scanNothing:"Aucune donnée fiable n’a été lue. Saisissez les valeurs ou reprenez une photo plus nette.",
+  scanDone:"{v} — {d} mis à jour ✓",scanPhotoOnly:"{v} — photo enregistrée ✓",scanPickVeh:"Choisissez le véhicule concerné.",
+  scanNewName:"Véhicule à compléter",scanRemain:"{n} photo(s) restante(s)",scanReplaceVin:"Le N° de série lu est différent : cochez seulement si vous êtes sûr.",
+  scanSameDoc:"Même échéance que le document enregistré : c’est le même document. Les petites différences de lecture ne sont pas cochées.",scanNoDate:"La date d’échéance n’a pas été lue : seules les cases vides sont proposées. Vérifiez avant de cocher.",
+  contracts:"Contrats d’assurance (flotte)",vehCount:"{n} véhicule(s)",fleetAlert:"Contrat {c} — {n} véhicules",renewContract:"🔁 Renouveler le contrat",newContract:"N° du contrat renouvelé",renewApply:"Appliquer aux véhicules cochés",renewDone:"{n} véhicule(s) mis à jour ✓",renewBad:"Vérifiez le N° de contrat et les dates.",certNote:"Les N° de certificat (F…) de chaque véhicule se complètent ensuite en photographiant chaque certificat avec « 📷 Mise à jour par photo ».",
+  chipAs:"Assurance",chipCt:"C.T",chipPm:"Permis",chipCg:"C. grise",chipCgOk:"enregistrée",docsCol:"Documents"
+});
+Object.assign(T.ar,{
+  scanBtn:"📷 تحديث بالصورة",scanTitle:"تحديث الوثائق بالصورة",
+  scanLoading:"جاري تحميل القارئ…",scanReading:"جاري قراءة الوثيقة…",scanOf:"الصورة {i}/{n}",
+  scanType:"نوع الوثيقة",scanDetected:"تم التعرف عليه تلقائياً",scanUnsure:"النوع غير مؤكد — تحقق منه",
+  scanVehicle:"المركبة / الآلة المعنية",scanChoose:"— اختر —",scanNewVeh:"➕ مركبة جديدة",
+  scanReasonMat:"تم التعرف عليها برقم التسجيل",scanReasonSerie:"تم التعرف عليها بالرقم التسلسلي",scanReasonOld:"تم التعرف عليها برقم التسجيل القديم",
+  scanNoMatch:"لم يتم التعرف على المركبة: اخترها من القائمة.",scanAmbig:"عدة مركبات محتملة: تحقق.",
+  scanCurrent:"الحالي",scanEmpty:"فارغ",scanSavePhoto:"حفظ الصورة في ملف المركبة",
+  scanApply:"تحديث",scanSkip:"تجاهل",scanUpToDate:"المعلومات محدّثة: ما قُرئ مطابق لما هو مسجل.",
+  scanNewInfo:"{n} معلومة جديدة محددة للتحديث.",scanOlder:"هذه الوثيقة أقدم من المسجلة: لم يُحدَّد أي تغيير.",
+  scanNothing:"لم تُقرأ أي معلومة موثوقة. أدخل القيم يدوياً أو أعد تصوير الوثيقة بوضوح.",
+  scanDone:"{v} — تم تحديث {d} ✓",scanPhotoOnly:"{v} — تم حفظ الصورة ✓",scanPickVeh:"اختر المركبة المعنية.",
+  scanNewName:"Véhicule à compléter",scanRemain:"بقيت {n} صورة",scanReplaceVin:"الرقم التسلسلي المقروء مختلف: حدّده فقط إذا كنت متأكداً.",
+  scanSameDoc:"نفس تاريخ الانتهاء المسجل: إنها نفس الوثيقة. الاختلافات البسيطة في القراءة لم تُحدَّد.",scanNoDate:"لم يُقرأ تاريخ الانتهاء: اقتُرحت الخانات الفارغة فقط. تحقق قبل التحديد.",
+  contracts:"عقود التأمين (الأسطول)",vehCount:"{n} مركبة",fleetAlert:"العقد {c} — {n} مركبة",renewContract:"🔁 تجديد العقد",newContract:"رقم العقد المجدَّد",renewApply:"تطبيق على المركبات المحددة",renewDone:"تم تحديث {n} مركبة ✓",renewBad:"تحقق من رقم العقد والتواريخ.",certNote:"أرقام الشهادات (F…) لكل مركبة تُكمَّل بعد ذلك بتصوير كل شهادة بزر «📷 تحديث بالصورة».",
+  chipAs:"التأمين",chipCt:"المراقبة",chipPm:"الرخصة",chipCg:"البطاقة الرمادية",chipCgOk:"مسجلة",docsCol:"الوثائق"
 });
 let LANG="fr";
 function t(k){return (T[LANG]&&T[LANG][k])||T.fr[k]||k;}
@@ -762,6 +825,7 @@ async function fbPull(){
     finally{ window._cloudApplying=false; }
   }
   _cloudBusy=false;
+  if(DATA&&!(DATA._mig_docs_oct26>=DOCS_MIG_VERSION)){try{await runDocsMigrationOnce();}catch(e){}}
   return true;
 }
 async function cloudSync(){
@@ -995,6 +1059,10 @@ async function init(){
   if(!DATA._mig_beijing){ if(!DATA.equipment.find(e=>e.matricule==="04171-512-02")) DATA.equipment.push({id:64,cat:2,name:"Tracteur Routier BEIJING",model:"BSX5180TYS",matricule:"04171-512-02",annee:"2012",etat:"Bon",obs:"Propriétaire : BENZAMIA MAMMAR",veh:true,needsCT:true,needsPermis:true,serie:"LZGJD3T16AG008829",assurance:{num:"D0901.2025.10.1121.00450 (F368336)",deb:"2025-12-05",fin:"2026-12-04",ref:"mat"},ct:{num:"6437702 / vignette 4218704",deb:"2025-12-10",fin:"2026-12-10"},permis:{}}); DATA._mig_beijing=true; await saveAll(); }
   if(!DATA._mig_peugct){ const v=DATA.equipment.find(e=>e.matricule==="012872-100-02"); if(v)v.ct={num:"8591496 / PV 0260486",deb:"2026-06-02",fin:"2027-06-02"}; DATA._mig_peugct=true; await saveAll(); }
   if(!DATA._mig_jmcass){ const v=DATA.equipment.find(e=>e.matricule==="008888-325-02"); if(v)v.assurance={num:"D0901.2026.10.1121.00228 (F407083)",deb:"2026-06-11",fin:"2027-06-10",ref:"mat"}; DATA._mig_jmcass=true; await saveAll(); }
+  // Mise à jour des documents d'octobre 2026 : après la première lecture du cloud (ou hors ligne / sans cloud).
+  // Sécurité : tant qu'une lecture du cloud est en cours, on attend (jusqu'à 60 s) pour ne jamais écraser des données plus récentes.
+  if(!navigator.onLine)await runDocsMigrationOnce();
+  else{let _w=0;const _tryMig=()=>{if(DATA._mig_docs_oct26>=DOCS_MIG_VERSION)return;if((_cloudBusy||!_cloudSynced)&&_w<12&&navigator.onLine){_w++;setTimeout(_tryMig,5000);return;}runDocsMigrationOnce();};setTimeout(_tryMig,12000);}
   LANG=DATA.lang;
   applyLang(); applyDesign();
   $("#menuBtn").onclick=()=>{$("#sidebar").classList.add("open");$("#scrim").classList.add("show");};
@@ -1837,20 +1905,39 @@ function doPrint(){
 let matFilter="all",matSearch="";
 function renderMat(){
   let html=`<div class="toolbar"><select id="fCat"><option value="all">${t("allCats")}</option>${Object.entries(CATS).map(([k,v])=>`<option value="${k}" ${matFilter==k?"selected":""}>${esc(v)}</option>`).join("")}<option value="veh" ${matFilter==="veh"?"selected":""}>🚛 ${t("vehicles")}</option></select>
-    <input id="fSearch" placeholder="${t("search")}" value="${esc(matSearch)}" style="flex:1;min-width:150px"><button class="btn" id="addBtn">${t("add")}</button></div><div class="card" style="overflow:auto">`;
+    <input id="fSearch" placeholder="${t("search")}" value="${esc(matSearch)}" style="flex:1;min-width:150px"><button class="btn" id="addBtn">${t("add")}</button>${scanBtnHtml()}</div><div class="card" style="overflow:auto">`;
   let list=DATA.equipment.slice();
   if(matFilter==="veh")list=list.filter(e=>e.veh);else if(matFilter!=="all")list=list.filter(e=>e.cat==Number(matFilter));
-  if(matSearch){const q=matSearch.toLowerCase();list=list.filter(e=>((e.name||"")+" "+(e.model||"")+" "+(e.matricule||"")+" "+(e.facture||"")).toLowerCase().includes(q));}
+  if(matSearch){const q=matSearch.toLowerCase(),qd=scanDigits(matSearch);list=list.filter(e=>((e.name||"")+" "+(e.model||"")+" "+(e.matricule||"")+" "+(e.facture||"")+" "+(e.serie||"")).toLowerCase().includes(q)||(qd.length>=4&&scanDigits(e.matricule).includes(qd)));}
   const byCat={};list.forEach(e=>{(byCat[e.cat]=byCat[e.cat]||[]).push(e);});
   Object.keys(byCat).sort().forEach(c=>{
     html+=`<div class="catbar">${esc(CATS[c])}</div><table class="grid"><thead><tr><th style="width:40px">N°</th><th>${t("designation")}</th><th style="width:120px">${t("matricule")}/${t("facture")}</th><th style="width:60px">${t("annee")}</th><th style="width:74px"></th></tr></thead><tbody>`;
-    byCat[c].forEach(e=>{html+=`<tr><td class="num">${String(e.id).padStart(2,"0")}</td><td><b>${esc(e.name)}</b> ${e.veh?`<span class="tag veh">${t("vehicles")}</span>`:''}${e.model?`<br><small class="muted">${esc(e.model)}</small>`:""}</td><td>${esc(e.matricule||e.facture||"—")}</td><td>${esc(e.annee||"—")}</td><td><button class="btn ghost sm" data-edit="${e.id}">${t("edit")}</button></td></tr>`;});
+    byCat[c].forEach(e=>{
+      html+=`<tr data-row="${e.id}" class="${e.veh?"has-docs":""}"><td class="num">${String(e.id).padStart(2,"0")}</td><td><b>${esc(e.name)}</b> ${e.veh?`<span class="tag veh">${t("vehicles")}</span>`:''}${e.model?`<br><small class="muted">${esc(e.model)}</small>`:""}</td><td>${esc(e.matricule||e.facture||"—")}</td><td>${esc(e.annee||"—")}</td><td><button class="btn ghost sm" data-edit="${e.id}">${t("edit")}</button></td></tr>`;
+      if(e.veh)html+=`<tr data-row="${e.id}" class="docrow"><td></td><td colspan="4">${docChipsHtml(e)}</td></tr>`;
+    });
     html+=`</tbody></table>`;});
   html+=`</div>`;$("#view").innerHTML=html;
   $("#fCat").onchange=e=>{matFilter=e.target.value;renderMat();};
   $("#fSearch").oninput=e=>{matSearch=e.target.value;renderMat();$("#fSearch").focus();};
   $("#addBtn").onclick=()=>openEdit(null);
+  bindScanBtn();
   document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEdit(Number(b.dataset.edit)));
+}
+/* Pastilles de validité (lisibles aussi en noir et blanc : l'état est écrit en toutes lettres). */
+function docChip(label,d){
+  if(!d||!d.fin)return `<span class="dchip miss"><span class="k">${esc(label)}</span> ${t("nonRens")}</span>`;
+  const st=statusOf(d.fin),n=daysLeft(d.fin);
+  const lbl=st==="bad"?t("expireL"):(st==="warn"?n+" "+t("inDays"):t("valide"));
+  return `<span class="dchip ${st}"><span class="k">${esc(label)}</span> ${fmtDate(d.fin)} · ${lbl}</span>`;
+}
+function docChipsHtml(e){
+  let h=docChip(t("chipAs"),e.assurance);
+  if(e.needsCT)h+=docChip(t("chipCt"),e.ct);
+  if(e.needsPermis)h+=docChip(t("chipPm"),e.permis);
+  const cg=e.cg&&String(e.cg.num||"").trim();
+  h+=cg?`<span class="dchip ok"><span class="k">${t("chipCg")}</span> ${t("chipCgOk")}</span>`:`<span class="dchip miss"><span class="k">${t("chipCg")}</span> ${t("nonRens")}</span>`;
+  return `<div class="dchips">${h}</div>`;
 }
 
 /* ===== EDIT MODAL + OCR DOCUMENTS ===== */
@@ -2473,19 +2560,433 @@ async function delItem(id){if(!confirm(t("confirmDel")))return;if(!Array.isArray
 function closeModal(){$("#overlay").classList.remove("show");$("#modal").innerHTML="";}
 $("#overlay").addEventListener("click",ev=>{if(ev.target.id==="overlay")closeModal();});
 
+/* ===== MISE À JOUR DES DOCUMENTS PAR PHOTO =====
+   1) lit la photo (OCR local Tesseract, même moteur que la fiche) ;
+   2) reconnaît le type : carte grise / assurance / contrôle technique / permis de circuler ;
+   3) retrouve le véhicule par matricule, N° de série ou ancien matricule ;
+   4) affiche « actuel → lu » et ne coche que ce qui est vraiment nouveau ;
+   5) rien n'est enregistré avant « Mettre à jour ». */
+const SCAN_TYPES=["as","ct","cg","pm"];
+const SCAN_TYPE_LABEL={as:"assurance",ct:"controleTech",cg:"carteGrise",pm:"permisCirc"};
+const SCAN_DOC_RX={
+  as:[[/\bcash\b/,3],[/assurance/,2],[/تامين/,3],[/المؤمن/,2],[/عقد\s*التامين/,3],[/d\s*0901/,3],[/hydrocarbure/,2],[/مقطورة/,1],[/saa\b|caar\b|caat\b|ciar\b|trust\b|salama\b|alliance\b|amana\b/,2]],
+  ct:[[/controle\s*technique/,4],[/المراقبة\s*التقنية/,4],[/محضر\s*المراقبة/,4],[/visite\s*periodique/,4],[/وزارة\s*النقل/,1],[/مراقب/,1],[/vl\s*\/\s*vu/,2],[/العيوب\s*الملاحظة/,3]],
+  cg:[[/carrosserie/,3],[/places\s*assises/,3],[/mise\s*en\s*circulation/,3],[/poids\s*total/,2],[/charge\s*utile/,2],[/precedent\s*numero/,3],[/الرقم\s*السابق/,3],[/عدد\s*المقاعد/,2],[/quittance/,3],[/profession/,2],[/carte\s*d.?immatriculation/,3],[/بطاقة\s*تسجيل/,3],[/الحمولة/,1],[/immatriculation/,2],[/\bgenre\b/,2],[/\benergie\b/,2],[/\bpuissance\b/,2],[/nom\s*et\s*prenoms?/,2],[/\bcommune\b/,1],[/\badresse\b/,1],[/automobile/,1]],
+  pm:[[/permis\s*de\s*circuler/,5],[/رخصة\s*(?:ال)?سير/,5],[/autorisation\s*de\s*circul/,3],[/registre\s*des\s*transporteurs/,2]]
+};
+const SCAN_FIELDS={
+  as:[["num","numContrat","text"],["deb","dateDeb","date"],["fin","dateFin","date"]],
+  ct:[["num","numPv","text"],["deb","dateCtrl","date"],["fin","validite","date"]],
+  pm:[["num","numRef","text"],["deb","dateDeliv","date"],["fin","validite","date"]],
+  cg:[["matricule","numMat","text"],["serie","serie","text"],["num","numRef","text"],["annee","annee","text"],["model","marque","text"]]
+};
+let _scanQueue=[],_scanTotal=0,_scanIndex=0,_scanWorker=null,_scanLastId=null,_scanUpdated=[];
+
+function scanDigits(v){return latinDigits(String(v||"")).replace(/\D/g,"");}
+function scanPlateKeys(v){const d=scanDigits(v);if(d.length<7)return [];return [...new Set([d,d.replace(/^0+/,"")])];}
+function scanAlnum(v){return latinDigits(String(v||"")).toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/[OQ]/g,"0").replace(/I/g,"1");}
+function scanPlatesInText(text){
+  const src=latinDigits(String(text||"")),out=new Set();
+  const re=/(\d{2,6})\s*[-.\s_,]\s*(\d{3,5})\s*[-.\s_,]\s*(\d{2})(?!\d)/g;
+  for(const m of src.matchAll(re)){const d=m[1]+m[2]+m[3];if(d.length>=8&&d.length<=13){out.add(d);out.add(d.replace(/^0+/,""));}}
+  const p=findPlate(src);if(p)scanPlateKeys(p).forEach(k=>out.add(k));
+  return out;
+}
+function scanSerieKeys(e){return String(e.serie||"").split(/[\s()\/,;]+/).map(scanAlnum).filter(x=>x.length>=7);}
+function scanClassify(text){
+  const f=foldOCR(text||""),scores={};
+  SCAN_TYPES.forEach(tt=>{scores[tt]=0;SCAN_DOC_RX[tt].forEach(([rx,w])=>{if(rx.test(f))scores[tt]+=w;});});
+  const sorted=SCAN_TYPES.slice().sort((a,b)=>scores[b]-scores[a]);
+  const top=sorted[0],second=sorted[1];
+  return {type:scores[top]>0?top:"",score:scores[top],sure:scores[top]>=4&&scores[top]-scores[second]>=3,scores};
+}
+function scanMatchVehicle(text,parsed){
+  const plates=scanPlatesInText(text);
+  if(parsed&&parsed.matricule)scanPlateKeys(parsed.matricule).forEach(k=>plates.add(k));
+  const alnum=scanAlnum(text),res=[];
+  DATA.equipment.filter(e=>e&&e.veh).forEach(e=>{
+    let score=0;const reasons=[];
+    if(scanPlateKeys(e.matricule).some(k=>plates.has(k))){score+=100;reasons.push("mat");}
+    else if((Array.isArray(e.oldMat)?e.oldMat:[]).some(m=>scanPlateKeys(m).some(k=>plates.has(k)))){score+=60;reasons.push("old");}
+    if(scanSerieKeys(e).some(k=>alnum.includes(k))){score+=90;reasons.push("serie");}
+    if(score)res.push({e,score,reasons});
+  });
+  res.sort((a,b)=>b.score-a.score);
+  const ambiguous=!!(res[0]&&res[1]&&res[1].score===res[0].score);
+  return {best:ambiguous?null:(res[0]||null),list:res,ambiguous};
+}
+function scanCashCertNo(text){
+  const m=latinDigits(String(text||"")).match(/(?:N\s*[°ºoO2eE]|№|Nº)\s*[:.\-]?\s*(\d{6,8})(?!\d)/);
+  return m?m[1]:"";
+}
+function scanCgReference(text){
+  const src=latinDigits(String(text||""));
+  const q=(src.match(/(?:^|\D)(18\d{6,7})(?!\d)/)||[])[1]||"";
+  const thisYear=new Date().getFullYear();
+  const d=_dateOccurrences(src).sort((a,b)=>a.index-b.index).map(x=>x.iso).find(iso=>{const y=Number(iso.slice(0,4));return y>=2000&&y<=thisYear;})||"";
+  const dd=d?fmtDate(d):"";
+  if(q)return "Quittance N° "+q+(dd?" du "+dd:"");
+  return dd?"Carte du "+dd:"";
+}
+function scanGapOk(tt,deb,fin){
+  if(!deb||!fin)return true;
+  const d=Math.round((new Date(fin+"T00:00:00")-new Date(deb+"T00:00:00"))/86400000);
+  return tt==="pm"?d>=300&&d<=4000:d>=150&&d<=800;
+}
+function scanEnrich(tt,p,text){
+  const src=latinDigits(String(text||""));
+  if(tt==="as"){const c=scanCashCertNo(text);if(p.num&&c&&!scanDigits(p.num).includes(c))p.num=p.num+" (F"+c+")";}
+  if(tt==="ct"){
+    // « VISITE PERIODIQUE LE jj/mm/aaaa » = prochaine visite = fin de validité (mention la plus fiable du PV).
+    const m=src.match(/visite\s*p[ée]riodique\s*(?:le)?\s*[:.]?\s*([0-9]{1,2}\s*[\/.-]\s*[0-9]{1,2}\s*[\/.-]\s*[0-9]{2,4})/i);
+    const f=m?parseISODate(m[1]):"";if(f)p.fin=f;
+    // Date du contrôle = même jour/mois que l'échéance, 1 ou 2 ans avant (sinon elle n'est pas proposée).
+    if(p.fin){
+      const y=Number(p.fin.slice(0,4)),md=p.fin.slice(4);
+      const cand=[(y-1)+md,(y-2)+md].find(d=>_dateOccurrences(src).some(o=>o.iso===d));
+      if(cand)p.deb=cand;else if(p.deb&&!(p.deb===(y-1)+md||p.deb===(y-2)+md))delete p.deb;
+    }
+    if(p.num&&/\/\s*(?:19|20)\d{2}$/.test(String(p.num).trim()))delete p.num;
+    if(!p.num){
+      const vg=(src.match(/(?:N\s*[°ºoO2eE]|№|Nº)\s*[:.\-]?\s*(\d{7})(?!\d)/)||[])[1]||"";
+      const cnt={};[...src.matchAll(/(?:^|[^\d\/.\-])(\d{7})(?![\d\/.\-])/g)].forEach(x=>{if(x[1]!==vg)cnt[x[1]]=(cnt[x[1]]||0)+1;});
+      const pv=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0]||"";
+      if(vg&&pv)p.num=vg+" / PV "+pv;
+    }
+  }
+  if((tt==="as"||tt==="ct"||tt==="pm")&&p.deb&&p.fin&&!scanGapOk(tt,p.deb,p.fin))delete p.deb;
+  if(tt==="cg"){
+    if(!p.matricule){const pl=findPlate(text);if(pl)p.matricule=pl;}
+    if(!p.num){const r=scanCgReference(text);if(r)p.num=r;}
+  }
+  return p;
+}
+function scanParsed(st,tt){
+  if(!st.parsedByType[tt])st.parsedByType[tt]=scanEnrich(tt,trustedOcrParsed(tt,parseOcrDocument(tt,st.text),st.conf),st.text);
+  return st.parsedByType[tt];
+}
+function scanDocOf(e,tt){if(!e)return {};const d=tt==="as"?e.assurance:tt==="ct"?e.ct:tt==="pm"?e.permis:e.cg;return d||{};}
+function scanCurrent(e,tt,f){if(!e)return "";if(tt==="cg"&&f!=="num")return String(e[f]||"");return String(scanDocOf(e,tt)[f]||"");}
+function scanSame(tt,f,a,b){
+  if(!a||!b)return false;
+  if(f==="deb"||f==="fin")return _isoDateValue(a)===_isoDateValue(b);
+  if(f==="matricule")return scanDigits(a)===scanDigits(b);
+  const x=scanAlnum(a),y=scanAlnum(b);
+  if(f==="num"&&Math.min(x.length,y.length)>=12&&(x.startsWith(y)||y.startsWith(x)))return true;
+  return x===y;
+}
+function scanIsOlder(e,tt,p){
+  if(tt==="cg"||!e)return false;
+  const cur=scanDocOf(e,tt).fin,nw=p&&p.fin;
+  return !!(cur&&nw&&_isoDateValue(nw)&&nw<cur);
+}
+function scanDefaultOn(e,tt,f,cur,val,reasons){
+  if(!val)return false;
+  if(cur&&scanSame(tt,f,cur,val))return false;
+  if(tt==="cg"){
+    if(f==="model"||f==="annee"||f==="serie")return !cur;
+    if(f==="matricule")return !cur||(reasons||[]).includes("serie");
+    return true;
+  }
+  return true;
+}
+function scanBtnHtml(){return `<label class="btn ghost" style="cursor:pointer">${t("scanBtn")}<input type="file" id="scanInp" accept="image/*" multiple style="display:none"></label>`;}
+function bindScanBtn(){const i=document.getElementById("scanInp");if(i)i.onchange=ev=>{const files=[...(ev.target.files||[])].filter(f=>!f.type||f.type.startsWith("image/"));ev.target.value="";if(files.length)scanStart(files);};}
+function egToast(msg){let el=document.getElementById("egToast");if(!el){el=document.createElement("div");el.id="egToast";el.className="eg-toast";document.body.appendChild(el);}el.textContent=msg;el.style.display="block";clearTimeout(el._t);el._t=setTimeout(()=>{el.style.display="none";},3800);}
+function scanSetProgress(msg){const el=document.getElementById("sc_prog");if(el)el.textContent=msg;}
+function scanStart(files){_scanQueue=files.slice();_scanTotal=files.length;_scanIndex=0;_scanUpdated=[];scanNext();}
+async function scanFinish(){
+  try{if(_scanWorker)await _scanWorker.terminate();}catch(e){}
+  _scanWorker=null;closeModal();
+  if(_scanLastId!=null)scanGoTo(_scanLastId);
+  _scanLastId=null;
+}
+async function scanNext(){
+  if(!_scanQueue.length){await scanFinish();return;}
+  const file=_scanQueue.shift();_scanIndex++;
+  const data=await new Promise(res=>processDocumentImage(file,res));
+  if(!data){alert(t("ocrBadImage"));return scanNext();}
+  const st={file,store:data.store,ocrSrc:data.ocr,text:"",conf:0,parsedByType:{},type:"",sure:false,match:null};
+  $("#modal").innerHTML=`<h3>${t("scanTitle")}</h3><div class="scan-busy"><img class="scan-img" src="${data.store}" alt=""><div><b id="sc_prog">${t("scanLoading")}</b><div class="muted" style="font-size:12px;margin-top:4px">${tVars("scanOf",{i:_scanIndex,n:_scanTotal})} — ${esc(file.name||"")}</div></div></div>`;
+  $("#overlay").classList.add("show");
+  try{
+    const OCR=await loadOcrLibrary();
+    if(!_scanWorker)_scanWorker=await OCR.createWorker("ara+fra+eng",1,{logger:m=>{if(m&&m.status){const p=typeof m.progress==="number"?" "+Math.round(m.progress*100)+"%":"";scanSetProgress(t("scanReading")+p);}}});
+    scanSetProgress(t("scanReading"));
+    const img=await loadImageDataUrl(data.ocr);
+    try{if(_scanWorker.setParameters)await _scanWorker.setParameters({tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300"});}catch(e){}
+    const quick=await _scanWorker.recognize(buildOcrVariant(img,{x:.015,y:.01,w:.97,h:.98},3400,false));
+    const quickText=((quick&&quick.data&&quick.data.text)||"").trim();
+    let cls=scanClassify(quickText);
+    const tt0=cls.type||"as";
+    const best=await recognizeBestOcr(_scanWorker,tt0,data.ocr);
+    st.text=_mergeOcrText([{text:quickText},{text:best.text||""}]);
+    st.conf=Math.max(Number(best.confidence)||0,Math.round(Number(quick&&quick.data&&quick.data.confidence)||0));
+    st.parsedByType[tt0]=scanEnrich(tt0,trustedOcrParsed(tt0,best.parsed,best.confidence),st.text);
+    const cls2=scanClassify(st.text);
+    if(cls2.type&&cls2.score>cls.score)cls=cls2;
+    st.type=cls.type||tt0;st.sure=cls.sure;
+    st.match=scanMatchVehicle(st.text,scanParsed(st,"cg"));
+  }catch(err){
+    console.error("scan",err);
+    $("#modal").innerHTML=`<h3>${t("scanTitle")}</h3><p class="scan-note bad">${t("ocrFailed")}</p><div class="modal-actions"><button class="btn" id="sc_ok" type="button">OK</button></div>`;
+    $("#sc_ok").onclick=()=>{scanNext();};
+    return;
+  }
+  scanReview(st);
+}
+function scanReview(st){
+  const vehs=DATA.equipment.filter(e=>e&&e.veh);
+  const best=st.match&&st.match.best;
+  const preId=best?String(best.e.id):"";
+  const reasonKey=best?(best.reasons.includes("mat")?"scanReasonMat":best.reasons.includes("serie")?"scanReasonSerie":"scanReasonOld"):"";
+  $("#modal").innerHTML=`<h3>📷 ${t("scanTitle")}</h3>
+    <div class="scan-head"><img class="scan-img" src="${st.store}" alt="">
+      <div>
+        <div class="field"><label>${t("scanType")}</label><select id="sc_type">${SCAN_TYPES.map(tt=>`<option value="${tt}" ${tt===st.type?"selected":""}>${t(SCAN_TYPE_LABEL[tt])}</option>`).join("")}</select>
+          <div class="scan-hint ${st.sure?"ok":"warn"}">${st.sure?"✓ "+t("scanDetected"):"⚠️ "+t("scanUnsure")}</div></div>
+        <div class="field"><label>${t("scanVehicle")}</label><select id="sc_veh"><option value="">${t("scanChoose")}</option>${vehs.map(e=>`<option value="${e.id}" ${String(e.id)===preId?"selected":""}>${esc(e.matricule||"—")} — ${esc(e.name)}${e.model?" "+esc(e.model):""}</option>`).join("")}<option value="new">${t("scanNewVeh")}</option></select>
+          <div class="scan-hint ${best?"ok":"warn"}" id="sc_reason">${best?"✓ "+t(reasonKey):"⚠️ "+t(st.match&&st.match.ambiguous?"scanAmbig":"scanNoMatch")}</div></div>
+      </div></div>
+    <div id="sc_fields"></div>
+    <label class="chk" style="margin-top:10px"><input type="checkbox" id="sc_photo" checked> ${t("scanSavePhoto")}</label>
+    ${st.text?`<details class="ocr-raw"><summary>${t("ocrText")} — ${Math.round(st.conf)}%</summary><pre>${esc(st.text)}</pre></details>`:""}
+    <div class="modal-actions">${_scanQueue.length?`<span class="muted" style="margin-inline-end:auto;font-size:12px;align-self:center">${tVars("scanRemain",{n:_scanQueue.length})}</span>`:""}<button class="btn gray" id="sc_skip" type="button">${t("scanSkip")}</button><button class="btn" id="sc_apply" type="button">${t("scanApply")}</button></div>`;
+  $("#overlay").classList.add("show");
+  const draw=()=>scanDrawFields(st);
+  $("#sc_type").onchange=()=>{st.type=$("#sc_type").value;draw();};
+  $("#sc_veh").onchange=()=>{const r=$("#sc_reason");if(r){r.className="scan-hint";r.textContent="";}draw();};
+  $("#sc_skip").onclick=()=>scanNext();
+  $("#sc_apply").onclick=()=>scanApply(st);
+  draw();
+}
+function scanSelectedVehicle(){const v=($("#sc_veh")||{}).value||"";if(!v||v==="new")return null;return DATA.equipment.find(x=>String(x.id)===v)||null;}
+function scanDrawFields(st){
+  const tt=st.type,e=scanSelectedVehicle(),p=scanParsed(st,tt);
+  const best=st.match&&st.match.best,reasons=best&&e&&best.e.id===e.id?best.reasons:[];
+  let older=scanIsOlder(e,tt,p);
+  const curFin=tt==="cg"?"":String(scanDocOf(e,tt).fin||"");
+  const curDeb=tt==="cg"?"":String(scanDocOf(e,tt).deb||"");
+  // Même document : même échéance, ou date lue = date de début enregistrée (lecteur ayant pris la date du contrôle).
+  const sameDoc=tt!=="cg"&&!!e&&!!p.fin&&((!!curFin&&_isoDateValue(p.fin)===curFin)||(!!curDeb&&_isoDateValue(p.fin)===curDeb));
+  if(sameDoc)older=false;
+  const noDate=tt!=="cg"&&!p.fin;
+  let diff=0,rows="";
+  SCAN_FIELDS[tt].forEach(([f,lbl,kind])=>{
+    const cur=scanCurrent(e,tt,f),val=p[f]||"";
+    const on=older?false:(sameDoc||noDate)?(!cur&&!!val):scanDefaultOn(e,tt,f,cur,val,reasons);
+    const isDiff=!!val&&!(cur&&scanSame(tt,f,cur,val));if(isDiff)diff++;
+    const curTxt=cur?(kind==="date"?fmtDate(cur):cur):t("scanEmpty");
+    const warnVin=tt==="cg"&&f==="serie"&&cur&&val&&isDiff?`<div class="scan-hint warn" style="grid-column:1/-1">${t("scanReplaceVin")}</div>`:"";
+    rows+=`<div class="sc-row ${isDiff?"diff":""}" data-f="${f}"><label class="chk" style="margin:0"><input type="checkbox" class="sc-on" ${on?"checked":""}> <b>${t(lbl)}</b></label><div class="sc-cur">${t("scanCurrent")} : ${esc(curTxt)}</div><input class="sc-val" type="${kind}" value="${esc(val)}">${warnVin}</div>`;
+  });
+  let note="";
+  if(!parsedFieldCount(p))note=`<p class="scan-note bad">${t("scanNothing")}</p>`;
+  else if(older)note=`<p class="scan-note warn">${t("scanOlder")}</p>`;
+  else if(e&&!diff)note=`<p class="scan-note ok">${t("scanUpToDate")}</p>`;
+  else if(sameDoc)note=`<p class="scan-note ok">${t("scanSameDoc")}</p>`;
+  else if(noDate&&e)note=`<p class="scan-note warn">${t("scanNoDate")}</p>`;
+  const box=$("#sc_fields");box.innerHTML=rows+note;
+  const count=()=>{const n=box.querySelectorAll(".sc-on:checked").length;const nn=box.querySelector(".scan-note.count");if(nn)nn.remove();if(n&&!older)box.insertAdjacentHTML("beforeend",`<p class="scan-note ok count">${tVars("scanNewInfo",{n})}</p>`);};
+  box.querySelectorAll(".sc-val").forEach(inp=>inp.addEventListener("input",()=>{const cb=inp.parentElement.querySelector(".sc-on");if(cb&&inp.value.trim())cb.checked=true;count();}));
+  box.querySelectorAll(".sc-on").forEach(cb=>cb.addEventListener("change",count));
+  count();
+}
+function scanNewVehicle(st){
+  const p=scanParsed(st,"cg"),mat=p.matricule||"",first=(scanDigits(mat).length&&String(mat).split(/[-.\s]/)[0])||"";
+  const engin=/^0?4\d?$/.test(first)&&scanDigits(mat).length<=10;
+  return {id:nextId(),cat:engin?1:2,name:t("scanNewName"),model:"",matricule:"",serie:"",facture:"",annee:"",etat:"Bon",obs:"",veh:true,needsCT:!engin,needsPermis:false,cg:{},assurance:{},ct:{},permis:{},ocr:{}};
+}
+async function scanApply(st){
+  const tt=$("#sc_type").value,vsel=$("#sc_veh").value;
+  if(!vsel){alert(t("scanPickVeh"));return;}
+  let e,isNew=false;
+  if(vsel==="new"){e=scanNewVehicle(st);isNew=true;}else e=DATA.equipment.find(x=>String(x.id)===vsel);
+  if(!e){alert(t("scanPickVeh"));return;}
+  const btn=$("#sc_apply");if(btn)btn.disabled=true;
+  e.cg=e.cg||{};e.assurance=e.assurance||{};e.ct=e.ct||{};e.permis=e.permis||{};
+  let n=0;
+  document.querySelectorAll("#sc_fields .sc-row").forEach(r=>{
+    const cb=r.querySelector(".sc-on");if(!cb||!cb.checked)return;
+    const f=r.dataset.f,v=String(r.querySelector(".sc-val").value||"").trim();if(!v)return;
+    if(tt==="cg"&&f!=="num"){
+      if(f==="matricule"&&e.matricule&&scanDigits(e.matricule)!==scanDigits(v)){e.oldMat=[...new Set([...(Array.isArray(e.oldMat)?e.oldMat:[]),e.matricule])];}
+      e[f]=v;
+    }else{
+      const d=tt==="as"?e.assurance:tt==="ct"?e.ct:tt==="pm"?e.permis:e.cg;d[f]=v;
+      if(tt==="as"&&!d.ref)d.ref="mat";
+    }
+    n++;
+  });
+  if(tt==="ct"&&n)e.needsCT=true;
+  if(tt==="pm"&&n)e.needsPermis=true;
+  const savePhoto=$("#sc_photo").checked;
+  if(!n&&!savePhoto&&!isNew){scanNext();return;}
+  e.ocr=e.ocr&&typeof e.ocr==="object"?e.ocr:{};
+  e.ocr[tt]={text:st.text,confidence:st.conf,parsed:scanParsed(st,tt),trusted:scanParsed(st,tt),supports:{},updatedAt:new Date().toISOString(),source:"scan"};
+  e._mod=nextMod();
+  if(isNew)DATA.equipment.push(e);
+  if(savePhoto)await setImg(e.id+"_"+tt,st.store);
+  await saveAll();
+  _scanLastId=e.id;
+  const vName=(e.matricule||"")+" "+(e.name||"");
+  egToast(n?tVars("scanDone",{v:vName.trim(),d:t(SCAN_TYPE_LABEL[tt])}):tVars("scanPhotoOnly",{v:vName.trim()}));
+  if(isNew&&!_scanQueue.length){try{if(_scanWorker)await _scanWorker.terminate();}catch(x){}_scanWorker=null;_scanLastId=null;closeModal();scanGoTo(e.id);openEdit(e.id);return;}
+  scanNext();
+}
+function scanGoTo(id){
+  if(CUR!=="mat"&&CUR!=="parc"){CUR="mat";}
+  if(CUR==="mat"){matSearch="";if(matFilter!=="all"&&matFilter!=="veh")matFilter="all";}
+  show(CUR);
+  setTimeout(()=>{
+    const rows=document.querySelectorAll(`[data-row="${id}"]`);if(!rows.length)return;
+    rows[0].scrollIntoView({behavior:"smooth",block:"center"});
+    rows.forEach(r=>{r.classList.remove("flash");void r.offsetWidth;r.classList.add("flash");});
+  },80);
+}
+
+/* ===== Mise à jour des documents — octobre 2026 (une seule fois par appareil) =====
+   Assurances renouvelées (CASH, contrats 2026/2027), références des cartes grises,
+   nouveau matricule du tracteur BEIJING, nouvel engin 04-50028-02.
+   Une valeur n'est remplacée que si l'échéance enregistrée est plus ancienne ;
+   une carte grise n'est remplie que si sa référence est vide. */
+const DOCS_MIG_VERSION=6; // v5 : « Details flotte » CASH 00043 (12 véhicules) — TOYOTA, FIAT, chargeur LOVOL // v2 : C.T 003537 du 23/08/2026 — v3 : N° de série complets + date d'effet assurance 04.10905.02
+const DOCS_OCT26={
+  as:{
+    "041090602":{num:"D0901.2026.10.1121.00267 (F407223)",deb:"2026-07-16",fin:"2027-07-15"},
+    "0420861402":{num:"D0901.2026.10.1122.00043 (F0455635)",deb:"2026-10-05",fin:"2027-10-04"},
+    "041103002":{num:"D0901.2026.10.1122.00043 (F0455628)",deb:"2026-10-05",fin:"2027-10-04"},
+    "041029902":{num:"D0901.2026.10.1122.00043 (F0455629)",deb:"2026-10-05",fin:"2027-10-04"},
+    "041117002":{num:"D0901.2026.10.1122.00043 (F0455630)",deb:"2026-10-05",fin:"2027-10-04"},
+    "00353722502":{num:"D0901.2026.10.1121.00266 (F407222)",deb:"2026-07-13",fin:"2027-07-12"},
+    "00353822502":{num:"D0901.2026.10.1121.00265 (F407221)",deb:"2026-07-13",fin:"2027-07-12"},
+    "02045421402":{num:"D0901.2026.10.1122.00043 (F0455631)",deb:"2026-10-05",fin:"2027-10-04"},
+    "0596320902":{num:"D0901.2026.10.1122.00043 (F0455633)",deb:"2026-10-05",fin:"2027-10-04"},
+    "50000722602":{num:"D0901.2026.10.1122.00043 (F0455634)",deb:"2026-10-05",fin:"2027-10-04"},
+    // v4 : PEUGEOT et CHERY renouvelées dans le contrat flotte (confirmé par le gérant) — N° de certificat à compléter par photo.
+    "01287210002":{num:"D0901.2026.10.1122.00043",deb:"2026-10-05",fin:"2027-10-04"},
+    "0330831902":{num:"D0901.2026.10.1122.00043",deb:"2026-10-05",fin:"2027-10-04"}
+  },
+  // N° de série tronqués : la carte grise les écrit sur deux lignes. Corrigés seulement s'ils ont encore l'ancienne valeur.
+  serie:{
+    "041029902":["CLW009LDPDS002","CLW009LDPDS002738"],
+    "041090502":["HJSCE6G9EE0034","HJSCE6G9EE0034034"],
+    "041090602":["HJSCE6GES00343","HJSCE6GES0034322"]
+  },
+  ct:{
+    "00353722502":{num:"1556469 / PV 1302230826081000353722502",deb:"2026-08-23",fin:"2027-08-23"}
+  },
+  cg:{
+    "041090602":"Quittance N° 180255578 du 15/07/2025",
+    "041090502":"Quittance N° 180255563 du 15/07/2025",
+    "0420861402":"Quittance N° 180112818 du 13/02/2025",
+    "041103002":"Quittance N° 180283480 du 15/10/2025",
+    "041029902":"Quittance N° 180128125 du 17/05/2023",
+    "041117002":"Quittance N° 180213770 du 26/02/2026",
+    "00353722502":"Quittance N° 180265356 du 19/08/2025",
+    "00353822502":"Quittance N° 180265360 du 19/08/2025",
+    "02045421402":"Quittance N° 18015292 du 28/01/2024",
+    "0596320902":"Quittance N° 180123847 du 22/03/2021",
+    "50000722602":"Carte du 11/05/2026",
+    "01287210002":"Quittance N° 180221525 du 16/03/2025",
+    "50000151202":"Carte du 29/09/2026"
+  }
+};
+function applyDocsOct26(list,deletedIds){
+  let changed=0;
+  const dset=new Set((deletedIds||[]).map(d=>String(d&&d.id!=null?d.id:d)));
+  list.forEach(e=>{
+    if(!e||!e.veh)return;let ch=false;
+    if(String(e.serie||"").toUpperCase().replace(/\s/g,"")==="LZGJD3T16AG008829"&&scanDigits(e.matricule)==="0417151202"){
+      e.oldMat=[...new Set([...(Array.isArray(e.oldMat)?e.oldMat:[]),e.matricule])];
+      e.matricule="500001-512-02";
+      e.obs="Carte grise au nom d'ABDI Youssouf Islam du 29/09/2026 (ancien matricule 04171-512-02)";
+      ch=true;
+    }
+    const k=scanDigits(e.matricule),a=DOCS_OCT26.as[k],c=DOCS_OCT26.cg[k];
+    if(a){const cur=e.assurance||{};if(!cur.fin||cur.fin<a.fin){e.assurance=Object.assign({},a,{ref:cur.ref||"mat"});ch=true;}}
+    const sf=DOCS_OCT26.serie[k];
+    if(sf&&String(e.serie||"").trim().toUpperCase()===sf[0]){e.serie=sf[1];ch=true;}
+    // Certificat N° 405930 : valable du 20/04/2026 au 19/04/2027.
+    if(k==="041090502"&&e.assurance&&e.assurance.fin==="2027-04-19"&&e.assurance.deb==="2026-04-19"){e.assurance=Object.assign({},e.assurance,{deb:"2026-04-20"});ch=true;}
+    const ctn=DOCS_OCT26.ct[k];
+    if(ctn){const cur=e.ct||{};if(!cur.fin||cur.fin<ctn.fin){e.ct=Object.assign({},ctn);e.needsCT=true;ch=true;}}
+    if(c&&!(e.cg&&String(e.cg.num||"").trim())){e.cg=Object.assign({},e.cg||{},{num:c});ch=true;}
+    if(ch){e._mod=nextMod();changed++;}
+  });
+  // v5 : détail flotte CASH D0901/2026/10/1122/00043 — l'engin 04-50028-02 est le chargeur LOVOL CLW009LDETZ000134 (2026).
+  list.forEach(e=>{
+    if(!e||scanDigits(e.matricule)!=="0450002802")return;
+    if(e.name==="Engin (à identifier)"){e.name="Chargeur S/Roues";e.model="LOVOL";e.annee="2026";if(!e.serie)e.serie="CLW009LDETZ000134";e.obs="";e._mod=nextMod();changed++;}
+  });
+  const FLEET={num:"D0901.2026.10.1122.00043",deb:"2026-10-05",fin:"2027-10-04",ref:"mat"};
+  // v6 : N° de certificat déduits de l'ordre du « Details flotte » (les 8 certificats vus suivent exactement cet ordre).
+  const CERT={"01287210002":"F0455632","50014212402":"F0455636","0330831902":"F0455637","00535012502":"F0455638"};
+  list.forEach(e=>{
+    if(!e||!e.assurance)return;const c=CERT[scanDigits(e.matricule)];
+    if(c&&contractKey(e.assurance.num)==="D0901.2026.10.1122.00043"&&!certOf(e.assurance.num)){e.assurance=Object.assign({},e.assurance,{num:"D0901.2026.10.1122.00043 ("+c+")"});e._mod=nextMod();changed++;}
+    if(scanDigits(e.matricule)==="041117002"&&String(e.serie||"").trim().toUpperCase()==="S3567307"){e.serie="JCB3CX4TAS3567307";e._mod=nextMod();changed++;}
+  });
+  [{id:66,name:"Véhicule de service TOYOTA",model:"YARIS",matricule:"500142-124-02",annee:"2024",serie:"YARKBAC3000222080"},
+   {id:67,name:"Véhicule de service FIAT",model:"EKNFJ",matricule:"005350-125-02",annee:"2025",serie:"BRYEKNFJ9S5723259"}].forEach(v=>{
+    if(dset.has(String(v.id))||list.some(e=>e&&(e.id===v.id||scanDigits(e.matricule)===scanDigits(v.matricule))))return;
+    list.push(Object.assign({cat:2,etat:"Bon",obs:"",veh:true,needsCT:false,needsPermis:false,cg:{},assurance:Object.assign({},FLEET,{num:FLEET.num+" ("+CERT[scanDigits(v.matricule)]+")"}),ct:{},permis:{},ocr:{},_mod:nextMod()},v));
+    changed++;
+  });
+  if(!dset.has("65")&&!list.some(e=>e&&(e.id===65||scanDigits(e.matricule)==="0450002802"))){
+    list.push({id:65,cat:1,name:"Chargeur S/Roues",model:"LOVOL",matricule:"04.50028.02",annee:"2026",etat:"Bon",obs:"",veh:true,needsCT:false,needsPermis:false,serie:"CLW009LDETZ000134",
+      cg:{},assurance:{num:"D0901.2026.10.1122.00043 (F0455639)",deb:"2026-10-05",fin:"2027-10-04",ref:"mat"},ct:{},permis:{},ocr:{},_mod:nextMod()});
+    changed++;
+  }
+  return changed;
+}
+let _docsMigRunning=false;
+async function runDocsMigrationOnce(){
+  if(!DATA||DATA._mig_docs_oct26>=DOCS_MIG_VERSION||_docsMigRunning)return;
+  _docsMigRunning=true;
+  try{
+    applyDocsOct26(DATA.equipment,DATA.deletedIds);
+    DATA._mig_docs_oct26=DOCS_MIG_VERSION;
+    await saveAll();
+    try{render();}catch(e){}
+  }finally{_docsMigRunning=false;}
+}
+
 /* ===== PARC ===== */
+/* ===== CONTRATS D'ASSURANCE (flotte) =====
+   Plusieurs véhicules partagent souvent le même contrat (ex. contrat flotte CASH) avec la même échéance :
+   ils sont regroupés en une seule ligne d'alerte et peuvent être renouvelés ensemble. */
+function contractKey(num){return String(num||"").replace(/\([^)]*\)/g,"").replace(/\s+/g,"").toUpperCase();}
+function certOf(num){const m=String(num||"").match(/\(([^)]*)\)/);return m?m[1]:"";}
+function insuranceGroups(){
+  const map=new Map();
+  DATA.equipment.filter(e=>e&&e.veh&&e.assurance&&e.assurance.fin).forEach(e=>{
+    const key=contractKey(e.assurance.num);if(!key)return;
+    const id=key+"|"+e.assurance.fin;
+    if(!map.has(id))map.set(id,{key,fin:e.assurance.fin,deb:e.assurance.deb||"",list:[]});
+    map.get(id).list.push(e);
+  });
+  return [...map.values()].filter(g=>g.list.length>=2).sort((a,b)=>a.fin<b.fin?-1:1);
+}
 function renderParc(){
   const veh=DATA.equipment.filter(e=>e.veh);
+  const groups=insuranceGroups(),inGroup=new Map();
+  groups.forEach(g=>g.list.forEach(e=>inGroup.set(e.id,g)));
   let entries=[];
+  const seenGroup=new Set();
   veh.forEach(e=>{
-    if(e.assurance&&e.assurance.fin)entries.push({e,type:t("assurance"),fin:e.assurance.fin});
+    if(e.assurance&&e.assurance.fin){
+      const g=inGroup.get(e.id);
+      if(g){const gid=g.key+"|"+g.fin;if(!seenGroup.has(gid)){seenGroup.add(gid);entries.push({group:g,type:t("assurance"),fin:g.fin});}}
+      else entries.push({e,type:t("assurance"),fin:e.assurance.fin});
+    }
     if(e.needsCT&&e.ct&&e.ct.fin)entries.push({e,type:t("controleTech"),fin:e.ct.fin});
     if(e.needsPermis&&e.permis&&e.permis.fin)entries.push({e,type:t("permisCirc"),fin:e.permis.fin});});
   entries.sort((a,b)=>new Date(a.fin)-new Date(b.fin));
   const bad=entries.filter(x=>statusOf(x.fin)==="bad").length,warn=entries.filter(x=>statusOf(x.fin)==="warn").length;
   const missing=veh.filter(e=>(!(e.assurance&&e.assurance.fin))||(e.needsCT&&!(e.ct&&e.ct.fin))||(e.needsPermis&&!(e.permis&&e.permis.fin))).length;
   const alerts=entries.filter(x=>statusOf(x.fin)!=="ok");
-  let html=`<div class="toolbar"><button class="btn" id="addVehBtn">${t("addVeh")}</button></div><div class="stats">
+  let html=`<div class="toolbar"><button class="btn" id="addVehBtn">${t("addVeh")}</button>${scanBtnHtml()}</div><div class="stats">
     <div class="stat"><div class="n">${DATA.equipment.length}</div><div class="l">${t("equipements")}</div></div>
     <div class="stat"><div class="n">${veh.length}</div><div class="l">${t("vehiculesN")}</div></div>
     <div class="stat warn"><div class="n">${warn}</div><div class="l">${t("expire30")}</div></div>
@@ -2493,14 +2994,57 @@ function renderParc(){
     <div class="card"><h2 class="sec">${t("alertsTitle")}<span class="bar"></span></h2>`;
   if(!alerts.length) html+=`<p class="muted">${t("noAlert")}${missing?`<br>ℹ️ ${missing} ${t("missing")}`:""}</p>`;
   else alerts.forEach(x=>{const st=statusOf(x.fin),n=daysLeft(x.fin);const lbl=st==="bad"?`${t("expireL")} +${Math.abs(n)} ${t("inDays")}`:`${n} ${t("inDays")}`;
-    html+=`<div class="alert-row ${st}"><div class="veh"><b>${esc(x.e.name)} ${esc(x.e.model||"")}</b><small>${esc(x.e.matricule||"")} • ${x.type} • ${fmtDate(x.fin)}</small></div><span class="pill ${st}">${lbl}</span></div>`;});
-  html+=`</div><div class="card"><h2 class="sec">${t("suivi")}<span class="bar"></span></h2><div style="overflow:auto"><table class="grid"><thead><tr><th>${t("designation")}</th><th>${t("matSerie")}</th><th>${t("assurance")}</th><th>${t("controleTech")}</th><th>${t("permisCol")}</th></tr></thead><tbody>`;
-  veh.forEach(e=>{html+=`<tr><td><b>${esc(e.name)}</b><br><small class="muted">${esc(e.model||"")}</small></td>
+    if(x.group){
+      html+=`<div class="alert-row ${st}"><div class="veh"><b>${tVars("fleetAlert",{c:esc(x.group.key),n:x.group.list.length})}</b><small>${x.group.list.map(e=>esc(e.matricule||e.name)).join(" • ")} • ${fmtDate(x.fin)}</small></div><span class="pill ${st}">${lbl}</span></div>`;
+    }else html+=`<div class="alert-row ${st}"><div class="veh"><b>${esc(x.e.name)} ${esc(x.e.model||"")}</b><small>${esc(x.e.matricule||"")} • ${x.type} • ${fmtDate(x.fin)}</small></div><span class="pill ${st}">${lbl}</span></div>`;});
+  html+=`</div>`;
+  if(groups.length){
+    html+=`<div class="card"><h2 class="sec">${t("contracts")}<span class="bar"></span></h2>`;
+    groups.forEach((g,i)=>{
+      const st=statusOf(g.fin),n=daysLeft(g.fin),lbl=st==="bad"?t("expireL"):(st==="warn"?n+" "+t("inDays"):t("valide"));
+      html+=`<div class="contract-box"><div class="contract-head"><div><b class="mono">${esc(g.key)}</b><div class="muted" style="font-size:12px">${tVars("vehCount",{n:g.list.length})} — ${g.deb?fmtDate(g.deb)+" → ":""}${fmtDate(g.fin)}</div></div><span class="dchip ${st}"><span class="k">${t("chipAs")}</span> ${fmtDate(g.fin)} · ${lbl}</span></div>
+        <div class="dchips" style="margin-top:8px">${g.list.map(e=>`<span class="dchip"><span class="k">${esc(e.matricule||"—")}</span> ${esc(e.name)}${certOf(e.assurance.num)?" · "+esc(certOf(e.assurance.num)):""}</span>`).join("")}</div>
+        <div class="toolbar" style="margin:10px 0 0"><button class="btn ghost sm" data-renew="${i}" type="button">${t("renewContract")}</button></div></div>`;
+    });
+    html+=`</div>`;
+  }
+  html+=`<div class="card"><h2 class="sec">${t("suivi")}<span class="bar"></span></h2><div style="overflow:auto"><table class="grid"><thead><tr><th>${t("designation")}</th><th>${t("matSerie")}</th><th>${t("assurance")}</th><th>${t("controleTech")}</th><th>${t("permisCol")}</th></tr></thead><tbody>`;
+  veh.forEach(e=>{html+=`<tr data-row="${e.id}"><td><b>${esc(e.name)}</b><br><small class="muted">${esc(e.model||"")}</small></td>
     <td>${esc(e.matricule||"—")}${e.serie?`<br><small class="muted">${esc(e.serie)}</small>`:""}</td>
     <td>${docCell(e.assurance)}</td><td>${e.needsCT?docCell(e.ct):`<span class="muted">${t("nonRequis")}</span>`}</td><td>${e.needsPermis?docCell(e.permis):`<span class="muted">${t("nonRequis")}</span>`}</td></tr>`;});
   html+=`</tbody></table></div></div>`;$("#view").innerHTML=html;
   $("#addVehBtn").onclick=()=>openEdit(null,true);
+  bindScanBtn();
+  document.querySelectorAll("[data-renew]").forEach(b=>b.onclick=()=>openRenewContract(groups[Number(b.dataset.renew)]));
 }
+function _addYearIso(iso,years){if(!iso)return "";const d=new Date(iso+"T12:00:00");d.setFullYear(d.getFullYear()+years);return d.toISOString().slice(0,10);}
+function _addDaysIso(iso,days){if(!iso)return "";const d=new Date(iso+"T12:00:00");d.setDate(d.getDate()+days);return d.toISOString().slice(0,10);}
+function openRenewContract(g){
+  if(!g)return;
+  const deb=_addDaysIso(g.fin,1),fin=_addYearIso(g.fin,1);
+  $("#modal").innerHTML=`<h3>${t("renewContract")}</h3>
+    <p class="muted" style="margin-top:0">${esc(g.key)} — ${tVars("vehCount",{n:g.list.length})}</p>
+    <div class="field"><label>${t("newContract")}</label><input id="rn_num" value="${esc(g.key)}"></div>
+    <div class="row2"><div class="field"><label>${t("dateDeb")}</label><input type="date" id="rn_deb" value="${deb}"></div><div class="field"><label>${t("dateFin")}</label><input type="date" id="rn_fin" value="${fin}"></div></div>
+    <div id="rn_list">${g.list.map(e=>`<label class="chk" style="display:flex"><input type="checkbox" value="${e.id}" checked> <b>${esc(e.matricule||"—")}</b>&nbsp;${esc(e.name)}</label>`).join("")}</div>
+    <p class="scan-note warn">${t("certNote")}</p>
+    <div class="modal-actions"><button class="btn gray" id="rn_cancel" type="button">${t("cancel")}</button><button class="btn" id="rn_ok" type="button">${t("renewApply")}</button></div>`;
+  $("#overlay").classList.add("show");
+  $("#rn_cancel").onclick=closeModal;
+  $("#rn_ok").onclick=async()=>{
+    const num=$("#rn_num").value.trim(),d=$("#rn_deb").value,f=$("#rn_fin").value;
+    if(!num||!d||!f||f<=d){alert(t("renewBad"));return;}
+    const ids=[...document.querySelectorAll("#rn_list input:checked")].map(x=>x.value);
+    let n=0;
+    DATA.equipment.forEach(e=>{if(!ids.includes(String(e.id)))return;
+      const same=contractKey(num)===contractKey(e.assurance&&e.assurance.num);
+      // Même contrat : on garde le N° de certificat ; nouveau contrat : le certificat sera complété par photo.
+      e.assurance={num:same?(e.assurance.num||num):num,deb:d,fin:f,ref:(e.assurance&&e.assurance.ref)||"mat"};
+      e._mod=nextMod();n++;});
+    await saveAll();closeModal();show(CUR);egToast(tVars("renewDone",{n}));
+  };
+}
+
 function docCell(d){if(!d||!d.fin)return`<span class="muted">${t("nonRens")}</span>`;const st=statusOf(d.fin),n=daysLeft(d.fin);
   const lbl=st==="bad"?t("expireL"):(st==="warn"?n+" "+t("inDays"):t("valide"));return `${fmtDate(d.fin)} <span class="pill ${st}">${lbl}</span>`;}
 
