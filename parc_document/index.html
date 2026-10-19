@@ -200,6 +200,33 @@ tr.flash td{animation:egFlash 2.6s ease}
 .sc-row input.sc-val{grid-column:1/-1;width:100%;min-width:0;padding:7px 9px;border:1px solid var(--line-2);border-radius:7px;font-size:13px;background:#fff}
 .scan-note{font-size:12.5px;margin:10px 0 0;padding:8px 10px;border-radius:8px;border:1px solid var(--line)}
 .scan-note.ok{background:#eef6f1}.scan-note.warn{background:#fbf2df}.scan-note.bad{background:#f7e9e6}
+.toolbar select{max-width:100%;min-width:0;text-overflow:ellipsis}
+.dchip{max-width:100%;white-space:normal}
+.row-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.row-acts .btn{padding:5px 9px;font-size:12px;text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+.gal-count{font-weight:700}
+.gal{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(max-width:560px){.gal{grid-template-columns:1fr}}
+.gal-tile{border:1px solid var(--line);border-radius:10px;padding:9px;background:#fff}
+.gal-h{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:6px}.gal-h small{text-align:end;font-size:11px}
+.gal-tile img{width:100%;max-height:230px;object-fit:contain;cursor:zoom-in;background:#f4f2ee;border-radius:6px;display:block}
+.gal-empty{border:1px dashed var(--line-2);border-radius:6px;padding:26px 8px;text-align:center;color:var(--muted);font-size:12.5px}
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:400;display:flex;align-items:center;justify-content:center;padding:10px}
+.lightbox img{max-width:100%;max-height:100%;object-fit:contain}
+.lightbox .lb-x{position:absolute;top:14px;inset-inline-end:14px}
+.pd-types{display:flex;flex-wrap:wrap;gap:4px 16px}
+.pd-list{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:4px 8px;background:#fff}
+.pd-cat{font-size:11.5px;font-weight:700;color:var(--gold);margin:10px 0 2px;text-transform:uppercase}
+.pd-row{display:flex;gap:8px;align-items:center;padding:6px 2px;border-bottom:1px solid var(--line);font-size:13px;cursor:pointer}
+.pd-row span:nth-child(2){flex:1}
+.pd-have{display:flex;gap:3px}
+.pd-dot{font-size:10px;border:1px dashed var(--line-2);border-radius:5px;padding:1px 5px;color:var(--muted);white-space:nowrap}
+.pd-dot.on{border:1px solid var(--ok);color:var(--ok);font-weight:700}
+.crop-ui{position:fixed;inset:0;background:#0c1c21;z-index:500;display:flex;flex-direction:column;padding:10px 10px calc(10px + env(safe-area-inset-bottom))}
+.crop-bar{display:flex;justify-content:space-between;gap:10px;color:#fff;align-items:center;padding:4px 4px 8px;font-size:14px}.crop-bar .muted{color:#c7d2cd;font-size:12px}
+.crop-stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+.crop-stage canvas{touch-action:none;max-width:100%;max-height:100%}
+.crop-tools{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding-top:8px;align-items:center}
 .contract-box{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px;background:#fff}
 .contract-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
 .eg-toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#11242a;color:#fff;padding:11px 18px;border-radius:10px;z-index:300;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.25);max-width:92vw;text-align:center}
@@ -473,7 +500,7 @@ Object.assign(T.fr,{
   scanLoading:"Chargement du lecteur…",scanReading:"Lecture du document…",scanOf:"Photo {i}/{n}",
   scanType:"Type de document",scanDetected:"Reconnu automatiquement",scanUnsure:"Type incertain — vérifiez-le",
   scanVehicle:"Véhicule / engin concerné",scanChoose:"— Choisir —",scanNewVeh:"➕ Nouveau véhicule",
-  scanReasonMat:"Reconnu par le matricule",scanReasonSerie:"Reconnu par le N° de série",scanReasonOld:"Reconnu par l’ancien matricule",
+  scanReasonMat:"Reconnu par le matricule",scanReasonSerie:"Reconnu par le N° de série",scanReasonOld:"Reconnu par l’ancien matricule",scanReasonCert:"Reconnu par le N° de certificat d’assurance",
   scanNoMatch:"Aucun véhicule reconnu : choisissez-le dans la liste.",scanAmbig:"Plusieurs véhicules possibles : vérifiez.",
   scanCurrent:"Actuel",scanEmpty:"vide",scanSavePhoto:"Enregistrer la photo dans la fiche du véhicule",
   scanApply:"Mettre à jour",scanSkip:"Ignorer",scanUpToDate:"Déjà à jour : les informations lues sont identiques à celles enregistrées.",
@@ -482,6 +509,12 @@ Object.assign(T.fr,{
   scanDone:"{v} — {d} mis à jour ✓",scanPhotoOnly:"{v} — photo enregistrée ✓",scanPickVeh:"Choisissez le véhicule concerné.",
   scanNewName:"Véhicule à compléter",scanRemain:"{n} photo(s) restante(s)",scanReplaceVin:"Le N° de série lu est différent : cochez seulement si vous êtes sûr.",
   scanSameDoc:"Même échéance que le document enregistré : c’est le même document. Les petites différences de lecture ne sont pas cochées.",scanNoDate:"La date d’échéance n’a pas été lue : seules les cases vides sont proposées. Vérifiez avant de cocher.",
+  cropTitle:"Recadrer le document",cropAuto:"🔍 Auto",cropFull:"⬜ Image entière",cropClean:"Nettoyer",cropOrig:"Garder l’original",cropApply:"✓ Appliquer",cropDetected:"Bords détectés — déplacez les coins si besoin",cropNotDetected:"Bords non détectés — placez les 4 coins",
+  flBtn:"📋 Liste du matériel",flTitle:"Imprimer la liste du matériel",flGroups:"Tableaux à imprimer",flEngins:"Engins de travaux publics",flTrucks:"Camions et tracteurs",flCars:"Véhicules légers et utilitaires",flOutils:"Matériel et outillage (non roulant)",flLang:"Langue du document",flAsOf:"Situation au",flDocTitle:"Liste du matériel — situation des documents",flAsOfTxt:"Situation au {d}",flExpired:"EXPIRÉ",flSoon:"expire dans {n} j",flSummary:"Total : {n} élément(s) — {e} document(s) expiré(s) — {s} à renouveler sous 30 jours.",
+  pdBtn:"🖨️ Imprimer les documents",pdTitle:"Imprimer les dossiers véhicules",pdDocs:"Documents à imprimer",pdVehicles:"Véhicules",pdTrucks:"Camions & véhicules",pdEngins:"Engins",pdCountTxt:"{n} véhicule(s) sélectionné(s)",pdMake:"📄 Créer le PDF",pdWorking:"Préparation du PDF…",pdNothing:"Aucune photo de document pour cette sélection.",pdReady:"PDF prêt : {p} page(s) pour {n} véhicule(s).",pdMissing:"{n} document(s) sans photo",pdOpen:"📄 Ouvrir / imprimer",pdDownload:"⬇️ Télécharger",pdFail:"Création du PDF impossible.",pdShort_cg:"CG",pdShort_as:"Ass.",pdShort_ct:"CT",pdShort_pm:"Perm.",
+  impDocs:"🖼 Importer des photos de documents",impDocsTitle:"Importer les photos de documents",impDocsInfo:"{n} photo(s) reconnue(s). Décochez celles à ne pas importer.",impNoVeh:"véhicule introuvable",impReplace:"remplace",impApply:"Importer",impDone:"{n} photo(s) importée(s) ✓",
+  actEdit:"✏️ Modifier",actPhoto:"📷 Photo",actGallery:"🖼 Documents",galTitle:"Documents du véhicule",galNone:"Aucune photo",galAdd:"📷 Ajouter",galReplace:"📷 Remplacer",galSaved:"Photo enregistrée ✓",galConfirmDel:"Supprimer cette photo ?",close:"Fermer",
+  scanOtherVeh:"Attention : le document semble appartenir à {v}. Vérifiez le véhicule.",scanForced:"Véhicule choisi depuis sa ligne",scanManual:"Lecture automatique impossible (Internet ?). Choisissez le type, tapez les valeurs et enregistrez la photo.",
   contracts:"Contrats d’assurance (flotte)",vehCount:"{n} véhicule(s)",fleetAlert:"Contrat {c} — {n} véhicules",renewContract:"🔁 Renouveler le contrat",newContract:"N° du contrat renouvelé",renewApply:"Appliquer aux véhicules cochés",renewDone:"{n} véhicule(s) mis à jour ✓",renewBad:"Vérifiez le N° de contrat et les dates.",certNote:"Les N° de certificat (F…) de chaque véhicule se complètent ensuite en photographiant chaque certificat avec « 📷 Mise à jour par photo ».",
   chipAs:"Assurance",chipCt:"C.T",chipPm:"Permis",chipCg:"C. grise",chipCgOk:"enregistrée",docsCol:"Documents"
 });
@@ -490,7 +523,7 @@ Object.assign(T.ar,{
   scanLoading:"جاري تحميل القارئ…",scanReading:"جاري قراءة الوثيقة…",scanOf:"الصورة {i}/{n}",
   scanType:"نوع الوثيقة",scanDetected:"تم التعرف عليه تلقائياً",scanUnsure:"النوع غير مؤكد — تحقق منه",
   scanVehicle:"المركبة / الآلة المعنية",scanChoose:"— اختر —",scanNewVeh:"➕ مركبة جديدة",
-  scanReasonMat:"تم التعرف عليها برقم التسجيل",scanReasonSerie:"تم التعرف عليها بالرقم التسلسلي",scanReasonOld:"تم التعرف عليها برقم التسجيل القديم",
+  scanReasonMat:"تم التعرف عليها برقم التسجيل",scanReasonSerie:"تم التعرف عليها بالرقم التسلسلي",scanReasonOld:"تم التعرف عليها برقم التسجيل القديم",scanReasonCert:"تم التعرف عليها برقم شهادة التأمين",
   scanNoMatch:"لم يتم التعرف على المركبة: اخترها من القائمة.",scanAmbig:"عدة مركبات محتملة: تحقق.",
   scanCurrent:"الحالي",scanEmpty:"فارغ",scanSavePhoto:"حفظ الصورة في ملف المركبة",
   scanApply:"تحديث",scanSkip:"تجاهل",scanUpToDate:"المعلومات محدّثة: ما قُرئ مطابق لما هو مسجل.",
@@ -499,6 +532,12 @@ Object.assign(T.ar,{
   scanDone:"{v} — تم تحديث {d} ✓",scanPhotoOnly:"{v} — تم حفظ الصورة ✓",scanPickVeh:"اختر المركبة المعنية.",
   scanNewName:"Véhicule à compléter",scanRemain:"بقيت {n} صورة",scanReplaceVin:"الرقم التسلسلي المقروء مختلف: حدّده فقط إذا كنت متأكداً.",
   scanSameDoc:"نفس تاريخ الانتهاء المسجل: إنها نفس الوثيقة. الاختلافات البسيطة في القراءة لم تُحدَّد.",scanNoDate:"لم يُقرأ تاريخ الانتهاء: اقتُرحت الخانات الفارغة فقط. تحقق قبل التحديد.",
+  cropTitle:"قصّ الوثيقة",cropAuto:"🔍 تلقائي",cropFull:"⬜ الصورة كاملة",cropClean:"تنظيف",cropOrig:"الاحتفاظ بالأصل",cropApply:"✓ تطبيق",cropDetected:"تم اكتشاف الحواف — حرّك الزوايا عند الحاجة",cropNotDetected:"لم تُكتشف الحواف — ضع الزوايا الأربع",
+  flBtn:"📋 قائمة العتاد",flTitle:"طباعة قائمة العتاد",flGroups:"الجداول المطلوبة",flEngins:"آلات الأشغال العمومية",flTrucks:"الشاحنات والجرارات",flCars:"السيارات والمركبات النفعية",flOutils:"العتاد والأدوات (غير متحرك)",flLang:"لغة الوثيقة",flAsOf:"الوضعية بتاريخ",flDocTitle:"قائمة العتاد — وضعية الوثائق",flAsOfTxt:"الوضعية بتاريخ {d}",flExpired:"منتهية",flSoon:"تنتهي بعد {n} يوم",flSummary:"المجموع: {n} عنصر — {e} وثيقة منتهية — {s} تُجدَّد خلال 30 يوماً.",
+  pdBtn:"🖨️ طباعة الوثائق",pdTitle:"طباعة ملفات المركبات",pdDocs:"الوثائق المطلوبة",pdVehicles:"المركبات",pdTrucks:"الشاحنات والمركبات",pdEngins:"الآلات",pdCountTxt:"{n} مركبة محددة",pdMake:"📄 إنشاء PDF",pdWorking:"جاري تحضير PDF…",pdNothing:"لا توجد صور وثائق لهذا الاختيار.",pdReady:"PDF جاهز: {p} صفحة لـ {n} مركبة.",pdMissing:"{n} وثيقة بدون صورة",pdOpen:"📄 فتح / طباعة",pdDownload:"⬇️ تحميل",pdFail:"تعذّر إنشاء PDF.",pdShort_cg:"ب.ر",pdShort_as:"تأمين",pdShort_ct:"مراقبة",pdShort_pm:"رخصة",
+  impDocs:"🖼 استيراد صور الوثائق",impDocsTitle:"استيراد صور الوثائق",impDocsInfo:"تم التعرف على {n} صورة. أزل العلامة عن ما لا تريد استيراده.",impNoVeh:"المركبة غير موجودة",impReplace:"تستبدل",impApply:"استيراد",impDone:"تم استيراد {n} صورة ✓",
+  actEdit:"✏️ تعديل",actPhoto:"📷 صورة",actGallery:"🖼 الوثائق",galTitle:"وثائق المركبة",galNone:"لا توجد صورة",galAdd:"📷 إضافة",galReplace:"📷 تغيير",galSaved:"تم حفظ الصورة ✓",galConfirmDel:"حذف هذه الصورة؟",close:"إغلاق",
+  scanOtherVeh:"تنبيه: يبدو أن الوثيقة تخص {v}. تحقق من المركبة.",scanForced:"المركبة مختارة من سطرها",scanManual:"تعذّرت القراءة التلقائية (الإنترنت؟). اختر النوع واكتب القيم واحفظ الصورة.",
   contracts:"عقود التأمين (الأسطول)",vehCount:"{n} مركبة",fleetAlert:"العقد {c} — {n} مركبة",renewContract:"🔁 تجديد العقد",newContract:"رقم العقد المجدَّد",renewApply:"تطبيق على المركبات المحددة",renewDone:"تم تحديث {n} مركبة ✓",renewBad:"تحقق من رقم العقد والتواريخ.",certNote:"أرقام الشهادات (F…) لكل مركبة تُكمَّل بعد ذلك بتصوير كل شهادة بزر «📷 تحديث بالصورة».",
   chipAs:"التأمين",chipCt:"المراقبة",chipPm:"الرخصة",chipCg:"البطاقة الرمادية",chipCgOk:"مسجلة",docsCol:"الوثائق"
 });
@@ -804,6 +843,10 @@ async function fbPush(){
   if(!navigator.onLine)return false;
   _cloudBusy=true;
   try{
+    // Relecture + fusion juste avant l'envoi : une modification faite entre-temps sur un autre appareil n'est jamais écrasée.
+    let remote=null;try{remote=await fbFetchData();}catch(e){_cloudBusy=false;return false;}
+    if(remote){window._cloudApplying=true;let ch=false;try{ch=mergeCloud(remote);}finally{window._cloudApplying=false;}
+      if(ch){window._cloudApplying=true;try{await saveAll();}finally{window._cloudApplying=false;}try{render();}catch(e){}}}
     const body=JSON.stringify(fbBuildData());
     const r=await fetch(FB_URL+FB_BASE+".json"+_fbAuthQS(),{method:"PUT",headers:{"Content-Type":"application/json"},body});
     if(!r.ok)throw new Error("PUT "+r.status);
@@ -1007,7 +1050,7 @@ function compressImage(file,cb){const r=new FileReader();r.onerror=()=>cb(null);
       try{cb(cv.toDataURL("image/jpeg",0.7));}catch(e){cb(null);}};img.src=r.result;};r.readAsDataURL(file);}
 function _documentJpeg(img,max,quality){let w=img.naturalWidth||img.width,h=img.naturalHeight||img.height;if(w>max||h>max){const s=Math.min(max/w,max/h);w=Math.max(1,Math.round(w*s));h=Math.max(1,Math.round(h*s));}
   const cv=document.createElement("canvas");cv.width=w;cv.height=h;const ctx=cv.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);return cv.toDataURL("image/jpeg",quality);}
-function processDocumentImage(file,cb){const r=new FileReader();r.onerror=()=>cb(null);
+function processDocumentImageRaw(file,cb){const r=new FileReader();r.onerror=()=>cb(null);
   r.onload=()=>{const img=new Image();img.onerror=()=>cb(null);
     img.onload=()=>{try{cb({store:_documentJpeg(img,2200,0.90),ocr:_documentJpeg(img,3200,0.96)});}catch(e){cb(null);}};img.src=r.result;};r.readAsDataURL(file);}
 const ICONS={subm:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
@@ -1905,7 +1948,7 @@ function doPrint(){
 let matFilter="all",matSearch="";
 function renderMat(){
   let html=`<div class="toolbar"><select id="fCat"><option value="all">${t("allCats")}</option>${Object.entries(CATS).map(([k,v])=>`<option value="${k}" ${matFilter==k?"selected":""}>${esc(v)}</option>`).join("")}<option value="veh" ${matFilter==="veh"?"selected":""}>🚛 ${t("vehicles")}</option></select>
-    <input id="fSearch" placeholder="${t("search")}" value="${esc(matSearch)}" style="flex:1;min-width:150px"><button class="btn" id="addBtn">${t("add")}</button>${scanBtnHtml()}</div><div class="card" style="overflow:auto">`;
+    <input id="fSearch" placeholder="${t("search")}" value="${esc(matSearch)}" style="flex:1;min-width:150px"><button class="btn" id="addBtn">${t("add")}</button>${scanBtnHtml()}${pdBtnHtml()}${flBtnHtml()}</div><div class="card" style="overflow:auto">`;
   let list=DATA.equipment.slice();
   if(matFilter==="veh")list=list.filter(e=>e.veh);else if(matFilter!=="all")list=list.filter(e=>e.cat==Number(matFilter));
   if(matSearch){const q=matSearch.toLowerCase(),qd=scanDigits(matSearch);list=list.filter(e=>((e.name||"")+" "+(e.model||"")+" "+(e.matricule||"")+" "+(e.facture||"")+" "+(e.serie||"")).toLowerCase().includes(q)||(qd.length>=4&&scanDigits(e.matricule).includes(qd)));}
@@ -1914,14 +1957,14 @@ function renderMat(){
     html+=`<div class="catbar">${esc(CATS[c])}</div><table class="grid"><thead><tr><th style="width:40px">N°</th><th>${t("designation")}</th><th style="width:120px">${t("matricule")}/${t("facture")}</th><th style="width:60px">${t("annee")}</th><th style="width:74px"></th></tr></thead><tbody>`;
     byCat[c].forEach(e=>{
       html+=`<tr data-row="${e.id}" class="${e.veh?"has-docs":""}"><td class="num">${String(e.id).padStart(2,"0")}</td><td><b>${esc(e.name)}</b> ${e.veh?`<span class="tag veh">${t("vehicles")}</span>`:''}${e.model?`<br><small class="muted">${esc(e.model)}</small>`:""}</td><td>${esc(e.matricule||e.facture||"—")}</td><td>${esc(e.annee||"—")}</td><td><button class="btn ghost sm" data-edit="${e.id}">${t("edit")}</button></td></tr>`;
-      if(e.veh)html+=`<tr data-row="${e.id}" class="docrow"><td></td><td colspan="4">${docChipsHtml(e)}</td></tr>`;
+      if(e.veh)html+=`<tr data-row="${e.id}" class="docrow"><td></td><td colspan="4">${docChipsHtml(e)}${rowActsHtml(e)}</td></tr>`;
     });
     html+=`</tbody></table>`;});
   html+=`</div>`;$("#view").innerHTML=html;
   $("#fCat").onchange=e=>{matFilter=e.target.value;renderMat();};
   $("#fSearch").oninput=e=>{matSearch=e.target.value;renderMat();$("#fSearch").focus();};
   $("#addBtn").onclick=()=>openEdit(null);
-  bindScanBtn();
+  bindScanBtn();bindRowActs();bindPdBtn();bindFlBtn();
   document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEdit(Number(b.dataset.edit)));
 }
 /* Pastilles de validité (lisibles aussi en noir et blanc : l'état est écrit en toutes lettres). */
@@ -2547,7 +2590,7 @@ async function openEdit(id,presetVeh){
   $("#m_save").onclick=()=>saveItem(e,draftImages,imageDirty,draftOcr);
 }
 function imgCtl(tt,img,record){return `<div class="ocr-tools"><label class="btn ghost sm" style="cursor:pointer;display:inline-block">${t("joindre")}<input type="file" id="file_${tt}" accept="image/*" style="display:none"></label><button class="btn ghost sm" id="ocr_${tt}" type="button" ${img?"":"disabled"}>${t("analyseOCR")}</button><button class="btn gray sm" id="rm_${tt}" type="button">${t("retirer")}</button></div><div id="thumb_${tt}">${img?`<img class="thumb" src="${img}" alt="">`:""}</div><div class="ocr-status" id="ocr_status_${tt}"></div><div id="ocr_raw_${tt}">${record&&record.text?`<details class="ocr-raw"><summary>${t("ocrText")} — ${Math.round(Number(record.confidence)||0)}%</summary><pre>${esc(record.text)}</pre></details>`:""}</div>`;}
-function handleImg(ev,draftImages,imageDirty,draftOcr,tt,draftOcrSources){const input=ev.target,f=input.files&&input.files[0];if(!f)return;if(f.type&&!f.type.startsWith("image/")){alert(t("ocrBadImage"));input.value="";return;}processDocumentImage(f,data=>{input.value="";if(!data){alert(t("ocrBadImage"));return;}draftImages[tt]=data.store;draftOcrSources[tt]=data.ocr;imageDirty[tt]=true;delete draftOcr[tt];setOcrPreview(tt,data.store,null);});}
+function handleImg(ev,draftImages,imageDirty,draftOcr,tt,draftOcrSources){const input=ev.target,f=input.files&&input.files[0];if(!f)return;if(f.type&&!f.type.startsWith("image/")){alert(t("ocrBadImage"));input.value="";return;}processDocumentImage(f,data=>{input.value="";if(!data||data.cancelled){if(!data)alert(t("ocrBadImage"));return;}draftImages[tt]=data.store;draftOcrSources[tt]=data.ocr;imageDirty[tt]=true;delete draftOcr[tt];setOcrPreview(tt,data.store,null);});}
 async function saveItem(e,draftImages,imageDirty,draftOcr){
   e.name=$("#m_name").value.trim();e.model=$("#m_model").value.trim();e.cat=Number($("#m_cat").value);e.matricule=$("#m_mat").value.trim();e.facture=$("#m_fac").value.trim();e.annee=$("#m_an").value.trim();e.etat=$("#m_etat").value.trim();e.obs=$("#m_obs").value.trim();e.veh=$("#m_veh").checked;
   if(e.veh){e.serie=$("#m_serie").value.trim();e.needsCT=$("#m_ct").checked;e.needsPermis=$("#m_perm").checked;e.cg={num:$("#d_cg_num").value.trim()};e.assurance={num:$("#d_as_num").value.trim(),deb:$("#d_as_deb").value,fin:$("#d_as_fin").value,ref:$("#d_as_ref").value};e.ct={num:$("#d_ct_num").value.trim(),deb:$("#d_ct_deb").value,fin:$("#d_ct_fin").value};e.permis={num:$("#d_pm_num").value.trim(),deb:$("#d_pm_deb").value,fin:$("#d_pm_fin").value};}
@@ -2600,15 +2643,32 @@ function scanClassify(text){
   const top=sorted[0],second=sorted[1];
   return {type:scores[top]>0?top:"",score:scores[top],sure:scores[top]>=4&&scores[top]-scores[second]>=3,scores};
 }
+// Groupes du matricule lus avec tolérance OCR (O→0, I/l/|→1) : « 020454-214-01 » reste reconnu par ses 2 premiers groupes.
+function scanPlateGroups(text){
+  const src=latinDigits(String(text||"")).replace(/[Oo]/g,"0").replace(/[Il|]/g,"1"),out=[];
+  const re=/(?:^|[^\d.\/])(\d{2,6})\s*[-.,_ ]\s*(\d{3,5})(?:\s*[-.,_ ]\s*(\d{1,2}))?(?![\d\/])/g;
+  for(const m of src.matchAll(re))out.push([m[1].replace(/^0+/,""),m[2].replace(/^0+/,""),m[3]||""]);
+  return out;
+}
+function vehPlateGroups(mat){const g=latinDigits(String(mat||"")).split(/\D+/).filter(Boolean);return g.length>=2?[g[0].replace(/^0+/,""),g[1].replace(/^0+/,""),g[2]||""]:null;}
 function scanMatchVehicle(text,parsed){
   const plates=scanPlatesInText(text);
   if(parsed&&parsed.matricule)scanPlateKeys(parsed.matricule).forEach(k=>plates.add(k));
-  const alnum=scanAlnum(text),res=[];
+  const alnum=scanAlnum(text),res=[],groups=scanPlateGroups(text),digitsTxt=scanDigits(text);
+  const tokens=String(text||"").toUpperCase().split(/[^A-Z0-9]+/).filter(x=>x.length>=7&&/\d/.test(x)&&/[A-Z]/.test(x));
   DATA.equipment.filter(e=>e&&e.veh).forEach(e=>{
     let score=0;const reasons=[];
     if(scanPlateKeys(e.matricule).some(k=>plates.has(k))){score+=100;reasons.push("mat");}
     else if((Array.isArray(e.oldMat)?e.oldMat:[]).some(m=>scanPlateKeys(m).some(k=>plates.has(k)))){score+=60;reasons.push("old");}
     if(scanSerieKeys(e).some(k=>alnum.includes(k))){score+=90;reasons.push("serie");}
+    else if(scanSerieKeys(e).some(k=>k.length>=12&&tokens.some(tk=>k.includes(tk)))){score+=50;reasons.push("serie");}
+    if(!reasons.includes("mat")){
+      const vg=vehPlateGroups(e.matricule);
+      if(vg&&vg[1].length>=3&&groups.some(g=>g[0]===vg[0]&&g[1]===vg[1])){score+=85;reasons.push("mat");}
+    }
+    // N° de certificat d'assurance déjà enregistré (ex. F0455633)
+    const cert=String((e.assurance&&e.assurance.num)||"").match(/\(F?0*(\d{5,8})\)/);
+    if(cert&&new RegExp("(^|\\D)0*"+cert[1]+"(\\D|$)").test(latinDigits(String(text||"")))){score+=60;reasons.push("cert");}
     if(score)res.push({e,score,reasons});
   });
   res.sort((a,b)=>b.score-a.score);
@@ -2694,10 +2754,11 @@ function scanBtnHtml(){return `<label class="btn ghost" style="cursor:pointer">$
 function bindScanBtn(){const i=document.getElementById("scanInp");if(i)i.onchange=ev=>{const files=[...(ev.target.files||[])].filter(f=>!f.type||f.type.startsWith("image/"));ev.target.value="";if(files.length)scanStart(files);};}
 function egToast(msg){let el=document.getElementById("egToast");if(!el){el=document.createElement("div");el.id="egToast";el.className="eg-toast";document.body.appendChild(el);}el.textContent=msg;el.style.display="block";clearTimeout(el._t);el._t=setTimeout(()=>{el.style.display="none";},3800);}
 function scanSetProgress(msg){const el=document.getElementById("sc_prog");if(el)el.textContent=msg;}
-function scanStart(files){_scanQueue=files.slice();_scanTotal=files.length;_scanIndex=0;_scanUpdated=[];scanNext();}
+let _scanForcedId=null;
+function scanStart(files,forcedId){_scanForcedId=forcedId!=null?forcedId:null;_scanQueue=files.slice();_scanTotal=files.length;_scanIndex=0;_scanUpdated=[];scanNext();}
 async function scanFinish(){
   try{if(_scanWorker)await _scanWorker.terminate();}catch(e){}
-  _scanWorker=null;closeModal();
+  _scanWorker=null;closeModal();_scanForcedId=null;
   if(_scanLastId!=null)scanGoTo(_scanLastId);
   _scanLastId=null;
 }
@@ -2705,7 +2766,7 @@ async function scanNext(){
   if(!_scanQueue.length){await scanFinish();return;}
   const file=_scanQueue.shift();_scanIndex++;
   const data=await new Promise(res=>processDocumentImage(file,res));
-  if(!data){alert(t("ocrBadImage"));return scanNext();}
+  if(!data||data.cancelled){if(!data)alert(t("ocrBadImage"));return scanNext();}
   const st={file,store:data.store,ocrSrc:data.ocr,text:"",conf:0,parsedByType:{},type:"",sure:false,match:null};
   $("#modal").innerHTML=`<h3>${t("scanTitle")}</h3><div class="scan-busy"><img class="scan-img" src="${data.store}" alt=""><div><b id="sc_prog">${t("scanLoading")}</b><div class="muted" style="font-size:12px;margin-top:4px">${tVars("scanOf",{i:_scanIndex,n:_scanTotal})} — ${esc(file.name||"")}</div></div></div>`;
   $("#overlay").classList.add("show");
@@ -2715,11 +2776,22 @@ async function scanNext(){
     scanSetProgress(t("scanReading"));
     const img=await loadImageDataUrl(data.ocr);
     try{if(_scanWorker.setParameters)await _scanWorker.setParameters({tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300"});}catch(e){}
-    const quick=await _scanWorker.recognize(buildOcrVariant(img,{x:.015,y:.01,w:.97,h:.98},3400,false));
-    const quickText=((quick&&quick.data&&quick.data.text)||"").trim();
+    let quick=await _scanWorker.recognize(buildOcrVariant(img,{x:.015,y:.01,w:.97,h:.98},3400,false));
+    let quickText=((quick&&quick.data&&quick.data.text)||"").trim();
+    // Document tourné (photo couchée) : peu de texte lisible → on essaie 90° et 270° et on garde le meilleur sens.
+    const alnumCount=s=>(String(s).match(/[A-Za-z0-9\u0600-\u06FF]/g)||[]).length;
+    if(alnumCount(quickText)<80){
+      for(const dir of [1,-1]){
+        const rc=_dsRotate(img,dir),rurl=rc.toDataURL("image/jpeg",0.95),rimg=await loadImageDataUrl(rurl);
+        const rq=await _scanWorker.recognize(buildOcrVariant(rimg,{x:.015,y:.01,w:.97,h:.98},3400,false));
+        const rt=((rq&&rq.data&&rq.data.text)||"").trim();
+        if(alnumCount(rt)>alnumCount(quickText)*1.6+20){quick=rq;quickText=rt;data.ocr=rurl;st.ocrSrc=rurl;
+          const simg=await loadImageDataUrl(st.store);st.store=_dsRotate(simg,dir).toDataURL("image/jpeg",0.9);}
+      }
+    }
     let cls=scanClassify(quickText);
     const tt0=cls.type||"as";
-    const best=await recognizeBestOcr(_scanWorker,tt0,data.ocr);
+    const best=await recognizeBestOcr(_scanWorker,tt0,st.ocrSrc);
     st.text=_mergeOcrText([{text:quickText},{text:best.text||""}]);
     st.conf=Math.max(Number(best.confidence)||0,Math.round(Number(quick&&quick.data&&quick.data.confidence)||0));
     st.parsedByType[tt0]=scanEnrich(tt0,trustedOcrParsed(tt0,best.parsed,best.confidence),st.text);
@@ -2728,25 +2800,26 @@ async function scanNext(){
     st.type=cls.type||tt0;st.sure=cls.sure;
     st.match=scanMatchVehicle(st.text,scanParsed(st,"cg"));
   }catch(err){
+    // Lecture impossible (hors ligne…) : on passe quand même à l'écran de saisie pour enregistrer la photo et taper les valeurs.
     console.error("scan",err);
-    $("#modal").innerHTML=`<h3>${t("scanTitle")}</h3><p class="scan-note bad">${t("ocrFailed")}</p><div class="modal-actions"><button class="btn" id="sc_ok" type="button">OK</button></div>`;
-    $("#sc_ok").onclick=()=>{scanNext();};
-    return;
+    st.ocrFailed=true;st.type=st.type||"as";st.match=null;
   }
   scanReview(st);
 }
 function scanReview(st){
   const vehs=DATA.equipment.filter(e=>e&&e.veh);
   const best=st.match&&st.match.best;
-  const preId=best?String(best.e.id):"";
-  const reasonKey=best?(best.reasons.includes("mat")?"scanReasonMat":best.reasons.includes("serie")?"scanReasonSerie":"scanReasonOld"):"";
-  $("#modal").innerHTML=`<h3>📷 ${t("scanTitle")}</h3>
+  const forced=_scanForcedId!=null?DATA.equipment.find(x=>x.id===_scanForcedId):null;
+  const preId=forced?String(forced.id):(best?String(best.e.id):"");
+  const conflict=forced&&best&&best.e.id!==forced.id;
+  const reasonKey=best?(best.reasons.includes("mat")?"scanReasonMat":best.reasons.includes("serie")?"scanReasonSerie":best.reasons.includes("cert")?"scanReasonCert":"scanReasonOld"):"";
+  $("#modal").innerHTML=`<h3>📷 ${t("scanTitle")}</h3>${st.ocrFailed?`<p class="scan-note warn">${t("scanManual")}</p>`:""}
     <div class="scan-head"><img class="scan-img" src="${st.store}" alt="">
       <div>
         <div class="field"><label>${t("scanType")}</label><select id="sc_type">${SCAN_TYPES.map(tt=>`<option value="${tt}" ${tt===st.type?"selected":""}>${t(SCAN_TYPE_LABEL[tt])}</option>`).join("")}</select>
           <div class="scan-hint ${st.sure?"ok":"warn"}">${st.sure?"✓ "+t("scanDetected"):"⚠️ "+t("scanUnsure")}</div></div>
         <div class="field"><label>${t("scanVehicle")}</label><select id="sc_veh"><option value="">${t("scanChoose")}</option>${vehs.map(e=>`<option value="${e.id}" ${String(e.id)===preId?"selected":""}>${esc(e.matricule||"—")} — ${esc(e.name)}${e.model?" "+esc(e.model):""}</option>`).join("")}<option value="new">${t("scanNewVeh")}</option></select>
-          <div class="scan-hint ${best?"ok":"warn"}" id="sc_reason">${best?"✓ "+t(reasonKey):"⚠️ "+t(st.match&&st.match.ambiguous?"scanAmbig":"scanNoMatch")}</div></div>
+          <div class="scan-hint ${conflict?"warn":(forced||best)?"ok":"warn"}" id="sc_reason">${conflict?"⚠️ "+tVars("scanOtherVeh",{v:esc((best.e.matricule||"")+" "+best.e.name)}):forced?"✓ "+t(best?reasonKey:"scanForced"):best?"✓ "+t(reasonKey):"⚠️ "+t(st.match&&st.match.ambiguous?"scanAmbig":"scanNoMatch")}</div></div>
       </div></div>
     <div id="sc_fields"></div>
     <label class="chk" style="margin-top:10px"><input type="checkbox" id="sc_photo" checked> ${t("scanSavePhoto")}</label>
@@ -2850,7 +2923,7 @@ function scanGoTo(id){
    nouveau matricule du tracteur BEIJING, nouvel engin 04-50028-02.
    Une valeur n'est remplacée que si l'échéance enregistrée est plus ancienne ;
    une carte grise n'est remplie que si sa référence est vide. */
-const DOCS_MIG_VERSION=6; // v5 : « Details flotte » CASH 00043 (12 véhicules) — TOYOTA, FIAT, chargeur LOVOL // v2 : C.T 003537 du 23/08/2026 — v3 : N° de série complets + date d'effet assurance 04.10905.02
+const DOCS_MIG_VERSION=9; // v5 : « Details flotte » CASH 00043 (12 véhicules) — TOYOTA, FIAT, chargeur LOVOL // v2 : C.T 003537 du 23/08/2026 — v3 : N° de série complets + date d'effet assurance 04.10905.02
 const DOCS_OCT26={
   as:{
     "041090602":{num:"D0901.2026.10.1121.00267 (F407223)",deb:"2026-07-16",fin:"2027-07-15"},
@@ -2874,7 +2947,8 @@ const DOCS_OCT26={
     "041090602":["HJSCE6GES00343","HJSCE6GES0034322"]
   },
   ct:{
-    "00353722502":{num:"1556469 / PV 1302230826081000353722502",deb:"2026-08-23",fin:"2027-08-23"}
+    "00353722502":{num:"1556469 / PV 1302230826081000353722502",deb:"2026-08-23",fin:"2027-08-23"},
+    "00353822502":{num:"PV 1302230826081000353822502",deb:"2026-08-23",fin:"2027-08-23"}
   },
   cg:{
     "041090602":"Quittance N° 180255578 du 15/07/2025",
@@ -2889,6 +2963,7 @@ const DOCS_OCT26={
     "0596320902":"Quittance N° 180123847 du 22/03/2021",
     "50000722602":"Carte du 11/05/2026",
     "01287210002":"Quittance N° 180221525 du 16/03/2025",
+    "0330831902":"Quittance N° 180243654 du 27/06/2019",
     "50000151202":"Carte du 29/09/2026"
   }
 };
@@ -2916,7 +2991,7 @@ function applyDocsOct26(list,deletedIds){
   });
   // v5 : détail flotte CASH D0901/2026/10/1122/00043 — l'engin 04-50028-02 est le chargeur LOVOL CLW009LDETZ000134 (2026).
   list.forEach(e=>{
-    if(!e||scanDigits(e.matricule)!=="0450002802")return;
+    if(!e||scanDigits(e.matricule)!=="045002802")return;
     if(e.name==="Engin (à identifier)"){e.name="Chargeur S/Roues";e.model="LOVOL";e.annee="2026";if(!e.serie)e.serie="CLW009LDETZ000134";e.obs="";e._mod=nextMod();changed++;}
   });
   const FLEET={num:"D0901.2026.10.1122.00043",deb:"2026-10-05",fin:"2027-10-04",ref:"mat"};
@@ -2933,7 +3008,7 @@ function applyDocsOct26(list,deletedIds){
     list.push(Object.assign({cat:2,etat:"Bon",obs:"",veh:true,needsCT:false,needsPermis:false,cg:{},assurance:Object.assign({},FLEET,{num:FLEET.num+" ("+CERT[scanDigits(v.matricule)]+")"}),ct:{},permis:{},ocr:{},_mod:nextMod()},v));
     changed++;
   });
-  if(!dset.has("65")&&!list.some(e=>e&&(e.id===65||scanDigits(e.matricule)==="0450002802"))){
+  if(!dset.has("65")&&!list.some(e=>e&&(e.id===65||scanDigits(e.matricule)==="045002802"))){
     list.push({id:65,cat:1,name:"Chargeur S/Roues",model:"LOVOL",matricule:"04.50028.02",annee:"2026",etat:"Bon",obs:"",veh:true,needsCT:false,needsPermis:false,serie:"CLW009LDETZ000134",
       cg:{},assurance:{num:"D0901.2026.10.1122.00043 (F0455639)",deb:"2026-10-05",fin:"2027-10-04",ref:"mat"},ct:{},permis:{},ocr:{},_mod:nextMod()});
     changed++;
@@ -2950,6 +3025,450 @@ async function runDocsMigrationOnce(){
     await saveAll();
     try{render();}catch(e){}
   }finally{_docsMigRunning=false;}
+}
+
+/* ===== SCANNER DE DOCUMENTS INTÉGRÉ (sans Internet) =====
+   1) détection automatique des 4 coins ; 2) écran de contrôle (coins déplaçables, rotation) ;
+   3) redressement de perspective ; 4) nettoyage : fond blanchi, ombres retirées, cachets en couleur conservés. */
+function _dsGray(img,maxSide){
+  const s=Math.min(1,maxSide/Math.max(img.width,img.height)),w=Math.max(1,Math.round(img.width*s)),h=Math.max(1,Math.round(img.height*s));
+  const cv=document.createElement("canvas");cv.width=w;cv.height=h;const ctx=cv.getContext("2d",{willReadFrequently:true});ctx.drawImage(img,0,0,w,h);
+  const d=ctx.getImageData(0,0,w,h).data,g=new Uint8ClampedArray(w*h),sat=new Uint8ClampedArray(w*h);
+  for(let i=0,j=0;i<d.length;i+=4,j++){const r=d[i],gg=d[i+1],b=d[i+2];g[j]=(r*299+gg*587+b*114)/1000;const mx=Math.max(r,gg,b),mn=Math.min(r,gg,b);sat[j]=mx?255*(mx-mn)/mx:0;}
+  return {g,sat,w,h,s};
+}
+function _dsBox(a,w,h,r){ // flou boîte séparable
+  const t=new Float32Array(w*h),o=new Uint8ClampedArray(w*h);
+  for(let y=0;y<h;y++){let acc=0;const row=y*w;for(let x=-r;x<=r;x++)acc+=a[row+Math.min(w-1,Math.max(0,x))];
+    for(let x=0;x<w;x++){t[row+x]=acc/(2*r+1);acc+=a[row+Math.min(w-1,x+r+1)]-a[row+Math.max(0,x-r)];}}
+  for(let x=0;x<w;x++){let acc=0;for(let y=-r;y<=r;y++)acc+=t[Math.min(h-1,Math.max(0,y))*w+x];
+    for(let y=0;y<h;y++){o[y*w+x]=acc/(2*r+1);acc+=t[Math.min(h-1,y+r+1)*w+x]-t[Math.max(0,y-r)*w+x];}}
+  return o;
+}
+function _dsMorph(m,w,h,r,isMax){ // dilatation / érosion séparable sur masque 0/1
+  const t=new Uint8Array(w*h),o=new Uint8Array(w*h),f=isMax?1:0;
+  for(let y=0;y<h;y++){const row=y*w;for(let x=0;x<w;x++){let v=1-f;for(let k=-r;k<=r;k++){const xx=x+k;if(xx<0||xx>=w)continue;if(m[row+xx]===f){v=f;break;}}t[row+x]=v;}}
+  for(let x=0;x<w;x++){for(let y=0;y<h;y++){let v=1-f;for(let k=-r;k<=r;k++){const yy=y+k;if(yy<0||yy>=h)continue;if(t[yy*w+x]===f){v=f;break;}}o[y*w+x]=v;}}
+  return o;
+}
+function _dsLargest(m,w,h){
+  const lab=new Int32Array(w*h);let best=null,id=0;const q=new Int32Array(w*h);
+  for(let i=0;i<w*h;i++){if(!m[i]||lab[i])continue;id++;let qh=0,qt=0;q[qt++]=i;lab[i]=id;
+    let n=0,tl=[0,0,1e9],tr=[0,0,-1e9],br=[0,0,-1e9],bl=[0,0,1e9];
+    while(qh<qt){const p=q[qh++],x=p%w,y=(p/w)|0;n++;
+      const s1=x+y,s2=x-y;if(s1<tl[2])tl=[x,y,s1];if(s1>br[2])br=[x,y,s1];if(s2>tr[2])tr=[x,y,s2];if(s2<bl[2])bl=[x,y,s2];
+      if(x>0){const k=p-1;if(m[k]&&!lab[k]){lab[k]=id;q[qt++]=k;}}if(x<w-1){const k=p+1;if(m[k]&&!lab[k]){lab[k]=id;q[qt++]=k;}}
+      if(y>0){const k=p-w;if(m[k]&&!lab[k]){lab[k]=id;q[qt++]=k;}}if(y<h-1){const k=p+w;if(m[k]&&!lab[k]){lab[k]=id;q[qt++]=k;}}}
+    if(!best||n>best.n)best={n,id,quad:[[tl[0],tl[1]],[tr[0],tr[1]],[br[0],br[1]],[bl[0],bl[1]]]};}
+  if(best){best.lab=lab;}
+  return best;
+}
+function _dsHull(pts){pts.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);const lo=[],up=[];
+  for(const p of pts){while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p);}
+  for(let i=pts.length-1;i>=0;i--){const p=pts[i];while(up.length>=2&&cr(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p);}
+  up.pop();lo.pop();return lo.concat(up);}
+// Plus grand quadrilatère inscrit dans l'enveloppe convexe (recherche des sommets extrêmes sur 90 orientations).
+function _dsBestQuad(hull){
+  let best=null;
+  for(let a=0;a<90;a+=1.5){const r=a*Math.PI/180,c=Math.cos(r),sn=Math.sin(r);let e=[null,null,null,null],v=[1e9,-1e9,-1e9,1e9];
+    for(const p of hull){const x=p[0]*c+p[1]*sn,y=-p[0]*sn+p[1]*c,s1=x+y,s2=x-y;if(s1<v[0]){v[0]=s1;e[0]=p;}if(s2>v[1]){v[1]=s2;e[1]=p;}if(s1>v[2]){v[2]=s1;e[2]=p;}if(s2<v[3]){v[3]=s2;e[3]=p;}}
+    const ar=_dsPolyArea(e);if(!best||ar>best.ar)best={ar,q:e};}
+  // remet dans l'ordre haut-gauche, haut-droite, bas-droite, bas-gauche
+  const q=best.q,sum=q.map(p=>p[0]+p[1]),dif=q.map(p=>p[0]-p[1]);
+  return [q[sum.indexOf(Math.min(...sum))],q[dif.indexOf(Math.max(...dif))],q[sum.indexOf(Math.max(...sum))],q[dif.indexOf(Math.min(...dif))]];
+}
+function _dsPolyArea(q){let a=0;for(let i=0;i<4;i++){const [x1,y1]=q[i],[x2,y2]=q[(i+1)%4];a+=x1*y2-x2*y1;}return Math.abs(a)/2;}
+function _dsOtsu(g){const h=new Float64Array(256);g.forEach(v=>h[v]++);let sum=0;for(let i=0;i<256;i++)sum+=i*h[i];let sB=0,wB=0,best=128,mx=-1;const tot=g.length;
+  for(let t=0;t<256;t++){wB+=h[t];if(!wB)continue;const wF=tot-wB;if(!wF)break;sB+=t*h[t];const mB=sB/wB,mF=(sum-sB)/wF,v=wB*wF*(mB-mF)*(mB-mF);if(v>mx){mx=v;best=t;}}return best;}
+function detectDocQuad(img){
+  const {g,sat,w,h,s}=_dsGray(img,640),bl=_dsBox(g,w,h,2),tot=w*h,cands=[];
+  const otsu=_dsOtsu(bl);
+  // 1) papier clair et peu saturé (exclut mains / bureau) ; 2) clair ; 3) non blanc (scan sur fond blanc)
+  const masks=[Uint8Array.from(bl,(v,i)=>(v>Math.max(otsu,90)&&sat[i]<70)?1:0),Uint8Array.from(bl,v=>v>otsu?1:0),Uint8Array.from(bl,(v,i)=>(v<232||sat[i]>30)?1:0)];
+  masks.forEach(m=>{
+    let mm=_dsMorph(m,w,h,4,true);mm=_dsMorph(mm,w,h,4,false);mm=_dsMorph(mm,w,h,3,false);mm=_dsMorph(mm,w,h,3,true);
+    const c=_dsLargest(mm,w,h);if(!c)return;
+    const pts=[];for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x;if(c.lab[i]!==c.id)continue;if(x===0||y===0||x===w-1||y===h-1||c.lab[i-1]!==c.id||c.lab[i+1]!==c.id||c.lab[i-w]!==c.id||c.lab[i+w]!==c.id)pts.push([x,y]);}
+    if(pts.length>=4)c.quad=_dsBestQuad(_dsHull(pts));
+    const qa=_dsPolyArea(c.quad),frac=qa/tot,rect=c.n/Math.max(1,qa);
+    if(frac<0.18||frac>0.985||rect<0.82)return;
+    cands.push({quad:c.quad,score:rect*2+Math.min(frac,0.9)*0.6});
+  });
+  if(!cands.length)return null;
+  cands.sort((a,b)=>b.score-a.score);
+  const q=cands[0].quad.map(([x,y])=>[x/s,y/s]),cx=q.reduce((a,p)=>a+p[0],0)/4,cy=q.reduce((a,p)=>a+p[1],0)/4;
+  return q.map(([x,y])=>[Math.min(img.width,Math.max(0,cx+(x-cx)*1.012)),Math.min(img.height,Math.max(0,cy+(y-cy)*1.012))]);
+}
+function _dsHomography(src,dst){ // dst(x,y) -> src(u,v)
+  const A=[],B=[];
+  for(let i=0;i<4;i++){const [x,y]=dst[i],[u,v]=src[i];A.push([x,y,1,0,0,0,-u*x,-u*y]);B.push(u);A.push([0,0,0,x,y,1,-v*x,-v*y]);B.push(v);}
+  for(let c=0;c<8;c++){let p=c;for(let r=c+1;r<8;r++)if(Math.abs(A[r][c])>Math.abs(A[p][c]))p=r;[A[c],A[p]]=[A[p],A[c]];[B[c],B[p]]=[B[p],B[c]];
+    for(let r=0;r<8;r++){if(r===c)continue;const f=A[r][c]/A[c][c];for(let k=c;k<8;k++)A[r][k]-=f*A[c][k];B[r]-=f*B[c];}}
+  return B.map((b,i)=>b/A[i][i]).concat([1]);
+}
+function warpDocument(img,quad,maxSide){
+  const d=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+  let W=Math.max(d(quad[0],quad[1]),d(quad[3],quad[2])),H=Math.max(d(quad[0],quad[3]),d(quad[1],quad[2]));
+  const sc=Math.min(maxSide/Math.max(W,H),2.2);W=Math.max(1,Math.round(W*sc));H=Math.max(1,Math.round(H*sc));
+  const sv=document.createElement("canvas");sv.width=img.width;sv.height=img.height;const sctx=sv.getContext("2d",{willReadFrequently:true});sctx.drawImage(img,0,0);
+  const S=sctx.getImageData(0,0,img.width,img.height).data,iw=img.width,ih=img.height;
+  const Hm=_dsHomography(quad,[[0,0],[W,0],[W,H],[0,H]]);
+  const out=document.createElement("canvas");out.width=W;out.height=H;const octx=out.getContext("2d");const od=octx.createImageData(W,H),O=od.data;
+  for(let y=0;y<H;y++){for(let x=0;x<W;x++){
+    const z=Hm[6]*x+Hm[7]*y+1,u=(Hm[0]*x+Hm[1]*y+Hm[2])/z,v=(Hm[3]*x+Hm[4]*y+Hm[5])/z;
+    let x0=Math.floor(u),y0=Math.floor(v);const fx=u-x0,fy=v-y0;x0=Math.min(iw-2,Math.max(0,x0));y0=Math.min(ih-2,Math.max(0,y0));
+    const i00=(y0*iw+x0)*4,i10=i00+4,i01=i00+iw*4,i11=i01+4,o=(y*W+x)*4;
+    for(let c=0;c<3;c++)O[o+c]=(S[i00+c]*(1-fx)+S[i10+c]*fx)*(1-fy)+(S[i01+c]*(1-fx)+S[i11+c]*fx)*fy;
+    O[o+3]=255;}}
+  octx.putImageData(od,0,0);return out;
+}
+function cleanDocumentCanvas(cv){
+  const W=cv.width,H=cv.height,ctx=cv.getContext("2d",{willReadFrequently:true}),id=ctx.getImageData(0,0,W,H),D=id.data;
+  // Fond estimé sur une petite image : dilatation (max) puis flou → retire ombres et teinte du papier.
+  const k=Math.max(8,Math.round(Math.max(W,H)/90)),sw=Math.max(4,Math.ceil(W/k)),sh=Math.max(4,Math.ceil(H/k));
+  const sm=document.createElement("canvas");sm.width=sw;sm.height=sh;const sctx=sm.getContext("2d",{willReadFrequently:true});sctx.imageSmoothingQuality="high";sctx.drawImage(cv,0,0,sw,sh);
+  const sd=sctx.getImageData(0,0,sw,sh).data,bg=[0,1,2].map(c=>{let a=new Uint8ClampedArray(sw*sh);for(let i=0;i<sw*sh;i++)a[i]=sd[i*4+c];
+    for(let it=0;it<3;it++){const b=new Uint8ClampedArray(sw*sh);for(let y=0;y<sh;y++)for(let x=0;x<sw;x++){let m=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=sw||yy>=sh)continue;const v=a[yy*sw+xx];if(v>m)m=v;}b[y*sw+x]=m;}a=b;}
+    return _dsBox(a,sw,sh,2);});
+  const lo=35,hi=232,lut=new Uint8ClampedArray(256);for(let v=0;v<256;v++){const n=Math.min(1,Math.max(0,(v-lo)/(hi-lo)));lut[v]=Math.round(Math.pow(n,1.25)*255);}
+  for(let y=0;y<H;y++){const fy=Math.min(sh-1.001,Math.max(0,(y+.5)/k-.5)),y0=fy|0,ty=fy-y0;
+    for(let x=0;x<W;x++){const fx=Math.min(sw-1.001,Math.max(0,(x+.5)/k-.5)),x0=fx|0,tx=fx-x0,i0=y0*sw+x0,o=(y*W+x)*4;
+      for(let c=0;c<3;c++){const B=bg[c],b=(B[i0]*(1-tx)+B[i0+1]*tx)*(1-ty)+(B[i0+sw]*(1-tx)+B[i0+sw+1]*tx)*ty;D[o+c]=lut[Math.min(255,Math.round(D[o+c]/Math.max(b,1)*255))];}}}
+  ctx.putImageData(id,0,0);return cv;
+}
+function _dsRotate(img,dir){const cv=document.createElement("canvas");cv.width=img.height;cv.height=img.width;const c=cv.getContext("2d");c.translate(cv.width/2,cv.height/2);c.rotate(dir*Math.PI/2);c.drawImage(img,-img.width/2,-img.height/2);return cv;}
+function _dsToJpeg(cv,max,q){const s=Math.min(1,max/Math.max(cv.width,cv.height));if(s>=1)return cv.toDataURL("image/jpeg",q);const o=document.createElement("canvas");o.width=Math.round(cv.width*s);o.height=Math.round(cv.height*s);const c=o.getContext("2d");c.imageSmoothingQuality="high";c.drawImage(cv,0,0,o.width,o.height);return o.toDataURL("image/jpeg",q);}
+/* Écran de contrôle : coins déplaçables au doigt, rotation, original, appliquer. */
+function openDocCropper(srcImg){
+  return new Promise(resolve=>{
+    let img=srcImg,quad=detectDocQuad(img)||[[0,0],[img.width,0],[img.width,img.height],[0,img.height]],auto=!!detectDocQuad(img),clean=true;
+    const ui=document.createElement("div");ui.className="crop-ui";
+    ui.innerHTML=`<div class="crop-bar"><b>${t("cropTitle")}</b><span class="muted" id="cr_hint"></span></div><div class="crop-stage"><canvas id="cr_cv"></canvas></div>
+      <div class="crop-tools"><button class="btn ghost sm" data-cr="l" type="button">⟲</button><button class="btn ghost sm" data-cr="r" type="button">⟳</button><button class="btn ghost sm" data-cr="auto" type="button">${t("cropAuto")}</button><button class="btn ghost sm" data-cr="full" type="button">${t("cropFull")}</button><label class="chk" style="color:#fff;margin:0"><input type="checkbox" id="cr_clean" checked> ${t("cropClean")}</label></div>
+      <div class="crop-tools"><button class="btn gray" data-cr="cancel" type="button">${t("cancel")}</button><button class="btn ghost" data-cr="orig" type="button">${t("cropOrig")}</button><button class="btn" data-cr="ok" type="button">${t("cropApply")}</button></div>`;
+    document.body.appendChild(ui);
+    const cv=ui.querySelector("#cr_cv"),ctx=cv.getContext("2d");let sc=1,drag=-1;
+    const fit=()=>{const st=ui.querySelector(".crop-stage"),mw=st.clientWidth-8,mh=st.clientHeight-8;sc=Math.min(mw/img.width,mh/img.height);cv.width=Math.round(img.width*sc);cv.height=Math.round(img.height*sc);draw();};
+    const draw=()=>{ctx.clearRect(0,0,cv.width,cv.height);ctx.drawImage(img,0,0,cv.width,cv.height);
+      ctx.fillStyle="rgba(0,0,0,.45)";ctx.beginPath();ctx.rect(0,0,cv.width,cv.height);const p=quad.map(([x,y])=>[x*sc,y*sc]);ctx.moveTo(p[0][0],p[0][1]);for(let i=3;i>=0;i--)ctx.lineTo(p[i][0],p[i][1]);ctx.closePath();ctx.fill("evenodd");
+      ctx.strokeStyle="#c8a86a";ctx.lineWidth=3;ctx.beginPath();p.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.stroke();
+      p.forEach(([x,y])=>{ctx.beginPath();ctx.arc(x,y,13,0,7);ctx.fillStyle="rgba(200,168,106,.35)";ctx.fill();ctx.lineWidth=3;ctx.strokeStyle="#fff";ctx.stroke();});
+      ui.querySelector("#cr_hint").textContent=auto?t("cropDetected"):t("cropNotDetected");};
+    const pos=ev=>{const r=cv.getBoundingClientRect();return [(ev.clientX-r.left)/sc,(ev.clientY-r.top)/sc];};
+    cv.addEventListener("pointerdown",ev=>{const [x,y]=pos(ev);let bi=-1,bd=1e9;quad.forEach(([qx,qy],i)=>{const dd=Math.hypot(qx-x,qy-y)*sc;if(dd<bd){bd=dd;bi=i;}});if(bd<48){drag=bi;cv.setPointerCapture(ev.pointerId);}});
+    cv.addEventListener("pointermove",ev=>{if(drag<0)return;const [x,y]=pos(ev);quad[drag]=[Math.min(img.width,Math.max(0,x)),Math.min(img.height,Math.max(0,y))];draw();});
+    cv.addEventListener("pointerup",()=>{drag=-1;});cv.addEventListener("pointercancel",()=>{drag=-1;});
+    const finish=v=>{window.removeEventListener("resize",fit);ui.remove();resolve(v);};
+    ui.querySelector("#cr_clean").onchange=e=>{clean=e.target.checked;};
+    ui.querySelectorAll("[data-cr]").forEach(b=>b.onclick=()=>{
+      const a=b.dataset.cr;
+      if(a==="l"||a==="r"){img=_dsRotate(img,a==="l"?-1:1);const q=detectDocQuad(img);auto=!!q;quad=q||[[0,0],[img.width,0],[img.width,img.height],[0,img.height]];fit();}
+      else if(a==="auto"){const q=detectDocQuad(img);auto=!!q;if(q)quad=q;draw();}
+      else if(a==="full"){quad=[[0,0],[img.width,0],[img.width,img.height],[0,img.height]];auto=false;draw();}
+      else if(a==="cancel")finish({cancelled:true});
+      else if(a==="orig")finish({img,quad:null,clean:false});
+      else if(a==="ok"){b.disabled=true;b.textContent="…";setTimeout(()=>finish({img,quad:quad.map(p=>p.slice()),clean}),30);}
+    });
+    window.addEventListener("resize",fit);requestAnimationFrame(fit);
+  });
+}
+function processDocumentImage(file,cb){
+  const r=new FileReader();r.onerror=()=>cb(null);
+  r.onload=()=>{const im=new Image();im.onerror=()=>cb(null);
+    im.onload=async()=>{try{
+      // Limite la taille de travail (photos de téléphone 12 Mpx) pour rester rapide.
+      let src=im;const lim=3600;if(Math.max(im.naturalWidth,im.naturalHeight)>lim){const s=lim/Math.max(im.naturalWidth,im.naturalHeight);const c=document.createElement("canvas");c.width=Math.round(im.naturalWidth*s);c.height=Math.round(im.naturalHeight*s);c.getContext("2d").drawImage(im,0,0,c.width,c.height);src=c;}
+      else{const c=document.createElement("canvas");c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext("2d").drawImage(im,0,0);src=c;}
+      const res=await openDocCropper(src);
+      if(res.cancelled){cb({cancelled:true});return;}
+      let out=res.img;
+      if(res.quad)out=warpDocument(res.img,res.quad,3200);
+      else{const c=document.createElement("canvas");c.width=out.width;c.height=out.height;const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(out,0,0);out=c;}
+      if(res.clean)cleanDocumentCanvas(out);
+      cb({store:_dsToJpeg(out,2200,0.9),ocr:_dsToJpeg(out,3200,0.95)});
+    }catch(e){console.error("doc",e);cb(null);}};
+    im.src=r.result;};
+  r.readAsDataURL(file);
+}
+
+/* ===== IMPRESSION DES DOSSIERS VÉHICULES (PDF) =====
+   Même mise en page que les dossiers préparés :
+   page 1 (A4 paysage) : assurance à gauche + carte grise à droite ;
+   pages suivantes (A4 portrait) : contrôle technique, permis de circuler.
+   Le PDF est construit ici même (images JPEG intégrées telles quelles, sans perte, sans bibliothèque externe). */
+const PD_TYPES=[["cg","carteGrise"],["as","assurance"],["ct","controleTech"],["pm","permisCirc"]];
+const MM=72/25.4;
+let pdSel=null,pdTypes=null;
+function _pdB64ToBytes(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;}
+function _jpegInfo(u){
+  // Lit le marqueur SOF : dimensions + nombre de composantes.
+  let i=2;
+  while(i<u.length-9){
+    if(u[i]!==0xFF){i++;continue;}
+    const m=u[i+1];
+    if(m===0xD8||m===0x01||(m>=0xD0&&m<=0xD7)){i+=2;continue;}
+    const len=(u[i+2]<<8)|u[i+3];
+    if((m>=0xC0&&m<=0xC3)||(m>=0xC5&&m<=0xC7)||(m>=0xC9&&m<=0xCB)||(m>=0xCD&&m<=0xCF)){
+      return {h:(u[i+5]<<8)|u[i+6],w:(u[i+7]<<8)|u[i+8],c:u[i+9]};
+    }
+    i+=2+len;
+  }
+  return null;
+}
+async function _pdJpeg(dataUrl){
+  let url=String(dataUrl||"");
+  if(!/^data:image\/jpe?g;base64,/i.test(url)){
+    const img=await loadImageDataUrl(url);const cv=document.createElement("canvas");
+    cv.width=img.naturalWidth;cv.height=img.naturalHeight;const ctx=cv.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,cv.width,cv.height);ctx.drawImage(img,0,0);
+    url=cv.toDataURL("image/jpeg",0.92);
+  }
+  const bytes=_pdB64ToBytes(url.split(",")[1]);
+  let info=_jpegInfo(bytes);
+  if(!info){const img=await loadImageDataUrl(url);info={w:img.naturalWidth,h:img.naturalHeight,c:3};}
+  return {bytes,w:info.w,h:info.h,c:info.c};
+}
+function buildPdfBytes(pages){
+  const enc=new TextEncoder(),chunks=[];let len=0;const off=[];
+  const push=d=>{const u=typeof d==="string"?enc.encode(d):d;chunks.push(u);len+=u.length;};
+  push(new Uint8Array([37,80,68,70,45,49,46,52,10,37,226,227,207,211,10])); // %PDF-1.4 + binaire
+  let next=3;const plan=pages.map(p=>{const pg={page:next++,content:next++,imgs:p.items.map(()=>next++)};return pg;});
+  const total=next-1;
+  const begin=id=>{off[id]=len;push(id+" 0 obj\n");};
+  begin(1);push("<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+  begin(2);push("<< /Type /Pages /Count "+pages.length+" /Kids ["+plan.map(p=>p.page+" 0 R").join(" ")+"] >>\nendobj\n");
+  pages.forEach((p,k)=>{
+    const pl=plan[k];
+    const xo=p.items.map((it,j)=>"/Im"+(j+1)+" "+pl.imgs[j]+" 0 R").join(" ");
+    begin(pl.page);push("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 "+p.w.toFixed(2)+" "+p.h.toFixed(2)+"] /Resources << /XObject << "+xo+" >> >> /Contents "+pl.content+" 0 R >>\nendobj\n");
+    const cs=p.items.map((it,j)=>"q "+it.dw.toFixed(2)+" 0 0 "+it.dh.toFixed(2)+" "+it.x.toFixed(2)+" "+it.y.toFixed(2)+" cm /Im"+(j+1)+" Do Q").join("\n");
+    const csb=enc.encode(cs);
+    begin(pl.content);push("<< /Length "+csb.length+" >>\nstream\n");push(csb);push("\nendstream\nendobj\n");
+    p.items.forEach((it,j)=>{
+      const im=it.img,space=im.c===1?"/DeviceGray":im.c===4?"/DeviceCMYK /Decode [1 0 1 0 1 0 1 0]":"/DeviceRGB";
+      begin(pl.imgs[j]);push("<< /Type /XObject /Subtype /Image /Width "+im.w+" /Height "+im.h+" /ColorSpace "+space+" /BitsPerComponent 8 /Filter /DCTDecode /Length "+im.bytes.length+" >>\nstream\n");
+      push(im.bytes);push("\nendstream\nendobj\n");
+    });
+  });
+  const xref=len;
+  let x="xref\n0 "+(total+1)+"\n0000000000 65535 f \n";
+  for(let id=1;id<=total;id++)x+=String(off[id]).padStart(10,"0")+" 00000 n \n";
+  push(x+"trailer\n<< /Size "+(total+1)+" /Root 1 0 R >>\nstartxref\n"+xref+"\n%%EOF\n");
+  const out=new Uint8Array(len);let p=0;chunks.forEach(c=>{out.set(c,p);p+=c.length;});return out;
+}
+function _pdPairPage(imgs){
+  const PW=297*MM,PH=210*MM,M=10*MM,G=10*MM,avW=PW-2*M,avH=PH-2*M;
+  const a=imgs.map(im=>im.w/im.h);
+  const aTot=imgs.length===2?a[0]+a[1]:Math.max(a[0],0.81+0.6);
+  const h=Math.min(avH,(avW-G*(imgs.length-1))/aTot);
+  const ws=a.map(x=>x*h),tot=ws.reduce((s,v)=>s+v,0)+G*(imgs.length-1);
+  let x=(PW-tot)/2;const y=(PH-h)/2;
+  const items=imgs.map((im,i)=>{const it={img:im,x,y,dw:ws[i],dh:h};x+=ws[i]+G;return it;});
+  return {w:PW,h:PH,items};
+}
+function _pdFullPage(im){
+  const PW=210*MM,PH=297*MM,M=8*MM;
+  const s=Math.min((PW-2*M)/im.w,(PH-2*M)/im.h),dw=im.w*s,dh=im.h*s;
+  return {w:PW,h:PH,items:[{img:im,x:(PW-dw)/2,y:(PH-dh)/2,dw,dh}]};
+}
+function pdVehicles(){return DATA.equipment.filter(e=>e&&e.veh);}
+function pdBtnHtml(){return `<button class="btn ghost" id="pdBtn" type="button">${t("pdBtn")}</button>`;}
+function bindPdBtn(){const b=document.getElementById("pdBtn");if(b)b.onclick=openPrintDocs;}
+async function openPrintDocs(){
+  const vehs=pdVehicles();
+  if(!pdSel)pdSel=new Set(vehs.map(e=>e.id));
+  if(!pdTypes)pdTypes=new Set(["cg","as","ct","pm"]);
+  const byCat={};vehs.forEach(e=>{(byCat[e.cat]=byCat[e.cat]||[]).push(e);});
+  $("#modal").innerHTML=`<h3>${t("pdTitle")}</h3>
+    <div class="field"><label>${t("pdDocs")}</label><div class="pd-types">${PD_TYPES.map(([tt,l])=>`<label class="chk"><input type="checkbox" data-pdt="${tt}" ${pdTypes.has(tt)?"checked":""}> ${t(l)}</label>`).join("")}</div></div>
+    <div class="field"><label>${t("pdVehicles")}</label>
+      <div class="toolbar" style="margin-bottom:6px"><button class="btn ghost sm" type="button" data-pdq="all">${t("all")}</button><button class="btn ghost sm" type="button" data-pdq="2">${t("pdTrucks")}</button><button class="btn ghost sm" type="button" data-pdq="1">${t("pdEngins")}</button><button class="btn ghost sm" type="button" data-pdq="none">${t("none")}</button></div>
+      <div class="pd-list">${Object.keys(byCat).sort().map(c=>`<div class="pd-cat">${esc(CATS[c]||"")}</div>`+byCat[c].map(e=>`<label class="pd-row"><input type="checkbox" data-pdv="${e.id}" ${pdSel.has(e.id)?"checked":""}><span><b>${esc(e.matricule||"—")}</b> ${esc(e.name)} <small class="muted">${esc(e.model||"")}</small></span><span class="pd-have" data-pdhave="${e.id}"></span></label>`).join("")).join("")}</div></div>
+    <p class="muted" id="pdCount" style="font-size:12px"></p>
+    <div id="pdOut"></div>
+    <div class="modal-actions"><button class="btn gray" id="pd_close" type="button">${t("close")}</button><button class="btn" id="pd_go" type="button">${t("pdMake")}</button></div>`;
+  $("#overlay").classList.add("show");
+  const cnt=()=>{const el=$("#pdCount");if(el)el.textContent=tVars("pdCountTxt",{n:pdSel.size});};
+  document.querySelectorAll("[data-pdt]").forEach(i=>i.onchange=()=>{i.checked?pdTypes.add(i.dataset.pdt):pdTypes.delete(i.dataset.pdt);});
+  document.querySelectorAll("[data-pdv]").forEach(i=>i.onchange=()=>{const id=Number(i.dataset.pdv);i.checked?pdSel.add(id):pdSel.delete(id);cnt();});
+  document.querySelectorAll("[data-pdq]").forEach(b=>b.onclick=()=>{
+    const q=b.dataset.pdq;pdSel=new Set(q==="all"?vehs.map(e=>e.id):q==="none"?[]:vehs.filter(e=>String(e.cat)===q).map(e=>e.id));
+    document.querySelectorAll("[data-pdv]").forEach(i=>{i.checked=pdSel.has(Number(i.dataset.pdv));});cnt();});
+  $("#pd_close").onclick=closeModal;
+  $("#pd_go").onclick=makePrintPdf;
+  cnt();
+  // Indique les photos disponibles sur cet appareil.
+  for(const e of vehs){
+    const el=document.querySelector(`[data-pdhave="${e.id}"]`);if(!el)continue;
+    let h="";for(const [tt] of PD_TYPES){let ok=false;try{ok=!!(await idbGetImg(e.id+"_"+tt));}catch(x){}h+=`<span class="pd-dot ${ok?"on":""}">${t("pdShort_"+tt)}</span>`;}
+    el.innerHTML=h;
+  }
+}
+async function makePrintPdf(){
+  const out=$("#pdOut"),btn=$("#pd_go");
+  const ids=pdVehicles().filter(e=>pdSel.has(e.id));
+  if(!ids.length||!pdTypes.size){alert(t("pickOne"));return;}
+  btn.disabled=true;out.innerHTML=`<p class="scan-note">${t("pdWorking")}</p>`;
+  const pages=[],missing=[];
+  try{
+    for(const e of ids){
+      const im={};
+      for(const [tt] of PD_TYPES){
+        if(!pdTypes.has(tt))continue;
+        let src=null;try{src=await getImg(e.id+"_"+tt);}catch(x){}
+        if(src)im[tt]=await _pdJpeg(src);else missing.push((e.matricule||e.name)+" — "+t(PD_TYPES.find(x=>x[0]===tt)[1]));
+      }
+      const pair=[im.as,im.cg].filter(Boolean);
+      // Page 1 (A4 paysage) : carte grise + assurance ensemble, même si l'une des deux manque. Page 2 : contrôle technique.
+      if(pair.length)pages.push(_pdPairPage(pair));
+      if(im.ct)pages.push(_pdFullPage(im.ct));
+      if(im.pm)pages.push(_pdFullPage(im.pm));
+    }
+    if(!pages.length){out.innerHTML=`<p class="scan-note bad">${t("pdNothing")}</p>`;btn.disabled=false;return;}
+    const blob=new Blob([buildPdfBytes(pages)],{type:"application/pdf"});
+    const url=URL.createObjectURL(blob);
+    const name="Dossiers_vehicules_EGTPH_"+new Date().toISOString().slice(0,10)+".pdf";
+    out.innerHTML=`<p class="scan-note ok">${tVars("pdReady",{p:pages.length,n:ids.length})}</p>
+      ${missing.length?`<details class="ocr-raw"><summary>${tVars("pdMissing",{n:missing.length})}</summary><pre>${esc(missing.join("\n"))}</pre></details>`:""}
+      <div class="toolbar" style="margin-top:8px"><a class="btn" href="${url}" target="_blank" rel="noopener">${t("pdOpen")}</a><a class="btn ghost" href="${url}" download="${name}">${t("pdDownload")}</a></div>`;
+  }catch(err){console.error("pdf",err);out.innerHTML=`<p class="scan-note bad">${t("pdFail")}</p>`;}
+  btn.disabled=false;
+}
+
+/* ===== IMPORT DES PHOTOS DE DOCUMENTS (fichier préparé) =====
+   Fichier JSON : {type:"egtph-docs-import", items:[{mat, tt, img}]} — rattaché au véhicule par son matricule. */
+function importDocsBtnHtml(){return `<label class="btn ghost" style="cursor:pointer">${t("impDocs")}<input type="file" id="impDocs" accept="application/json,.json" style="display:none"></label>`;}
+function bindImportDocs(){
+  const inp=document.getElementById("impDocs");if(!inp)return;
+  inp.onchange=ev=>{const f=ev.target.files&&ev.target.files[0];ev.target.value="";if(!f)return;
+    const r=new FileReader();r.onload=()=>{let o=null;try{o=JSON.parse(r.result);}catch(x){}
+      if(!o||o.type!=="egtph-docs-import"||!Array.isArray(o.items)){alert(t("badFile"));return;}
+      reviewImportDocs(o.items);};r.readAsText(f);};
+}
+function _findVehByMat(mat){
+  const k=scanDigits(mat);if(!k)return null;
+  return DATA.equipment.find(e=>e&&e.veh&&scanDigits(e.matricule)===k)||DATA.equipment.find(e=>e&&e.veh&&(Array.isArray(e.oldMat)?e.oldMat:[]).some(m=>scanDigits(m)===k))||null;
+}
+async function reviewImportDocs(items){
+  const rows=[];
+  for(const it of items){
+    const e=_findVehByMat(it.mat);let has=false;
+    if(e){try{has=!!(await idbGetImg(e.id+"_"+it.tt));}catch(x){}}
+    rows.push({it,e,has});
+  }
+  $("#modal").innerHTML=`<h3>${t("impDocsTitle")}</h3><p class="muted" style="margin-top:0">${tVars("impDocsInfo",{n:rows.filter(r=>r.e).length})}</p>
+    <div class="pd-list">${rows.map((r,i)=>`<label class="pd-row"><input type="checkbox" data-imp="${i}" ${r.e?"checked":"disabled"}><span><b>${esc(r.it.mat)}</b> — ${t(SCAN_TYPE_LABEL[r.it.tt]||"carteGrise")} ${r.e?`<small class="muted">${esc(r.e.name)}</small>`:`<small class="muted">${t("impNoVeh")}</small>`}</span>${r.has?`<span class="pd-dot on">${t("impReplace")}</span>`:""}</label>`).join("")}</div>
+    <p class="muted" id="impProg" style="font-size:12px"></p>
+    <div class="modal-actions"><button class="btn gray" id="imp_cancel" type="button">${t("cancel")}</button><button class="btn" id="imp_go" type="button">${t("impApply")}</button></div>`;
+  $("#overlay").classList.add("show");
+  $("#imp_cancel").onclick=closeModal;
+  $("#imp_go").onclick=async()=>{
+    $("#imp_go").disabled=true;
+    const sel=[...document.querySelectorAll("[data-imp]:checked")].map(i=>rows[Number(i.dataset.imp)]).filter(r=>r.e);
+    let n=0;
+    for(const r of sel){await setImg(r.e.id+"_"+r.it.tt,r.it.img);r.e._mod=nextMod();n++;const p=$("#impProg");if(p)p.textContent=n+" / "+sel.length;}
+    await saveAll();closeModal();show(CUR);egToast(tVars("impDone",{n}));
+  };
+}
+
+/* ===== LISTE DU MATÉRIEL PAR GROUPES (impression A4 paysage, lisible en noir et blanc) ===== */
+const FL_GROUPS=[["eng","flEngins"],["trk","flTrucks"],["car","flCars"],["out","flOutils"]];
+let flOpt=null;
+function fleetGroupOf(e){
+  if(!e.veh)return "out";
+  if(Number(e.cat)===1)return "eng";
+  if(/\bcamion\b|tracteur|semi-?remorque/i.test(String(e.name||"")))return "trk";
+  return "car";
+}
+function flBtnHtml(){return `<button class="btn ghost" id="flBtn" type="button">${t("flBtn")}</button>`;}
+function bindFlBtn(){const b=document.getElementById("flBtn");if(b)b.onclick=openFleetList;}
+function openFleetList(){
+  if(!flOpt)flOpt={groups:new Set(["eng","trk","car","out"]),cols:new Set(["serie","as","asNum","ct","pm","cg","etat"]),lang:"fr",date:new Date().toISOString().slice(0,10)};
+  const cnt={};DATA.equipment.forEach(e=>{const g=fleetGroupOf(e);cnt[g]=(cnt[g]||0)+1;});
+  const COLS=[["serie","serie"],["asNum","numContrat"],["as","assurance"],["ct","controleTech"],["pm","permisCirc"],["cg","carteGrise"],["etat","etat"]];
+  $("#modal").innerHTML=`<h3>${t("flTitle")}</h3>
+    <div class="field"><label>${t("flGroups")}</label><div class="pd-types">${FL_GROUPS.map(([g,l])=>`<label class="chk"><input type="checkbox" data-flg="${g}" ${flOpt.groups.has(g)?"checked":""}> ${t(l)} (${cnt[g]||0})</label>`).join("")}</div></div>
+    <div class="field"><label>${t("cols")}</label><div class="pd-types">${COLS.map(([c,l])=>`<label class="chk"><input type="checkbox" data-flc="${c}" ${flOpt.cols.has(c)?"checked":""}> ${t(l)}</label>`).join("")}</div></div>
+    <div class="row2"><div class="field"><label>${t("flLang")}</label><select id="fl_lang"><option value="fr" ${flOpt.lang==="fr"?"selected":""}>Français</option><option value="ar" ${flOpt.lang==="ar"?"selected":""}>العربية</option></select></div>
+      <div class="field"><label>${t("flAsOf")}</label><input type="date" id="fl_date" value="${esc(flOpt.date)}"></div></div>
+    <div class="modal-actions"><button class="btn gray" id="fl_close" type="button">${t("close")}</button><button class="btn" id="fl_go" type="button">🖨️ ${t("print")}</button></div>`;
+  $("#overlay").classList.add("show");
+  document.querySelectorAll("[data-flg]").forEach(i=>i.onchange=()=>{i.checked?flOpt.groups.add(i.dataset.flg):flOpt.groups.delete(i.dataset.flg);});
+  document.querySelectorAll("[data-flc]").forEach(i=>i.onchange=()=>{i.checked?flOpt.cols.add(i.dataset.flc):flOpt.cols.delete(i.dataset.flc);});
+  $("#fl_close").onclick=closeModal;
+  $("#fl_go").onclick=()=>{flOpt.lang=$("#fl_lang").value;flOpt.date=$("#fl_date").value||new Date().toISOString().slice(0,10);
+    if(!flOpt.groups.size){alert(t("pickOne"));return;}closeModal();printFleetList(flOpt);};
+}
+function buildFleetListHtml(o){
+  const L=o.lang==="ar"?T.ar:T.fr,tl=k=>L[k]||T.fr[k]||k;
+  const ref=new Date(o.date+"T00:00:00");
+  const dLeft=d=>{if(!d)return null;const x=new Date(d+"T00:00:00");if(isNaN(x))return null;return Math.round((x-ref)/86400000);};
+  const fd=d=>{if(!d)return "—";const p=String(d).split("-");return p.length===3?p[2]+"/"+p[1]+"/"+p[0]:d;};
+  const state=d=>{const n=dLeft(d);if(n===null)return "";if(n<0)return tl("flExpired");if(n<=30)return tl("flSoon").replace("{n}",n);return tl("valide");};
+  const docTd=(need,d)=>{
+    if(!need)return `<td class="c">${tl("nonRequis")}</td>`;
+    if(!d||!d.fin)return `<td class="c">${tl("nonRens")}</td>`;
+    const st=state(d.fin),bad=dLeft(d.fin)<0;
+    return `<td class="c">${d.deb?fd(d.deb)+" → ":""}<b>${fd(d.fin)}</b><br><span class="${bad?"st-bad":""}">${st}</span></td>`;
+  };
+  const c=o.cols,dir=o.lang==="ar"?"rtl":"ltr";
+  let body="",total=0,expired=0,soon=0;
+  FL_GROUPS.forEach(([g,lbl])=>{
+    if(!o.groups.has(g))return;
+    const list=DATA.equipment.filter(e=>fleetGroupOf(e)===g).sort((a,b)=>String(a.name).localeCompare(String(b.name))||String(a.matricule||"").localeCompare(String(b.matricule||"")));
+    if(!list.length)return;
+    const veh=g!=="out";
+    // Colonnes C.T / permis masquées si aucun véhicule du tableau n'y est soumis (ex. engins).
+    const showCt=veh&&c.has("ct")&&list.some(e=>e.needsCT),showPm=veh&&c.has("pm")&&list.some(e=>e.needsPermis);
+    let th=`<th style="width:30px">N°</th><th>${tl("designation")}</th><th>${veh?tl("matricule"):tl("facture")}</th>`;
+    if(veh&&c.has("serie"))th+=`<th>${tl("serie")}</th>`;
+    th+=`<th style="width:48px">${tl("annee")}</th>`;
+    if(veh&&c.has("asNum"))th+=`<th>${tl("numContrat")}</th>`;
+    if(veh&&c.has("as"))th+=`<th>${tl("assurance")}</th>`;
+    if(showCt)th+=`<th>${tl("controleTech")}</th>`;
+    if(showPm)th+=`<th>${tl("permisCirc")}</th>`;
+    if(veh&&c.has("cg"))th+=`<th>${tl("carteGrise")}</th>`;
+    if(c.has("etat"))th+=`<th>${tl("etat")}</th>`;
+    const rows=list.map((e,i)=>{
+      total++;
+      if(veh){[[true,e.assurance],[e.needsCT,e.ct],[e.needsPermis,e.permis]].forEach(([need,d])=>{if(!need||!d||!d.fin)return;const n=dLeft(d.fin);if(n<0)expired++;else if(n<=30)soon++;});}
+      let r=`<td class="num">${String(i+1).padStart(2,"0")}</td><td><b>${esc(e.name)}</b>${e.model?`<br>${esc(e.model)}`:""}</td><td class="c">${esc(veh?(e.matricule||"—"):(e.facture||"—"))}</td>`;
+      if(veh&&c.has("serie"))r+=`<td class="c" style="font-size:10.5px">${esc(e.serie||"—")}</td>`;
+      r+=`<td class="c">${esc(e.annee||"—")}</td>`;
+      if(veh&&c.has("asNum"))r+=`<td class="c" style="font-size:10.5px">${esc((e.assurance&&e.assurance.num)||"—")}</td>`;
+      if(veh&&c.has("as"))r+=docTd(true,e.assurance);
+      if(showCt)r+=docTd(e.needsCT,e.ct);
+      if(showPm)r+=docTd(e.needsPermis,e.permis);
+      if(veh&&c.has("cg"))r+=`<td class="c" style="font-size:10.5px">${e.cg&&e.cg.num?esc(e.cg.num):tl("nonRens")}</td>`;
+      if(c.has("etat"))r+=`<td class="c">${esc(e.etat||"")}</td>`;
+      return `<tr>${r}</tr>`;
+    }).join("");
+    body+=`<div class="fl-grp ${list.length<=12?"keep":""}"><div class="cat">${tl(lbl)} — ${list.length}</div><table><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  });
+  const co=DATA.company;
+  const head=`<div class="ph"><div class="l">${co.logo?`<img src="${co.logo}" style="height:62px;width:auto;max-width:330px;object-fit:contain">`:`<div class="nm"><b>${esc(co.name)}</b></div>`}</div><div class="r">RC N° ${esc(co.rc)}<br>${esc(co.ville||"")}</div></div>
+    <h1>${tl("flDocTitle")}</h1><div class="refs">${tl("flAsOfTxt").replace("{d}",fd(o.date))}</div>`;
+  const sum=`<div class="fl-sum">${tl("flSummary").replace("{n}",total).replace("{e}",expired).replace("{s}",soon)}</div>`;
+  const sign=`<div class="sign"><div class="pl">${o.lang==="ar"?"حرر بـ "+esc(co.ville||"")+" في "+fd(o.date):"Fait à "+esc(co.ville||"")+", le "+fd(o.date)}</div><b>${o.lang==="ar"?"المسيّر":"Le Gérant"}</b></div>`;
+  return {html:head+body+sum+sign,dir};
+}
+function printFleetList(o){
+  const r=buildFleetListHtml(o),root=$("#print-root");
+  root.innerHTML=`<div class="fleet-print" dir="${r.dir}">${r.html}</div>`;
+  let st=document.getElementById("flPageStyle");
+  if(!st){st=document.createElement("style");st.id="flPageStyle";document.head.appendChild(st);}
+  st.textContent=`@media print{@page{size:A4 landscape;margin:9mm} html,body{background:#fff!important}}
+    #print-root .fleet-print table{font-size:10.5px;page-break-inside:auto}
+    #print-root .fleet-print tr{page-break-inside:avoid}
+    #print-root .fleet-print th{background:#fff;border-bottom:2px solid #000}
+    #print-root .fleet-print .cat{background:#fff;color:#000;border:2px solid #000;border-bottom:0;margin-top:14px}
+    #print-root .fleet-print .fl-grp.keep{break-inside:avoid;page-break-inside:avoid}
+    #print-root .fleet-print .cat{break-after:avoid;page-break-after:avoid}
+    #print-root .fleet-print .st-bad{font-weight:bold;text-decoration:underline}
+    #print-root .fleet-print .fl-sum{margin-top:12px;font-size:12px;border:1px solid #000;padding:6px 9px}
+    #print-root .fleet-print[dir="rtl"] .sign{text-align:left}`;
+  const done=()=>{st.textContent="";window.removeEventListener("afterprint",done);};
+  window.addEventListener("afterprint",done);
+  setTimeout(()=>window.print(),60);
 }
 
 /* ===== PARC ===== */
@@ -2986,7 +3505,7 @@ function renderParc(){
   const bad=entries.filter(x=>statusOf(x.fin)==="bad").length,warn=entries.filter(x=>statusOf(x.fin)==="warn").length;
   const missing=veh.filter(e=>(!(e.assurance&&e.assurance.fin))||(e.needsCT&&!(e.ct&&e.ct.fin))||(e.needsPermis&&!(e.permis&&e.permis.fin))).length;
   const alerts=entries.filter(x=>statusOf(x.fin)!=="ok");
-  let html=`<div class="toolbar"><button class="btn" id="addVehBtn">${t("addVeh")}</button>${scanBtnHtml()}</div><div class="stats">
+  let html=`<div class="toolbar"><button class="btn" id="addVehBtn">${t("addVeh")}</button>${scanBtnHtml()}${pdBtnHtml()}${flBtnHtml()}</div><div class="stats">
     <div class="stat"><div class="n">${DATA.equipment.length}</div><div class="l">${t("equipements")}</div></div>
     <div class="stat"><div class="n">${veh.length}</div><div class="l">${t("vehiculesN")}</div></div>
     <div class="stat warn"><div class="n">${warn}</div><div class="l">${t("expire30")}</div></div>
@@ -3009,12 +3528,13 @@ function renderParc(){
     html+=`</div>`;
   }
   html+=`<div class="card"><h2 class="sec">${t("suivi")}<span class="bar"></span></h2><div style="overflow:auto"><table class="grid"><thead><tr><th>${t("designation")}</th><th>${t("matSerie")}</th><th>${t("assurance")}</th><th>${t("controleTech")}</th><th>${t("permisCol")}</th></tr></thead><tbody>`;
-  veh.forEach(e=>{html+=`<tr data-row="${e.id}"><td><b>${esc(e.name)}</b><br><small class="muted">${esc(e.model||"")}</small></td>
+  veh.forEach(e=>{html+=`<tr data-row="${e.id}"><td><b>${esc(e.name)}</b><br><small class="muted">${esc(e.model||"")}</small>${rowActsHtml(e)}</td>
     <td>${esc(e.matricule||"—")}${e.serie?`<br><small class="muted">${esc(e.serie)}</small>`:""}</td>
     <td>${docCell(e.assurance)}</td><td>${e.needsCT?docCell(e.ct):`<span class="muted">${t("nonRequis")}</span>`}</td><td>${e.needsPermis?docCell(e.permis):`<span class="muted">${t("nonRequis")}</span>`}</td></tr>`;});
   html+=`</tbody></table></div></div>`;$("#view").innerHTML=html;
   $("#addVehBtn").onclick=()=>openEdit(null,true);
-  bindScanBtn();
+  bindScanBtn();bindPdBtn();bindFlBtn();
+  bindRowActs();
   document.querySelectorAll("[data-renew]").forEach(b=>b.onclick=()=>openRenewContract(groups[Number(b.dataset.renew)]));
 }
 function _addYearIso(iso,years){if(!iso)return "";const d=new Date(iso+"T12:00:00");d.setFullYear(d.getFullYear()+years);return d.toISOString().slice(0,10);}
@@ -3043,6 +3563,54 @@ function openRenewContract(g){
       e._mod=nextMod();n++;});
     await saveAll();closeModal();show(CUR);egToast(tVars("renewDone",{n}));
   };
+}
+
+/* ===== Actions par véhicule : modifier / photo / documents ===== */
+const GAL_TYPES=[["cg","carteGrise"],["as","assurance"],["ct","controleTech"],["pm","permisCirc"]];
+function rowActsHtml(e){
+  return `<div class="row-acts"><button class="btn ghost sm" type="button" data-redit="${e.id}">${t("actEdit")}</button>`+
+    `<label class="btn ghost sm" style="cursor:pointer">${t("actPhoto")}<input type="file" accept="image/*" multiple style="display:none" data-rscan="${e.id}"></label>`+
+    `<button class="btn ghost sm" type="button" data-rgal="${e.id}">${t("actGallery")} <span class="gal-count" data-gcount="${e.id}"></span></button></div>`;
+}
+function bindRowActs(){
+  document.querySelectorAll("[data-redit]").forEach(b=>b.onclick=()=>openEdit(Number(b.dataset.redit)));
+  document.querySelectorAll("[data-rscan]").forEach(i=>i.onchange=ev=>{const files=[...(ev.target.files||[])];ev.target.value="";if(files.length)scanStart(files,Number(i.dataset.rscan));});
+  document.querySelectorAll("[data-rgal]").forEach(b=>b.onclick=()=>openGallery(Number(b.dataset.rgal)));
+  // Nombre de photos déjà enregistrées sur cet appareil (sans téléchargement).
+  document.querySelectorAll("[data-gcount]").forEach(async el=>{
+    const id=el.dataset.gcount;let n=0;
+    for(const [tt] of GAL_TYPES){try{if(await idbGetImg(id+"_"+tt))n++;}catch(e){}}
+    el.textContent=n?"("+n+")":"";
+  });
+}
+async function openGallery(id){
+  const e=DATA.equipment.find(x=>x.id===id);if(!e)return;
+  $("#modal").innerHTML=`<h3>${t("galTitle")}</h3><p class="muted" style="margin-top:0"><b>${esc(e.matricule||"—")}</b> — ${esc(e.name)} ${esc(e.model||"")}</p><div class="gal" id="galBox"><p class="muted">${t("scanLoading")}</p></div>
+    <div class="modal-actions"><button class="btn ghost" id="gal_edit" type="button">${t("actEdit")}</button><button class="btn gray" id="gal_close" type="button">${t("close")}</button></div>`;
+  $("#overlay").classList.add("show");
+  $("#gal_close").onclick=closeModal;
+  $("#gal_edit").onclick=()=>{closeModal();openEdit(id);};
+  const imgs={};
+  for(const [tt] of GAL_TYPES){try{imgs[tt]=await getImg(id+"_"+tt);}catch(x){imgs[tt]=null;}}
+  const box=document.getElementById("galBox");if(!box)return;
+  const info=tt=>{const d=tt==="as"?e.assurance:tt==="ct"?e.ct:tt==="pm"?e.permis:e.cg;if(!d)return "";
+    if(tt==="cg")return d.num?esc(d.num):"";return (d.num?esc(d.num)+"<br>":"")+(d.fin?fmtDate(d.fin):"");};
+  box.innerHTML=GAL_TYPES.map(([tt,lbl])=>`<div class="gal-tile"><div class="gal-h"><b>${t(lbl)}</b><small class="muted">${info(tt)}</small></div>
+      ${imgs[tt]?`<img src="${imgs[tt]}" alt="" data-gzoom="${tt}">`:`<div class="gal-empty">${t("galNone")}</div>`}
+      <div class="row-acts"><label class="btn ghost sm" style="cursor:pointer">${imgs[tt]?t("galReplace"):t("galAdd")}<input type="file" accept="image/*" style="display:none" data-gadd="${tt}"></label>
+      ${imgs[tt]?`<a class="btn ghost sm" download="${esc((e.matricule||e.id)+"_"+tt)}.jpg" href="${imgs[tt]}">⬇️</a><button class="btn ghost sm" type="button" data-gdel="${tt}">🗑</button>`:""}</div></div>`).join("");
+  box.querySelectorAll("[data-gzoom]").forEach(im=>im.onclick=()=>openLightbox(im.src));
+  box.querySelectorAll("[data-gadd]").forEach(inp=>inp.onchange=ev=>{
+    const f=ev.target.files&&ev.target.files[0];ev.target.value="";if(!f)return;
+    processDocumentImage(f,async data=>{if(!data||data.cancelled){if(!data)alert(t("ocrBadImage"));return;}
+      await setImg(id+"_"+inp.dataset.gadd,data.store);e._mod=nextMod();await saveAll();egToast(t("galSaved"));openGallery(id);});
+  });
+  box.querySelectorAll("[data-gdel]").forEach(b=>b.onclick=async()=>{
+    if(!confirm(t("galConfirmDel")))return;await delImg(id+"_"+b.dataset.gdel);e._mod=nextMod();await saveAll();openGallery(id);});
+}
+function openLightbox(src){
+  const lb=document.createElement("div");lb.className="lightbox";lb.innerHTML=`<img src="${src}" alt=""><button class="btn gray lb-x" type="button">✕</button>`;
+  lb.onclick=()=>lb.remove();document.body.appendChild(lb);
 }
 
 function docCell(d){if(!d||!d.fin)return`<span class="muted">${t("nonRens")}</span>`;const st=statusOf(d.fin),n=daysLeft(d.fin);
@@ -3097,13 +3665,14 @@ function renderSet(){
   <div class="card"><h2 class="sec">${t("backup")}<span class="bar"></span></h2>
     <p class="muted" style="margin-top:0">${t("savedAuto")} ☁️ مُتزامن عبر السحابة بين الأجهزة.</p>
     <div class="toolbar"><button class="btn ghost" id="exp">${t("exp")}</button>
-      <label class="btn ghost" style="cursor:pointer">${t("imp")}<input type="file" id="imp" accept="application/json,.json" style="display:none"></label>
+      <label class="btn ghost" style="cursor:pointer">${t("imp")}<input type="file" id="imp" accept="application/json,.json" style="display:none"></label>${importDocsBtnHtml()}
       <button class="btn danger" id="reset">${t("reset")}</button></div></div>`;
   $("#s_logo").onchange=ev=>{const f=ev.target.files[0];if(!f)return;compressImage(f,async(data)=>{if(!data){alert("Image illisible.");return;}DATA.company.logo=data;await saveAll();applyLang();renderSet();});};
   const lr=$("#s_logoReset");if(lr)lr.onclick=async()=>{DATA.company.logo="";await saveAll();applyLang();renderSet();};
   $("#s_save").onclick=async()=>{DATA.company.name=$("#s_name").value.trim();DATA.company.rc=$("#s_rc").value.trim();DATA.company.ville=$("#s_ville").value.trim();DATA.company.expertise=$("#s_exp").value.trim();DATA.company.huissier=$("#s_huis").value.trim();await saveAll();applyLang();alert(t("saved"));};
   $("#exp").onclick=()=>{const b=new Blob([JSON.stringify(DATA,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="parc_egtph_"+new Date().toISOString().slice(0,10)+".json";a.click();};
   $("#imp").onchange=ev=>{const f=ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{try{const o=JSON.parse(r.result);if(!o.equipment)throw 0;DATA=o;DATA.company=Object.assign({},SEED.company,DATA.company||{});DATA.print=Object.assign({},SEED.print,DATA.print||{});DATA.design=Object.assign({},SEED.design,DATA.design||{});if(!Array.isArray(DATA.deletedIds))DATA.deletedIds=[];selIds=null;await saveAll();applyLang();applyDesign();alert(t("imported"));renderSet();}catch(e){alert(t("badFile"));}};r.readAsText(f);};
+  bindImportDocs();
   $("#reset").onclick=async()=>{if(!confirm(t("confirmReset")))return;DATA=JSON.parse(JSON.stringify(SEED));selIds=null;await saveAll();applyLang();applyDesign();renderSet();};
 }
 init();
