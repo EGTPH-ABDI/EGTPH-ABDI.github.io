@@ -193,6 +193,33 @@ body.auth-locked{overflow:hidden}
 #atsFrame{width:100%;height:calc(100vh - 145px);min-height:680px;border:0;display:block;background:#eef1f5}
 @media(max-width:760px){.ats-host-card{padding:7px}.ats-host-head{padding:6px 4px 9px}#atsFrame{height:calc(100vh - 126px);min-height:620px;border-radius:0}.ats-frame-wrap{border-radius:7px}}
 
+/* ATTESTATIONS CNAS */
+.ni{position:relative}
+.nbadge{position:absolute;top:2px;inset-inline-start:6px;min-width:17px;height:17px;line-height:17px;text-align:center;background:#e74c3c;color:#fff;border-radius:9px;font-size:10px;font-weight:700;padding:0 4px}
+.cd-st{font-weight:700;white-space:nowrap;font-size:11.5px}
+.cd-st.ok{color:#7be0a4}.cd-st.soon,.cd-st.unknown{color:#f5c869}.cd-st.expired,.cd-st.ended{color:#f08b83}.cd-st.none{color:var(--mt);font-weight:400}
+.cd-alert{border-color:rgba(231,76,60,.6);background:linear-gradient(135deg,rgba(231,76,60,.10),var(--cd))}
+.cd-alert-list{margin:0;padding-inline-start:20px;line-height:1.9;font-size:12.5px}
+.cd-date{background:var(--dkr);border:1px solid var(--br);color:var(--tx);border-radius:6px;padding:4px 6px;font-size:11.5px;max-width:150px}
+.cd-company{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;font-size:12.5px}
+.cd-dates{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.cd-um{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid var(--br);padding:9px 0;font-size:12.5px}
+.cd-cloud{font-size:12px;cursor:help}
+#cdDrop{text-align:center;padding:18px;cursor:pointer;margin-top:12px}
+.cd-tools{display:flex;gap:8px;flex-wrap:wrap}
+@media(max-width:760px){
+  #cdTbl{min-width:0}#cdTbl thead tr{display:flex;align-items:center;gap:8px}#cdTbl thead th{display:none}#cdTbl thead th:first-child{display:block;background:none;border:0}
+  #cdTbl thead th:first-child::after{content:attr(title);font-weight:400;margin-inline-start:6px;color:var(--mt)}
+  #cdTbl tbody tr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:10px 4px;border-bottom:1px solid var(--br)}
+  #cdTbl td{border:0;padding:0}
+  #cdTbl td.c-rk{color:var(--mt);min-width:18px}#cdTbl td.c-nm{flex:1 1 60%}
+  #cdTbl td.c-ss,#cdTbl td.c-x{flex:1 1 100%;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px}
+  #cdTbl td.c-ss::before,#cdTbl td.c-x::before{content:attr(data-l);color:var(--mt);font-size:11px}
+  #cdTbl tr.no td.c-x{display:none}
+  #cdTbl td.c-st{flex:1 1 auto}#cdTbl td.c-act{margin-inline-start:auto}
+  #cdTbl tr:hover td{background:none}
+}
+
 /* ============ PRINT ============ */
 @page{size:A4 portrait;margin:0}
 @media print{
@@ -225,6 +252,7 @@ body.auth-locked{overflow:hidden}
   <div class="ns"><div class="nl" data-t="nav_doc">Documents</div>
     <div class="ni" onclick="sp('pay',this)"><span class="i">💰</span><span class="lbl" data-t="nav_pay">Bulletin de Paie</span></div>
     <div class="ni" onclick="sp('att',this)"><span class="i">📄</span><span class="lbl" data-t="nav_att">Attestations</span></div>
+    <div class="ni" data-page="cnasdoc" onclick="sp('cnasdoc',this)"><span class="i">🗂️</span><span class="lbl" data-t="nav_cnasdoc">Attestations CNAS</span><span class="nbadge" id="cdNavBadge" hidden></span></div>
     <div class="ni" onclick="sp('cnt',this)"><span class="i">📝</span><span class="lbl" data-t="nav_cnt">Contrats</span></div>
     <div class="ni" onclick="sp('ats',this)"><span class="i">🪪</span><span class="lbl">ATS / CNAS</span></div>
   </div>
@@ -240,7 +268,7 @@ body.auth-locked{overflow:hidden}
   <div id="topb">
     <h1 id="ptitle">📊 Tableau de Bord</h1>
     <div class="tbr">
-      <span class="sync-state syncing" id="syncState" aria-live="polite">☁️ Synchronisation…</span>
+      <span class="sync-state syncing" id="syncState" aria-live="polite" role="button" tabindex="0" style="cursor:pointer" onclick="if(typeof syncNow==='function')syncNow(true)">☁️ Synchronisation…</span>
       <button class="btp" id="langbtn" onclick="toggleLang()">🌐 العربية</button>
       <button class="btp gray" onclick="saveAll()" data-t="btn_save">💾 Sauvegarder</button>
     </div>
@@ -249,6 +277,7 @@ body.auth-locked{overflow:hidden}
 
     <!-- DASHBOARD -->
     <div class="pg on" id="pg-db">
+      <div id="dbCnasAlerts"></div>
       <div class="sg" id="dbStats"></div>
       <div class="card"><div class="ctit"><span class="t" data-t="db_recent">👥 Derniers travailleurs</span></div>
         <div class="tw"><table class="dt" id="dbTbl"></table></div>
@@ -435,6 +464,28 @@ body.auth-locked{overflow:hidden}
       <div class="docwrap"><div class="doc printArea" id="attDoc"></div></div>
     </div>
 
+    <!-- ATTESTATIONS CNAS (PDF) -->
+    <div class="pg" id="pg-cnasdoc">
+      <div class="card">
+        <div class="ctit"><span class="t" data-t="cd_title">🗂️ Attestations CNAS (PDF officiels)</span>
+          <div class="cd-tools"><button class="btp solid" onclick="$('cdFiles').click()" data-t="cd_import">📤 Importer des PDF</button>
+          <button class="btp" onclick="printSelectedCnas()" data-t="cd_print_sel">🖨️ Imprimer la sélection</button>
+          <button class="btp gray" onclick="syncStatusWithCnas()" data-t="cd_sync_status">🔁 Statut selon attestations</button></div></div>
+        <input type="file" id="cdFiles" accept="application/pdf,.pdf" multiple hidden>
+        <input type="file" id="cdOneFile" accept="application/pdf,.pdf" hidden>
+        <div id="cdDrop" class="doc-store" onclick="$('cdFiles').click()"><span data-t="cd_drop">Glissez ici les PDF « AF_… » (attestations d’affiliation) et « MAJ_… » (mise à jour) — plusieurs fichiers à la fois.</span></div>
+        <div class="hint" id="cdProgress" style="min-height:16px"></div>
+        <div class="frm" style="margin-top:6px">
+          <div class="fl"><label data-t="cd_alert_days">Alerte avant expiration (jours)</label><input type="number" id="cdAlertDays" min="1" max="120" onchange="setCnasAlertDays(this.value)"></div>
+          <div class="fl"><label data-t="ln_filter">Filtre</label><select id="cdFilter" onchange="renderCnasDocs()"><option value="ACTIF" data-t="f_active">Actifs</option><option value="ALL" data-t="f_all">Tous</option><option value="ALERT" data-t="cd_f_alert">À renouveler / manquantes</option></select></div>
+        </div>
+        <p class="hint" data-t="cd_hint">Le PDF original est conservé sans perte de qualité. Le travailleur est reconnu par son N° SS ; la validité est calculée automatiquement (3 mois après la date d’établissement) et peut être corrigée.</p>
+      </div>
+      <div class="card" id="cdCompany"></div>
+      <div class="card" id="cdUnmatched" hidden></div>
+      <div class="card"><div class="ctit"><span class="t" id="cdCount"></span></div><div class="tw"><table class="dt" id="cdTbl"></table></div></div>
+    </div>
+
     <!-- CONTRATS -->
     <div class="pg" id="pg-cnt">
       <div class="card noprint">
@@ -537,6 +588,7 @@ body.auth-locked{overflow:hidden}
           <p class="hint" id="syncHint">Connexion en temps réel avec horodatage en millisecondes. Les suppressions sont archivées comme tombstones et ne sont jamais recréées par un appareil ancien.</p>
           <div class="sync-key" id="syncPathKey"></div>
           <p class="sync-auth-note" id="syncAuthNote"></p>
+          <div class="sync-auth-note" id="syncDiag" style="line-height:1.6"></div>
           <div class="frm" style="margin-top:10px" id="syncAuthForm">
             <div class="fl"><label data-t="sync_email">Email Firebase</label><input id="fbAuthEmail" type="email" autocomplete="username" inputmode="email" placeholder="email@exemple.com"></div>
             <div class="fl"><label data-t="sync_password">Mot de passe Firebase</label><input id="fbAuthPassword" type="password" autocomplete="current-password" placeholder="••••••••"></div>
@@ -661,7 +713,7 @@ const I18N = {
  fr:{
   brand_sub:"Gestion RH", nav_main:"Principal", nav_db:"Tableau de Bord", nav_emp:"Personnel",
   nav_wk:"Travailleurs", nav_ln:"Liste Nominative", nav_im:"Import CNAS", nav_cg:"Congés / Absences",
-  nav_doc:"Documents", nav_pay:"Bulletin de Paie", nav_att:"Attestations", nav_cnt:"Contrats",
+  nav_doc:"Documents", nav_pay:"Bulletin de Paie", nav_att:"Attestations", nav_cnasdoc:"Attestations CNAS", cd_title:"🗂️ Attestations CNAS (PDF officiels)", cd_import:"📤 Importer des PDF", cd_print_sel:"🖨️ Imprimer la sélection", cd_sync_status:"🔁 Actif / inactif selon les attestations", cd_drop:"Touchez ou glissez ici les PDF « AF_… » (attestations d’affiliation) et « MAJ_… » (mise à jour) — plusieurs fichiers à la fois.", cd_alert_days:"Alerte avant expiration (jours)", cd_f_alert:"À renouveler / manquantes", cd_hint:"Le PDF original est conservé sans perte de qualité et partagé entre vos appareils. Le travailleur est reconnu par son N° SS ; la validité est calculée automatiquement (3 mois après la date d’établissement) et reste modifiable.", nav_cnt:"Contrats",
   nav_track:"Suivi", nav_av:"Avances / Dettes", nav_st:"Paramètres",
   btn_save:"💾 Sauvegarder", btn_print:"🖨️ Imprimer", btn_cancel:"Annuler", btn_save_w:"💾 Enregistrer",
   btn_save_apply:"💾 Enregistrer", btn_save_:"💾",
@@ -747,7 +799,7 @@ const I18N = {
   bul_entree:"Date d'entrée", bul_anc:"Ancienneté", bul_sit:"Situation familiale",
   bul_snmg_warn:"⚠️ Salaire inférieur au SNMG (20 000 DA)",
   sec_ident:"Bloc identité", sec_alloc:"Allocations", sec_band:"Bandeau légal (NIS/NIN/CNAS)",
-  sec_sign:"Signature & cachet", sec_fband:"Pied de page", sec_recap:"Tableau récapitulatif", sec_ref:"Ligne référence",
+  sec_sign:"Signature & cachet", sec_fband:"Pied de page", sec_recap:"Tableau récapitulatif", sec_exp:"Ancienneté (expérience)", sec_ref:"Ligne référence",
   // documents généraux
   doc_poste_over:"Poste (modifiable)", doc_objet:"Objet", doc_dest_lieu:"Destination",
   doc_du:"Du", doc_au:"Au", doc_moyen:"Moyen de transport", doc_nbjours:"Nombre de jours",
@@ -763,7 +815,7 @@ const I18N = {
  ar:{
   brand_sub:"تسيير الموارد البشرية", nav_main:"الرئيسية", nav_db:"لوحة القيادة", nav_emp:"المستخدمون",
   nav_wk:"العمّال", nav_ln:"القائمة الإسمية", nav_im:"استيراد CNAS", nav_cg:"العطل / الغيابات",
-  nav_doc:"الوثائق", nav_pay:"كشف الراتب", nav_att:"الشهادات", nav_cnt:"العقود",
+  nav_doc:"الوثائق", nav_pay:"كشف الراتب", nav_att:"الشهادات", nav_cnasdoc:"شهادات CNAS", cd_title:"🗂️ شهادات CNAS (ملفات PDF الرسمية)", cd_import:"📤 استيراد ملفات PDF", cd_print_sel:"🖨️ طباعة المحدد", cd_sync_status:"🔁 نشط / غير نشط حسب الشهادات", cd_drop:"اضغط هنا أو اسحب ملفات «AF_…» (شهادات الانتساب) و«MAJ_…» (شهادة أداء المستحقات) — يمكن اختيار عدة ملفات مرة واحدة.", cd_alert_days:"التنبيه قبل انتهاء الصلاحية (بالأيام)", cd_f_alert:"للتجديد / الناقصة", cd_hint:"يُحفظ ملف PDF الأصلي بدون أي فقدان في الجودة ويُشارك بين أجهزتك. يُتعرّف على العامل من رقم الضمان الاجتماعي، وتُحسب الصلاحية تلقائياً (3 أشهر من تاريخ الإصدار) ويمكن تعديلها.", nav_cnt:"العقود",
   nav_track:"المتابعة", nav_av:"التسبيقات / الديون", nav_st:"الإعدادات",
   btn_save:"💾 حفظ", btn_print:"🖨️ طباعة", btn_cancel:"إلغاء", btn_save_w:"💾 حفظ",
   btn_save_apply:"💾 حفظ", btn_save_:"💾",
@@ -846,7 +898,7 @@ const I18N = {
   bul_entree:"تاريخ التوظيف", bul_anc:"الأقدمية", bul_sit:"الحالة العائلية",
   bul_snmg_warn:"⚠️ الأجر أقل من الأجر الأدنى المضمون (20 000 دج)",
   sec_ident:"خانة الهوية", sec_alloc:"المنح", sec_band:"الشريط القانوني (NIS/NIN/CNAS)",
-  sec_sign:"الإمضاء والختم", sec_fband:"تذييل الصفحة", sec_recap:"الجدول الإجمالي", sec_ref:"سطر المرجع",
+  sec_sign:"الإمضاء والختم", sec_fband:"تذييل الصفحة", sec_recap:"الجدول الإجمالي", sec_exp:"الأقدمية (الخبرة)", sec_ref:"سطر المرجع",
   doc_poste_over:"المنصب (قابل للتعديل)", doc_objet:"الموضوع", doc_dest_lieu:"الوجهة",
   doc_du:"من", doc_au:"إلى", doc_moyen:"وسيلة النقل", doc_nbjours:"عدد الأيام",
   doc_reprise:"تاريخ الاستئناف", doc_motif:"السبب",
@@ -922,7 +974,7 @@ const DEF_SET={
   payDisp:{poste:true,et:true,anc:true,sit:true,ss:true,af:false,alloc:true},
   secs:{
     pay:{ident:true,band:true,sign:true,fband:true},
-    att:{recap:true,ref:true,band:true,sign:true,fband:true},
+    att:{recap:true,exp:true,ref:true,band:true,sign:true,fband:true},
     cnt:{band:true,sign:true,fband:true},
     doc:{band:true,sign:true,fband:true,ref:true}
   },
@@ -995,7 +1047,7 @@ function saveAll(silent,opts){
     normalizeDataIds();
     localStorage.setItem(DBK,JSON.stringify(S));
     if(!silent)toast(t('msg_saved'),'ok');
-    if(!opts.noSync&&typeof queueCloudSync==='function')queueCloudSync();
+    if(!opts.noSync&&typeof queueCloudSync==='function'){try{fbRetryAfter=0;}catch(e){}queueCloudSync();}
     setTimeout(()=>{if(typeof syncAtsRhWorkers==='function')syncAtsRhWorkers();},0);
   }catch(e){console.error(e);toast(t('msg_storage'),'er');}
 }
@@ -1187,7 +1239,7 @@ function sp(p,el){
   const page=$('pg-'+p);if(!page)return;
   page.classList.add('on');
   if(el)el.classList.add('on');
-  const titles={db:'📊 '+t('nav_db'),wk:t('wk_title'),ln:t('nav_ln'),im:t('im_title'),cg:t('cg_title'),pay:t('pay_title'),att:t('att_title'),cnt:t('cnt_title'),ats:'🪪 ATS / CNAS',av:t('av_title'),st:'⚙️ '+t('nav_st')};
+  const titles={db:'📊 '+t('nav_db'),wk:t('wk_title'),ln:t('nav_ln'),im:t('im_title'),cg:t('cg_title'),pay:t('pay_title'),att:t('att_title'),cnt:t('cnt_title'),ats:'🪪 ATS / CNAS',cnasdoc:'🗂️ '+t('nav_cnasdoc'),av:t('av_title'),st:'⚙️ '+t('nav_st')};
   $('ptitle').textContent=titles[p]||'';
   if(p==='db')renderDB();if(p==='wk')renderWk();if(p==='ln')renderLN();
   if(p==='cg')renderCg();if(p==='av')renderAv();if(p==='st')fillSettings();
@@ -1195,6 +1247,7 @@ function sp(p,el){
   if(p==='att'){fillWorkerSelect('aW');buildPosteOverride();if(!$('aRef').value)$('aRef').value=genRef('refAtt');onAttType();}
   if(p==='cnt'){fillWorkerSelect('cW');buildCntPoste();calcCnt();}
   if(p==='ats'){initAtsModule();}
+  if(p==='cnasdoc')renderCnasDocs();
 }
 function toggleSb(){$('sb').classList.toggle('col');$('mn').classList.toggle('ex');}
 function toggleLang(){LANG=LANG==='fr'?'ar':'fr';localStorage.setItem('egtph_lang',LANG);applyLang();}
@@ -1208,7 +1261,7 @@ function applyLang(){
   // refresh active page
   const cur=document.querySelector('.pg.on');if(cur){const id=cur.id.replace('pg-','');
     if(id==='db')renderDB();else if(id==='wk')renderWk();else if(id==='ln')renderLN();
-    else if(id==='cg')renderCg();else if(id==='av')renderAv();else if(id==='st')fillSettings();
+    else if(id==='cg')renderCg();else if(id==='av')renderAv();else if(id==='st')fillSettings();else if(id==='cnasdoc')renderCnasDocs();
     else if(id==='pay'){fillWorkerSelect('pW');calcPay();}else if(id==='att'){fillWorkerSelect('aW');buildPosteOverride();calcAtt();}
     else if(id==='cnt'){fillWorkerSelect('cW');buildCntPoste();calcCnt();}
     else if(id==='ats'){initAtsModule();syncAtsRhWorkers();}
@@ -1300,6 +1353,7 @@ window.addEventListener('message',event=>{
 
 /* ---------- DASHBOARD ---------- */
 function renderDB(){
+  try{const box=$('dbCnasAlerts');if(box)box.innerHTML=cnasAlertsHtml();}catch(e){}
   const tot=S.workers.length, act=S.workers.filter(w=>w.st==='ACTIF').length;
   const mass=S.workers.filter(w=>w.st==='ACTIF').reduce((s,w)=>s+(+w.sl||0),0);
   let totM=0,n=0;S.workers.forEach(w=>{if(w.et){const d=new Date(w.et);totM+=(new Date()-d)/(1000*3600*24*30.4);n++;}});
@@ -1364,6 +1418,7 @@ async function delWorker(id){
   S.conges=S.conges.filter(x=>x.wid!==id);
   S.avances=S.avances.filter(x=>x.wid!==id);
   try{await deleteAllWorkerDocs(id);}catch(e){console.warn(e);}
+  try{cnasForgetWorker(id);}catch(e){console.warn(e);}
   sortW();saveAll(true);renderWk();renderDB();
 }
 
@@ -1573,7 +1628,7 @@ function dwrap(html,w){return '<div style="font-size:12.5pt;line-height:1.95;col
 /* ---- print-section & display toggles (user controls what shows / prints) ---- */
 const SEC_DEFS={
   pay:[{k:'ident',t:'sec_ident'},{k:'band',t:'sec_band'},{k:'sign',t:'sec_sign'},{k:'fband',t:'sec_fband'}],
-  att:[{k:'recap',t:'sec_recap'},{k:'ref',t:'sec_ref'},{k:'band',t:'sec_band'},{k:'sign',t:'sec_sign'},{k:'fband',t:'sec_fband'}],
+  att:[{k:'exp',t:'sec_exp'},{k:'recap',t:'sec_recap'},{k:'ref',t:'sec_ref'},{k:'band',t:'sec_band'},{k:'sign',t:'sec_sign'},{k:'fband',t:'sec_fband'}],
   cnt:[{k:'band',t:'sec_band'},{k:'sign',t:'sec_sign'},{k:'fband',t:'sec_fband'}],
   doc:[{k:'ref',t:'sec_ref'},{k:'band',t:'sec_band'},{k:'sign',t:'sec_sign'},{k:'fband',t:'sec_fband'}]
 };
@@ -1734,16 +1789,16 @@ function calcAtt(){
       '<thead><tr style="background:#1a2a52;color:#fff">'+
         '<th style="border:1px solid #1a2a52;padding:5px 14px">'+t('doc_recrut')+'</th>'+
         '<th style="border:1px solid #1a2a52;padding:5px 14px">'+t('doc_jusqua')+'</th>'+
-        '<th style="border:1px solid #1a2a52;padding:5px 14px">'+t('doc_anciennete')+'</th></tr></thead>'+
+        (sec.exp?'<th style="border:1px solid #1a2a52;padding:5px 14px">'+t('doc_anciennete')+'</th>':'')+'</tr></thead>'+
       '<tbody><tr style="font-weight:700;text-align:center">'+
         '<td style="border:1px solid #999;padding:5px 14px">'+fd(w.et)+'</td>'+
         '<td style="border:1px solid #999;padding:5px 14px;color:#1a2a52">'+t('doc_cejour')+'</td>'+
-        '<td style="border:1px solid #999;padding:5px 14px;color:#1a2a52">'+esc(exp)+'</td></tr></tbody></table>';
+        (sec.exp?'<td style="border:1px solid #999;padding:5px 14px;color:#1a2a52">'+esc(exp)+'</td>':'')+'</tr></tbody></table>';
   const intro=G?'أنا الموقّع أدناه، '+ger+'، المسيّر للمؤسسة، أشهد بأنّ السيّد(ة) ':"Je soussigné, <b>"+ger+"</b>, Gérant de l'entreprise, ";
   if(ty==='travail'){
     title=t('att_t1');
-    body=G?intro+nom+'، المولود(ة) بتاريخ '+fd(w.dd)+' بـ'+esc(w.li||'')+'، يشتغل(تشتغل) ضمن مؤسستنا بصفة <b>'+poste+'</b> منذ '+fd(w.et)+'، أي بأقدمية قدرها <b>'+esc(exp)+'</b>.'
-            :intro+"atteste que M./Mme "+nom+", né(e) le "+fd(w.dd)+" à "+esc(w.li||'')+", exerce au sein de notre entreprise en qualité de <b>"+poste+"</b> depuis le "+fd(w.et)+", soit une ancienneté de <b>"+esc(exp)+"</b>.";
+    body=G?intro+nom+'، المولود(ة) بتاريخ '+fd(w.dd)+' بـ'+esc(w.li||'')+'، يشتغل(تشتغل) ضمن مؤسستنا بصفة <b>'+poste+'</b> منذ '+fd(w.et)+(sec.exp?'، أي بأقدمية قدرها <b>'+esc(exp)+'</b>':'')+'.'
+            :intro+"atteste que M./Mme "+nom+", né(e) le "+fd(w.dd)+" à "+esc(w.li||'')+", exerce au sein de notre entreprise en qualité de <b>"+poste+"</b> depuis le "+fd(w.et)+(sec.exp?", soit une ancienneté de <b>"+esc(exp)+"</b>":"")+".";
     if(sec.recap)extra=recap+'<p>'+aff+'</p>';
     closeTxt=G?(dest?'سُلّمت هذه الشهادة بناءً على طلب المعني(ة) لتقديمها لدى <b>'+esc(dest)+'</b>، للاستعمال فيما يخوّله القانون.':'سُلّمت هذه الشهادة بناءً على طلب المعني(ة) لاستعمالها فيما يخوّله القانون.')
               :(dest?"La présente attestation est délivrée à la demande de l'intéressé(e) pour servir et valoir ce que de droit, notamment auprès de : <b>"+esc(dest)+"</b>.":"La présente attestation est délivrée à la demande de l'intéressé(e) pour servir et valoir ce que de droit.");
@@ -1856,22 +1911,478 @@ function calcCnt(){
    '</div>',sec);
 }
 
-/* ---------- PRINT ---------- */
-function printArea(id){
-  document.querySelectorAll('.printArea').forEach(e=>{if(e.id!==id)e.dataset.noprint='1';else delete e.dataset.noprint;});
-  let pageRule='';
-  if(id==='lnDoc' && $('lnOrient') && $('lnOrient').value==='landscape'){pageRule='@page{size:A4 landscape;margin:0}';}
-  const css=document.createElement('style');css.id='ptmp';
-  css.textContent=pageRule+'@media print{.printArea[data-noprint]{display:none!important}}';
-  document.head.appendChild(css);
-  window.print();
+/* ---------- ATTESTATIONS CNAS OFFICIELLES (PDF d'origine) ----------
+   - Le PDF original est conservé tel quel (qualité d'origine, vectoriel) dans IndexedDB.
+   - Il est aussi envoyé dans Firebase (nœud « files ») pour être disponible sur tous les appareils.
+   - Lecture automatique : N° SS, N° d'attestation, date d'établissement, validité (3 mois / date de validité MAJ).
+   - Alertes avant expiration (tableau de bord + menu). */
+const CNAS_KINDS=['af','maj'],CNAS_COMPANY='__company',CNAS_TOMB_KEY='egtph_rh_cnas_tombs_v1';
+let cnasIndex={},cnasUnmatched=[],cnasTargetWid=null,cnasAlertToastShown=false,cnasIndexLoaded=false;
+let cnasCloudBusy=false,cnasCloudPending=false,cnasCloudFailed=0;
+function L(fr,ar){return LANG==='ar'?ar:fr;}
+function cnasNowMs(){let off=0;try{off=fbOffset||0;}catch(e){}return Math.floor(Date.now()+off);}
+function cnasCloudKey(kind,wid){return kind+'_'+(wid===CNAS_COMPANY?'company':wid);}
+function cnasWidFromKey(key){const i=key.indexOf('_');const w=key.slice(i+1);return w==='company'?CNAS_COMPANY:w;}
+async function idbAllDocs(){const db=await openDocDb();return new Promise((res,rej)=>{const q=db.transaction(DOC_STORE,'readonly').objectStore(DOC_STORE).getAll();q.onsuccess=()=>res(q.result||[]);q.onerror=()=>rej(q.error);});}
+async function idbGetDoc(id){const db=await openDocDb();return new Promise((res,rej)=>{const q=db.transaction(DOC_STORE,'readonly').objectStore(DOC_STORE).get(id);q.onsuccess=()=>res(q.result||null);q.onerror=()=>rej(q.error);});}
+async function idbPutDoc(rec){const db=await openDocDb();return new Promise((res,rej)=>{const q=db.transaction(DOC_STORE,'readwrite').objectStore(DOC_STORE).put(rec);q.onsuccess=()=>res();q.onerror=()=>rej(q.error);});}
+async function idbDelDoc(id){const db=await openDocDb();return new Promise((res,rej)=>{const q=db.transaction(DOC_STORE,'readwrite').objectStore(DOC_STORE).delete(id);q.onsuccess=()=>res();q.onerror=()=>rej(q.error);});}
+function loadCnasTombs(){try{return JSON.parse(localStorage.getItem(CNAS_TOMB_KEY)||'{}')||{};}catch(e){return {};}}
+function saveCnasTombs(o){try{localStorage.setItem(CNAS_TOMB_KEY,JSON.stringify(o||{}));}catch(e){}}
+function indexEntry(r){const c=Object.assign({},r);delete c.blob;c.meta=c.meta||{};return c;}
+async function loadCnasIndex(){
+  try{const all=await idbAllDocs();const idx={};all.forEach(r=>{if(r&&CNAS_KINDS.includes(r.kind))idx[r.id]=indexEntry(r);});cnasIndex=idx;}
+  catch(e){console.warn(e);}
+  cnasIndexLoaded=true;updateCnasAlertsUi();
+  if(!cnasAlertToastShown){const n=cnasAlerts().length;if(n){cnasAlertToastShown=true;setTimeout(()=>toast('⚠️ '+L(n+' attestation(s) CNAS expirée(s) ou bientôt expirée(s) — voir « Attestations CNAS ».',n+' شهادة CNAS منتهية أو تقترب من انتهاء صلاحيتها — راجع «شهادات CNAS».'),'wa'),900);}}
+}
+/* ----- dates ----- */
+function dmy2iso(s){const m=/(\d{2})\/(\d{2})\/(\d{4})/.exec(String(s||''));return m?m[3]+'-'+m[2]+'-'+m[1]:'';}
+function isoUtc(s){const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||''));return m?Date.UTC(+m[1],+m[2]-1,+m[3]):NaN;}
+function isoDiffDays(a,b){return Math.round((isoUtc(b)-isoUtc(a))/86400000);}
+function addMonthsIso(iso,n){
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso||''));if(!m)return'';
+  const y=+m[1],mo=+m[2]-1+n,d=+m[3];const last=new Date(Date.UTC(y,mo+1,0)).getUTCDate();
+  return new Date(Date.UTC(y,mo,Math.min(d,last))).toISOString().slice(0,10);
+}
+function cnasAlertDays(){const n=parseInt(S.settings.cnasAlertDays,10);return n>0?n:15;}
+/* ----- lecture du PDF ----- */
+async function pdfTextItems(file){
+  await ensurePdfJs();
+  const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+  const page=await pdf.getPage(1),tc=await page.getTextContent();
+  return tc.items.filter(i=>i&&typeof i.str==='string'&&i.str.trim()).map(i=>({s:i.str.replace(/\s+/g,' ').trim(),x:i.transform[4],y:i.transform[5]}));
+}
+// Valeur placée à droite d'un libellé, sur la même ligne (le PDF CNAS ne garde pas l'ordre de lecture).
+function pdfValueAfter(items,labelRe,valueRe){
+  let best=null;
+  items.forEach(l=>{
+    if(!labelRe.test(l.s))return;
+    const rest=l.s.replace(labelRe,'').replace(/^[\s:]+/,'');
+    if(rest&&valueRe.test(rest)){const m=valueRe.exec(rest);if(!best)best={v:m[0],d:0};return;}
+    items.forEach(v=>{if(v===l||Math.abs(v.y-l.y)>5||v.x<=l.x)return;const m=valueRe.exec(v.s);if(m){const d=v.x-l.x;if(!best||d<best.d)best={v:m[0],d};}});
+  });
+  return best?best.v:'';
+}
+const RE_DATE=/\d{2}\/\d{2}\/\d{4}/;
+function parseCnasItems(items,fileName){
+  const all=items.map(i=>i.s).join(' ');
+  const meta={source:'pdf'};
+  if(/MISE\s*A\s*JOUR/i.test(all)){
+    meta.kind='maj';
+    meta.num=pdfValueAfter(items,/^N°$/,/^[A-Z0-9]{8,}$/)||((/\b([A-Z0-9]*[A-Z][A-Z0-9]*\d[A-Z0-9]{6,})\b/.exec(all))||[])[1]||'';
+    meta.au=dmy2iso(pdfValueAfter(items,/^Au$/i,RE_DATE));
+    meta.validUntil=dmy2iso(pdfValueAfter(items,/validit/i,RE_DATE));
+    meta.effectif=pdfValueAfter(items,/effectif/i,/^\d+$/);
+    meta.employer=pdfValueAfter(items,/Immatricul.*sous le num/i,/^\d{8,}$/);
+    meta.issued=dmy2iso(pdfValueAfter(items,/^Fait le/i,RE_DATE))||meta.au;
+    if(!meta.validUntil){const ds=(all.match(/\d{2}\/\d{2}\/\d{4}/g)||[]).map(dmy2iso).sort();meta.validUntil=ds[ds.length-1]||'';}
+    return meta;
+  }
+  if(/AFFILI|Sous le num/i.test(all)||/^AF_/i.test(fileName||'')){
+    meta.kind='af';
+    meta.num=pdfValueAfter(items,/^ATTESTATION N°/i,/^[A-Z0-9]{8,}$/);
+    meta.nom=pdfValueAfter(items,/^Nom\s*:/,/^[A-Z][A-Z' .-]*$/);
+    meta.prenom=pdfValueAfter(items,/^Pr[ée]nom\s*:/,/^[A-Z][A-Z' .-]*$/);
+    meta.birth=dmy2iso(pdfValueAfter(items,/Naissance/i,RE_DATE));
+    meta.ss=pdfValueAfter(items,/^Sous le num/,/^\d{10}\s*\/\s*\d{2}$/)||((/\b(\d{10}\/\d{2})\b/.exec(all))||[])[1]||'';
+    meta.qualite=pdfValueAfter(items,/^En qualit/i,/^[A-Z]+$/);
+    meta.since=dmy2iso(pdfValueAfter(items,/^Depuis le/i,RE_DATE));
+    meta.until=dmy2iso(pdfValueAfter(items,/^Au\s*:/i,RE_DATE));
+    meta.issued=dmy2iso(pdfValueAfter(items,/^Fait le/i,RE_DATE));
+    meta.months=parseInt(((/\((\d{1,2})\)\s*mois/i.exec(all))||[])[1]||'3',10)||3;
+    meta.validUntil=meta.issued?addMonthsIso(meta.issued,meta.months):'';
+    if(!meta.ss){const f=/(\d{10})/.exec(fileName||'');if(f)meta.ss=f[1];}
+    return meta;
+  }
+  return null;
+}
+function cnasMetaFromFileName(name){
+  if(/^MAJ_/i.test(name))return {kind:'maj',source:'name'};
+  const f=/AF_(\d{10})/i.exec(name);if(f)return {kind:'af',ss:f[1],months:3,source:'name'};
+  return null;
+}
+async function readCnasPdfMeta(file){
+  try{const items=await pdfTextItems(file);const m=parseCnasItems(items,file.name);if(m)return m;}
+  catch(e){console.warn('Lecture PDF impossible, utilisation du nom de fichier',e);}
+  return cnasMetaFromFileName(file.name||'');
+}
+function ssDigits(v){return String(v||'').replace(/\D/g,'').slice(0,10);}
+function matchWorkerBySS(ss){const d=ssDigits(ss);if(d.length<10)return null;const w=S.workers.find(x=>ssDigits(x.ss)===d);return w?w.id:null;}
+/* ----- enregistrement ----- */
+async function storeCnasDoc(wid,kind,file,meta,force){
+  const id=docId(wid,kind),old=cnasIndex[id];
+  if(!force&&old&&old.meta&&old.meta.issued&&meta.issued&&meta.issued<old.meta.issued)return 'older';
+  const ms=cnasNowMs();
+  const rec={id,workerId:wid,kind,name:file.name||(kind+'.pdf'),type:'application/pdf',size:Number(file.size)||0,
+    updatedAt:new Date(ms).toISOString(),updatedAtMs:ms,cloudMs:0,blob:file,meta:Object.assign({},meta)};
+  await idbPutDoc(rec);cnasIndex[id]=indexEntry(rec);
+  const tombs=loadCnasTombs();delete tombs[cnasCloudKey(kind,wid)];saveCnasTombs(tombs);
+  return 'saved';
+}
+async function importCnasFiles(fileList,opts){
+  opts=opts||{};
+  const files=[...(fileList||[])].filter(f=>/pdf/i.test(f.type||'')||/\.pdf$/i.test(f.name||''));
+  if(!files.length){toast(L('Choisissez des fichiers PDF.','اختر ملفات PDF.'),'wa');return;}
+  const prog=$('cdProgress');let saved=0,older=0,errors=0,unknown=0;const newUnmatched=[];
+  for(let i=0;i<files.length;i++){
+    const f=files[i];if(prog)prog.textContent='⏳ '+(i+1)+' / '+files.length+' — '+f.name;
+    try{
+      if(f.size>OCR_MAX_FILE)throw new Error('size');
+      const meta=await readCnasPdfMeta(f);
+      if(!meta){unknown++;continue;}
+      let wid=meta.kind==='maj'?CNAS_COMPANY:(opts.targetWid||matchWorkerBySS(meta.ss));
+      if(meta.kind==='af'&&opts.targetWid&&meta.ss){
+        const w=S.workers.find(x=>x.id===opts.targetWid);
+        if(w&&ssDigits(w.ss)&&ssDigits(w.ss)!==ssDigits(meta.ss)&&!confirm(L('Le N° SS de ce PDF ('+meta.ss+') ne correspond pas à '+w.N+' '+w.P+'. Continuer ?','رقم الضمان في هذا الملف ('+meta.ss+') لا يطابق '+w.N+' '+w.P+'. هل تواصل؟'))){continue;}
+      }
+      if(!wid){newUnmatched.push({uid:makeId('u'),file:f,meta});continue;}
+      const r=await storeCnasDoc(wid,meta.kind,f,meta,!!opts.targetWid);
+      if(r==='older')older++;else saved++;
+    }catch(e){console.error(e);errors++;}
+  }
+  cnasUnmatched=cnasUnmatched.concat(newUnmatched);
+  if(prog)prog.textContent='';
+  const parts=[L(saved+' enregistrée(s)',saved+' شهادة محفوظة')];
+  if(newUnmatched.length)parts.push(L(newUnmatched.length+' sans travailleur correspondant',newUnmatched.length+' بدون عامل مطابق'));
+  if(older)parts.push(L(older+' plus ancienne(s) ignorée(s)',older+' أقدم من المحفوظة (تم تجاهلها)'));
+  if(unknown)parts.push(L(unknown+' non reconnue(s)',unknown+' غير معروفة'));
+  if(errors)parts.push(L(errors+' erreur(s)',errors+' خطأ'));
+  toast('📑 '+parts.join(' — '),errors||unknown?'wa':'ok');
+  updateCnasAlertsUi();renderCnasDocs();cnasCloudSync();
+}
+async function linkUnmatchedCnas(uid){
+  const u=cnasUnmatched.find(x=>x.uid===uid),sel=$('cdLink_'+uid);if(!u||!sel||!sel.value)return;
+  await storeCnasDoc(sel.value,'af',u.file,u.meta,true);
+  cnasUnmatched=cnasUnmatched.filter(x=>x.uid!==uid);toast(t('msg_saved'));updateCnasAlertsUi();renderCnasDocs();cnasCloudSync();
+}
+function dropUnmatchedCnas(uid){cnasUnmatched=cnasUnmatched.filter(x=>x.uid!==uid);renderCnasDocs();}
+function replaceCnasFor(wid){cnasTargetWid=wid;const inp=$('cdOneFile');if(inp){inp.value='';inp.click();}}
+async function deleteCnasDoc(id){
+  const r=cnasIndex[id];if(!r||!confirm(L('Supprimer cette attestation (sur tous les appareils) ?','حذف هذه الشهادة (من كل الأجهزة)؟')))return;
+  try{await idbDelDoc(id);}catch(e){console.warn(e);}
+  const tombs=loadCnasTombs();tombs[cnasCloudKey(r.kind,r.workerId)]=cnasNowMs();saveCnasTombs(tombs);
+  delete cnasIndex[id];toast(t('msg_saved'));updateCnasAlertsUi();renderCnasDocs();cnasCloudSync();
+}
+function cnasForgetWorker(wid){
+  const id=docId(wid,'af');const tombs=loadCnasTombs();tombs[cnasCloudKey('af',wid)]=cnasNowMs();saveCnasTombs(tombs);
+  delete cnasIndex[id];updateCnasAlertsUi();cnasCloudSync();
+}
+async function editCnasDate(id,field,value){
+  const rec=await idbGetDoc(id);if(!rec)return;rec.meta=rec.meta||{};
+  rec.meta[field]=value||'';
+  if(field==='issued'&&rec.kind==='af'&&value)rec.meta.validUntil=addMonthsIso(value,rec.meta.months||3);
+  rec.updatedAtMs=cnasNowMs();rec.updatedAt=new Date(rec.updatedAtMs).toISOString();
+  await idbPutDoc(rec);cnasIndex[id]=indexEntry(rec);updateCnasAlertsUi();renderCnasDocs();cnasCloudSync();
+}
+function setCnasAlertDays(v){const n=Math.max(1,Math.min(120,parseInt(v,10)||15));S.settings.cnasAlertDays=n;saveAll(true);updateCnasAlertsUi();renderCnasDocs();}
+/* ----- statut / alertes ----- */
+function cnasStatus(rec,w){
+  if(!rec)return {k:'none',txt:L('— Aucune attestation','— لا توجد شهادة')};
+  const m=rec.meta||{};
+  if(rec.kind==='af'&&m.until&&(!w||w.st==='ACTIF'))return {k:'ended',txt:'⛔ '+L('Affiliation terminée le '+fd(m.until),'انتهى الانتساب في '+fd(m.until))};
+  if(!m.validUntil)return {k:'unknown',txt:'❔ '+L('Date de validité à saisir','أدخل تاريخ الصلاحية')};
+  const d=isoDiffDays(tod(),m.validUntil);
+  if(d<0)return {k:'expired',days:d,txt:'⛔ '+L('Expirée depuis '+(-d)+' j','منتهية منذ '+(-d)+' يوم')};
+  if(d===0)return {k:'soon',days:0,txt:'⚠️ '+L('Expire aujourd’hui','تنتهي اليوم')};
+  if(d<=cnasAlertDays())return {k:'soon',days:d,txt:'⚠️ '+L('Expire dans '+d+' j','تنتهي بعد '+d+' يوم')};
+  return {k:'ok',days:d,txt:'✅ '+L('Valide ('+d+' j)','صالحة ('+d+' يوم)')};
+}
+function cnasAlerts(){
+  const out=[];
+  const maj=cnasIndex[docId(CNAS_COMPANY,'maj')];
+  if(maj){const s=cnasStatus(maj);if(['expired','soon','unknown'].includes(s.k))out.push({label:L('Attestation de mise à jour (entreprise)','شهادة أداء المستحقات (المؤسسة)'),s});}
+  S.workers.filter(w=>w.st==='ACTIF').forEach(w=>{const r=cnasIndex[docId(w.id,'af')];if(!r)return;const s=cnasStatus(r,w);if(['expired','soon','ended'].includes(s.k))out.push({label:w.N+' '+w.P,s});});
+  return out;
+}
+function cnasAlertsHtml(){
+  const a=cnasAlerts();if(!a.length)return'';
+  return '<div class="card cd-alert"><div class="ctit"><span class="t">⚠️ '+L('Alertes — validité des attestations CNAS','تنبيهات — صلاحية شهادات CNAS')+'</span>'+
+    '<button class="btp" onclick="goCnasDocs()">📑 '+L('Ouvrir','فتح')+'</button></div>'+
+    '<ul class="cd-alert-list">'+a.map(x=>'<li><b>'+esc(x.label)+'</b> — <span class="cd-st '+x.s.k+'">'+esc(x.s.txt)+'</span></li>').join('')+'</ul></div>';
+}
+function updateCnasAlertsUi(){
+  const n=cnasAlerts().length,b=$('cdNavBadge');if(b){b.textContent=n;b.hidden=!n;}
+  const box=$('dbCnasAlerts');if(box)box.innerHTML=cnasAlertsHtml();
+}
+function goCnasDocs(){const el=document.querySelector('.ni[data-page="cnasdoc"]');sp('cnasdoc',el);}
+/* ----- page ----- */
+function cnasCloudTag(r){
+  if(!r)return'';
+  return r.cloudMs&&r.cloudMs===r.updatedAtMs?'<span class="cd-cloud" title="'+L('Disponible sur tous les appareils','متوفرة في كل الأجهزة')+'">☁️</span>':'<span class="cd-cloud" title="'+L('Sur cet appareil seulement (pas encore envoyé)','في هذا الجهاز فقط (لم تُرسل بعد)')+'">📱</span>';
+}
+function renderCnasDocs(){
+  const page=$('pg-cnasdoc');if(!page||!page.classList.contains('on'))return;
+  const ad=$('cdAlertDays');if(ad&&document.activeElement!==ad)ad.value=cnasAlertDays();
+  const filter=($('cdFilter')||{}).value||'ACTIF';
+  // entreprise
+  const maj=cnasIndex[docId(CNAS_COMPANY,'maj')],mid=docId(CNAS_COMPANY,'maj');
+  let ch='<div class="ctit"><span class="t">🏢 '+L('Attestation de mise à jour (entreprise)','شهادة أداء المستحقات — المؤسسة (Mise à jour)')+'</span></div>';
+  if(maj){
+    const s=cnasStatus(maj),m=maj.meta||{};
+    ch+='<div class="cd-company"><label class="chip"><input type="checkbox" class="cdSel" value="'+mid+'" onchange="this.parentElement.classList.toggle(\'on\',this.checked)"> '+L('Inclure dans l’impression groupée','ضمن الطباعة الجماعية')+'</label>'+
+      '<div><b>N°</b> '+esc(m.num||'—')+' &nbsp; <b>'+L('Au','بتاريخ')+'</b> '+esc(fd(m.issued)||'—')+(m.effectif?' &nbsp; <b>'+L('Effectif','عدد العمال')+'</b> '+esc(m.effectif):'')+' '+cnasCloudTag(maj)+'</div>'+
+      '<div class="cd-dates"><label>'+L('Validité','صالحة إلى')+' <input type="date" class="cd-date" value="'+esc(m.validUntil||'')+'" onchange="editCnasDate(\''+mid+'\',\'validUntil\',this.value)"></label> <span class="cd-st '+s.k+'">'+esc(s.txt)+'</span></div>'+
+      '<div class="act"><button class="ib" title="'+L('Voir','عرض')+'" onclick="viewCnasDoc(\''+mid+'\')">👁️</button><button class="ib" title="'+L('Imprimer','طباعة')+'" onclick="printCnasIds([\''+mid+'\'])">🖨️</button><button class="ib" title="'+L('Remplacer','استبدال')+'" onclick="replaceCnasFor(\''+CNAS_COMPANY+'\')">📤</button><button class="ib del" title="'+L('Supprimer','حذف')+'" onclick="deleteCnasDoc(\''+mid+'\')">🗑️</button></div></div>';
+  }else ch+='<p class="hint">'+L('Aucune attestation de mise à jour. Importez le PDF MAJ_… téléchargé depuis la télédéclaration CNAS.','لا توجد شهادة أداء المستحقات. استورد ملف MAJ_… المحمّل من موقع التصريح عن بعد CNAS.')+'</p>';
+  $('cdCompany').innerHTML=ch;
+  // non rattachées
+  const um=$('cdUnmatched');
+  if(cnasUnmatched.length){
+    const opts='<option value="">'+L('— Choisir le travailleur —','— اختر العامل —')+'</option>'+S.workers.map(w=>'<option value="'+w.id+'">'+esc(w.N+' '+w.P)+(w.st!=='ACTIF'?' ('+t('s_inactive')+')':'')+'</option>').join('');
+    um.hidden=false;
+    um.innerHTML='<div class="ctit"><span class="t">❓ '+L('Attestations sans travailleur correspondant','شهادات بدون عامل مطابق')+'</span></div>'+
+      '<p class="hint">'+L('Le N° SS de ces PDF ne correspond à aucun travailleur. Rattachez-les ou ignorez-les.','رقم الضمان الاجتماعي في هذه الملفات لا يطابق أي عامل. اربطها بعامل أو تجاهلها.')+'</p>'+
+      cnasUnmatched.map(u=>'<div class="cd-um"><div><b>'+esc(((u.meta.nom||'')+' '+(u.meta.prenom||'')).trim()||u.file.name)+'</b> — '+esc(u.meta.ss||'')+(u.meta.until?' — '+L('affiliation terminée le ','انتهى الانتساب في ')+esc(fd(u.meta.until)):'')+'</div>'+
+        '<div class="act"><select id="cdLink_'+u.uid+'" class="cd-date">'+opts+'</select><button class="btp" onclick="linkUnmatchedCnas(\''+u.uid+'\')">🔗 '+L('Rattacher','ربط')+'</button><button class="btp gray" onclick="dropUnmatchedCnas(\''+u.uid+'\')">✖ '+L('Ignorer','تجاهل')+'</button></div></div>').join('');
+  }else{um.hidden=true;um.innerHTML='';}
+  // tableau
+  let ws=S.workers.slice();
+  if(filter==='ACTIF')ws=ws.filter(w=>w.st==='ACTIF');
+  if(filter==='ALERT')ws=ws.filter(w=>{if(w.st!=='ACTIF')return false;const s=cnasStatus(cnasIndex[docId(w.id,'af')],w);return s.k!=='ok';});
+  const withDoc=ws.filter(w=>cnasIndex[docId(w.id,'af')]).length;
+  $('cdCount').textContent=L(withDoc+' / '+ws.length+' travailleur(s) avec attestation',withDoc+' / '+ws.length+' عامل لديهم شهادة');
+  $('cdTbl').innerHTML='<thead><tr><th><input type="checkbox" id="cdSelAll" onchange="cnasSelectAll(this.checked)" title="'+L('Tout sélectionner','تحديد الكل')+'"></th><th>'+t('col_no')+'</th><th>'+L('Nom & prénom','الاسم واللقب')+'</th><th>'+L('N° SS','رقم الضمان الاجتماعي')+'</th><th>'+L('N° attestation','رقم الشهادة')+'</th><th>'+L('Établie le','تاريخ الإصدار')+'</th><th>'+L('Valable jusqu’au','صالحة إلى')+'</th><th>'+L('État','الحالة')+'</th><th></th></tr></thead><tbody>'+
+    (ws.length?ws.map(w=>{
+      const id=docId(w.id,'af'),r=cnasIndex[id],s=cnasStatus(r,w),m=(r&&r.meta)||{};
+      const dl=k=>' data-l="'+esc(k)+'"';
+      return '<tr class="'+(r?'has':'no')+'"><td class="c-sel">'+(r?'<input type="checkbox" class="cdSel" value="'+id+'">':'')+'</td><td class="c-rk">'+w.rk+'</td><td class="c-nm"><b>'+esc(w.N)+'</b> '+esc(w.P)+(w.st!=='ACTIF'?' <span class="badge off">'+t('s_inactive')+'</span>':'')+'</td><td class="c-ss"'+dl(L('N° SS','رقم الضمان'))+'>'+esc(w.ss||'')+'</td>'+
+        '<td class="c-x"'+dl(L('N° attestation','رقم الشهادة'))+'>'+(r?esc(m.num||'—')+' '+cnasCloudTag(r):'')+'</td>'+
+        '<td class="c-x"'+dl(L('Établie le','تاريخ الإصدار'))+'>'+(r?'<input type="date" class="cd-date" value="'+esc(m.issued||'')+'" onchange="editCnasDate(\''+id+'\',\'issued\',this.value)">':'')+'</td>'+
+        '<td class="c-x"'+dl(L('Valable jusqu’au','صالحة إلى'))+'>'+(r?'<input type="date" class="cd-date" value="'+esc(m.validUntil||'')+'" onchange="editCnasDate(\''+id+'\',\'validUntil\',this.value)">':'')+'</td>'+
+        '<td class="c-st"><span class="cd-st '+s.k+'">'+esc(s.txt)+'</span></td>'+
+        '<td class="c-act"><div class="act">'+(r?'<button class="ib" title="'+L('Voir','عرض')+'" onclick="viewCnasDoc(\''+id+'\')">👁️</button><button class="ib" title="'+L('Imprimer','طباعة')+'" onclick="printCnasIds([\''+id+'\'])">🖨️</button>':'')+
+        '<button class="ib" title="'+(r?L('Remplacer','استبدال'):L('Ajouter le PDF','إضافة الملف'))+'" onclick="replaceCnasFor(\''+w.id+'\')">📤</button>'+(r?'<button class="ib del" title="'+L('Supprimer','حذف')+'" onclick="deleteCnasDoc(\''+id+'\')">🗑️</button>':'')+'</div></td></tr>';
+    }).join(''):'<tr><td colspan="9" style="text-align:center;color:var(--mt)">'+t('t_no_data')+'</td></tr>')+'</tbody>';
+}
+function cnasSelectAll(on){document.querySelectorAll('#cdTbl .cdSel').forEach(c=>c.checked=on);}
+function cnasSelectedIds(){return [...document.querySelectorAll('#pg-cnasdoc .cdSel:checked')].map(c=>c.value);}
+/* ----- affichage / impression (PDF d'origine, qualité maximale) ----- */
+let pdfLibPromise=null;
+function ensurePdfLib(){
+  if(window.PDFLib)return Promise.resolve();
+  if(!pdfLibPromise)pdfLibPromise=loadExternalScript([
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js',
+    'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js',
+    'https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js'
+  ],()=>!!window.PDFLib).catch(e=>{pdfLibPromise=null;throw e;});
+  return pdfLibPromise;
+}
+async function cnasPdfBlob(ids){
+  if(ids.length===1){const r=await idbGetDoc(ids[0]);if(!r||!r.blob)throw new Error('missing');return r.blob.type==='application/pdf'?r.blob:new Blob([r.blob],{type:'application/pdf'});}
+  await ensurePdfLib();
+  const out=await PDFLib.PDFDocument.create();
+  for(const id of ids){
+    const r=await idbGetDoc(id);if(!r||!r.blob)continue;
+    const src=await PDFLib.PDFDocument.load(await r.blob.arrayBuffer(),{ignoreEncryption:true});
+    (await out.copyPages(src,src.getPageIndices())).forEach(p=>out.addPage(p));
+  }
+  if(!out.getPageCount())throw new Error('missing');
+  return new Blob([await out.save()],{type:'application/pdf'});
+}
+function cnasWaitWindow(){
+  let w=null;try{w=window.open('','_blank');}catch(e){w=null;}
+  if(w){try{w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CNAS</title></head><body style="font:17px sans-serif;padding:32px 18px;text-align:center;color:#1a2a52">⏳ '+L('Préparation du document…','جارٍ تحضير الوثيقة…')+'<p style="font-size:14px;color:#555;margin-top:18px">'+L('Pour imprimer : bouton Partager → Imprimer.','للطباعة: زر المشاركة ← طباعة (Imprimer).')+'</p></body></html>');}catch(e){}}
+  return w;
+}
+function cnasShowBlob(blob,w,fileName){
+  const url=URL.createObjectURL(blob);setTimeout(()=>URL.revokeObjectURL(url),15*60000);
+  if(w){try{w.location.href=url;return;}catch(e){}}
+  const nw=window.open(url,'_blank');if(nw)return;
+  const a=document.createElement('a');a.href=url;a.download=fileName||'attestation.pdf';document.body.appendChild(a);a.click();a.remove();
+}
+function cnasPrintDesktop(blob,fileName){
+  const url=URL.createObjectURL(blob);setTimeout(()=>URL.revokeObjectURL(url),15*60000);
+  const old=$('cnasPrintFrame');if(old)old.remove();
+  const f=document.createElement('iframe');f.id='cnasPrintFrame';f.title='print';
+  f.style.cssText='position:fixed;inset-inline-end:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
+  f.onload=()=>setTimeout(()=>{try{f.contentWindow.focus();f.contentWindow.print();}catch(e){console.warn(e);cnasShowBlob(blob,null,fileName);}},500);
+  f.src=url;document.body.appendChild(f);
+}
+function cnasFileName(ids){
+  if(ids.length>1)return 'Attestations_CNAS_'+tod()+'.pdf';
+  const r=cnasIndex[ids[0]];if(!r)return 'attestation.pdf';
+  if(r.workerId===CNAS_COMPANY)return 'MAJ_CNAS_'+tod()+'.pdf';
+  const w=S.workers.find(x=>x.id===r.workerId);return 'AF_'+(w?(w.N+'_'+w.P).replace(/\s+/g,'_'):ssDigits(r.meta&&r.meta.ss))+'.pdf';
+}
+async function viewCnasDoc(id){
+  const w=cnasWaitWindow();
+  try{cnasShowBlob(await cnasPdfBlob([id]),w,cnasFileName([id]));}
+  catch(e){console.error(e);if(w)try{w.close();}catch(_){}toast(L('Fichier introuvable sur cet appareil (synchronisation en attente).','الملف غير موجود في هذا الجهاز (في انتظار المزامنة).'),'er');}
+}
+async function printCnasIds(ids,fromSelection){
+  ids=(ids||[]).filter(Boolean);
+  if(!ids.length){toast(L('Sélectionnez au moins une attestation.','حدّد شهادة واحدة على الأقل.'),'wa');return;}
+  const mobile=isMobilePrint(),w=mobile?cnasWaitWindow():null,name=cnasFileName(ids);
+  try{
+    const blob=await cnasPdfBlob(ids);
+    if(mobile)cnasShowBlob(blob,w,name);else cnasPrintDesktop(blob,name);
+  }catch(e){
+    console.error(e);if(w)try{w.close();}catch(_){}
+    toast(e&&e.message==='missing'?L('Fichier introuvable sur cet appareil (synchronisation en attente).','الملف غير موجود في هذا الجهاز (في انتظار المزامنة).'):L('Impression impossible (connexion Internet nécessaire pour regrouper plusieurs PDF).','تعذرت الطباعة (يلزم الإنترنت لجمع عدة ملفات في ملف واحد).'),'er');
+  }
+}
+function printSelectedCnas(){printCnasIds(cnasSelectedIds(),true);}
+/* ----- synchronisation des fichiers (nœud files) ----- */
+function blobToB64(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]||'');r.onerror=()=>rej(r.error);r.readAsDataURL(blob);});}
+function b64ToBlob(b64,type){const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new Blob([u],{type:type||'application/pdf'});}
+async function cnasCloudSync(remoteFiles){
+  let ready=false;try{ready=!!(fbReady&&fbRef);}catch(e){}
+  if(!ready||!cnasIndexLoaded)return;
+  if(cnasCloudBusy){cnasCloudPending=true;return;}
+  cnasCloudBusy=true;let changed=false,failed=0;
+  try{
+    if(remoteFiles===undefined){const s=await fbRef.child('files').once('value');remoteFiles=s.val()||{};}
+    remoteFiles=remoteFiles||{};
+    const local={};(await idbAllDocs()).forEach(r=>{if(r&&CNAS_KINDS.includes(r.kind))local[cnasCloudKey(r.kind,r.workerId)]=r;});
+    const tombs=loadCnasTombs();
+    for(const key of Object.keys(remoteFiles)){
+      const rv=remoteFiles[key];if(!rv||typeof rv!=='object')continue;
+      const kind=rv.kind||key.split('_')[0];if(!CNAS_KINDS.includes(kind))continue;
+      const rms=Number(rv.updatedAtMs)||0,lr=local[key];
+      if(tombs[key]&&tombs[key]>=rms)continue;
+      if(lr&&(Number(lr.updatedAtMs)||0)>=rms)continue;
+      const wid=cnasWidFromKey(key);
+      if(rv.deleted){if(lr){await idbDelDoc(lr.id);delete local[key];changed=true;}continue;}
+      if(wid!==CNAS_COMPANY&&!S.workers.some(w=>w.id===wid))continue;
+      if(!rv.b64)continue;
+      const rec={id:docId(wid,kind),workerId:wid,kind,name:rv.name||(key+'.pdf'),type:'application/pdf',size:Number(rv.size)||0,
+        updatedAt:new Date(rms).toISOString(),updatedAtMs:rms,cloudMs:rms,blob:b64ToBlob(rv.b64),meta:rv.meta||{}};
+      await idbPutDoc(rec);local[key]=rec;if(tombs[key])delete tombs[key];changed=true;
+    }
+    for(const key of Object.keys(local)){
+      const lr=local[key],lms=Number(lr.updatedAtMs)||0,rv=remoteFiles[key],rms=rv?Number(rv.updatedAtMs)||0:0;
+      if(rv&&rms>=lms){if(rms===lms&&lr.cloudMs!==lms){lr.cloudMs=lms;await idbPutDoc(lr);changed=true;}continue;}
+      try{
+        const b64=await blobToB64(lr.blob);
+        await fbRef.child('files/'+key).set(fbNormalize({kind:lr.kind,wid:lr.workerId,name:lr.name,size:lr.size,meta:lr.meta||{},updatedAtMs:lms,by:syncMeta.deviceId,b64}));
+        lr.cloudMs=lms;await idbPutDoc(lr);changed=true;
+      }catch(e){failed++;console.warn('[CNAS] envoi refusé',key,e&&e.message);}
+    }
+    for(const key of Object.keys(tombs)){
+      const ms=tombs[key],rv=remoteFiles[key],rms=rv?Number(rv.updatedAtMs)||0:0;
+      // Rien en ligne, suppression déjà en ligne, ou fichier plus récent envoyé ailleurs : la marque locale n'est plus utile.
+      if(!rv||(rv.deleted&&rms>=ms)||(!rv.deleted&&rms>ms)){delete tombs[key];continue;}
+      try{await fbRef.child('files/'+key).set({kind:key.split('_')[0],deleted:true,updatedAtMs:ms});delete tombs[key];}
+      catch(e){failed++;}
+    }
+    saveCnasTombs(tombs);
+  }catch(e){console.warn('[CNAS] synchronisation fichiers',e);failed++;}
+  finally{
+    cnasCloudFailed=failed;cnasCloudBusy=false;
+    if(changed){const all=await idbAllDocs().catch(()=>null);if(all){const idx={};all.forEach(r=>{if(r&&CNAS_KINDS.includes(r.kind))idx[r.id]=indexEntry(r);});cnasIndex=idx;}updateCnasAlertsUi();renderCnasDocs();}
+    if(cnasCloudPending){cnasCloudPending=false;setTimeout(()=>cnasCloudSync(),400);}
+  }
+}
+setInterval(()=>{if(cnasCloudFailed)cnasCloudSync();},90000);
+/* Correction demandée le 20/10/2026 : seuls les 12 travailleurs ayant une attestation d'affiliation restent actifs. */
+const FIX_INACTIF_202610=['9201800345','8430780013','8437110022','8502880171']; // ELHADJ, GACEM, BENYAMINA, MAACHOU
+function applyOneTimeFixes(){
+  if(S.settings.fixInactif202610)return;
+  let n=0;S.workers.forEach(w=>{if(FIX_INACTIF_202610.includes(ssDigits(w.ss))&&w.st!=='INACTIF'){w.st='INACTIF';n++;}});
+  S.settings.fixInactif202610=true;saveAll(true);
+  if(n)console.info('[EGTPH RH] '+n+' travailleur(s) passé(s) en inactif');
+}
+function cnasPlannedStatus(){
+  return S.workers.map(w=>{const r=cnasIndex[docId(w.id,'af')];const ok=!!(r&&!(r.meta&&r.meta.until));return {w,want:ok?'ACTIF':'INACTIF'};}).filter(x=>x.w.st!==x.want);
+}
+function syncStatusWithCnas(){
+  const ch=cnasPlannedStatus();
+  if(!ch.length){toast(L('Les statuts correspondent déjà aux attestations.','حالات العمال مطابقة للشهادات.'));return;}
+  const list=ch.map(x=>'• '+x.w.N+' '+x.w.P+' → '+(x.want==='ACTIF'?t('s_active'):t('s_inactive'))).join('\n');
+  if(!confirm(L('Mettre à jour le statut selon les attestations CNAS ?','تحديث حالة العمال حسب شهادات CNAS؟')+'\n\n'+list))return;
+  ch.forEach(x=>x.w.st=x.want);saveAll(true);toast(t('msg_saved'));updateCnasAlertsUi();renderCnasDocs();
+}
+function bindCnasDocEvents(){
+  const many=$('cdFiles'),one=$('cdOneFile'),dz=$('cdDrop');
+  if(many)many.addEventListener('change',e=>{const fs=[...e.target.files];e.target.value='';importCnasFiles(fs);});
+  if(one)one.addEventListener('change',e=>{const fs=[...e.target.files];e.target.value='';const wid=cnasTargetWid;cnasTargetWid=null;if(fs.length)importCnasFiles(fs.slice(0,1),{targetWid:wid===CNAS_COMPANY?null:wid});});
+  if(dz){
+    dz.addEventListener('dragover',e=>{e.preventDefault();dz.style.borderColor='var(--g)';});
+    dz.addEventListener('dragleave',()=>dz.style.borderColor='');
+    dz.addEventListener('drop',e=>{e.preventDefault();dz.style.borderColor='';importCnasFiles(e.dataTransfer.files);});
+  }
+}
+
+/* ---------- PRINT ----------
+   Ordinateur : impression directe de la page.
+   Téléphone / tablette (et application ouverte dans le tableau de bord) : window.print() ne fonctionne pas
+   de façon fiable (iPhone, iframe, application ajoutée à l'écran d'accueil). Le document est donc ouvert seul
+   dans un nouvel onglet, avec un bouton Imprimer, puis l'impression est lancée automatiquement. */
+function isMobilePrint(){
+  const ua=navigator.userAgent||'';
+  if(/iPhone|iPad|iPod|Android|Mobile/i.test(ua))return true;
+  if(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)return true; // iPad en mode bureau
+  try{if(navigator.standalone===true||window.matchMedia('(display-mode: standalone)').matches)return true;}catch(e){}
+  return false;
+}
+function printPageRule(id){
+  if(id==='lnDoc'&&$('lnOrient')&&$('lnOrient').value==='landscape')return '@page{size:A4 landscape;margin:0}@media print{html,body{width:297mm!important}#lnDoc{width:297mm!important;min-height:0!important}}';
+  return '';
+}
+function buildPrintHtml(id){
+  const el=$(id);if(!el)return '';
+  const clone=el.cloneNode(true);delete clone.dataset.noprint;
+  clone.querySelectorAll('[contenteditable]').forEach(x=>x.removeAttribute('contenteditable'));
+  clone.querySelectorAll('[onblur],[onclick],[ondblclick],[onchange]').forEach(x=>['onblur','onclick','ondblclick','onchange'].forEach(a=>x.removeAttribute(a)));
+  const css=[...document.querySelectorAll('style')].filter(x=>x.id!=='ptmp').map(x=>x.textContent).join('\n');
+  const ar=LANG==='ar',land=id==='lnDoc'&&$('lnOrient')&&$('lnOrient').value==='landscape';
+  const extra='body.pw{background:#d9dbe3;color:#000;min-height:0;overflow:auto;font-size:14px}'+
+    '.pw-bar{position:sticky;top:0;z-index:5;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px;background:#1a2a52;color:#fff}'+
+    '.pw-bar button{font:700 17px Cairo,sans-serif;border:0;border-radius:10px;padding:12px 22px;cursor:pointer}'+
+    '.pw-print{background:#C8960C;color:#111}.pw-close{background:#fff;color:#1a2a52}'+
+    '.pw-bar small{flex-basis:100%;font-size:12px;color:#cdd5e8;line-height:1.5}'+
+    '.pw-wrap{padding:14px;overflow-x:auto}.pw-wrap .doc{margin:0 auto}'+
+    '@media print{body.pw{background:#fff}.pw-bar{display:none!important}.pw-wrap{padding:0;overflow:visible}.pw-wrap .doc{margin:0}}'+printPageRule(id);
+  const hint=ar?'إذا لم تظهر نافذة الطباعة تلقائياً اضغط «طباعة»، أو استعمل زر المشاركة ثم «طباعة» / «حفظ PDF».':'Si la fenêtre d’impression ne s’ouvre pas, appuyez sur « Imprimer », ou utilisez Partager → Imprimer / Enregistrer en PDF.';
+  return '<!DOCTYPE html><html lang="'+document.documentElement.lang+'" dir="'+document.documentElement.dir+'"><head><meta charset="UTF-8">'+
+    '<meta name="viewport" content="width='+(land?1160:830)+'">'+
+    '<base href="'+esc(location.href)+'"><title>'+esc(document.title)+'</title><style>'+css+'</style><style>'+extra+'</style></head>'+
+    '<body class="pw"><div class="pw-bar"><button class="pw-print" onclick="window.print()">🖨️ '+(ar?'طباعة':'Imprimer')+'</button>'+
+    '<button class="pw-close" onclick="window.close()">✖ '+(ar?'إغلاق':'Fermer')+'</button><small>'+hint+'</small></div>'+
+    '<div class="pw-wrap">'+clone.outerHTML+'</div>'+
+    '<scr'+'ipt>window.addEventListener("load",function(){var go=function(){setTimeout(function(){try{window.print();}catch(e){}},500);};'+
+    'if(document.fonts&&document.fonts.ready){document.fonts.ready.then(go,go);}else{go();}});</scr'+'ipt></body></html>';
+}
+function openPrintWindow(id){
+  const html=buildPrintHtml(id);if(!html)return false;
+  let w=null;
+  try{w=window.open('','_blank');}catch(e){w=null;}
+  if(w){
+    try{w.document.open();w.document.write(html);w.document.close();return true;}
+    catch(e){try{w.close();}catch(_){}}
+  }
+  // Ouverture via une adresse blob si l'écriture directe est bloquée
+  try{
+    const url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));
+    const w2=window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),120000);
+    if(w2)return true;
+  }catch(e){console.warn(e);}
+  return false;
+}
+function afterPrintActions(id){
   if(id==='attDoc'&&$('aRef')){
     const current=$('aRef').value.trim(),expected=genRef('refAtt');
     if(current===expected){S.settings.refAtt=(parseInt(S.settings.refAtt,10)||1)+1;saveAll(true);$('aRef').value=genRef('refAtt');calcAtt();}
   }
-  setTimeout(()=>{const e=$('ptmp');if(e)e.remove();},500);
 }
-
+function printArea(id){
+  if(isMobilePrint()){
+    if(openPrintWindow(id)){afterPrintActions(id);return;}
+    toast(LANG==='ar'?'⚠️ المتصفح منع فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة (Pop-ups) لهذا الموقع ثم أعد المحاولة.':'⚠️ Le navigateur a bloqué la fenêtre d’impression. Autorisez les fenêtres pop-up pour ce site puis réessayez.','er');
+  }
+  document.querySelectorAll('.printArea').forEach(e=>{if(e.id!==id)e.dataset.noprint='1';else delete e.dataset.noprint;});
+  const old=$('ptmp');if(old)old.remove();
+  const css=document.createElement('style');css.id='ptmp';
+  css.textContent=printPageRule(id)+'@media print{.printArea[data-noprint]{display:none!important}}';
+  document.head.appendChild(css);
+  let cleaned=false;
+  const cleanup=()=>{if(cleaned)return;cleaned=true;const e=$('ptmp');if(e)e.remove();document.querySelectorAll('.printArea').forEach(e=>delete e.dataset.noprint);};
+  window.addEventListener('afterprint',cleanup,{once:true});
+  window.print();
+  afterPrintActions(id);
+  setTimeout(cleanup,60000);
+}
 
 /* ---------- FIREBASE REAL-TIME SYNCHRONISATION ----------
    The path key isolates this RH application. It is a namespace, not an authentication secret.
@@ -1924,7 +2435,7 @@ function setSyncStatus(kind,detail){
   const key=$('syncPathKey');if(key){key.textContent=(LANG==='ar'?'مفتاح المسار':'Clé du chemin')+': '+FIREBASE_PATH_KEY+'\n'+(LANG==='ar'?'المسار الكامل':'Chemin complet')+': '+FIREBASE_ROOT_PATH;}
   const hint=$('syncHint');if(hint){hint.textContent=LANG==='ar'?'مزامنة فورية عبر Firebase مع طابع زمني بالميلي ثانية. الحذف يُحفظ كسجل حذف دائم؛ صور CNAS تبقى محلية، والمعلومات المستخرجة فقط تُزامَن.':'Synchronisation Firebase en temps réel avec horodatage en millisecondes. Les suppressions sont des tombstones permanents ; les scans CNAS restent locaux et seules les informations extraites sont synchronisées.';}
   const title=$('syncTitleText');if(title)title.textContent=LANG==='ar'?'مزامنة Firebase':'Synchronisation Firebase';
-  updateFirebaseAuthUi();
+  updateFirebaseAuthUi();renderSyncDiag();
 }
 function loadRemoteScript(src){return new Promise((resolve,reject)=>{const found=[...document.scripts].some(x=>x.src===src);if(found){resolve();return;}const n=document.createElement('script');n.src=src;n.async=true;n.crossOrigin='anonymous';n.onload=()=>resolve();n.onerror=()=>reject(new Error('SDK Firebase indisponible'));document.head.appendChild(n);});}
 let firebaseSdkPromise=null;
@@ -2049,7 +2560,62 @@ function mergeEnvelopes(remoteValue,localValue){
   if(!out.settings||!out.settings.data)out.settings={data:cleanClone(S.settings),...makeStamp()};
   return out;
 }
-function sameEnvelope(a,b){return stableStringify(hydrateEnvelope(a))===stableStringify(hydrateEnvelope(b));}
+/* Firebase ne stocke ni null, ni objets/tableaux vides : on compare et on écrit la même forme pour éviter les boucles d'écriture. */
+function fbNormalize(v){
+  if(v===undefined||v===null)return null;
+  if(typeof v==='number')return Number.isFinite(v)?v:null;
+  if(typeof v!=='object')return v;
+  if(Array.isArray(v)){const a=v.map(fbNormalize);const o={};let n=0;a.forEach((x,i)=>{if(x!==null){o[i]=x;n++;}});if(!n)return null;return a.every(x=>x!==null)?a:o;}
+  const o={};let n=0;Object.keys(v).forEach(k=>{const x=fbNormalize(v[k]);if(x!==null){o[k]=x;n++;}});return n?o:null;
+}
+function fbSame(a,b){return stableStringify(fbNormalize(a))===stableStringify(fbNormalize(b));}
+function sameEnvelope(a,b){return fbSame(hydrateEnvelope(a),hydrateEnvelope(b));}
+/* Liste des chemins à écrire (un par enregistrement modifié) au lieu de réécrire tout le dossier d'un bloc. */
+function envelopeWrites(remoteValue,merged){
+  const raw=remoteValue&&typeof remoteValue==='object'?remoteValue:{},remote=hydrateEnvelope(raw),writes={};
+  if(raw.schema!==3)writes.schema=3;
+  SYNC_TYPES.forEach(type=>{
+    const ids=new Set([...Object.keys(remote.records[type]),...Object.keys(merged.records[type]),...Object.keys(remote.tombstones[type]),...Object.keys(merged.tombstones[type])]);
+    ids.forEach(id=>{
+      const mt=merged.tombstones[type][id];
+      if(mt){
+        if(!fbSame(mt,remote.tombstones[type][id]))writes['tombstones/'+type+'/'+id]=fbNormalize(mt);
+        if(remote.records[type][id])writes['records/'+type+'/'+id]=null;
+        return;
+      }
+      const mr=merged.records[type][id];
+      if(mr&&!fbSame(mr,remote.records[type][id]))writes['records/'+type+'/'+id]=fbNormalize(mr);
+    });
+  });
+  if(merged.settings&&!fbSame(merged.settings,raw.settings))writes.settings=fbNormalize(merged.settings);
+  return writes;
+}
+let fbFailedWrites=[],fbRetryAfter=0,fbRetryTimer=null;
+function writeLabel(path){
+  const m=/^records\/(workers|conges|avances)\/(.+)$/.exec(path)||/^tombstones\/(workers|conges|avances)\/(.+)$/.exec(path);
+  if(!m)return path==='settings'?(LANG==='ar'?'الإعدادات':'Paramètres'):path;
+  const w=m[1]==='workers'?S.workers.find(x=>x.id===m[2]):null;
+  const kind={workers:LANG==='ar'?'عامل':'Travailleur',conges:LANG==='ar'?'عطلة':'Congé',avances:LANG==='ar'?'تسبيق':'Avance'}[m[1]];
+  return kind+(w?' : '+w.N+' '+w.P:' ('+m[2]+')');
+}
+function renderSyncDiag(){
+  const box=$('syncDiag');if(!box)return;
+  const ar=LANG==='ar',u=fbUser;
+  let h='<div><b>'+(ar?'الحساب':'Compte')+':</b> '+esc(u?(u.email||u.uid):(ar?'غير متصل':'non connecté'))+'</div>';
+  if(fbFailedWrites.length){
+    const denied=fbFailedWrites.some(f=>/permission/i.test(f.code));
+    h+='<div style="margin-top:6px;color:#f08b83"><b>'+(ar?'تعديلات محفوظة في هذا الجهاز فقط ولم تُرسل إلى السحابة':'Modifications enregistrées sur cet appareil seulement, non envoyées au cloud')+' ('+fbFailedWrites.length+')</b></div>';
+    h+='<ul style="margin:4px 18px 0;padding:0">'+fbFailedWrites.slice(0,8).map(f=>'<li>'+esc(writeLabel(f.path))+' — <code>'+esc(f.code)+'</code></li>').join('')+(fbFailedWrites.length>8?'<li>…</li>':'')+'</ul>';
+    if(denied)h+='<div style="margin-top:6px">'+(ar?'Firebase يرفض الكتابة (permission_denied): القراءة تعمل لكن قواعد قاعدة البيانات (Realtime Database → Rules) في مشروع egtph-rh لا تسمح لهذا الحساب بالكتابة في هذا المسار. البيانات لم تُفقد، وستُرسل تلقائياً بمجرد السماح بالكتابة.':'Firebase refuse l’écriture (permission_denied) : la lecture fonctionne mais les règles (Realtime Database → Rules) du projet egtph-rh n’autorisent pas ce compte à écrire sur ce chemin. Rien n’est perdu : l’envoi reprendra automatiquement dès que l’écriture sera autorisée.')+'</div>';
+  }else if(fbLastSyncAt){
+    h+='<div style="margin-top:6px;color:#7be0a4">'+(ar?'آخر مزامنة ناجحة':'Dernière synchronisation réussie')+': '+new Date(fbLastSyncAt).toLocaleTimeString(ar?'ar-DZ':'fr-DZ')+'</div>';
+  }
+  box.innerHTML=h;
+}
+function scheduleSyncRetry(ms){
+  clearTimeout(fbRetryTimer);fbRetryAfter=Date.now()+ms;
+  fbRetryTimer=setTimeout(()=>{fbRetryAfter=0;if(fbReady)syncNow(false);},ms);
+}
 function applyRemoteEnvelope(value){
   const env=hydrateEnvelope(value);
   const raw={workers:[],conges:[],avances:[],settings:env.settings&&env.settings.data?env.settings.data:S.settings};
@@ -2066,23 +2632,45 @@ function applyRemoteEnvelope(value){
 }
 function rerenderAfterCloudSync(){
   const cur=document.querySelector('.pg.on');const id=cur?cur.id.replace('pg-',''):'db';
-  if(id==='db')renderDB();else if(id==='wk')renderWk();else if(id==='ln')renderLN();else if(id==='cg')renderCg();else if(id==='av')renderAv();else if(id==='st')fillSettings();
+  if(id==='db')renderDB();else if(id==='wk')renderWk();else if(id==='ln')renderLN();else if(id==='cg')renderCg();else if(id==='av')renderAv();else if(id==='st')fillSettings();else if(id==='cnasdoc')renderCnasDocs();
   else if(id==='pay'){fillWorkerSelect('pW');calcPay();}else if(id==='att'){fillWorkerSelect('aW');buildPosteOverride();calcAtt();}else if(id==='cnt'){fillWorkerSelect('cW');buildCntPoste();calcCnt();}
 }
 function queueCloudSync(immediate){
   if(!fbReady||fbApplying)return;
-  clearTimeout(fbTimer);fbTimer=setTimeout(()=>syncNow(false),immediate?0:150);
+  clearTimeout(fbTimer);
+  // Après un refus, on n'insiste pas en boucle : nouvel essai programmé (ou bouton « Synchroniser maintenant »).
+  if(fbRetryAfter&&Date.now()<fbRetryAfter)return;
+  fbTimer=setTimeout(()=>syncNow(false),immediate?0:150);
 }
 async function syncNow(force){
-  if(!fbReady||!fbRef||!navigator.onLine){setSyncStatus('offline');return false;}
-  if(fbBusy)return false;
+  if(!fbReady||!fbRef||!navigator.onLine){setSyncStatus('offline');renderSyncDiag();return false;}
+  if(fbBusy){if(force)setTimeout(()=>syncNow(true),400);return false;}
+  if(force){fbRetryAfter=0;clearTimeout(fbRetryTimer);}
   fbBusy=true;setSyncStatus('saving');
   try{
     const local=prepareLocalEnvelope();
-    const result=await fbRef.transaction(current=>mergeEnvelopes(current||{},local),undefined,false);
-    if(!result||!result.committed)throw new Error('Transaction Firebase non validée');
-    applyRemoteEnvelope(result.snapshot.val()||{});fbLastSyncAt=Date.now();fbLastError='';setSyncStatus('ok');return true;
-  }catch(e){console.error(e);fbLastError=e&&e.message?e.message:'';setSyncStatus('error',fbLastError);return false;}
+    const snap=await fbRef.once('value');const remote=snap.val()||{};
+    const merged=mergeEnvelopes(remote,local);
+    const writes=envelopeWrites(remote,merged),paths=Object.keys(writes);
+    // Chaque enregistrement est envoyé séparément : un refus sur un élément ne bloque plus tous les autres.
+    const results=await Promise.allSettled(paths.map(p=>fbRef.child(p).set(writes[p])));
+    fbFailedWrites=[];
+    results.forEach((r,i)=>{if(r.status==='rejected'){const e=r.reason||{};fbFailedWrites.push({path:paths[i],code:String(e.code||e.message||'erreur').replace(/^PERMISSION_DENIED.*$/i,'permission_denied').toLowerCase()});}});
+    applyRemoteEnvelope(merged);
+    if(fbFailedWrites.length){
+      const denied=fbFailedWrites.some(f=>/permission/.test(f.code));
+      fbLastError=denied?'permission_denied':fbFailedWrites[0].code;
+      const n=fbFailedWrites.length;
+      setSyncStatus('error',(denied?(LANG==='ar'?'Firebase يرفض الكتابة':'écriture refusée par Firebase'):fbLastError)+' — '+n+(LANG==='ar'?' تعديل محفوظ محلياً فقط':' modif. en local seulement'));
+      console.warn('[EGTPH RH] Écritures refusées',fbFailedWrites);
+      scheduleSyncRetry(60000);renderSyncDiag();
+      if(force)toast(LANG==='ar'?'⚠️ لم تُرسل التعديلات إلى السحابة (permission_denied). هي محفوظة في هذا الجهاز.':'⚠️ Modifications non envoyées (permission_denied). Elles restent enregistrées sur cet appareil.','er');
+      return false;
+    }
+    fbLastSyncAt=Date.now();fbLastError='';setSyncStatus('ok');renderSyncDiag();
+    if(force)toast(LANG==='ar'?'✅ تمت المزامنة.':'✅ Synchronisé.');
+    return true;
+  }catch(e){console.error(e);fbLastError=e&&e.message?e.message:'';setSyncStatus('error',fbLastError);scheduleSyncRetry(60000);renderSyncDiag();return false;}
   finally{fbBusy=false;}
 }
 async function initCloudSync(){
@@ -2103,16 +2691,18 @@ async function initCloudSync(){
     }else await syncNow(true);
     if(!fbListenerAttached){
       fbListenerAttached=true;fbRef.on('value',snap=>{
+        const remoteAll=snap.val();
+        try{cnasCloudSync((remoteAll&&remoteAll.files)||{});}catch(e){console.warn(e);}
         if(fbBusy||fbApplying)return;
-        const remote=snap.val();if(!remote){queueCloudSync(true);return;}
+        const remote=remoteAll;if(!remote){queueCloudSync(true);return;}
         try{
           const local=prepareLocalEnvelope(),merged=mergeEnvelopes(remote,local);
           applyRemoteEnvelope(merged);
-          if(!sameEnvelope(remote,merged))queueCloudSync(true);else setSyncStatus('ok');
+          if(!sameEnvelope(remote,merged))queueCloudSync(true);else if(!fbFailedWrites.length)setSyncStatus('ok');
         }catch(e){console.error(e);setSyncStatus('error',e.message||'');}
       },e=>{console.error(e);setSyncStatus('error',e&&e.message?e.message:'');});
     }
-    hideAuthGate();return true;
+    hideAuthGate();setTimeout(()=>cnasCloudSync(),300);return true;
   }catch(e){console.error(e);closeFirebaseListener();setSyncStatus('error',e&&e.message?e.message:'');showAuthGate('auth_network_error','error');return false;}
   })();
   try{return await fbInitPromise;}finally{fbInitPromise=null;}
@@ -2371,7 +2961,7 @@ function bindEvents(){
 }
 loadD();
 window.addEventListener('DOMContentLoaded',async()=>{
-  buildPosteSelects();bindEvents();showAuthGate('auth_loading','info');applyLang();renderDB();setSyncStatus('connecting');
+  applyOneTimeFixes();buildPosteSelects();bindEvents();bindCnasDocEvents();loadCnasIndex().then(()=>{if(document.querySelector('#pg-db.on'))renderDB();cnasCloudSync();});showAuthGate('auth_loading','info');applyLang();renderDB();setSyncStatus('connecting');
   await initCloudSync();
 });
 </script>
