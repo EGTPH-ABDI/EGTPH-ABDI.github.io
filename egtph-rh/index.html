@@ -208,6 +208,8 @@ body.auth-locked{overflow:hidden}
 #cdDrop{text-align:center;padding:18px;cursor:pointer;margin-top:12px}
 .cd-tools{display:flex;gap:8px;flex-wrap:wrap}
 .cd-entry{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.exp-host{position:fixed;left:-12000px;top:0;background:#fff;z-index:-1;pointer-events:none}
+.exp-busy{position:fixed;inset:auto 0 24px 0;margin:auto;width:max-content;max-width:90vw;z-index:600;background:#1a2a52;color:#fff;border:1px solid var(--g);border-radius:10px;padding:12px 18px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.5)}
 .cd-report{border:1px solid var(--br);border-radius:9px;padding:10px 12px;margin-top:8px;font-size:12.5px;line-height:1.8;background:var(--dkr)}
 .cd-report ul{margin:0;padding-inline-start:18px}
 .wk-cnas-fill{border:1px dashed var(--g);border-radius:10px;padding:12px;margin-bottom:14px;background:rgba(200,150,12,.06)}
@@ -305,7 +307,7 @@ body.auth-locked{overflow:hidden}
     <div class="pg" id="pg-ln">
       <div class="card noprint">
         <div class="ctit"><span class="t" data-t="ln_opts">🧩 Options d'affichage & d'impression</span>
-          <button class="btp solid" onclick="printArea('lnDoc')" data-t="btn_print">🖨️ Imprimer</button></div>
+          <span class="cd-tools"><button class="btp solid" onclick="printArea('lnDoc')" data-t="btn_print">🖨️ Imprimer</button><button class="btp" onclick="exportDocPdf('lnDoc')">📄 PDF</button><button class="btp" onclick="exportLnExcel()">📊 Excel</button></span></div>
         <p class="hint" data-t="ln_hint">Cochez les colonnes à afficher. Vous pouvez aussi modifier les cellules directement dans le tableau (double-clic).</p>
         <div class="chips" id="lnCols" style="margin-top:10px"></div>
         <div class="frm" style="margin-top:12px">
@@ -405,7 +407,7 @@ body.auth-locked{overflow:hidden}
     <div class="pg" id="pg-pay">
       <div class="card noprint">
         <div class="ctit"><span class="t" data-t="pay_title">💰 Bulletin de Paie</span>
-          <button class="btp solid" onclick="printArea('payDoc')" data-t="btn_print">🖨️ Imprimer</button></div>
+          <span class="cd-tools"><button class="btp solid" onclick="printArea('payDoc')" data-t="btn_print">🖨️ Imprimer</button><button class="btp" onclick="exportDocPdf('payDoc')">📄 PDF</button></span></div>
         <div class="frm">
           <div class="fl"><label data-t="f_worker">Travailleur</label><select id="pW" onchange="onPayWorker()"></select></div>
           <div class="fl"><label data-t="doc_poste_over">Poste (modifiable)</label><select id="pPoste" onchange="calcPay()"></select></div>
@@ -430,7 +432,7 @@ body.auth-locked{overflow:hidden}
     <div class="pg" id="pg-att">
       <div class="card noprint">
         <div class="ctit"><span class="t" data-t="att_title">📄 Attestations</span>
-          <button class="btp solid" onclick="printArea('attDoc')" data-t="btn_print">🖨️ Imprimer</button></div>
+          <span class="cd-tools"><button class="btp solid" onclick="printArea('attDoc')" data-t="btn_print">🖨️ Imprimer</button><button class="btp" onclick="exportDocPdf('attDoc')">📄 PDF</button></span></div>
         <div class="frm">
           <div class="fl"><label data-t="f_worker">Travailleur</label><select id="aW" onchange="onAttWorker()"></select></div>
           <div class="fl"><label data-t="att_type">Type</label>
@@ -488,7 +490,7 @@ body.auth-locked{overflow:hidden}
           <div class="fl"><label data-t="cd_alert_days">Alerte avant expiration (jours)</label><input type="number" id="cdAlertDays" min="1" max="120" onchange="setCnasAlertDays(this.value)"></div>
           <div class="fl"><label data-t="ln_filter">Filtre</label><select id="cdFilter" onchange="renderCnasDocs()"><option value="ACTIF" data-t="f_active">Actifs</option><option value="ALL" data-t="f_all">Tous</option><option value="ALERT" data-t="cd_f_alert">À renouveler / manquantes</option></select></div>
         </div>
-        <p class="hint" style="opacity:.7">Version : 2026-10-20 · 18h50</p>
+        <p class="hint" style="opacity:.7">Version : 2026-10-20 · 19h00</p>
         <p class="hint" data-t="cd_hint">Le PDF original est conservé sans perte de qualité. Le travailleur est reconnu par son N° SS ; s’il n’existe pas, il est ajouté automatiquement avec les informations de l’attestation. La validité est calculée automatiquement (3 mois après la date d’établissement) et peut être corrigée.</p>
       </div>
       <div class="card" id="cdCompany"></div>
@@ -500,7 +502,7 @@ body.auth-locked{overflow:hidden}
     <div class="pg" id="pg-cnt">
       <div class="card noprint">
         <div class="ctit"><span class="t" data-t="cnt_title">📝 Contrat de Travail</span>
-          <button class="btp solid" onclick="printArea('cntDoc')" data-t="btn_print">🖨️ Imprimer</button></div>
+          <span class="cd-tools"><button class="btp solid" onclick="printArea('cntDoc')" data-t="btn_print">🖨️ Imprimer</button><button class="btp" onclick="exportDocPdf('cntDoc')">📄 PDF</button></span></div>
         <div class="frm">
           <div class="fl"><label data-t="f_worker">Travailleur</label><select id="cW" onchange="calcCnt()"></select></div>
           <div class="fl"><label data-t="cnt_type">Type de contrat</label>
@@ -1486,9 +1488,9 @@ function renderLN(){
   $('lnDoc').innerHTML=docHeader()+
    '<h2 style="text-align:center;font-size:19pt;color:#1a2a52;font-weight:900;margin:6mm 0 1mm;letter-spacing:.5px">'+t('doc_listtitle')+'</h2>'+
    '<p style="text-align:center;font-size:11pt;color:#555;margin-bottom:5mm">'+esc(st.wilaya)+', '+t('doc_le')+' '+fd(tod())+' — '+t('doc_effectif')+' : '+list.length+' '+t('workers_u')+'</p>'+
-   '<table style="width:100%;border-collapse:collapse;font-size:'+(cols.length>8?'9.5pt':'11pt')+'">'+
-   '<thead><tr style="background:#1a2a52;color:#fff">'+head.replace(/<th>/g,'<th style="border:1px solid #1a2a52;padding:5px 6px;font-weight:700">')+'</tr></thead>'+
-   '<tbody>'+body.replace(/<td/g,'<td style="border:1px solid #999;padding:4px 6px;color:#000"').replace(/<tr>/g,'<tr style="background:#fff">')+'</tbody></table>'+
+   '<table style="width:100%;border-collapse:collapse;font-size:'+(land?(cols.length>10?'9.5pt':'10.5pt'):(cols.length>9?'8pt':cols.length>7?'9pt':'11pt'))+'">'+
+   '<thead><tr style="background:#1a2a52;color:#fff">'+head.replace(/<th>/g,'<th style="border:1px solid #1a2a52;padding:'+(cols.length>9&&!land?'4px 3px':'5px 6px')+';font-weight:700">')+'</tr></thead>'+
+   '<tbody>'+body.replace(/<td/g,'<td style="border:1px solid #999;padding:'+(cols.length>9&&!land?'3px 3px':'4px 6px')+';color:#000"').replace(/<tr>/g,'<tr style="background:#fff">')+'</tbody></table>'+
    docFooter(true);
   $('lnDoc').style.width=land?'297mm':'210mm';
 }
@@ -2460,6 +2462,186 @@ function bindCnasDocEvents(){
   }
 }
 
+/* ---------- EXPORT PDF / EXCEL ----------
+   PDF : le document affiché est photographié en haute résolution (≈ 240 dpi) puis mis en pages A4 → fichier .pdf.
+   Excel : la liste nominative est écrite dans un vrai fichier .xlsx (sans bibliothèque externe). */
+let html2canvasPromise=null;
+function ensureHtml2Canvas(){
+  if(window.html2canvas)return Promise.resolve();
+  if(!html2canvasPromise)html2canvasPromise=loadExternalScript([
+    'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+    'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
+    'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js'
+  ],()=>!!window.html2canvas).catch(e=>{html2canvasPromise=null;throw e;});
+  return html2canvasPromise;
+}
+function exportBaseName(id){
+  const d=tod(),w=x=>{const k=$(x)&&$(x).value;const o=S.workers.find(y=>y.id===k);return o?(o.N+'_'+o.P).replace(/\s+/g,'_'):'';};
+  const m={lnDoc:'Liste_nominative_'+d,payDoc:'Bulletin_paie_'+w('pW')+'_'+(($('pMois')||{}).value||d),attDoc:(($('aT')||{}).value||'Attestation')+'_'+w('aW')+'_'+d,cntDoc:'Contrat_'+w('cW')+'_'+d};
+  return (m[id]||('Document_'+d)).replace(/[^\w\-.]+/g,'_');
+}
+function exportBusy(on,msg){
+  let b=$('expBusy');
+  if(!b){b=document.createElement('div');b.id='expBusy';b.className='exp-busy';document.body.appendChild(b);}
+  b.textContent=msg||'';b.hidden=!on;
+}
+async function exportDocPdf(id){
+  const el=$(id);if(!el){return;}
+  exportBusy(true,'⏳ '+L('Préparation du PDF…','جارٍ تجهيز ملف PDF…'));
+  let host=null;
+  try{
+    await ensureHtml2Canvas();await ensurePdfLib();
+    try{if(document.fonts&&document.fonts.ready)await document.fonts.ready;}catch(e){}
+    const land=id==='lnDoc'&&$('lnOrient')&&$('lnOrient').value==='landscape';
+    const pageWmm=land?297:210,pageHmm=land?210:297,pxPerMm=96/25.4,wPx=Math.round(pageWmm*pxPerMm);
+    // copie hors écran, à la largeur exacte de la page (pas d'effet du téléphone)
+    host=document.createElement('div');host.className='exp-host';host.style.width=wPx+'px';
+    host.setAttribute('dir',document.documentElement.dir);
+    const clone=el.cloneNode(true);delete clone.dataset.noprint;clone.removeAttribute('id');
+    clone.querySelectorAll('[contenteditable]').forEach(x=>x.removeAttribute('contenteditable'));
+    // html2canvas dessine lettre par lettre dès qu'il y a un espacement de lettres : cela casse l'écriture arabe.
+    [clone,...clone.querySelectorAll('*')].forEach(e=>{e.style.letterSpacing='0';e.style.wordSpacing='normal';});
+    clone.querySelectorAll('.lned,.lnpick').forEach(x=>{x.classList.remove('lned','lnpick');x.removeAttribute('title');});
+    clone.classList.add('exp-doc');clone.style.width=wPx+'px';clone.style.minHeight=Math.round(pageHmm*pxPerMm)+'px';clone.style.boxShadow='none';clone.style.margin='0';
+    host.appendChild(clone);document.body.appendChild(host);
+    const scale=2.5;
+    const canvas=await html2canvas(clone,{scale,backgroundColor:'#ffffff',useCORS:true,logging:false,windowWidth:wPx+40,scrollX:0,scrollY:0});
+    const pdf=await PDFLib.PDFDocument.create();
+    const ptW=pageWmm/25.4*72,ptH=pageHmm/25.4*72;
+    const sliceH=Math.round(canvas.width*pageHmm/pageWmm);
+    const pages=Math.max(1,Math.ceil((canvas.height-4)/sliceH));
+    for(let i=0;i<pages;i++){
+      const h=Math.min(sliceH,canvas.height-i*sliceH);
+      const c=document.createElement('canvas');c.width=canvas.width;c.height=sliceH;
+      const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);
+      ctx.drawImage(canvas,0,i*sliceH,canvas.width,h,0,0,canvas.width,h);
+      const jpg=await new Promise(res=>c.toBlob(res,'image/jpeg',0.93));
+      const img=await pdf.embedJpg(new Uint8Array(await jpg.arrayBuffer()));
+      const page=pdf.addPage([ptW,ptH]);page.drawImage(img,{x:0,y:0,width:ptW,height:ptH});
+      c.width=c.height=0;
+    }
+    canvas.width=canvas.height=0;
+    pdf.setTitle(exportBaseName(id));pdf.setAuthor(S.settings.gerant||'EGTPH');pdf.setCreator('EGTPH Gestion RH');
+    const blob=new Blob([await pdf.save()],{type:'application/pdf'});
+    exportBusy(false);
+    deliverFile(blob,exportBaseName(id)+'.pdf');
+  }catch(e){
+    console.error(e);exportBusy(false);
+    toast(L('PDF impossible (connexion Internet nécessaire la première fois).','تعذر تجهيز PDF (يلزم الإنترنت في المرة الأولى).'),'er');
+  }finally{if(host)host.remove();}
+}
+/* ----- XLSX minimal (zip sans compression) ----- */
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(u8){let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=CRC_TABLE[(c^u8[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function zipStore(files){
+  const enc=new TextEncoder(),parts=[],central=[];let offset=0;
+  const u16=v=>[v&255,(v>>>8)&255],u32=v=>[v&255,(v>>>8)&255,(v>>>16)&255,(v>>>24)&255];
+  files.forEach(f=>{
+    const name=enc.encode(f.name),data=typeof f.data==='string'?enc.encode(f.data):f.data,crc=crc32(data);
+    const local=new Uint8Array([0x50,0x4b,0x03,0x04,...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),...u16(0)]);
+    parts.push(local,name,data);
+    central.push(new Uint8Array([0x50,0x4b,0x01,0x02,...u16(20),...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(offset)]),name);
+    offset+=local.length+name.length+data.length;
+  });
+  const cdSize=central.reduce((a,b)=>a+b.length,0);
+  const end=new Uint8Array([0x50,0x4b,0x05,0x06,...u16(0),...u16(0),...u16(files.length),...u16(files.length),...u32(cdSize),...u32(offset),...u16(0)]);
+  return new Blob([...parts,...central,end],{type:'application/zip'});
+}
+function xmlEsc(v){return String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');}
+function colName(i){let s='';i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26);}return s;}
+// rows : [{cells:[...], style:n, height?}] ; styles : 0 normal, 1 titre, 2 sous-titre, 3 en-tête, 4 cellule, 5 nombre
+function buildXlsx(sheetName,rows,colWidths,opts){
+  opts=opts||{};
+  const nCols=Math.max(...rows.map(r=>r.cells.length));
+  const sheetRows=rows.map((r,ri)=>'<row r="'+(ri+1)+'"'+(r.height?' ht="'+r.height+'" customHeight="1"':'')+'>'+r.cells.map((v,ci)=>{
+    const ref=colName(ci)+(ri+1),st=r.styles?r.styles[ci]:r.style||0;
+    if(typeof v==='number'&&isFinite(v))return '<c r="'+ref+'" s="'+st+'"><v>'+v+'</v></c>';
+    return '<c r="'+ref+'" s="'+st+'" t="inlineStr"><is><t xml:space="preserve">'+xmlEsc(v)+'</t></is></c>';
+  }).join('')+'</row>').join('');
+  const merges=(opts.merges||[]).map(m=>'<mergeCell ref="'+m+'"/>').join('');
+  const sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
+    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>'+
+    '<sheetViews><sheetView workbookViewId="0"'+(opts.rtl?' rightToLeft="1"':'')+'>'+(opts.freezeRow?'<pane ySplit="'+opts.freezeRow+'" topLeftCell="A'+(opts.freezeRow+1)+'" activePane="bottomLeft" state="frozen"/>':'')+'</sheetView></sheetViews>'+
+    '<sheetFormatPr defaultRowHeight="16"/>'+
+    '<cols>'+colWidths.slice(0,nCols).map((w,i)=>'<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>').join('')+'</cols>'+
+    '<sheetData>'+sheetRows+'</sheetData>'+(merges?'<mergeCells count="'+opts.merges.length+'">'+merges+'</mergeCells>':'')+
+    '<printOptions horizontalCentered="1"/><pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>'+
+    '<pageSetup paperSize="9" orientation="'+(opts.landscape?'landscape':'portrait')+'" fitToWidth="1" fitToHeight="0"/></worksheet>';
+  const styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+    '<fonts count="4"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="15"/><color rgb="FF1A2A52"/><name val="Calibri"/></font><font><sz val="10"/><color rgb="FF444444"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts>'+
+    '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1A2A52"/><bgColor indexed="64"/></patternFill></fill></fills>'+
+    '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FF808080"/></left><right style="thin"><color rgb="FF808080"/></right><top style="thin"><color rgb="FF808080"/></top><bottom style="thin"><color rgb="FF808080"/></bottom><diagonal/></border></borders>'+
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'+
+    '<cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'+
+    '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'+
+    '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>'+
+    '<xf numFmtId="0" fontId="3" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>'+
+    '<xf numFmtId="49" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>'+
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf></cellXfs>'+
+    '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+  const safeName=xmlEsc(String(sheetName).replace(/[\\\/?*\[\]:]/g,' ').slice(0,31));
+  return zipStore([
+    {name:'[Content_Types].xml',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'},
+    {name:'_rels/.rels',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+    {name:'xl/workbook.xml',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="'+safeName+'" sheetId="1" r:id="rId1"/></sheets>'+(opts.printTitles?'<definedNames><definedName name="_xlnm.Print_Titles" localSheetId="0">\''+safeName+'\'!$'+opts.printTitles+':$'+opts.printTitles+'</definedName></definedNames>':'')+'</workbook>'},
+    {name:'xl/_rels/workbook.xml.rels',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'},
+    {name:'xl/worksheets/sheet1.xml',data:sheet},
+    {name:'xl/styles.xml',data:styles}
+  ]);
+}
+function exportLnExcel(){
+  const table=$('lnDoc')&&$('lnDoc').querySelector('table');
+  if(!table){toast(t('t_no_data'),'wa');return;}
+  const head=[...table.querySelectorAll('thead th')].map(th=>th.textContent.trim());
+  const body=[...table.querySelectorAll('tbody tr')].map(tr=>[...tr.children].map(td=>td.textContent.trim()));
+  const nC=head.length,ar=LANG==='ar',s=S.settings;
+  const title=t('doc_listtitle'),sub=(s.wilaya||'')+', '+t('doc_le')+' '+fd(tod())+' — '+t('doc_effectif')+' : '+body.length+' '+t('workers_u');
+  const company=ar?(s.rsAr||''):(s.rsFr||'');
+  const legal='RC : '+(s.rc||'')+'   NIF : '+(s.nif||'')+'   NIS : '+(s.nis||'')+'   N° CNAS : '+(s.cnasNum||'');
+  const pad=a=>{const r=a.slice();while(r.length<nC)r.push('');return r;};
+  const rows=[
+    {cells:pad([company]),style:2,height:20},
+    {cells:pad([legal]),style:2},
+    {cells:pad(['']),style:0},
+    {cells:pad([title]),style:1,height:24},
+    {cells:pad([sub]),style:2},
+    {cells:pad(['']),style:0},
+    {cells:head,style:3,height:30}
+  ];
+  body.forEach(r=>rows.push({cells:r.map((v,i)=>i===0&&/^\d+$/.test(v)?Number(v):v),styles:r.map((v,i)=>i===0?5:4)}));
+  rows.push({cells:pad(['']),style:0});
+  rows.push({cells:pad([(ar?'حُرّر بـ ':'Fait à ')+(s.wilaya||'')+(ar?' في ':', le ')+fd(tod())]),style:0});
+  rows.push({cells:pad([(ar?'المسيّر : ':'Le Gérant : ')+(s.gerant||'')]),style:0});
+  const last=colName(nC-1);
+  const merges=[1,2,4,5].map(r=>'A'+r+':'+last+r);
+  const widthOf=i=>{const k=head[i]||'';const m=Math.max(k.length,...body.map(r=>String(r[i]||'').length));return Math.min(40,Math.max(5,Math.round(m*1.15)+2));};
+  const widths=head.map((_,i)=>widthOf(i));
+  const blob=buildXlsx(ar?'القائمة الاسمية':'Liste nominative',rows,widths,{rtl:ar,merges,freezeRow:7,printTitles:7,landscape:$('lnOrient')&&$('lnOrient').value==='landscape'||nC>8});
+  deliverFile(new Blob([blob],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),exportBaseName('lnDoc')+'.xlsx');
+}
+/* ----- remise du fichier : ordinateur = téléchargement ; téléphone = fenêtre « Enregistrer / Partager » ----- */
+function downloadBlob(blob,name){
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.rel='noopener';
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+function deliverFile(blob,name){
+  if(!isMobilePrint()){downloadBlob(blob,name);toast('⬇️ '+name);return;}
+  let m=$('expReady');
+  if(!m){m=document.createElement('div');m.id='expReady';m.className='mo';document.body.appendChild(m);}
+  const file=new File([blob],name,{type:blob.type});
+  const canShare=!!(navigator.canShare&&navigator.canShare({files:[file]}));
+  m.innerHTML='<div class="mc" style="max-width:420px;text-align:center"><h3><span>✅ '+L('Fichier prêt','الملف جاهز')+'</span><span class="x" onclick="closeM(\'expReady\')">✕</span></h3>'+
+    '<p style="margin-bottom:14px;overflow-wrap:anywhere">'+esc(name)+'<br><small style="color:var(--mt)">'+(blob.size/1024).toFixed(0)+' Ko</small></p>'+
+    '<div style="display:flex;flex-direction:column;gap:10px">'+
+    (canShare?'<button class="btp solid" style="padding:12px;font-size:15px" id="expShareBtn">📤 '+L('Partager / Enregistrer dans Fichiers','مشاركة / حفظ في الملفات')+'</button>':'')+
+    '<button class="btp'+(canShare?'':' solid')+'" style="padding:12px;font-size:15px" id="expDlBtn">⬇️ '+L('Télécharger','تحميل')+'</button>'+
+    '<button class="btp gray" style="padding:10px" id="expOpenBtn">👁️ '+L('Ouvrir','فتح')+'</button></div></div>';
+  const sh=$('expShareBtn');if(sh)sh.onclick=async()=>{try{await navigator.share({files:[file],title:name});closeM('expReady');}catch(e){if(e&&e.name!=='AbortError')downloadBlob(blob,name);}};
+  $('expDlBtn').onclick=()=>{downloadBlob(blob,name);closeM('expReady');};
+  $('expOpenBtn').onclick=()=>{const url=URL.createObjectURL(blob);window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),600000);closeM('expReady');};
+  oM('expReady');
+}
+
 /* ---------- PRINT ----------
    Ordinateur : impression directe de la page.
    Téléphone / tablette (et application ouverte dans le tableau de bord) : window.print() ne fonctionne pas
@@ -2480,6 +2662,7 @@ function buildPrintHtml(id){
   const el=$(id);if(!el)return '';
   const clone=el.cloneNode(true);delete clone.dataset.noprint;
   clone.querySelectorAll('[contenteditable]').forEach(x=>x.removeAttribute('contenteditable'));
+  clone.querySelectorAll('.lned,.lnpick').forEach(x=>{x.classList.remove('lned','lnpick');x.removeAttribute('title');});
   clone.querySelectorAll('[onblur],[onclick],[ondblclick],[onchange]').forEach(x=>['onblur','onclick','ondblclick','onchange'].forEach(a=>x.removeAttribute(a)));
   const css=[...document.querySelectorAll('style')].filter(x=>x.id!=='ptmp').map(x=>x.textContent).join('\n');
   const ar=LANG==='ar',land=id==='lnDoc'&&$('lnOrient')&&$('lnOrient').value==='landscape';
