@@ -490,7 +490,7 @@ body.auth-locked{overflow:hidden}
           <div class="fl"><label data-t="cd_alert_days">Alerte avant expiration (jours)</label><input type="number" id="cdAlertDays" min="1" max="120" onchange="setCnasAlertDays(this.value)"></div>
           <div class="fl"><label data-t="ln_filter">Filtre</label><select id="cdFilter" onchange="renderCnasDocs()"><option value="ACTIF" data-t="f_active">Actifs</option><option value="ALL" data-t="f_all">Tous</option><option value="ALERT" data-t="cd_f_alert">À renouveler / manquantes</option></select></div>
         </div>
-        <p class="hint" style="opacity:.7">Version : 2026-10-20 · 19h00</p>
+        <p class="hint" style="opacity:.7">Version : 2026-10-20 · 19h15</p>
         <p class="hint" data-t="cd_hint">Le PDF original est conservé sans perte de qualité. Le travailleur est reconnu par son N° SS ; s’il n’existe pas, il est ajouté automatiquement avec les informations de l’attestation. La validité est calculée automatiquement (3 mois après la date d’établissement) et peut être corrigée.</p>
       </div>
       <div class="card" id="cdCompany"></div>
@@ -1493,6 +1493,7 @@ function renderLN(){
    '<tbody>'+body.replace(/<td/g,'<td style="border:1px solid #999;padding:'+(cols.length>9&&!land?'3px 3px':'4px 6px')+';color:#000"').replace(/<tr>/g,'<tr style="background:#fff">')+'</tbody></table>'+
    docFooter(true);
   $('lnDoc').style.width=land?'297mm':'210mm';
+  $('lnDoc').style.minHeight=land?'210mm':'';
 }
 function lnEdit(td){
   const w=S.workers.find(x=>x.id===td.dataset.id);if(!w)return;const k=td.dataset.k,v=td.textContent.trim();
@@ -2502,23 +2503,33 @@ async function exportDocPdf(id){
     // html2canvas dessine lettre par lettre dès qu'il y a un espacement de lettres : cela casse l'écriture arabe.
     [clone,...clone.querySelectorAll('*')].forEach(e=>{e.style.letterSpacing='0';e.style.wordSpacing='normal';});
     clone.querySelectorAll('.lned,.lnpick').forEach(x=>{x.classList.remove('lned','lnpick');x.removeAttribute('title');});
-    clone.classList.add('exp-doc');clone.style.width=wPx+'px';clone.style.minHeight=Math.round(pageHmm*pxPerMm)+'px';clone.style.boxShadow='none';clone.style.margin='0';
+    clone.classList.add('exp-doc');clone.style.width=wPx+'px';clone.style.minHeight=Math.floor(pageHmm*pxPerMm-2)+'px';clone.style.boxShadow='none';clone.style.margin='0';
     host.appendChild(clone);document.body.appendChild(host);
     const scale=2.5;
     const canvas=await html2canvas(clone,{scale,backgroundColor:'#ffffff',useCORS:true,logging:false,windowWidth:wPx+40,scrollX:0,scrollY:0});
     const pdf=await PDFLib.PDFDocument.create();
     const ptW=pageWmm/25.4*72,ptH=pageHmm/25.4*72;
     const sliceH=Math.round(canvas.width*pageHmm/pageWmm);
-    const pages=Math.max(1,Math.ceil((canvas.height-4)/sliceH));
-    for(let i=0;i<pages;i++){
-      const h=Math.min(sliceH,canvas.height-i*sliceH);
-      const c=document.createElement('canvas');c.width=canvas.width;c.height=sliceH;
-      const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);
-      ctx.drawImage(canvas,0,i*sliceH,canvas.width,h,0,0,canvas.width,h);
-      const jpg=await new Promise(res=>c.toBlob(res,'image/jpeg',0.93));
-      const img=await pdf.embedJpg(new Uint8Array(await jpg.arrayBuffer()));
-      const page=pdf.addPage([ptW,ptH]);page.drawImage(img,{x:0,y:0,width:ptW,height:ptH});
-      c.width=c.height=0;
+    const ratio=canvas.height/sliceH;
+    if(ratio<=2){
+      // Tient sur UNE page : réduction proportionnelle si nécessaire, centrée horizontalement.
+      const jpgAll=await new Promise(res=>canvas.toBlob(res,'image/jpeg',0.93));
+      const img=await pdf.embedJpg(new Uint8Array(await jpgAll.arrayBuffer()));
+      const page=pdf.addPage([ptW,ptH]);
+      if(ratio<=1.01)page.drawImage(img,{x:0,y:ptH-ptW*canvas.height/canvas.width,width:ptW,height:ptW*canvas.height/canvas.width});
+      else{const h=ptH,w=ptH*canvas.width/canvas.height;page.drawImage(img,{x:(ptW-w)/2,y:0,width:w,height:h});}
+    }else{
+      const pages=Math.ceil((canvas.height-8)/sliceH);
+      for(let i=0;i<pages;i++){
+        const h=Math.min(sliceH,canvas.height-i*sliceH);
+        const c=document.createElement('canvas');c.width=canvas.width;c.height=sliceH;
+        const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);
+        ctx.drawImage(canvas,0,i*sliceH,canvas.width,h,0,0,canvas.width,h);
+        const jpg=await new Promise(res=>c.toBlob(res,'image/jpeg',0.93));
+        const img=await pdf.embedJpg(new Uint8Array(await jpg.arrayBuffer()));
+        const page=pdf.addPage([ptW,ptH]);page.drawImage(img,{x:0,y:0,width:ptW,height:ptH});
+        c.width=c.height=0;
+      }
     }
     canvas.width=canvas.height=0;
     pdf.setTitle(exportBaseName(id));pdf.setAuthor(S.settings.gerant||'EGTPH');pdf.setCreator('EGTPH Gestion RH');
@@ -2654,6 +2665,15 @@ function isMobilePrint(){
   try{if(navigator.standalone===true||window.matchMedia('(display-mode: standalone)').matches)return true;}catch(e){}
   return false;
 }
+/* Ajuste le document à UNE page à l'impression (réduction automatique si le contenu dépasse). */
+function printPageHmm(id){return (id==='lnDoc'&&$('lnOrient')&&$('lnOrient').value==='landscape')?210:297;}
+const FIT_SCRIPT=function(sel,pageHmm){
+  var d=document.querySelector(sel);if(!d)return;
+  var ph=pageHmm*96/25.4,h=d.scrollHeight;
+  var old=document.getElementById('pfit');if(old)old.remove();
+  if(h>ph*1.01){var r=Math.max(0.5,(ph-6)/h);var st=document.createElement('style');st.id='pfit';
+    st.textContent='@media print{'+sel+'{zoom:'+r.toFixed(4)+';margin:0 auto!important;min-height:0!important}}';document.head.appendChild(st);}
+}.toString();
 function printPageRule(id){
   if(id==='lnDoc'&&$('lnOrient')&&$('lnOrient').value==='landscape')return '@page{size:A4 landscape;margin:0}@media print{html,body{width:297mm!important}#lnDoc{width:297mm!important;min-height:0!important}}';
   return '';
@@ -2680,7 +2700,8 @@ function buildPrintHtml(id){
     '<body class="pw"><div class="pw-bar"><button class="pw-print" onclick="window.print()">🖨️ '+(ar?'طباعة':'Imprimer')+'</button>'+
     '<button class="pw-close" onclick="window.close()">✖ '+(ar?'إغلاق':'Fermer')+'</button><small>'+hint+'</small></div>'+
     '<div class="pw-wrap">'+clone.outerHTML+'</div>'+
-    '<scr'+'ipt>window.addEventListener("load",function(){var go=function(){setTimeout(function(){try{window.print();}catch(e){}},500);};'+
+    '<scr'+'ipt>var __fit='+FIT_SCRIPT+';window.addEventListener("beforeprint",function(){__fit(".pw-wrap .doc",'+printPageHmm(id)+');});'+
+    'window.addEventListener("load",function(){var go=function(){__fit(".pw-wrap .doc",'+printPageHmm(id)+');setTimeout(function(){try{window.print();}catch(e){}},500);};'+
     'if(document.fonts&&document.fonts.ready){document.fonts.ready.then(go,go);}else{go();}});</scr'+'ipt></body></html>';
 }
 function openPrintWindow(id){
@@ -2715,8 +2736,9 @@ function printArea(id){
   const css=document.createElement('style');css.id='ptmp';
   css.textContent=printPageRule(id)+'@media print{.printArea[data-noprint]{display:none!important}}';
   document.head.appendChild(css);
+  try{(new Function('return '+FIT_SCRIPT)())('#'+id,printPageHmm(id));}catch(e){console.warn(e);}
   let cleaned=false;
-  const cleanup=()=>{if(cleaned)return;cleaned=true;const e=$('ptmp');if(e)e.remove();document.querySelectorAll('.printArea').forEach(e=>delete e.dataset.noprint);};
+  const cleanup=()=>{if(cleaned)return;cleaned=true;const e=$('ptmp');if(e)e.remove();const f=$('pfit');if(f)f.remove();document.querySelectorAll('.printArea').forEach(e=>delete e.dataset.noprint);};
   window.addEventListener('afterprint',cleanup,{once:true});
   window.print();
   afterPrintActions(id);
