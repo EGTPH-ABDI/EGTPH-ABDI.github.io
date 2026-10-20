@@ -207,6 +207,9 @@ body.auth-locked{overflow:hidden}
 .cd-cloud{font-size:12px;cursor:help}
 #cdDrop{text-align:center;padding:18px;cursor:pointer;margin-top:12px}
 .cd-tools{display:flex;gap:8px;flex-wrap:wrap}
+.st-tg{border:0;border-radius:20px;padding:6px 13px;font:700 11.5px 'Cairo',sans-serif;cursor:pointer;white-space:nowrap;color:#fff;transition:background .15s,transform .1s;min-width:82px}
+.st-tg.on{background:#27ae60}.st-tg.off{background:#e74c3c}
+.st-tg:hover{filter:brightness(1.1)}.st-tg:active{transform:scale(.95)}
 @media(max-width:760px){
   #cdTbl{min-width:0}#cdTbl thead tr{display:flex;align-items:center;gap:8px}#cdTbl thead th{display:none}#cdTbl thead th:first-child{display:block;background:none;border:0}
   #cdTbl thead th:first-child::after{content:attr(title);font-weight:400;margin-inline-start:6px;color:var(--mt)}
@@ -479,7 +482,7 @@ body.auth-locked{overflow:hidden}
           <div class="fl"><label data-t="cd_alert_days">Alerte avant expiration (jours)</label><input type="number" id="cdAlertDays" min="1" max="120" onchange="setCnasAlertDays(this.value)"></div>
           <div class="fl"><label data-t="ln_filter">Filtre</label><select id="cdFilter" onchange="renderCnasDocs()"><option value="ACTIF" data-t="f_active">Actifs</option><option value="ALL" data-t="f_all">Tous</option><option value="ALERT" data-t="cd_f_alert">À renouveler / manquantes</option></select></div>
         </div>
-        <p class="hint" data-t="cd_hint">Le PDF original est conservé sans perte de qualité. Le travailleur est reconnu par son N° SS ; la validité est calculée automatiquement (3 mois après la date d’établissement) et peut être corrigée.</p>
+        <p class="hint" data-t="cd_hint">Le PDF original est conservé sans perte de qualité. Le travailleur est reconnu par son N° SS ; s’il n’existe pas, il est ajouté automatiquement avec les informations de l’attestation. La validité est calculée automatiquement (3 mois après la date d’établissement) et peut être corrigée.</p>
       </div>
       <div class="card" id="cdCompany"></div>
       <div class="card" id="cdUnmatched" hidden></div>
@@ -713,7 +716,7 @@ const I18N = {
  fr:{
   brand_sub:"Gestion RH", nav_main:"Principal", nav_db:"Tableau de Bord", nav_emp:"Personnel",
   nav_wk:"Travailleurs", nav_ln:"Liste Nominative", nav_im:"Import CNAS", nav_cg:"Congés / Absences",
-  nav_doc:"Documents", nav_pay:"Bulletin de Paie", nav_att:"Attestations", nav_cnasdoc:"Attestations CNAS", cd_title:"🗂️ Attestations CNAS (PDF officiels)", cd_import:"📤 Importer des PDF", cd_print_sel:"🖨️ Imprimer la sélection", cd_sync_status:"🔁 Actif / inactif selon les attestations", cd_drop:"Touchez ou glissez ici les PDF « AF_… » (attestations d’affiliation) et « MAJ_… » (mise à jour) — plusieurs fichiers à la fois.", cd_alert_days:"Alerte avant expiration (jours)", cd_f_alert:"À renouveler / manquantes", cd_hint:"Le PDF original est conservé sans perte de qualité et partagé entre vos appareils. Le travailleur est reconnu par son N° SS ; la validité est calculée automatiquement (3 mois après la date d’établissement) et reste modifiable.", nav_cnt:"Contrats",
+  nav_doc:"Documents", nav_pay:"Bulletin de Paie", nav_att:"Attestations", nav_cnasdoc:"Attestations CNAS", cd_title:"🗂️ Attestations CNAS (PDF officiels)", cd_import:"📤 Importer des PDF", cd_print_sel:"🖨️ Imprimer la sélection", cd_sync_status:"🔁 Actif / inactif selon les attestations", cd_drop:"Touchez ou glissez ici les PDF « AF_… » (attestations d’affiliation) et « MAJ_… » (mise à jour) — plusieurs fichiers à la fois.", cd_alert_days:"Alerte avant expiration (jours)", cd_f_alert:"À renouveler / manquantes", cd_hint:"Le PDF original est conservé sans perte de qualité et partagé entre vos appareils. Le travailleur est reconnu par son N° SS ; s’il n’existe pas, il est ajouté automatiquement avec les informations de l’attestation. La validité est calculée automatiquement (3 mois après la date d’établissement) et reste modifiable.", nav_cnt:"Contrats",
   nav_track:"Suivi", nav_av:"Avances / Dettes", nav_st:"Paramètres",
   btn_save:"💾 Sauvegarder", btn_print:"🖨️ Imprimer", btn_cancel:"Annuler", btn_save_w:"💾 Enregistrer",
   btn_save_apply:"💾 Enregistrer", btn_save_:"💾",
@@ -815,7 +818,7 @@ const I18N = {
  ar:{
   brand_sub:"تسيير الموارد البشرية", nav_main:"الرئيسية", nav_db:"لوحة القيادة", nav_emp:"المستخدمون",
   nav_wk:"العمّال", nav_ln:"القائمة الإسمية", nav_im:"استيراد CNAS", nav_cg:"العطل / الغيابات",
-  nav_doc:"الوثائق", nav_pay:"كشف الراتب", nav_att:"الشهادات", nav_cnasdoc:"شهادات CNAS", cd_title:"🗂️ شهادات CNAS (ملفات PDF الرسمية)", cd_import:"📤 استيراد ملفات PDF", cd_print_sel:"🖨️ طباعة المحدد", cd_sync_status:"🔁 نشط / غير نشط حسب الشهادات", cd_drop:"اضغط هنا أو اسحب ملفات «AF_…» (شهادات الانتساب) و«MAJ_…» (شهادة أداء المستحقات) — يمكن اختيار عدة ملفات مرة واحدة.", cd_alert_days:"التنبيه قبل انتهاء الصلاحية (بالأيام)", cd_f_alert:"للتجديد / الناقصة", cd_hint:"يُحفظ ملف PDF الأصلي بدون أي فقدان في الجودة ويُشارك بين أجهزتك. يُتعرّف على العامل من رقم الضمان الاجتماعي، وتُحسب الصلاحية تلقائياً (3 أشهر من تاريخ الإصدار) ويمكن تعديلها.", nav_cnt:"العقود",
+  nav_doc:"الوثائق", nav_pay:"كشف الراتب", nav_att:"الشهادات", nav_cnasdoc:"شهادات CNAS", cd_title:"🗂️ شهادات CNAS (ملفات PDF الرسمية)", cd_import:"📤 استيراد ملفات PDF", cd_print_sel:"🖨️ طباعة المحدد", cd_sync_status:"🔁 نشط / غير نشط حسب الشهادات", cd_drop:"اضغط هنا أو اسحب ملفات «AF_…» (شهادات الانتساب) و«MAJ_…» (شهادة أداء المستحقات) — يمكن اختيار عدة ملفات مرة واحدة.", cd_alert_days:"التنبيه قبل انتهاء الصلاحية (بالأيام)", cd_f_alert:"للتجديد / الناقصة", cd_hint:"يُحفظ ملف PDF الأصلي بدون أي فقدان في الجودة ويُشارك بين أجهزتك. يُتعرّف على العامل من رقم الضمان الاجتماعي، وإن لم يكن موجوداً يُضاف تلقائياً إلى قائمة العمال بكل معلومات الشهادة. وتُحسب الصلاحية تلقائياً (3 أشهر من تاريخ الإصدار) ويمكن تعديلها.", nav_cnt:"العقود",
   nav_track:"المتابعة", nav_av:"التسبيقات / الديون", nav_st:"الإعدادات",
   btn_save:"💾 حفظ", btn_print:"🖨️ طباعة", btn_cancel:"إلغاء", btn_save_w:"💾 حفظ",
   btn_save_apply:"💾 حفظ", btn_save_:"💾",
@@ -1363,7 +1366,7 @@ function renderDB(){
   ].map(c=>'<div class="sc"><div class="ico">'+c[0]+'</div><div class="num">'+c[1]+'</div><div class="lab">'+c[2]+'</div></div>').join('');
   const rows=S.workers.slice(-8).reverse();
   $('dbTbl').innerHTML='<thead><tr><th>'+t('col_no')+'</th><th>'+t('f_nom')+'</th><th>'+t('f_prenom')+'</th><th>'+t('f_poste')+'</th><th>'+t('col_exp')+'</th><th>'+t('f_status')+'</th></tr></thead><tbody>'+
-   (rows.length?rows.map(w=>'<tr><td>'+w.rk+'</td><td>'+esc(w.N)+'</td><td>'+esc(w.P)+'</td><td>'+esc(posteLabel(w))+'</td><td>'+esc(calcExp(w))+'</td><td><span class="badge '+(w.st==='ACTIF'?'ok">'+t('s_active'):'off">'+t('s_inactive'))+'</span></td></tr>').join(''):'<tr><td colspan="6" style="text-align:center;color:var(--mt)">'+t('t_no_data')+'</td></tr>')+'</tbody>';
+   (rows.length?rows.map(w=>'<tr><td>'+w.rk+'</td><td>'+esc(w.N)+'</td><td>'+esc(w.P)+'</td><td>'+esc(posteLabel(w))+'</td><td>'+esc(calcExp(w))+'</td><td>'+stBtn(w)+'</td></tr>').join(''):'<tr><td colspan="6" style="text-align:center;color:var(--mt)">'+t('t_no_data')+'</td></tr>')+'</tbody>';
 }
 
 /* ---------- POSTE / DIPLOME selects ---------- */
@@ -1380,7 +1383,7 @@ function onExpModeChange(){$('wEXVbox').style.display=$('wEXM').value==='manuel'
 let editW=null;
 function renderWk(){
   $('wkTbl').innerHTML='<thead><tr><th>'+t('col_no')+'</th><th>'+t('f_nom')+'</th><th>'+t('f_prenom')+'</th><th>'+t('col_naissance')+'</th><th>'+t('f_et')+'</th><th>'+t('f_poste')+'</th><th>'+t('f_diplome')+'</th><th>N° SS</th><th>'+t('f_af')+'</th><th>'+t('col_exp')+'</th><th>'+t('f_status')+'</th><th>'+t('actions')+'</th></tr></thead><tbody>'+
-   (S.workers.length?S.workers.map(w=>'<tr><td>'+w.rk+'</td><td><b>'+esc(w.N)+'</b></td><td>'+esc(w.P)+'</td><td>'+esc(fd(w.dd))+(w.li?'<br><span style="color:var(--mt)">'+esc(w.li)+'</span>':'')+'</td><td>'+esc(fd(w.et))+'</td><td>'+esc(posteLabel(w))+'</td><td>'+esc(diplomeLabel(w)||'–')+'</td><td>'+esc(w.ss||'')+'</td><td>'+esc(w.af||'')+'</td><td>'+esc(calcExp(w))+'</td><td><span class="badge '+(w.st==='ACTIF'?'ok">'+t('s_active'):'off">'+t('s_inactive'))+'</span></td><td><div class="act"><button class="ib" onclick="editWorker(\''+w.id+'\')">✏️</button><button class="ib del" onclick="delWorker(\''+w.id+'\')">🗑️</button></div></td></tr>').join(''):'<tr><td colspan="12" style="text-align:center;color:var(--mt)">'+t('t_no_data')+'</td></tr>')+'</tbody>';
+   (S.workers.length?S.workers.map(w=>'<tr><td>'+w.rk+'</td><td><b>'+esc(w.N)+'</b></td><td>'+esc(w.P)+'</td><td>'+esc(fd(w.dd))+(w.li?'<br><span style="color:var(--mt)">'+esc(w.li)+'</span>':'')+'</td><td>'+esc(fd(w.et))+'</td><td>'+esc(posteLabel(w))+'</td><td>'+esc(diplomeLabel(w)||'–')+'</td><td>'+esc(w.ss||'')+'</td><td>'+esc(w.af||'')+'</td><td>'+esc(calcExp(w))+'</td><td>'+stBtn(w)+'</td><td><div class="act"><button class="ib" onclick="editWorker(\''+w.id+'\')">✏️</button><button class="ib del" onclick="delWorker(\''+w.id+'\')">🗑️</button></div></td></tr>').join(''):'<tr><td colspan="12" style="text-align:center;color:var(--mt)">'+t('t_no_data')+'</td></tr>')+'</tbody>';
 }
 function openWorker(){
   editW=null;$('mWkTit').textContent=t('wk_add');
@@ -1985,6 +1988,9 @@ function parseCnasItems(items,fileName){
     meta.nom=pdfValueAfter(items,/^Nom\s*:/,/^[A-Z][A-Z' .-]*$/);
     meta.prenom=pdfValueAfter(items,/^Pr[ée]nom\s*:/,/^[A-Z][A-Z' .-]*$/);
     meta.birth=dmy2iso(pdfValueAfter(items,/Naissance/i,RE_DATE));
+    {const bl=pdfValueAfter(items,/Naissance/i,/\d{2}\/\d{2}\/\d{4}\s*\/\s*[A-Z0-9].*$/);const m=/\/\s*([^/]+)$/.exec(bl);meta.lieu=m?m[1].trim():'';}
+    meta.acte=pdfValueAfter(items,/^N°\s*Acte/i,/^\d{2,}$/);
+    {const ad=pdfValueAfter(items,/^Adresse\s*:/i,/^[A-Z0-9][A-Z0-9 .,'°\/-]*$/);meta.adresse=ad?ad.split(' / ')[0].trim():'';}
     meta.ss=pdfValueAfter(items,/^Sous le num/,/^\d{10}\s*\/\s*\d{2}$/)||((/\b(\d{10}\/\d{2})\b/.exec(all))||[])[1]||'';
     meta.qualite=pdfValueAfter(items,/^En qualit/i,/^[A-Z]+$/);
     meta.since=dmy2iso(pdfValueAfter(items,/^Depuis le/i,RE_DATE));
@@ -2024,7 +2030,7 @@ async function importCnasFiles(fileList,opts){
   opts=opts||{};
   const files=[...(fileList||[])].filter(f=>/pdf/i.test(f.type||'')||/\.pdf$/i.test(f.name||''));
   if(!files.length){toast(L('Choisissez des fichiers PDF.','اختر ملفات PDF.'),'wa');return;}
-  const prog=$('cdProgress');let saved=0,older=0,errors=0,unknown=0;const newUnmatched=[];
+  const prog=$('cdProgress');let saved=0,older=0,errors=0,unknown=0,filled=0;const newUnmatched=[],created=[],stChanged=[];
   for(let i=0;i<files.length;i++){
     const f=files[i];if(prog)prog.textContent='⏳ '+(i+1)+' / '+files.length+' — '+f.name;
     try{
@@ -2036,14 +2042,31 @@ async function importCnasFiles(fileList,opts){
         const w=S.workers.find(x=>x.id===opts.targetWid);
         if(w&&ssDigits(w.ss)&&ssDigits(w.ss)!==ssDigits(meta.ss)&&!confirm(L('Le N° SS de ce PDF ('+meta.ss+') ne correspond pas à '+w.N+' '+w.P+'. Continuer ?','رقم الضمان في هذا الملف ('+meta.ss+') لا يطابق '+w.N+' '+w.P+'. هل تواصل؟'))){continue;}
       }
+      if(!wid&&meta.kind==='af'){
+        wid=matchWorkerByName(meta);
+        if(!wid&&meta.nom&&meta.prenom&&ssDigits(meta.ss).length===10){const nw=workerFromCnas(meta);S.workers.push(nw);wid=nw.id;created.push(nw.N+' '+nw.P);}
+      }
+      if(wid&&meta.kind==='af'){const w=S.workers.find(x=>x.id===wid);if(w&&fillWorkerFromCnas(w,meta))filled++;}
       if(!wid){newUnmatched.push({uid:makeId('u'),file:f,meta});continue;}
       const r=await storeCnasDoc(wid,meta.kind,f,meta,!!opts.targetWid);
-      if(r==='older')older++;else saved++;
+      if(r==='older')older++;else{
+        saved++;
+        // Règle : seule une attestation portant une date de sortie (« Au : … ») rend le travailleur inactif.
+        // Sans date de sortie, le statut existant n'est pas modifié (le bouton Actif/Inactif reste au choix du gérant).
+        if(meta.kind==='af'&&meta.source==='pdf'&&meta.until){
+          const w=S.workers.find(x=>x.id===wid);
+          if(w&&w.st!=='INACTIF'){w.st='INACTIF';stChanged.push(w.N+' '+w.P+' → '+t('s_inactive')+' ('+L('sortie le ','خروج في ')+fd(meta.until)+')');}
+        }
+      }
     }catch(e){console.error(e);errors++;}
   }
   cnasUnmatched=cnasUnmatched.concat(newUnmatched);
   if(prog)prog.textContent='';
+  if(created.length||filled||stChanged.length){sortW();saveAll(true);}
   const parts=[L(saved+' enregistrée(s)',saved+' شهادة محفوظة')];
+  if(created.length)parts.push(L(created.length+' travailleur(s) ajouté(s) : '+created.join(', '),created.length+' عامل جديد أُضيف: '+created.join('، ')));
+  if(stChanged.length)parts.push(L('Statut mis à jour : ','تم تغيير الحالة: ')+stChanged.join(LANG==='ar'?'، ':', '));
+  if(filled)parts.push(L(filled+' fiche(s) complétée(s)',filled+' ملف عامل تم إكماله'));
   if(newUnmatched.length)parts.push(L(newUnmatched.length+' sans travailleur correspondant',newUnmatched.length+' بدون عامل مطابق'));
   if(older)parts.push(L(older+' plus ancienne(s) ignorée(s)',older+' أقدم من المحفوظة (تم تجاهلها)'));
   if(unknown)parts.push(L(unknown+' non reconnue(s)',unknown+' غير معروفة'));
@@ -2146,7 +2169,7 @@ function renderCnasDocs(){
     (ws.length?ws.map(w=>{
       const id=docId(w.id,'af'),r=cnasIndex[id],s=cnasStatus(r,w),m=(r&&r.meta)||{};
       const dl=k=>' data-l="'+esc(k)+'"';
-      return '<tr class="'+(r?'has':'no')+'"><td class="c-sel">'+(r?'<input type="checkbox" class="cdSel" value="'+id+'">':'')+'</td><td class="c-rk">'+w.rk+'</td><td class="c-nm"><b>'+esc(w.N)+'</b> '+esc(w.P)+(w.st!=='ACTIF'?' <span class="badge off">'+t('s_inactive')+'</span>':'')+'</td><td class="c-ss"'+dl(L('N° SS','رقم الضمان'))+'>'+esc(w.ss||'')+'</td>'+
+      return '<tr class="'+(r?'has':'no')+'"><td class="c-sel">'+(r?'<input type="checkbox" class="cdSel" value="'+id+'">':'')+'</td><td class="c-rk">'+w.rk+'</td><td class="c-nm"><b>'+esc(w.N)+'</b> '+esc(w.P)+' '+stBtn(w)+'</td><td class="c-ss"'+dl(L('N° SS','رقم الضمان'))+'>'+esc(w.ss||'')+'</td>'+
         '<td class="c-x"'+dl(L('N° attestation','رقم الشهادة'))+'>'+(r?esc(m.num||'—')+' '+cnasCloudTag(r):'')+'</td>'+
         '<td class="c-x"'+dl(L('Établie le','تاريخ الإصدار'))+'>'+(r?'<input type="date" class="cd-date" value="'+esc(m.issued||'')+'" onchange="editCnasDate(\''+id+'\',\'issued\',this.value)">':'')+'</td>'+
         '<td class="c-x"'+dl(L('Valable jusqu’au','صالحة إلى'))+'>'+(r?'<input type="date" class="cd-date" value="'+esc(m.validUntil||'')+'" onchange="editCnasDate(\''+id+'\',\'validUntil\',this.value)">':'')+'</td>'+
@@ -2275,6 +2298,36 @@ async function cnasCloudSync(remoteFiles){
   }
 }
 setInterval(()=>{if(cnasCloudFailed)cnasCloudSync();},90000);
+/* ----- bouton Actif / Inactif (un clic) ----- */
+function stBtn(w){
+  const on=w.st==='ACTIF';
+  return '<button type="button" class="st-tg '+(on?'on':'off')+'" title="'+esc(L('Cliquer pour passer en '+(on?'inactif':'actif'),'اضغط للتحويل إلى '+(on?'غير نشط':'نشط')))+'" onclick="event.stopPropagation();toggleWorkerStatus(\''+w.id+'\')">'+(on?'● '+t('s_active'):'○ '+t('s_inactive'))+'</button>';
+}
+function toggleWorkerStatus(id){
+  const w=S.workers.find(x=>x.id===id);if(!w)return;
+  w.st=w.st==='ACTIF'?'INACTIF':'ACTIF';saveAll(true);
+  const cur=document.querySelector('.pg.on'),pg=cur?cur.id.replace('pg-',''):'';
+  if(pg==='wk')renderWk();else if(pg==='db')renderDB();else if(pg==='cnasdoc')renderCnasDocs();else if(pg==='ln')renderLN();
+  updateCnasAlertsUi();
+  toast((w.st==='ACTIF'?'✅ ':'⛔ ')+w.N+' '+w.P+' — '+(w.st==='ACTIF'?t('s_active'):t('s_inactive')),w.st==='ACTIF'?'ok':'wa');
+}
+/* ----- création / complément du travailleur depuis l'attestation d'affiliation ----- */
+function matchWorkerByName(meta){
+  const N=String(meta.nom||'').trim().toUpperCase(),P=String(meta.prenom||'').trim().toUpperCase();if(!N||!P)return null;
+  const w=S.workers.find(x=>String(x.N||'').trim().toUpperCase()===N&&String(x.P||'').trim().toUpperCase()===P&&(!x.dd||!meta.birth||x.dd===meta.birth));
+  return w?w.id:null;
+}
+function workerFromCnas(meta){
+  return {id:makeId('w'),N:String(meta.nom||'').toUpperCase(),P:String(meta.prenom||'').toUpperCase(),dd:meta.birth||'',li:String(meta.lieu||'').toUpperCase(),
+    ss:normalizeSS(meta.ss||''),ac:meta.acte||'',et:meta.since||'',fn:'manoeuvre',fnx:'',dp:'sans',dpx:'',exm:'auto',exv:'',
+    si:'',en:0,sl:S.settings.salBase,st:meta.until?'INACTIF':'ACTIF',af:S.settings.wilaya,ad:meta.adresse||'',
+    nt:'Créé depuis l’attestation CNAS'+(meta.num?' N° '+meta.num:'')+(meta.issued?' du '+fd(meta.issued):'')+(meta.until?' — affiliation terminée le '+fd(meta.until):'')};
+}
+// Complète uniquement les champs vides : ne remplace jamais une information déjà saisie.
+function fillWorkerFromCnas(w,meta){
+  const map={dd:meta.birth,li:meta.lieu&&String(meta.lieu).toUpperCase(),ss:meta.ss&&normalizeSS(meta.ss),ac:meta.acte,et:meta.since,ad:meta.adresse};
+  let n=0;Object.keys(map).forEach(k=>{if(map[k]&&!String(w[k]||'').trim()){w[k]=map[k];n++;}});return n;
+}
 /* Correction demandée le 20/10/2026 : seuls les 12 travailleurs ayant une attestation d'affiliation restent actifs. */
 const FIX_INACTIF_202610=['9201800345','8430780013','8437110022','8502880171']; // ELHADJ, GACEM, BENYAMINA, MAACHOU
 function applyOneTimeFixes(){
