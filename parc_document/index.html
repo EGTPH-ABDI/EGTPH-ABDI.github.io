@@ -286,7 +286,7 @@ const SEED={
 
 /* ===== i18n ===== */
 const T={
- fr:{soumission:"Soumission",materiel:"Matériel",parc:"Parc",design:"Design document",params:"Paramètres",
+ fr:{memoire:"Mémoire technique",soumission:"Soumission",materiel:"Matériel",parc:"Parc",design:"Design document",params:"Paramètres",
   prep:"Préparer une liste pour Soumission",docTitle:"Titre du document",objet:"Objet / Projet",mo:"Maître d'ouvrage",date:"Date du document",ville:"Ville",
   display:"Affichage :",cols:"Colonnes :",headerRadp:"En-tête RADP",logoName:"Logo + nom",projBlock:"Bloc projet",refsPv:"Réf. P.V",signDate:"Signature + date",groupCat:"Grouper par catégorie",
   matricule:"Matricule",facture:"Facture",annee:"Année",etat:"État",observation:"Observation",
@@ -304,7 +304,7 @@ const T={
   desFont:"Police",desSize:"Taille du texte",desBold:"Texte en gras",desAccent:"Couleur d'accent",preview:"Aperçu",resetDes:"Réinitialiser le design",
   fClassic:"Classique",fModern:"Moderne",fFormal:"Formel",szS:"Compact",szM:"Normal",szL:"Grand",szXL:"Très grand",szXXL:"Extra",pvTitle:"Liste des Moyens Matériels",pvPara:"Pelle Mécanique S/Chenilles HYUNDAI — bon état et opérationnel.",
   saved:"Enregistré ✓",imported:"Importé ✓",badFile:"Fichier invalide.",pickOne:"Sélectionnez au moins un équipement."},
- ar:{soumission:"المناقصة",materiel:"العتاد",parc:"الحظيرة",design:"تصميم الوثيقة",params:"الإعدادات",
+ ar:{memoire:"المذكرة التقنية",soumission:"المناقصة",materiel:"العتاد",parc:"الحظيرة",design:"تصميم الوثيقة",params:"الإعدادات",
   prep:"تحضير قائمة للمناقصة",docTitle:"عنوان الوثيقة",objet:"الموضوع / المشروع",mo:"صاحب المشروع",date:"تاريخ الوثيقة",ville:"المدينة",
   display:"العرض :",cols:"الأعمدة :",headerRadp:"ترويسة الجمهورية",logoName:"الشعار + الاسم",projBlock:"خانة المشروع",refsPv:"مرجع المحضر",signDate:"الإمضاء + التاريخ",groupCat:"تجميع حسب الفئة",
   matricule:"رقم التسجيل",facture:"الفاتورة",annee:"السنة",etat:"الحالة",observation:"ملاحظة",
@@ -989,7 +989,7 @@ function _documentJpeg(img,max,quality){let w=img.naturalWidth||img.width,h=img.
 function processDocumentImageRaw(file,cb){const r=new FileReader();r.onerror=()=>cb(null);
   r.onload=()=>{const img=new Image();img.onerror=()=>cb(null);
     img.onload=()=>{try{cb({store:_documentJpeg(img,2200,0.90),ocr:_documentJpeg(img,3200,0.96)});}catch(e){cb(null);}};img.src=r.result;};r.readAsDataURL(file);}
-const ICONS={subm:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
+const ICONS={memo:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h12l4 4v12H4z"/><path d="M8 10h8M8 14h8M8 18h5"/></svg>',subm:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
   mat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>',
   parc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>',
   design:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="10" r="1.2" fill="currentColor"/><circle cx="15.5" cy="10" r="1.2" fill="currentColor"/><circle cx="12" cy="15" r="1.2" fill="currentColor"/></svg>',
@@ -1061,14 +1061,21 @@ function applyLang(){
 }
 let CUR="subm";
 function buildNav(){
-  const items=[["subm","soumission"],["mat","materiel"],["parc","parc"],["design","design"],["set","params"]];
+  const items=[["subm","soumission"],["memo","memoire"],["mat","materiel"],["parc","parc"],["design","design"],["set","params"]];
   $("#nav").innerHTML=items.map(([tab,key])=>`<button data-tab="${tab}" class="${CUR===tab?"active":""}">${ICONS[tab]||""}<span>${t(key)}</span></button>`).join("");
   document.querySelectorAll("#nav button").forEach(b=>b.onclick=()=>{CUR=b.dataset.tab;closeDrawer();buildNav();render();});
 }
-function render(){ $("#pageTitle").textContent=t(CUR==="set"?"params":CUR==="design"?"design":CUR==="subm"?"soumission":CUR==="mat"?"materiel":CUR); show(CUR); }
-function show(tab){CUR=tab;buildNav();$("#pageTitle").textContent=t(tab==="set"?"params":tab==="design"?"design":tab==="subm"?"soumission":tab==="mat"?"materiel":tab);
+function render(){ $("#pageTitle").textContent=t(CUR==="set"?"params":CUR==="design"?"design":CUR==="subm"?"soumission":CUR==="mat"?"materiel":CUR==="memo"?"memoire":CUR); show(CUR); }
+function show(tab){CUR=tab;buildNav();$("#pageTitle").textContent=t(tab==="set"?"params":tab==="design"?"design":tab==="subm"?"soumission":tab==="mat"?"materiel":tab==="memo"?"memoire":tab);
+  if(tab==="memo")return renderMemo();
   tab==="subm"?renderSubm():tab==="mat"?renderMat():tab==="parc"?renderParc():tab==="design"?renderDesign():renderSet();}
 
+/* ===== MÉMOIRE TECHNIQUE (onglet) — même connexion, données dans le cloud du parc ===== */
+function renderMemo(){
+  const v=$("#view"); if(!v)return;
+  if(v.querySelector("#memoFrame"))return;
+  v.innerHTML='<iframe id="memoFrame" title="Mémoire technique" src="memoire.html?embed=1&lang='+(LANG==="ar"?"ar":"fr")+'" style="display:block;width:100%;height:calc(100vh - 86px);min-height:560px;border:0;border-radius:12px;background:#fff"></iframe>';
+}
 /* ===== SOUMISSION ===== */
 let selIds=null;
 
