@@ -3,6 +3,8 @@
 <head><script src="../egtph-lock.js"></script>
 <meta charset="UTF-8">
 <script src="../egtph-auth.js"></script>
+<script>window.EGTPH_SCAN_OFF=true;/* Parc : le scanner est appelé directement par processDocumentImage */</script>
+<script src="../egtph-scan.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EGTPH — Matériel & Soumissions</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -3412,6 +3414,12 @@ function openDocCropper(srcImg){
   });
 }
 function processDocumentImage(file,cb){
+  // Scanner partagé EGTPH (filtres Original / Magique / Gris / N&B) quand il est chargé.
+  if(window.EGTPHScan){(async()=>{try{
+      const src=await EGTPHScan.loadFile(file),r=await EGTPHScan.scanImage(src,0);
+      if(!r){cb({cancelled:true});return;}
+      const out=r.canvas||src;cb({store:_dsToJpeg(out,2200,0.9),ocr:_dsToJpeg(out,3200,0.95)});
+    }catch(e){console.error("scan",e);cb(null);}})();return;}
   const r=new FileReader();r.onerror=()=>cb(null);
   r.onload=()=>{const im=new Image();im.onerror=()=>cb(null);
     im.onload=async()=>{try{

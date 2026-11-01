@@ -2,6 +2,8 @@
 <html lang="fr" dir="ltr">
 <head><script src="../egtph-lock.js"></script>
 <script src="../egtph-auth.js"></script>
+<script src="../egtph-scan.js"></script>
+<script src="../egtph-ocr.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>EGTPH – Gestion RH</title>
@@ -2081,7 +2083,14 @@ function cnasMetaFromFileName(name){
   return null;
 }
 async function readCnasPdfMeta(file){
-  try{const items=await pdfTextItems(file);const m=parseCnasItems(items,file.name);if(m)return m;}
+  try{
+    let items=await pdfTextItems(file);
+    if(items.length<6&&window.EGTPHOcr){ // PDF scanné (image sans texte) : page rendue à 300 dpi puis lue
+      const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+      items=await cnasOcrItems(await EGTPHOcr.pdfPageCanvas(await pdf.getPage(1),300));
+    }
+    const m=parseCnasItems(items,file.name);if(m)return m;
+  }
   catch(e){console.warn('Lecture PDF impossible, utilisation du nom de fichier',e);}
   return cnasMetaFromFileName(file.name||'');
 }
@@ -2182,6 +2191,11 @@ async function cnasImageToPdf(file){
 }
 async function cnasOcrItems(canvas){
   await ensureTesseract();
+  if(window.EGTPHOcr){ // moteur partagé : plusieurs rendus, meilleure lecture par ligne
+    const {data}=await EGTPHOcr.recognize(canvas,'fra');
+    const items=(data.lines||[]).map(l=>({s:String(l.text||'').replace(/\s+/g,' ').trim(),x:l.bbox.x0,y:-l.bbox.y0})).filter(i=>i.s);
+    if(items.length)return items;
+  }
   const w=await Tesseract.createWorker('fra',1);
   try{
     const {data}=await w.recognize(canvas,{},{blocks:true,text:true});
@@ -3349,6 +3363,7 @@ function cancelImport(){clearImportFile();}
 async function fileToCanvas(file){
   if(file.type==='application/pdf'){
     await ensurePdfJs();const buf=await file.arrayBuffer(),pdf=await pdfjsLib.getDocument({data:buf}).promise,pg=await pdf.getPage(1);
+    if(window.EGTPHOcr)return EGTPHOcr.pdfPageCanvas(pg,300);
     const base=pg.getViewport({scale:1}),scale=Math.min(2.2,2200/Math.max(base.width,base.height));
     const vp=pg.getViewport({scale:Math.max(1,scale)}),cv=document.createElement('canvas');cv.width=Math.round(vp.width);cv.height=Math.round(vp.height);
     await pg.render({canvasContext:cv.getContext('2d',{willReadFrequently:true}),viewport:vp}).promise;return cv;
@@ -3427,7 +3442,7 @@ async function runImportOcr(){
     validateImportFile(file);$('imReadBtn').disabled=true;$('imForm').style.display='none';setProg(8,t('ocr_loading'));
     await ensureOcrAssets(file);const cv=await fileToCanvas(file);setProg(35,t('ocr_reading'));
     const lang=$('imLang').value||'fra';
-    const result=await Tesseract.recognize(cv,lang,{logger:m=>{
+    const result=await (window.EGTPHOcr?EGTPHOcr.recognize:Tesseract.recognize)(cv,lang,{logger:m=>{
       if(m.status==='recognizing text'||m.status==='loading language traineddata'||m.status==='initializing tesseract'){
         setProg(35+Math.round((m.progress||0)*60),t('ocr_reading'));
       }

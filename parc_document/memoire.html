@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="../egtph-lock.js"></script>
 <script src="../egtph-auth.js"></script>
+<script src="../egtph-scan.js"></script>
+<script src="../egtph-ocr.js"></script>
 <title>EGTPH — Mémoire Technique</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2973,7 +2975,8 @@ async function ocrImage(src, label){
   const pick = (document.getElementById("plLang")||{}).value||"auto";
   const texts = [];
   const run = async (rot, mode, langs, tag)=>{
-    const cv = (mode==="raw" && !rot) ? src : await prepCanvas(src, rot, mode==="raw"?"scale":mode);
+    // passe 1 : image nettoyée par le moteur partagé (fond blanc, ombres retirées, 300 dpi)
+    const cv = (mode==="raw" && !rot) ? (window.EGTPHOcr ? await EGTPHOcr.prepare(src,"clean") : src) : await prepCanvas(src, rot, mode==="raw"?"scale":mode);
     const t = await ocrCanvas(T, cv, langs, label+" "+tag);
     texts.push(t); return t;
   };
@@ -3039,9 +3042,9 @@ async function pdfTexts(file){
     tc.items.forEach(it=>{ const y = Math.round(it.transform[5]/3); (rows[y]=rows[y]||[]).push({x:it.transform[4], s:it.str}); });
     const txt = Object.keys(rows).map(Number).sort((a,b)=>b-a).map(y=>rows[y].sort((a,b)=>a.x-b.x).map(o=>o.s).join(" ")).join("\n");
     if(txt.replace(/\s/g,"").length > 40){ digital += txt+"\n"; continue; }
-    const vp = page.getViewport({scale:2.2});
-    const cv = document.createElement("canvas"); cv.width=vp.width; cv.height=vp.height;
-    await page.render({canvasContext:cv.getContext("2d"), viewport:vp}).promise;
+    let cv;
+    if(window.EGTPHOcr) cv = await EGTPHOcr.pdfPageCanvas(page,300);   // 300 dpi
+    else { const vp = page.getViewport({scale:2.2}); cv = document.createElement("canvas"); cv.width=vp.width; cv.height=vp.height; await page.render({canvasContext:cv.getContext("2d"), viewport:vp}).promise; }
     const blob = await new Promise(r=>cv.toBlob(r,"image/png"));
     const tx = await ocrImage(blob, px("plPage")+" "+p);
     tx.forEach((t,i)=>{ scans[i]=(scans[i]||"")+t+"\n"; });
