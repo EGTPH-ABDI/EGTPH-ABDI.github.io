@@ -513,6 +513,7 @@ body[dir="rtl"] #p_days, body[dir="rtl"] #p_days_w{ text-align:right; }
 .rh-fn{display:block;margin-top:4px;width:100%;max-width:260px;border:1px solid var(--line-2);border-radius:7px;padding:5px;font-size:12px;font-family:inherit;background:#fff}
 .rh-docs{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
 .rh-docs button{border:1px solid var(--line-2);background:#fff;border-radius:6px;padding:3px 7px;font-size:11px;cursor:pointer;font-family:inherit}
+.pl-rate{font:inherit;padding:1px 4px;border:1px solid #999;border-radius:4px;background:#fff;color:#000}
 </style>
 </head>
 <body dir="ltr">
@@ -3433,7 +3434,8 @@ function reconcileWithHT(items, doc){
 function plTotals(){
   const p=store.planning, items=p.items.filter(i=>i.on!==false);
   const ht = Math.round(items.reduce((a,i)=>a+(Number(i.mt)||0),0)*100)/100;
-  const rate = (p.doc&&p.doc.rate)||19;
+  const d=p.doc||{}, rs=(d.rateSet!=null&&d.rateSet!=="")?Number(d.rateSet):NaN;
+  const rate = !isNaN(rs) ? rs : (Number(d.rate)>0 ? Number(d.rate) : 19);
   const tva = Math.round(ht*rate)/100, ttc = Math.round((ht+tva)*100)/100;
   return {ht, rate, tva, ttc};
 }
@@ -3445,14 +3447,19 @@ function totalsHTML(){
   const bad = p.items.filter(i=>i.on!==false && i.ok===false).length, fixed = p.items.filter(i=>i.fixed).length;
   return `<table class="pl-tot"><tbody>
     <tr><th>${px("ttHT")}</th><td class="num">${fmt2(t.ht)}</td><td>${chk(t.ht,d.ht)}</td></tr>
-    <tr><th>${px("ttTVA")} ${t.rate}%</th><td class="num">${fmt2(t.tva)}</td><td>${chk(t.tva,d.tva)}</td></tr>
+    <tr><th>${px("ttTVA")} <select class="pl-rate" onchange="plSetRate(this.value)" title="${px("ttRateT")}">${[0,7,9,17,19].concat([0,7,9,17,19].includes(t.rate)?[]:[t.rate]).map(r=>`<option value="${r}"${r===t.rate?" selected":""}>${String(r).replace(".",",")} %</option>`).join("")}<option value="x">${px("ttRateX")}</option></select></th><td class="num">${fmt2(t.tva)}</td><td>${chk(t.tva,d.tva)}</td></tr>
     <tr><th>${px("ttTTC")}</th><td class="num"><b>${fmt2(t.ttc)}</b></td><td>${chk(t.ttc,d.ttc)}</td></tr>
   </tbody></table>
   <p class="pl-muted">${px("ttCheck")} · ✓ ${p.items.length-bad} ${bad?`· ⚠ ${bad} ${px("plToCheck")}`:""} ${fixed?`· ✎ ${fixed} ${px("ttFixed")}`:""}</p>`;
 }
-function plSetRate(v){ store.planning.doc=Object.assign({},store.planning.doc,{rate:parseFloat(v)||19}); renderPlanning(); }
-Object.assign(PX.fr,{ttHT:"Montant HT", ttTVA:"TVA", ttTTC:"Montant TTC", ttRead:"devis :", ttCheck:"Chaque ligne est vérifiée : quantité × prix unitaire = montant", ttFixed:"corrigé(s) automatiquement par le calcul", colPU:"P.U"});
-Object.assign(PX.ar,{ttHT:"المبلغ خارج الرسوم", ttTVA:"الرسم على القيمة المضافة", ttTTC:"المجموع بكل الرسوم", ttRead:"في الكشف:", ttCheck:"كل سطر محقق: الكمية × سعر الوحدة = المبلغ", ttFixed:"صُحّح تلقائياً بالحساب", colPU:"سعر الوحدة"});
+function plSetRate(v){
+  if(v==="x"){ const a=prompt(px("ttRateT")+" (%)", String(plTotals().rate)); if(a==null){ renderPlanning(); return; } v=a; }
+  const r=parseFloat(String(v).replace(",","."));
+  if(isNaN(r)||r<0||r>100){ renderPlanning(); return; }
+  store.planning.doc=Object.assign({},store.planning.doc,{rateSet:r}); persist(); renderPlanning();
+}
+Object.assign(PX.fr,{ttHT:"Montant HT", ttTVA:"TVA", ttTTC:"Montant TTC", ttRead:"devis :", ttCheck:"Chaque ligne est vérifiée : quantité × prix unitaire = montant", ttFixed:"corrigé(s) automatiquement par le calcul", ttRateT:"Taux de TVA de ce projet", ttRateX:"Autre…", colPU:"P.U"});
+Object.assign(PX.ar,{ttHT:"المبلغ خارج الرسوم", ttTVA:"الرسم على القيمة المضافة", ttTTC:"المجموع بكل الرسوم", ttRead:"في الكشف:", ttCheck:"كل سطر محقق: الكمية × سعر الوحدة = المبلغ", ttFixed:"صُحّح تلقائياً بالحساب", ttRateT:"نسبة الرسم على القيمة المضافة لهذا المشروع", ttRateX:"نسبة أخرى…", colPU:"سعر الوحدة"});
 Object.keys(PX).forEach(l=>Object.assign(I18N[l], PX[l]));
 
 /* =================================================================

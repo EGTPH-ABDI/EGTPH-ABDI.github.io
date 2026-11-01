@@ -482,8 +482,8 @@ body.auth-locked{overflow:hidden}
           <div class="cd-tools"><button class="btp solid" onclick="$('cdFiles').click()" data-t="cd_import">📤 Importer des PDF</button>
           <button class="btp" onclick="printSelectedCnas()" data-t="cd_print_sel">🖨️ Imprimer la sélection</button>
           <button class="btp gray" onclick="syncStatusWithCnas()" data-t="cd_sync_status">🔁 Statut selon attestations</button></div></div>
-        <input type="file" id="cdFiles" accept="application/pdf,.pdf" multiple hidden>
-        <input type="file" id="cdOneFile" accept="application/pdf,.pdf" hidden>
+        <input type="file" id="cdFiles" accept="application/pdf,.pdf,image/*" multiple hidden>
+        <input type="file" id="cdOneFile" accept="application/pdf,.pdf,image/*" hidden>
         <div id="cdDrop" class="doc-store" onclick="$('cdFiles').click()"><span data-t="cd_drop">Glissez ici les PDF « AF_… » (attestations d’affiliation) et « MAJ_… » (mise à jour) — plusieurs fichiers à la fois.</span></div>
         <div class="hint" id="cdProgress" style="min-height:16px"></div>
         <div id="cdReport" class="cd-report" hidden></div>
@@ -1150,6 +1150,7 @@ async function onWorkerDocSelected(file){
     validateImportFile(file);
     await putWorkerDoc(editW,'cnas',file);
     await refreshWorkerCnasDoc();toast(t('doc_saved'));
+    try{await importCnasFiles([file],{targetWid:editW});}catch(e){console.warn('[CNAS] remplacement',e);}
   }catch(e){console.error(e);toast(e&&e.message?e.message:t('doc_save_fail'),'er');}
 }
 async function viewWorkerCnasDoc(){
@@ -1941,7 +1942,7 @@ function calcCnt(){
    - Il est aussi envoyé dans Firebase (nœud « files ») pour être disponible sur tous les appareils.
    - Lecture automatique : N° SS, N° d'attestation, date d'établissement, validité (3 mois / date de validité MAJ).
    - Alertes avant expiration (tableau de bord + menu). */
-const CNAS_KINDS=['af','maj'],CNAS_COMPANY='__company',CNAS_TOMB_KEY='egtph_rh_cnas_tombs_v1';
+const CNAS_KINDS=['af','maj','afe'],CNAS_COMPANY='__company',CNAS_TOMB_KEY='egtph_rh_cnas_tombs_v1';
 let cnasIndex={},cnasUnmatched=[],cnasTargetWid=null,cnasAlertToastShown=false,cnasIndexLoaded=false;
 let cnasCloudBusy=false,cnasCloudPending=false,cnasCloudFailed=0;
 function L(fr,ar){return LANG==='ar'?ar:fr;}
@@ -1975,8 +1976,12 @@ function cnasAlertDays(){const n=parseInt(S.settings.cnasAlertDays,10);return n>
 async function pdfTextItems(file){
   await ensurePdfJs();
   const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
-  const page=await pdf.getPage(1),tc=await page.getTextContent();
-  return tc.items.filter(i=>i&&typeof i.str==='string'&&i.str.trim()).map(i=>({s:i.str.replace(/\s+/g,' ').trim(),x:i.transform[4],y:i.transform[5]}));
+  const out=[];
+  for(let p=1;p<=Math.min(2,pdf.numPages);p++){
+    const page=await pdf.getPage(p),tc=await page.getTextContent();
+    tc.items.filter(i=>i&&typeof i.str==='string'&&i.str.trim()).forEach(i=>out.push({s:i.str.replace(/\s+/g,' ').trim(),x:i.transform[4],y:i.transform[5]-(p-1)*10000,pg:p}));
+  }
+  return out;
 }
 // Valeur placée à droite d'un libellé, sur la même ligne (le PDF CNAS ne garde pas l'ordre de lecture).
 function pdfValueAfter(items,labelRe,valueRe){
@@ -1990,9 +1995,41 @@ function pdfValueAfter(items,labelRe,valueRe){
   return best?best.v:'';
 }
 const RE_DATE=/\d{2}\/\d{2}\/\d{4}/;
+// Lignes reconstituées (même hauteur, de gauche à droite) — utile pour les documents bilingues.
+function cnasLines(items){
+  const ls=[];
+  items.slice().sort((a,b)=>b.y-a.y||a.x-b.x).forEach(i=>{const l=ls.find(z=>Math.abs(z.y-i.y)<=5);if(l)l.it.push(i);else ls.push({y:i.y,it:[i]});});
+  return ls.map(l=>l.it.sort((a,b)=>a.x-b.x).map(i=>i.s).join(' ').replace(/\s+/g,' ').trim());
+}
+// Attestation d'affiliation de l'EMPLOYEUR (portail TASRIHATCOM) — document de l'entreprise.
+function parseCnasEmployer(items,all){
+  const meta={source:'pdf',kind:'afe'},lines=cnasLines(items);
+  const before=l=>{const i=l.indexOf(':');return i>0?l.slice(0,i).trim():'';};
+  const find=re=>lines.find(l=>re.test(l))||'';
+  meta.num=((/\b([a-f0-9]{24,40})\b/i.exec(all))||[])[1]||'';
+  meta.employer=((/(?:^|\s)(\d{8})\s*:/.exec(lines.join('\n')))||(/\b(\d{8})\b/.exec(all))||[])[1]||'';
+  meta.raison=before(find(/التسمية|اللقب|Raison|D[ée]nomination/i));
+  meta.adresse=before(find(/العنوان|Adresse/i));
+  meta.agence=before(find(/الوكــ*الة|الوكالة|Agence/i));
+  {const l=find(/منتسب|Affili[ée] depuis/i),m=/(\d{4})\s*-\s*(\d{2})\s*-\s*(\d{2})/.exec(l||all);meta.since=m?m[1]+'-'+m[2]+'-'+m[3]:dmy2iso(l);}
+  {const l=find(/العمال|Effectif|d[ée]clar/i)||lines.filter(z=>/^\d{1,5}\s*:/.test(z)).pop()||'',m=/(?:^|\s)(\d{1,5})\s*:/.exec(l);meta.effectif=m?m[1]:'';}
+  meta.issued=dmy2iso(((/En date du\s*:?\s*(\d{2}\/\d{2}\/\d{4})/i.exec(all))||[])[1]||'')||dmy2iso(((/(?:Fait|D[ée]livr[ée]e?) le\s*:?\s*(\d{2}\/\d{2}\/\d{4})/i.exec(all))||[])[1]||'');
+  if(!meta.raison||!meta.adresse){ // photo (OCR sans l'arabe) : valeurs latines dans l'ordre du document
+    const c=lines.map(before).filter(v=>v&&/[A-Z]{2}/.test(v)&&!/^[a-f0-9]{24,}$/i.test(v)&&!/ATTESTATION|IMPORTANT|En date/i.test(v));
+    if(!meta.agence&&c.length>2)meta.agence=c[0];
+    if(!meta.raison)meta.raison=c[c.length>2?1:0]||'';
+    if(!meta.adresse)meta.adresse=c[c.length>2?2:1]||'';
+  }
+  meta.validUntil=''; // pas de date de validité imprimée : modifiable à la main
+  return meta;
+}
+function isEmployerAffiliation(all){
+  return /ATTESTATION\s*D.?\s*AFFILIATION/i.test(all)&&!/Sous le num|Pr[ée]nom\s*:|Nom\s*:/i.test(all)&&/TASRIHAT|AffiliationInvoice|administratif|منتسب|اجتماعية|جتماعية/i.test(all);
+}
 function parseCnasItems(items,fileName){
   const all=items.map(i=>i.s).join(' ');
   const meta={source:'pdf'};
+  if(isEmployerAffiliation(all))return parseCnasEmployer(items,all);
   if(/MISE\s*A\s*JOUR/i.test(all)){
     meta.kind='maj';
     meta.num=pdfValueAfter(items,/^N°$/,/^[A-Z0-9]{8,}$/)||((/\b([A-Z0-9]*[A-Z][A-Z0-9]*\d[A-Z0-9]{6,})\b/.exec(all))||[])[1]||'';
@@ -2027,6 +2064,7 @@ function parseCnasItems(items,fileName){
 }
 function cnasMetaFromFileName(name){
   if(/^MAJ_/i.test(name))return {kind:'maj',source:'name'};
+  if(/^Attestation_d.?Affiliation/i.test(name))return {kind:'afe',source:'name'};
   const f=/AF_(\d{10})/i.exec(name);if(f)return {kind:'af',ss:f[1],months:3,source:'name'};
   return null;
 }
@@ -2048,18 +2086,52 @@ async function storeCnasDoc(wid,kind,file,meta,force){
   const tombs=loadCnasTombs();delete tombs[cnasCloudKey(kind,wid)];saveCnasTombs(tombs);
   return 'saved';
 }
+/* Photo d'une attestation d'affiliation : lecture OCR + conversion en PDF (remplace l'ancienne automatiquement) */
+function cnasIsImage(f){return /^image\//i.test(f.type||'')||/\.(jpe?g|png|webp|heic)$/i.test(f.name||'');}
+async function cnasImageToPdf(file){
+  await ensurePdfLib();
+  const bmp=await createImageBitmap(file);
+  const sc=Math.min(1,2200/Math.max(bmp.width,bmp.height)),c=document.createElement('canvas');
+  c.width=Math.round(bmp.width*sc);c.height=Math.round(bmp.height*sc);
+  const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(bmp,0,0,c.width,c.height);
+  const jpg=await new Promise(r=>c.toBlob(r,'image/jpeg',0.9));
+  const pdf=await PDFLib.PDFDocument.create(),img=await pdf.embedJpg(new Uint8Array(await jpg.arrayBuffer()));
+  const W=595.28,H=841.89,k=Math.min(W/c.width,H/c.height),page=pdf.addPage([W,H]);
+  page.drawImage(img,{x:(W-c.width*k)/2,y:(H-c.height*k)/2,width:c.width*k,height:c.height*k});
+  const bytes=await pdf.save();
+  return {pdf:new File([bytes],String(file.name||'affiliation').replace(/\.[a-z0-9]+$/i,'')+'.pdf',{type:'application/pdf'}),canvas:c};
+}
+async function cnasOcrItems(canvas){
+  await ensureTesseract();
+  const w=await Tesseract.createWorker('fra',1);
+  try{
+    const {data}=await w.recognize(canvas,{},{blocks:true,text:true});
+    const items=[];
+    (data.blocks||[]).forEach(b=>(b.paragraphs||[]).forEach(p=>(p.lines||[]).forEach(l=>{const s=String(l.text||'').replace(/\s+/g,' ').trim();if(s)items.push({s,x:l.bbox.x0,y:-l.bbox.y0});})));
+    if(!items.length)String(data.text||'').split('\n').forEach((s,i)=>{s=s.trim();if(s)items.push({s,x:0,y:-i*20});});
+    return items;
+  }finally{try{await w.terminate();}catch(e){}}
+}
 async function importCnasFiles(fileList,opts){
   opts=opts||{};
-  const files=[...(fileList||[])].filter(f=>/pdf/i.test(f.type||'')||/\.pdf$/i.test(f.name||''));
-  if(!files.length){toast(L('Choisissez des fichiers PDF.','اختر ملفات PDF.'),'wa');return;}
+  const files=[...(fileList||[])].filter(f=>/pdf/i.test(f.type||'')||/\.pdf$/i.test(f.name||'')||cnasIsImage(f));
+  if(!files.length){toast(L('Choisissez des fichiers PDF ou des photos.','اختر ملفات PDF أو صوراً.'),'wa');return;}
   const prog=$('cdProgress');let saved=0,older=0,errors=0,unknown=0,filled=0;const newUnmatched=[],created=[],stChanged=[];
   for(let i=0;i<files.length;i++){
     const f=files[i];if(prog)prog.textContent='⏳ '+(i+1)+' / '+files.length+' — '+f.name;
     try{
       if(f.size>OCR_MAX_FILE)throw new Error('size');
-      const meta=await readCnasPdfMeta(f);
+      let meta;
+      if(cnasIsImage(f)){
+        if(prog)prog.textContent='⏳ '+(i+1)+' / '+files.length+' — OCR '+f.name;
+        const conv=await cnasImageToPdf(f);
+        meta=parseCnasItems(await cnasOcrItems(conv.canvas),f.name)||cnasMetaFromFileName(f.name||'')||(opts.targetWid?{kind:'af',source:'photo'}:opts.companyKind?{kind:opts.companyKind,source:'photo'}:null);
+        if(meta)meta.source='photo';
+        files[i]=conv.pdf;
+      } else meta=await readCnasPdfMeta(f);
+      if(!meta&&opts.companyKind)meta={kind:opts.companyKind,source:'pdf'};
       if(!meta){unknown++;continue;}
-      let wid=meta.kind==='maj'?CNAS_COMPANY:(opts.targetWid||matchWorkerBySS(meta.ss));
+      let wid=(meta.kind==='maj'||meta.kind==='afe')?CNAS_COMPANY:(opts.targetWid||matchWorkerBySS(meta.ss));
       if(meta.kind==='af'&&opts.targetWid&&meta.ss){
         const w=S.workers.find(x=>x.id===opts.targetWid);
         if(w&&ssDigits(w.ss)&&ssDigits(w.ss)!==ssDigits(meta.ss)&&!confirm(L('Le N° SS de ce PDF ('+meta.ss+') ne correspond pas à '+w.N+' '+w.P+'. Continuer ?','رقم الضمان في هذا الملف ('+meta.ss+') لا يطابق '+w.N+' '+w.P+'. هل تواصل؟'))){continue;}
@@ -2070,7 +2142,7 @@ async function importCnasFiles(fileList,opts){
       }
       if(wid&&meta.kind==='af'){const w=S.workers.find(x=>x.id===wid);if(w&&fillWorkerFromCnas(w,meta))filled++;}
       if(!wid){newUnmatched.push({uid:makeId('u'),file:f,meta});continue;}
-      const r=await storeCnasDoc(wid,meta.kind,f,meta,!!opts.targetWid);
+      const r=await storeCnasDoc(wid,meta.kind,files[i],meta,!!opts.targetWid);
       if(r==='older')older++;else{
         saved++;
         // Date d'entrée / sortie / réintégration vérifiées à chaque import (voir applyAfPeriod).
@@ -2138,6 +2210,7 @@ function cnasAlerts(){
   const out=[];
   const maj=cnasIndex[docId(CNAS_COMPANY,'maj')];
   if(maj){const s=cnasStatus(maj);if(['expired','soon','unknown'].includes(s.k))out.push({label:L('Attestation de mise à jour (entreprise)','شهادة أداء المستحقات (المؤسسة)'),s});}
+  {const afe=cnasIndex[docId(CNAS_COMPANY,'afe')];if(afe&&afe.meta&&afe.meta.validUntil){const s=cnasStatus(afe);if(['expired','soon'].includes(s.k))out.push({label:L('Attestation d’affiliation (employeur)','شهادة انتساب المؤسسة'),s});}}
   S.workers.filter(w=>w.st==='ACTIF').forEach(w=>{const r=cnasIndex[docId(w.id,'af')];if(!r)return;const s=cnasStatus(r,w);if(['expired','soon','ended'].includes(s.k))out.push({label:w.N+' '+w.P,s});});
   return out;
 }
@@ -2161,16 +2234,23 @@ function renderCnasDocs(){
   const page=$('pg-cnasdoc');if(!page||!page.classList.contains('on'))return;
   const ad=$('cdAlertDays');if(ad&&document.activeElement!==ad)ad.value=cnasAlertDays();
   const filter=($('cdFilter')||{}).value||'ACTIF';
-  // entreprise
-  const maj=cnasIndex[docId(CNAS_COMPANY,'maj')],mid=docId(CNAS_COMPANY,'maj');
-  let ch='<div class="ctit"><span class="t">🏢 '+L('Attestation de mise à jour (entreprise)','شهادة أداء المستحقات — المؤسسة (Mise à jour)')+'</span></div>';
-  if(maj){
-    const s=cnasStatus(maj),m=maj.meta||{};
-    ch+='<div class="cd-company"><label class="chip"><input type="checkbox" class="cdSel" value="'+mid+'" onchange="this.parentElement.classList.toggle(\'on\',this.checked)"> '+L('Inclure dans l’impression groupée','ضمن الطباعة الجماعية')+'</label>'+
-      '<div><b>N°</b> '+esc(m.num||'—')+' &nbsp; <b>'+L('Au','بتاريخ')+'</b> '+esc(fd(m.issued)||'—')+(m.effectif?' &nbsp; <b>'+L('Effectif','عدد العمال')+'</b> '+esc(m.effectif):'')+' '+cnasCloudTag(maj)+'</div>'+
-      '<div class="cd-dates"><label>'+L('Validité','صالحة إلى')+' <input type="date" class="cd-date" value="'+esc(m.validUntil||'')+'" onchange="editCnasDate(\''+mid+'\',\'validUntil\',this.value)"></label> <span class="cd-st '+s.k+'">'+esc(s.txt)+'</span></div>'+
-      '<div class="act"><button class="ib" title="'+L('Voir','عرض')+'" onclick="viewCnasDoc(\''+mid+'\')">👁️</button><button class="ib" title="'+L('Imprimer','طباعة')+'" onclick="printCnasIds([\''+mid+'\'])">🖨️</button><button class="ib" title="'+L('Remplacer','استبدال')+'" onclick="replaceCnasFor(\''+CNAS_COMPANY+'\')">📤</button><button class="ib del" title="'+L('Supprimer','حذف')+'" onclick="deleteCnasDoc(\''+mid+'\')">🗑️</button></div></div>';
-  }else ch+='<p class="hint">'+L('Aucune attestation de mise à jour. Importez le PDF MAJ_… téléchargé depuis la télédéclaration CNAS.','لا توجد شهادة أداء المستحقات. استورد ملف MAJ_… المحمّل من موقع التصريح عن بعد CNAS.')+'</p>';
+  // entreprise : mise à jour + affiliation employeur (PDF ou photo ; la plus récente remplace l'ancienne)
+  const coBlock=(kind,title,empty)=>{
+    const r=cnasIndex[docId(CNAS_COMPANY,kind)],id=docId(CNAS_COMPANY,kind);
+    let h='<div class="ctit"><span class="t">🏢 '+title+'</span><button class="btp" onclick="replaceCnasFor(\''+CNAS_COMPANY+':'+kind+'\')">📤 '+(r?L('Mettre à jour (PDF ou photo)','تحديث (PDF أو صورة)'):L('Ajouter (PDF ou photo)','إضافة (PDF أو صورة)'))+'</button></div>';
+    if(!r)return h+'<p class="hint">'+empty+'</p>';
+    const s2=cnasStatus(r),m=r.meta||{};
+    const info=kind==='afe'
+      ?'<b>N°</b> '+esc(m.employer||'—')+(m.raison?' &nbsp; '+esc(m.raison):'')+(m.since?' &nbsp; <b>'+L('Affilié depuis','منتسب منذ')+'</b> '+esc(fd(m.since)):'')+(m.effectif?' &nbsp; <b>'+L('Effectif','عدد العمال')+'</b> '+esc(m.effectif):'')+' &nbsp; <b>'+L('Du','بتاريخ')+'</b> '+esc(fd(m.issued)||'—')
+      :'<b>N°</b> '+esc(m.num||'—')+' &nbsp; <b>'+L('Au','بتاريخ')+'</b> '+esc(fd(m.issued)||'—')+(m.effectif?' &nbsp; <b>'+L('Effectif','عدد العمال')+'</b> '+esc(m.effectif):'');
+    return h+'<div class="cd-company"><label class="chip"><input type="checkbox" class="cdSel" value="'+id+'" onchange="this.parentElement.classList.toggle(\'on\',this.checked)"> '+L('Inclure dans l’impression groupée','ضمن الطباعة الجماعية')+'</label>'+
+      '<div>'+info+' '+(m.source==='photo'?'📷 ':'')+cnasCloudTag(r)+'</div>'+
+      '<div class="cd-dates"><label>'+L('Validité','صالحة إلى')+' <input type="date" class="cd-date" value="'+esc(m.validUntil||'')+'" onchange="editCnasDate(\''+id+'\',\'validUntil\',this.value)"></label> '+(kind==='afe'&&!m.validUntil?'':'<span class="cd-st '+s2.k+'">'+esc(s2.txt)+'</span>')+'</div>'+
+      '<div class="act"><button class="ib" title="'+L('Voir','عرض')+'" onclick="viewCnasDoc(\''+id+'\')">👁️</button><button class="ib" title="'+L('Imprimer','طباعة')+'" onclick="printCnasIds([\''+id+'\'])">🖨️</button><button class="ib" title="'+L('Remplacer','استبدال')+'" onclick="replaceCnasFor(\''+CNAS_COMPANY+':'+kind+'\')">📤</button><button class="ib del" title="'+L('Supprimer','حذف')+'" onclick="deleteCnasDoc(\''+id+'\')">🗑️</button></div></div>';
+  };
+  let ch=coBlock('maj',L('Attestation de mise à jour (entreprise)','شهادة أداء المستحقات — المؤسسة (Mise à jour)'),L('Aucune attestation de mise à jour. Ajoutez le PDF MAJ_… ou une photo.','لا توجد شهادة أداء المستحقات. أضف ملف MAJ_… أو صورة.'))+
+    '<div style="height:10px"></div>'+
+    coBlock('afe',L('Attestation d’affiliation (employeur)','شهادة انتساب المستخدم (المؤسسة)'),L('Aucune attestation d’affiliation employeur. Ajoutez le PDF « Attestation d’Affiliation » (TASRIHATCOM) ou une photo.','لا توجد شهادة انتساب المؤسسة. أضف ملف «Attestation d’Affiliation» من بوابة تصريحاتكم أو صورة.'));
   $('cdCompany').innerHTML=ch;
   // non rattachées
   const um=$('cdUnmatched');
@@ -2255,7 +2335,7 @@ function cnasPrintDesktop(blob,fileName){
 function cnasFileName(ids){
   if(ids.length>1)return 'Attestations_CNAS_'+tod()+'.pdf';
   const r=cnasIndex[ids[0]];if(!r)return 'attestation.pdf';
-  if(r.workerId===CNAS_COMPANY)return 'MAJ_CNAS_'+tod()+'.pdf';
+  if(r.workerId===CNAS_COMPANY)return (r.kind==='afe'?'Affiliation_employeur_CNAS_':'MAJ_CNAS_')+tod()+'.pdf';
   const w=S.workers.find(x=>x.id===r.workerId);return 'AF_'+(w?(w.N+'_'+w.P).replace(/\s+/g,'_'):ssDigits(r.meta&&r.meta.ss))+'.pdf';
 }
 async function viewCnasDoc(id){
@@ -2456,7 +2536,7 @@ function bindCnasDocEvents(){
   const many=$('cdFiles'),one=$('cdOneFile'),dz=$('cdDrop');
   if(many)many.addEventListener('change',e=>{const fs=[...e.target.files];e.target.value='';importCnasFiles(fs);});
   const wf=$('wkCnasFile');if(wf)wf.addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(f)fillWorkerFormFromCnas(f);});
-  if(one)one.addEventListener('change',e=>{const fs=[...e.target.files];e.target.value='';const wid=cnasTargetWid;cnasTargetWid=null;if(fs.length)importCnasFiles(fs.slice(0,1),{targetWid:wid===CNAS_COMPANY?null:wid});});
+  if(one)one.addEventListener('change',e=>{const fs=[...e.target.files];e.target.value='';const wid=cnasTargetWid;cnasTargetWid=null;if(fs.length)importCnasFiles(fs.slice(0,1),wid&&String(wid).indexOf(CNAS_COMPANY)===0?{companyKind:String(wid).split(':')[1]||''}:{targetWid:wid});});
   if(dz){
     dz.addEventListener('dragover',e=>{e.preventDefault();dz.style.borderColor='var(--g)';});
     dz.addEventListener('dragleave',()=>dz.style.borderColor='');
