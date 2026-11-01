@@ -171,7 +171,9 @@
   var viewerOn = false, lastBlockToast = 0;
   var HIDE_RX = /(حفظ|احفظ|إضافة|اضافة|أضف|اضف|جديد|تعديل|عدّل|عدل|حذف|احذف|مسح|امسح|استيراد|استرجاع|استعادة|دمج|أرشفة|ارشفة|ترحيل|تسجيل دفعة|رفع|ajouter|nouveau|nouvelle|modifier|supprimer|enregistrer|importer|restaurer|effacer|archiver|valider|➕|✏️|✏|🗑|💾|📥)/i;
   var KEEP_RX = /(طباعة|اطبع|طبع|pdf|تصدير|excel|بحث|إغلاق|اغلاق|رجوع|عودة|عرض|معاينة|خروج|الدخول|imprimer|exporter|recherch|fermer|retour|aperçu|déconnexion|×|✕)/i;
-  var CLICKABLE = "button,[role=button],input[type=submit],input[type=button],a.btn,.btn,[onclick]";
+  // تُخفى دائماً حتى لو ذكرت PDF (تغيّر البيانات أو تُدخل ملفات)
+  var STRONG_RX = /(استيراد|إرفاق|ارفاق|استبدال|التقاط|ملء|املأ|اسحب|اختر ملف|اختيار ملف|مزامنة|تفعيل|تعطيل|إزالة|ازالة|importer|import |joindre|remplacer|prendre une photo|remplir|glissez|choisir un fichier|synchronis|réinitialiser|retirer|actif|inactif|📤|📎|📷|🔁)/i;
+  var CLICKABLE = "button,[role=button],input[type=submit],input[type=button],a.btn,.btn,[onclick],label[for]";
 
   function toast(msg) {
     var now = Date.now();
@@ -193,10 +195,8 @@
       if (el.closest && (el.closest("#egtphAuthOverlay") || el.closest("#egtphViewerBar") || el.closest("#egtphLock"))) continue;
       var txt = ((el.innerText || el.value || "") + " " + (el.title || "") + " " + (el.getAttribute("aria-label") || "")).trim();
       if (!txt) continue;
-      if (HIDE_RX.test(txt) && !KEEP_RX.test(txt)) el.classList.add("egtph-ro-hide");
+      if (STRONG_RX.test(txt) || (HIDE_RX.test(txt) && !KEEP_RX.test(txt))) el.classList.add("egtph-ro-hide");
     }
-    var checks = root.querySelectorAll("input[type=checkbox]");
-    for (var c = 0; c < checks.length; c++) if (!checks[c].closest("#egtphViewerBar")) checks[c].disabled = true;
     var files = root.querySelectorAll("input[type=file]");
     for (var j = 0; j < files.length; j++) files[j].disabled = true;
     var ed = root.querySelectorAll("[contenteditable=true],[contenteditable='']");
@@ -303,8 +303,46 @@
     }, delay);
   }
 
+  // قاعدة كل برنامج — للتحقق من صلاحية حساب العرض (القواعد في Firebase هي الحماية الحقيقية)
+  var DB_OF = {
+    gestion: "https://egtph-abdi-youssouf-islam-default-rtdb.europe-west1.firebasedatabase.app",
+    facture: "https://egtph-abdi-youssouf-islam-default-rtdb.europe-west1.firebasedatabase.app",
+    caution: "https://egtph-reception-default-rtdb.europe-west1.firebasedatabase.app",
+    commande: "https://egtph-commande-default-rtdb.europe-west1.firebasedatabase.app",
+    lapayeparmois: "https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app",
+    semaine: "https://egtph-semaine-default-rtdb.europe-west1.firebasedatabase.app",
+    parc_document: "https://egtph-parc-default-rtdb.europe-west1.firebasedatabase.app",
+    service: "https://egtph-service-default-rtdb.europe-west1.firebasedatabase.app"
+  };
+  function showNoAccess(appId) {
+    var w = document.getElementById("egtphNoAccess");
+    if (w) return;
+    w = document.createElement("div");
+    w.id = "egtphNoAccess";
+    w.style.cssText = "position:fixed;inset:0;z-index:2147483002;background:#0d0f14;color:#f0f0f0;display:flex;flex-direction:column;" +
+      "align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;font:15px Arial,sans-serif;direction:rtl";
+    w.innerHTML = "<div style=\"font-size:42px\">🔒</div><div><b>لا تملك صلاحية الدخول إلى هذا البرنامج</b><br>" +
+      "<span style=\"color:#9a9ea6;font-size:13px\">يمنحها المسير من لوحة التحكم.</span></div>" +
+      "<button type=\"button\" style=\"background:#fff;color:#111;border:0;border-radius:8px;padding:9px 18px;font-weight:700\">خروج</button>";
+    (document.body || document.documentElement).appendChild(w);
+    w.querySelector("button").onclick = function () { logout(appId); location.reload(); };
+  }
+  function viewerAllowed(appId, token) {
+    var base = DB_OF[appId];
+    if (!base) return Promise.resolve(true);
+    return fetch(base + "/_viewer/" + appId + ".json?auth=" + encodeURIComponent(token), { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : false; })
+      .then(function (v) { return v === true; }, function () { return true; }); // بلا إنترنت: القواعد تمنع على أي حال
+  }
   function ready(appId, opts, token) {
     adoptSession(appId, opts, token);
+    if (isViewer(appId)) {
+      viewerAllowed(appId, token).then(function (ok) {
+        if (!ok) { showNoAccess(appId); return; }
+        if (opts.onReady) opts.onReady(token);
+      });
+      return token;
+    }
     if (opts.onReady) opts.onReady(token);
     return token;
   }

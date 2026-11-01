@@ -2842,7 +2842,7 @@ async function firebaseSignIn(source){
   if(fromGate)setAuthGateBusy(true,'auth_loading');
   try{
     setSyncStatus('connecting');await ensureFirebaseApp();
-    const result=await fbAuth.signInWithEmailAndPassword(creds.email,creds.password);fbUser=result.user||await getFirebaseUser();
+    const result=await fbAuth.signInWithEmailAndPassword(creds.email,creds.password);try{localStorage.setItem('egtph_rh_login_at',String(Date.now()));}catch(e){}fbUser=result.user||await getFirebaseUser();
     if(!fbAllowedUser(fbUser)){
       try{await fbAuth.signOut();}catch(e){}
       fbUser=null;closeFirebaseListener();setSyncStatus('error',t('sync_auth_wrong'));
@@ -3047,9 +3047,17 @@ async function initCloudSync(){
   setSyncStatus('connecting');
   try{
     await ensureFirebaseApp();fbUser=await getFirebaseUser();
+    if(fbUser){let la=0;try{la=Number(localStorage.getItem('egtph_rh_login_at'))||0;}catch(e){}
+      if(!la){try{localStorage.setItem('egtph_rh_login_at',String(Date.now()));}catch(e){}}
+      else if(Date.now()-la>10*24*60*60*1000){try{localStorage.removeItem('egtph_rh_login_at');await fbAuth.signOut();}catch(e){}fbUser=null;}}
     if(!fbUser){closeFirebaseListener();setSyncStatus('offline',t('sync_auth_required'));showAuthGate('auth_required','info');return false;}
     if(!fbAllowedUser(fbUser)){closeFirebaseListener();setSyncStatus('error',t('sync_auth_wrong'));showAuthGate('auth_wrong_account','error');return false;}
-    fbDb=firebase.database(fbApp);fbRef=fbDb.ref(FIREBASE_ROOT_PATH);fbReady=true;fbApplyViewerMode();
+    fbDb=firebase.database(fbApp);
+    if(fbIsViewer()){let allowed=false;try{allowed=(await fbDb.ref('_viewer/rh').once('value')).val()===true;}catch(e){allowed=false;}
+      if(!allowed){fbDb=null;fbApplyViewerMode();const w=document.createElement('div');w.style.cssText='position:fixed;inset:0;z-index:2147483002;background:#0d0f14;color:#f0f0f0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;font:15px Arial,sans-serif;direction:rtl';
+        w.innerHTML='<div style="font-size:42px">🔒</div><div><b>لا تملك صلاحية الدخول إلى هذا البرنامج</b><br><span style="color:#9a9ea6;font-size:13px">يمنحها المسير من لوحة التحكم.</span></div><button type="button" style="background:#fff;color:#111;border:0;border-radius:8px;padding:9px 18px;font-weight:700">خروج</button>';
+        document.body.appendChild(w);w.querySelector('button').onclick=async()=>{try{await fbAuth.signOut();}catch(e){}location.reload();};hideAuthGate();return false;}}
+    fbRef=fbDb.ref(FIREBASE_ROOT_PATH);fbReady=true;fbApplyViewerMode();
     fbDb.ref('.info/serverTimeOffset').on('value',snap=>{fbOffset=Number(snap.val())||0;});
     const first=await fbRef.once('value');const remote=first.val();
     if(fbIsViewer()){if(remote)applyRemoteEnvelope(remote);}
