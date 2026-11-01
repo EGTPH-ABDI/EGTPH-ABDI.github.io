@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head><script src="../egtph-lock.js"></script>
+<script src="../egtph-auth.js"></script>
+<meta charset="UTF-8">
+<script>
+/* Module autonome Firebase Authentication : génère un vrai ID token compatible avec les règles Realtime Database. */
+(function(global){
+  'use strict';
+  if(global.EGTPHAuth) return;
+  function storageKey(appId){ return 'egtph_auth_'+appId; }
+  function saveSession(appId,data){ try{ localStorage.setItem(storageKey(appId),JSON.stringify({idToken:data.idToken,refreshToken:data.refreshToken,expiresAt:Date.now()+(parseInt(data.expiresIn||'3600',10)*1000)-60000,uid:data.localId||data.uid||null})); }catch(e){} }
+  function loadSession(appId){ try{return JSON.parse(localStorage.getItem(storageKey(appId)));}catch(e){return null;} }
+  function clearSession(appId){ try{localStorage.removeItem(storageKey(appId));}catch(e){} }
+  function signIn(apiKey,email,password){ return fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key='+apiKey,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,password:password,returnSecureToken:true})}).then(function(r){if(!r.ok)return r.json().then(function(e){throw new Error((e.error&&e.error.message)||'AUTH_FAILED');});return r.json();}); }
+  function refreshToken(apiKey,refreshTok){ return fetch('https://securetoken.googleapis.com/v1/token?key='+apiKey,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'grant_type=refresh_token&refresh_token='+encodeURIComponent(refreshTok)}).then(function(r){if(!r.ok)throw new Error('REFRESH_FAILED');return r.json();}).then(function(d){return{idToken:d.id_token,refreshToken:d.refresh_token,expiresIn:d.expires_in,uid:d.user_id};}); }
+  function buildOverlay(){
+    var existing=document.getElementById('egtphAuthOverlay');if(existing)return existing;
+    var css=document.createElement('style');css.textContent='#egtphAuthOverlay{position:fixed;inset:0;z-index:99999;background:rgba(10,10,12,.92);display:flex;align-items:center;justify-content:center;padding:20px;font-family:Arial,sans-serif}#egtphAuthOverlay .eg-card{background:#1c1e24;border:1px solid #2c2f38;border-radius:14px;padding:26px 22px;width:100%;max-width:280px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.5)}#egtphAuthOverlay h2{color:#f0f0f0;font-size:15px;margin-bottom:4px}#egtphAuthOverlay p{color:#9a9ea6;font-size:12px;margin-bottom:14px}#egtphAuthOverlay input{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #333740;background:#262932;color:#f0f0f0;font-size:15px;text-align:center;box-sizing:border-box}#egtphAuthOverlay button{width:100%;margin-top:10px;padding:10px;border:0;border-radius:8px;background:#ff7a1a;color:#1a0f06;font-weight:700;font-size:13px;cursor:pointer}#egtphAuthOverlay .eg-err{color:#ff8a78;font-size:12px;margin-top:8px;min-height:1em}';document.head.appendChild(css);
+    var wrap=document.createElement('div');wrap.id='egtphAuthOverlay';wrap.innerHTML='<div class="eg-card"><h2>EGTPH — تسجيل الدخول</h2><p>البرنامج محمي بكلمة سر — اكتبها لاسترجاع البيانات</p><form id="egtphAuthForm"><input type="password" id="egtphAuthPass" autocomplete="current-password" autofocus><button type="submit">دخول</button></form><div class="eg-err" id="egtphAuthErr"></div></div>';document.body.appendChild(wrap);return wrap;
+  }
+  function promptLogin(opts){return new Promise(function(resolve){var overlay=buildOverlay();overlay.style.display='flex';var form=document.getElementById('egtphAuthForm'),pass=document.getElementById('egtphAuthPass'),err=document.getElementById('egtphAuthErr');pass.focus();function submit(e){e.preventDefault();err.textContent='...';signIn(opts.apiKey,opts.email,pass.value).then(function(d){saveSession(opts.appId,d);form.removeEventListener('submit',submit);overlay.style.display='none';pass.value='';resolve(d.idToken);}).catch(function(){err.textContent='كلمة السر غير صحيحة. أعد المحاولة.';pass.value='';pass.focus();});}form.addEventListener('submit',submit);});}
+  var sessions={};
+  function scheduleRefresh(appId){var s=sessions[appId];if(!s)return;if(s.refreshTimer)clearTimeout(s.refreshTimer);var sess=loadSession(appId);if(!sess)return;var delay=Math.max(5000,sess.expiresAt-Date.now()-5000);s.refreshTimer=setTimeout(function(){var cur=loadSession(appId);if(!cur||!cur.refreshToken)return;refreshToken(s.opts.apiKey,cur.refreshToken).then(function(d){saveSession(appId,d);s.token=d.idToken;if(s.opts.onTokenChange)s.opts.onTokenChange(d.idToken);scheduleRefresh(appId);}).catch(function(){clearSession(appId);ensureLogin(appId,s.opts);});},delay);}
+  function ensureLogin(appId,opts){var sess=loadSession(appId);if(sess&&sess.idToken&&Date.now()<sess.expiresAt){sessions[appId]={token:sess.idToken,opts:opts};scheduleRefresh(appId);if(opts.onReady)opts.onReady(sess.idToken);return Promise.resolve(sess.idToken);}if(sess&&sess.refreshToken){return refreshToken(opts.apiKey,sess.refreshToken).then(function(d){saveSession(appId,d);sessions[appId]={token:d.idToken,opts:opts};scheduleRefresh(appId);if(opts.onReady)opts.onReady(d.idToken);return d.idToken;}).catch(function(){clearSession(appId);return promptLogin(opts).then(function(token){sessions[appId]={token:token,opts:opts};scheduleRefresh(appId);if(opts.onReady)opts.onReady(token);return token;});});}return promptLogin(opts).then(function(token){sessions[appId]={token:token,opts:opts};scheduleRefresh(appId);if(opts.onReady)opts.onReady(token);return token;});}
+  global.EGTPHAuth={init:function(opts){if(!opts||!opts.appId||!opts.apiKey||!opts.email){console.error('EGTPHAuth.init: configuration manquante');return;}ensureLogin(opts.appId,opts);},getToken:function(appId){return sessions[appId]?sessions[appId].token:null;},authParam:function(appId){var t=sessions[appId]?sessions[appId].token:null;return t?('?auth='+encodeURIComponent(t)):'';},logout:function(appId){clearSession(appId);delete sessions[appId];}};
+})(window);
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Système EGTPH - Pro (v9.8)</title>
+<style>
+:root{--primary:#2c3e50;--secondary:#3498db;--accent:#e67e22;--light:#f8f9fa;--border:#dee2e6;--success:#27ae60;--danger:#e74c3c;}
+*{box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
+body{background:#f0f2f5;margin:0;padding:20px;color:#333;}
+.container{max-width:1300px;margin:0 auto;background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.1);overflow:hidden;}
+.header{background:linear-gradient(135deg,var(--primary),#1a252f);color:white;padding:20px 25px;text-align:center;position:relative;}
+.header h1{margin:0;font-size:1.5rem;letter-spacing:1px;}
+.header .ids{font-size:0.8rem;opacity:0.9;margin-top:5px;line-height:1.4;}
+.mode-badge{position:absolute;top:15px;right:20px;background:var(--success);color:white;padding:5px 12px;border-radius:20px;font-size:0.8rem;font-weight:600;display:none;}
+.mode-badge.active{display:block;}
+.stats-bar{display:flex;background:#1a252f;}
+.stat-item{flex:1;text-align:center;padding:8px;border-right:1px solid rgba(255,255,255,0.1);color:white;}
+.stat-item:last-child{border-right:none;}
+.stat-value{font-size:1.05rem;font-weight:700;color:#3498db;}
+.stat-label{font-size:0.7rem;opacity:0.7;}
+.tabs{display:flex;background:var(--light);border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.tab{flex:1;min-width:150px;padding:12px;cursor:pointer;border:none;background:none;font-weight:600;color:#555;transition:0.3s;}
+.tab.active{color:var(--secondary);border-bottom:3px solid var(--secondary);background:white;}
+.content{padding:25px;}
+.section{display:none;animation:fadeIn 0.3s ease;}
+.section.active{display:block;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px;margin-bottom:20px;}
+.form-group label{display:block;margin-bottom:5px;font-weight:600;font-size:0.85rem;color:#444;}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:6px;font-size:0.9rem;}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--secondary);box-shadow:0 0 0 2px rgba(52,152,219,0.2);}
+table{width:100%;border-collapse:collapse;margin:15px 0;background:white;font-size:0.9rem;}
+th,td{padding:10px 8px;text-align:center;border:1px solid var(--border);vertical-align:top;}
+th{background:var(--light);font-weight:600;color:var(--primary);}
+input.tbl,textarea.tbl{width:100%;border:none;background:transparent;padding:6px;text-align:center;resize:vertical;}
+input.tbl[type=number]{-moz-appearance:textfield;padding:6px 2px;}
+input.tbl[type=number]::-webkit-outer-spin-button,input.tbl[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+textarea.tbl.desig{text-align:left;min-height:40px;}
+.progress-wrap{position:relative;width:100%;}
+.progress-bar-bg{height:5px;background:#eee;border-radius:3px;margin-top:4px;}
+.progress-bar-fill{height:5px;background:var(--success);border-radius:3px;transition:width 0.3s;}
+.btn{padding:9px 16px;border:none;border-radius:6px;cursor:pointer;font-weight:600;transition:0.2s;margin:3px;font-size:0.85rem;}
+.btn:hover{opacity:0.85;}
+.btn-primary{background:var(--secondary);color:white;}
+.btn-success{background:var(--success);color:white;}
+.btn-warning{background:var(--accent);color:white;}
+.btn-danger{background:var(--danger);color:white;padding:5px 8px;font-size:0.75rem;}
+.btn-outline{background:white;border:1px solid var(--secondary);color:var(--secondary);}
+.btn-purple{background:#8e44ad;color:white;}
+.btn-sm{padding:5px 10px;font-size:0.8rem;}
+.totals-box{background:var(--light);padding:15px;border-radius:8px;max-width:340px;margin-left:auto;margin-top:20px;border:1px solid var(--border);}
+.total-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed #ccc;font-size:0.9rem;}
+.total-row:last-child{border-bottom:none;font-weight:bold;font-size:1.1rem;color:var(--primary);margin-top:6px;border-top:2px solid var(--border);padding-top:8px;}
+.actions{margin:20px 0;text-align:center;padding-bottom:15px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
+.client-card{background:white;border:1px solid var(--border);padding:12px;margin-bottom:10px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;}
+.client-info h4{margin:0 0 4px;color:var(--primary);}
+.client-info p{margin:2px 0;font-size:0.85rem;color:#666;}
+
+.client-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+.client-recovery-panel{margin:0 0 15px;padding:12px;border:1px dashed #d69016;border-radius:8px;background:#fff8e9;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:.84rem;color:#6b4a0f;}
+.client-recovery-panel p{margin:0;max-width:740px;line-height:1.45;}
+.client-source{display:inline-block;margin-top:5px;padding:2px 6px;border-radius:9px;background:#fff3d8;color:#87570a;font-size:.72rem;}
+.client-modal{display:none;position:fixed;inset:0;z-index:10000;background:rgba(20,30,42,.55);padding:18px;overflow:auto;}
+.client-modal.open{display:flex;align-items:flex-start;justify-content:center;}
+.client-modal-card{width:min(980px,100%);margin:24px auto;background:#fff;border-radius:12px;box-shadow:0 18px 55px rgba(0,0,0,.32);padding:20px;position:relative;}
+.client-modal-close{position:absolute;right:12px;top:10px;border:0;background:transparent;font-size:24px;color:#666;cursor:pointer;line-height:1;}
+.client-file-head{padding-right:30px;border-bottom:1px solid var(--border);margin-bottom:14px;}
+.client-file-head h3{margin:0 0 5px;color:var(--primary);}
+.client-file-head p{margin:0 0 12px;color:#666;font-size:.86rem;}
+.client-file-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:12px 0 16px;}
+.client-file-stat{background:var(--light);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:.8rem;color:#5a6370;}
+.client-file-stat strong{display:block;font-size:1rem;color:var(--primary);margin-top:3px;}
+.client-file-table{font-size:.83rem;}
+.client-file-table td,.client-file-table th{padding:8px 6px;}
+.client-recovery-detail{margin:10px 0 14px;padding:8px 10px;background:#fff8e9;border:1px solid #f0d28b;border-radius:6px;font-size:.8rem;color:#704f14;}
+@media (max-width:640px){.client-card{align-items:flex-start;gap:10px;flex-direction:column;}.client-actions{justify-content:flex-start;}.client-modal{padding:8px;}.client-modal-card{padding:16px 12px;margin:8px auto;}.client-file-table{font-size:.74rem;}.client-file-table th,.client-file-table td{padding:6px 3px;}}
+
+.filter-bar{display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap;align-items:center;}
+.active-filter-badge{background:var(--secondary);color:white;padding:4px 10px;border-radius:12px;font-size:0.8rem;display:inline-flex;align-items:center;gap:5px;}
+.active-filter-badge .close{cursor:pointer;font-weight:bold;}
+.alert{padding:10px;margin-bottom:15px;border-radius:6px;font-size:0.9rem;display:none;}
+.alert-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;}
+.hist-stats{display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap;}
+.hist-stat{background:var(--light);border:1px solid var(--border);padding:8px 14px;border-radius:8px;font-size:0.85rem;}
+.hist-stat strong{color:var(--primary);display:block;font-size:1rem;}
+#toast{position:fixed;bottom:30px;right:30px;background:#2c3e50;color:white;padding:12px 20px;border-radius:8px;font-size:0.9rem;display:none;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);}
+#toast.success{background:var(--success);}
+#toast.error{background:var(--danger);}
+.cloud-status{display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:14px;border-radius:7px;border:1px solid #b9d9f5;background:#eef7ff;color:#1a5276;font-size:.86rem;line-height:1.35}.cloud-status.ok{background:#edf9f1;border-color:#b7e5c6;color:#1e6b3a}.cloud-status.warn{background:#fff8e9;border-color:#f0d28b;color:#7b5615}.cloud-status.error{background:#fff1f1;border-color:#efb9b9;color:#9b3030}.cloud-status strong{margin-left:auto;font-size:.78rem;white-space:nowrap}.cloud-recovery-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:-6px 0 14px;padding:9px 10px;background:#fff8e9;border:1px dashed #f0d28b;border-radius:7px;font-size:.82rem;color:#704f14}.cloud-recovery-actions .btn{margin:0;white-space:nowrap}@media (max-width:640px){.cloud-recovery-actions{align-items:flex-start;flex-direction:column}.cloud-recovery-actions .btn{width:100%;margin-top:1px}}
+
+.avan-link{font-size:0.82rem;color:var(--secondary);cursor:pointer;text-decoration:underline;margin-left:10px;}
+
+/* Navigation et affichage tactile : iPhone / Android.
+   Le balayage sur une zone libre passe à l'onglet voisin ; les champs, boutons,
+   listes et tableaux restent protégés afin de ne jamais interrompre une saisie. */
+.mobile-swipe-hint{display:none;}
+.table-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x;}
+.table-wrap>table{min-width:680px;margin:10px 0;}
+@media (max-width:768px){
+  html{overscroll-behavior-x:none;}
+  body{padding:0;overflow-x:hidden;}
+  .container{min-height:100dvh;border-radius:0;box-shadow:none;}
+  .header{padding:15px 12px 18px;}
+  .header h1{font-size:1.15rem;letter-spacing:.2px;}
+  .header .ids{font-size:.69rem;overflow-wrap:anywhere;}
+  .mode-badge{right:9px;top:auto;bottom:7px;font-size:.7rem;padding:4px 8px;max-width:72%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .stats-bar{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .stat-item{min-width:25%;padding:7px 4px;}
+  .stat-value{font-size:.9rem;}
+  .stat-label{font-size:.62rem;}
+  .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scrollbar-width:none;touch-action:pan-x;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tab{flex:0 0 auto;min-width:auto;padding:11px 14px;white-space:nowrap;scroll-snap-align:center;}
+  .mobile-swipe-hint{display:block;text-align:center;padding:6px 10px 5px;font-size:.72rem;color:#66727e;background:#f8f9fa;border-bottom:1px solid var(--border);}
+  .content{padding:14px 11px 18px;}
+  .form-grid{grid-template-columns:1fr;gap:10px;margin-bottom:14px;}
+  .form-group[style*="grid-column"]{grid-column:auto !important;}
+  .form-group input,.form-group select,.form-group textarea{font-size:16px;/* évite le zoom iOS pendant la saisie */}
+  .table-wrap{margin:0 -2px;}
+  .table-wrap>table{font-size:.79rem;}
+  #itemsTable{min-width:790px;}
+  .totals-box{max-width:none;margin-left:0;}
+  .actions{position:sticky;bottom:0;z-index:50;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);margin:14px -11px -18px;padding:9px 8px calc(9px + env(safe-area-inset-bottom));border-top:1px solid var(--border);gap:4px;}
+  .actions .btn{padding:8px 10px;margin:1px;font-size:.78rem;}
+  #toast{left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));text-align:center;}
+}
+@media print{
+body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+.no-print{display:none !important;}
+#print-area{display:block !important;width:100%;max-width:210mm;margin:0 auto;padding:12px;font-family:'Arial',sans-serif;color:#000;font-size:10px;line-height:1.3;}
+.print-header{text-align:center;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:8px;}
+.print-header h2{margin:0 0 2px;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;}
+.print-header .ids{font-size:9px;margin:2px 0;white-space:nowrap;}
+.print-info{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px;font-size:10px;}
+.print-info div{border:1px solid #000;padding:4px 6px;background:#fafafa;overflow:hidden;}
+.print-table{width:100%;border-collapse:collapse;margin-bottom:8px;font-size:9px;page-break-inside:avoid;}
+.print-table th,.print-table td{border:1px solid #000;padding:3px 5px;text-align:center;vertical-align:middle;}
+.print-table th{background-color:#f0f0f0;font-weight:bold;}
+.print-table .desig-cell{text-align:left;white-space:pre-wrap;}
+.totals-grid{display:grid;grid-template-columns:1fr 130px;border:1px solid #000;font-size:9px;margin-bottom:10px;}
+.totals-grid > div{border-bottom:1px solid #000;padding:4px 6px;display:flex;justify-content:space-between;}
+.totals-grid > div:last-child{border-bottom:none;background:#e8f4f8;font-weight:bold;font-size:10px;}
+.amount-words{margin-top:6px;font-style:italic;font-size:9px;padding:5px;border:1px solid #000;background:#fafafa;text-align:center;}
+.print-footer{margin-top:15px;font-size:8px;text-align:center;color:#555;}
+.print-notes{margin-top:6px;font-size:9px;padding:5px;border:1px solid #000;background:#fafafa;}
+}
+#print-area{display:none;}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+<div class="container no-print">
+<div class="header">
+<h1>🏗️ Système EGTPH - Pro (v9.8)</h1>
+<div class="ids" id="uiCoIds">RC: 02/00-4566908A15 | NIF: 192020105006199 | NIS: 1 992 0201 05006 48 | NIN: 109920029050060008</div>
+<div style="margin-top:3px" id="uiCoSub">Entreprise des Grands Travaux Publics et Hydrauliques – CHLEF</div>
+<div id="uiCoAddr" style="display:none"></div>
+<div id="modeBadge" class="mode-badge">📝 Mode Édition Actif</div>
+</div>
+
+<div class="stats-bar">
+<div class="stat-item"><div class="stat-value" id="statDocs">0</div><div class="stat-label">Documents</div></div>
+<div class="stat-item"><div class="stat-value" id="statClients">0</div><div class="stat-label">Clients</div></div>
+<div class="stat-item"><div class="stat-value" id="statFact">0</div><div class="stat-label">Total Factures (DA)</div></div>
+<div class="stat-item"><div class="stat-value" id="statSit">0</div><div class="stat-label">Total Situations (DA)</div></div>
+</div>
+
+<div class="tabs">
+<button class="tab active" onclick="enterDocTab(this)">📄 Document</button>
+<button class="tab" onclick="switchTab('sec-clients',this)">👥 Clients</button>
+<button class="tab" onclick="switchTab('sec-history',this)">📜 Historique</button>
+<button class="tab" onclick="switchTab('sec-settings',this)">⚙️ Réglages</button>
+</div>
+<div class="mobile-swipe-hint" aria-hidden="true">↔️ اسحب في مساحة فارغة يمينًا أو يسارًا للتنقل بين الشاشات</div>
+
+<div class="content">
+<div id="sec-doc" class="section active">
+<div id="storageAlert" class="alert alert-error">⚠️ التخزين المحلي غير متفعل.</div>
+<div id="cloudStatus" class="cloud-status" style="display:none"><span>☁️</span><span id="cloudStatusText"></span><strong id="cloudStatusMeta"></strong></div>
+<div id="cloudRecoveryActions" class="cloud-recovery-actions" style="display:none"><span id="cloudRecoveryHint"></span><button id="cloudReconnectBtn" class="btn btn-outline btn-sm" type="button" onclick="reconnectFirebase()" style="display:none">🔐 إعادة تسجيل الدخول</button></div>
+<div id="legacyRecoveryActions" class="cloud-recovery-actions" style="display:none"></div>
+<div class="form-grid">
+<div class="form-group"><label>Type Document</label>
+<select id="docType" onchange="onTypeChange();syncPrint()"><option>DEVIS</option><option>FACTURE</option><option>AVOIR</option><option selected>SITUATION ACTUELLE</option><option>DÉCOMPTE FINAL</option></select></div>
+<div class="form-group"><label>N° Document</label><input type="text" id="docNum" placeholder="Ex: 101/2026" oninput="syncPrint()"></div>
+<div class="form-group"><label>Date</label><input type="date" id="docDate" oninput="syncPrint()"></div>
+<div class="form-group"><label>Client / Projet</label>
+<input type="text" id="clientName" placeholder="Nom du client" list="clientsList" oninput="syncPrint()">
+<datalist id="clientsList"></datalist></div>
+<div class="form-group"><label>Réf. Interne</label><input type="text" id="refInt" placeholder="REF-XXX" oninput="syncPrint()"></div>
+<div class="form-group"><label>Mode Paiement</label>
+<select id="payMode" onchange="syncPrint()"><option selected>ESPÈCES</option><option>CHÈQUE</option><option>VIREMENT</option></select></div>
+<div class="form-group"><label>N° Chèque/Vir.</label><input type="text" id="payRef" oninput="syncPrint()"></div>
+<div class="form-group"><label>Banque</label><input type="text" id="bank" oninput="syncPrint()"></div>
+<div class="form-group" id="payDateGroup"><label>Date Paiement</label><input type="date" id="payDate" oninput="syncPrint()"></div>
+<div class="form-group"><label>TVA</label>
+<select id="tvaRate" onchange="calc();syncPrint()"><option selected value="0">0% (Exonéré)</option><option value="0.09">9%</option><option value="0.19">19%</option></select></div>
+<div class="form-group"><label>Retenue de Garantie (%)</label>
+<input type="number" id="garantieRate" value="0" min="0" max="100" step="0.5" placeholder="Ex: 5" oninput="calc();syncPrint()"></div>
+<div class="form-group" style="grid-column:1/-1"><label>Observations / Notes</label>
+<textarea id="docNotes" rows="2" placeholder="Conditions de paiement, remarques..." style="width:100%;padding:9px;border:1px solid var(--border);border-radius:6px;" oninput="syncPrint()"></textarea></div>
+</div>
+
+<h3 style="margin:15px 0 8px;color:var(--primary)">📦 Articles
+<span id="avanLink" class="avan-link" onclick="toggleAvan()" style="display:none">📊 Afficher Avancement %</span>
+</h3>
+<div class="table-wrap" aria-label="Table des articles"><table id="itemsTable"><thead><tr>
+<th style="width:35px">N°</th><th>Désignation</th>
+<th style="width:95px">Qté</th><th style="width:60px">Unité</th>
+<th style="width:90px">P.U HT (DA)</th>
+<th id="colAvanH" style="width:90px;display:none">Avance %</th>
+<th style="width:95px">Montant HT</th>
+<th style="width:35px"></th>
+</tr></thead><tbody id="itemsBody"></tbody></table></div>
+<button class="btn btn-primary btn-sm" onclick="addItem()">+ Ajouter Article</button>
+
+<h3 style="margin:20px 0 8px;color:var(--primary)">💰 Acomptes / Déductions</h3>
+<div class="table-wrap" aria-label="Table des acomptes"><table><thead><tr><th style="width:100px">Date</th><th>Désignation / Mode</th><th style="width:100px">Montant (DA)</th><th style="width:35px"></th></tr></thead><tbody id="deductionsBody"></tbody></table></div>
+<button class="btn btn-outline btn-sm" onclick="addDeduction()">+ Ajouter Acompte</button>
+
+<div class="totals-box">
+<div class="total-row"><span>Total H.T.</span><span id="tHT">0,00</span></div>
+<div class="total-row"><span>TVA (<span id="tTvaLbl">0</span>%)</span><span id="tTVA">0,00</span></div>
+<div class="total-row" id="garRow" style="display:none"><span>Ret. Garantie (<span id="tGarLbl">0</span>%)</span><span id="tGar" style="color:var(--danger)">- 0,00</span></div>
+<div class="total-row"><span>Total Acomptes</span><span id="tAcc">- 0,00</span></div>
+<div class="total-row"><span>NET À PAYER</span><span id="tNet">0,00</span></div>
+</div>
+<div style="margin-top:10px;font-size:0.85rem;color:#555;">
+<label>Arrêté à la somme de :</label>
+<div id="amtWords" style="background:#f8f9fa;padding:6px;border-radius:4px;border:1px dashed #ccc;font-style:italic;margin-top:3px;min-height:20px;">ZÉRO DINARS ALGÉRIENS</div>
+</div>
+</div>
+
+<div id="sec-clients" class="section">
+<div class="filter-bar">
+<input type="text" id="searchClient" placeholder="🔍 Rechercher client..." style="flex:1;padding:8px;border:1px solid #ccc;border-radius:5px;" oninput="renderClients()">
+<button class="btn btn-primary" onclick="addClient()">+ Nouveau Client</button>
+</div>
+<div class="client-recovery-panel" style="border-color:#b9dff7;background:#f3fbff">
+  <p><strong>Document intégré et synchronisé :</strong> la situation <strong>102/2026</strong> de <strong>DJALOUL RAHMOUN</strong> est enregistrée comme document normal, avec ses neuf désignations, quantités, unités, prix unitaires, versement et calculs. Elle se synchronise après connexion Firebase. Ouvrez-la depuis <strong>Historique</strong> ou le fichier client pour la modifier.</p>
+</div>
+<div id="clientsListContainer"></div>
+</div>
+
+<div id="sec-history" class="section">
+<div id="histStats" class="hist-stats"></div>
+<div class="filter-bar">
+<input type="text" id="histSearch" placeholder="🔍 Rechercher (N°, Client)..." style="flex:1;min-width:140px;padding:8px;border:1px solid #ccc;border-radius:5px;" oninput="renderHistory()">
+<select id="histTypeFilter" style="padding:8px;border:1px solid #ccc;border-radius:5px;" onchange="renderHistory()">
+<option value="">Tous les types</option><option>DEVIS</option><option>FACTURE</option><option>AVOIR</option><option>SITUATION ACTUELLE</option><option>DÉCOMPTE FINAL</option>
+</select>
+<input type="date" id="histDateFrom" style="padding:8px;border:1px solid #ccc;border-radius:5px;" onchange="renderHistory()" title="Du">
+<input type="date" id="histDateTo" style="padding:8px;border:1px solid #ccc;border-radius:5px;" onchange="renderHistory()" title="Au">
+<button class="btn btn-sm btn-outline" onclick="clearHistFilters()">✖ Effacer</button>
+<div id="clientFilterBadge"></div>
+</div>
+<div class="table-wrap" aria-label="Table historique"><table><thead><tr><th>Date</th><th>Type</th><th>N°</th><th>Client</th><th>H.T.</th><th>Net</th><th>Actions</th></tr></thead><tbody id="histBody"></tbody></table></div>
+</div>
+
+<div id="sec-settings" class="section">
+<h3 style="margin:5px 0 12px;color:var(--primary)">⚙️ Informations de l'entreprise</h3>
+<div style="font-size:0.82rem;color:#666;margin-bottom:14px;">Ces informations apparaissent sur l'en-tête des documents imprimés et se synchronisent avec le cloud.</div>
+<div class="form-grid">
+<div class="form-group" style="grid-column:1/-1"><label>Nom de l'entreprise</label><input type="text" id="setCoName" placeholder="EGTPH ABDI YOUSSOUF ISLAM"></div>
+<div class="form-group" style="grid-column:1/-1"><label>Activité / Sous-titre</label><input type="text" id="setCoSub" placeholder="Entreprise des Grands Travaux Publics et Hydrauliques – CHLEF"></div>
+<div class="form-group" style="grid-column:1/-1"><label>Adresse</label><input type="text" id="setCoAddr" placeholder="Ex: Zone Oued Sly, Chlef"></div>
+<div class="form-group"><label>RC</label><input type="text" id="setCoRC" placeholder="02/00-4566908A15"></div>
+<div class="form-group"><label>NIF</label><input type="text" id="setCoNIF" placeholder="192020105006199"></div>
+<div class="form-group"><label>NIS</label><input type="text" id="setCoNIS" placeholder="1 992 0201 05006 48"></div>
+<div class="form-group"><label>NIN</label><input type="text" id="setCoNIN" placeholder="109920029050060008"></div>
+</div>
+<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+<button class="btn btn-primary" onclick="saveCompany()">💾 Enregistrer</button>
+<button class="btn btn-outline" onclick="resetCompany()">↺ Valeurs par défaut</button>
+</div>
+<div id="setPreview" style="margin-top:16px;padding:12px;border:1px dashed #ccc;border-radius:6px;background:#f8f9fa;font-size:0.85rem;"></div>
+</div>
+</div>
+
+<div class="actions">
+<button class="btn btn-success" onclick="window.print()">🖨️ Imprimer / PDF</button>
+<button class="btn btn-primary" onclick="saveDoc()">💾 Sauvegarder</button>
+<button class="btn" style="background:#16a085;color:white" onclick="saveAsNew()">🆕 Enregistrer sous</button>
+<button class="btn btn-outline" onclick="cancelEdit()">↩️ Annuler</button>
+<button class="btn btn-outline" id="btnUndo" onclick="undoEdit()">↶ Défaire</button>
+<button class="btn btn-outline" id="btnRedo" onclick="redoEdit()">↷ Refaire</button>
+<button class="btn btn-outline" onclick="goBackHistory()">⬅️ Retour</button>
+<span id="cloudDot" title="Synchroniser maintenant" onclick="cloudSync(true)" style="cursor:pointer;font-size:16px;vertical-align:middle;">⚪</span>
+<button class="btn btn-outline" type="button" onclick="reconnectFirebase()">🔐 إعادة دخول Firebase</button>
+<button class="btn btn-purple" onclick="duplicateDoc()">📋 Dupliquer</button>
+<button class="btn btn-warning" onclick="loadDemoData()">📥 تحميل بيانات التجربة</button>
+<button class="btn btn-outline" onclick="newDoc()">↺ Nouveau</button>
+<button class="btn btn-warning" onclick="exportJSON()">📤 Exporter JSON</button>
+<button class="btn btn-outline" onclick="document.getElementById('jsonImportInput').click()">📥 Importer JSON</button>
+<input type="file" id="jsonImportInput" accept=".json" onchange="importJSON(this)" style="display:none">
+<button class="btn btn-outline" onclick="exportCSV()">📊 Exporter CSV</button>
+<button class="btn btn-danger" onclick="deleteDoc()">🗑️ Supprimer</button>
+</div>
+</div>
+
+<!-- CLIENT FILE MODAL -->
+<div id="clientFileModal" class="client-modal no-print" role="dialog" aria-modal="true" aria-labelledby="clientFileTitle" onclick="if(event.target===this)closeClientFile()">
+  <div class="client-modal-card">
+    <button class="client-modal-close" type="button" aria-label="Fermer" onclick="closeClientFile()">×</button>
+    <div id="clientFileContent"></div>
+  </div>
+</div>
+
+<!-- PRINT AREA -->
+<div id="print-area">
+<div class="print-header">
+<h2 id="pCoName">🏗️ EGTPH ABDI YOUSSOUF ISLAM</h2>
+<div class="ids" id="pCoIds">RC: 02/00-4566908A15 | NIF: 192020105006199 | NIS: 1 992 0201 05006 48 | NIN: 109920029050060008</div>
+<div id="pCoSub">Entreprise des Grands Travaux Publics et Hydrauliques – CHLEF</div>
+<div id="pCoAddr" style="display:none"></div>
+</div>
+<div class="print-info">
+<div><strong>Type :</strong> <span id="pType"></span></div><div><strong>N° :</strong> <span id="pNum"></span></div>
+<div><strong>Date :</strong> <span id="pDate"></span></div><div><strong>Client :</strong> <span id="pClient"></span></div>
+<div><strong>Réf. :</strong> <span id="pRef"></span></div><div><strong>Paiement :</strong> <span id="pPayMode"></span></div>
+<div><strong>N° Chèque/Vir. :</strong> <span id="pPayRef"></span></div><div><strong>Banque :</strong> <span id="pBank"></span></div>
+<div id="pPayDateRow"><strong>Date Paiement :</strong> <span id="pPayDate"></span></div><div><strong>Ret. Garantie :</strong> <span id="pGarInfo"></span></div>
+</div>
+<table class="print-table">
+<thead><tr><th>N°</th><th class="desig-cell">Désignation</th><th>Qté</th><th>Unité</th><th>P.U HT</th><th id="pColAvan" style="display:none">Avance %</th><th>Montant HT</th></tr></thead>
+<tbody id="pItemsBody"></tbody>
+</table>
+<table class="print-table" style="margin-top:8px;"><thead><tr><th>Date</th><th>Désignation / Mode</th><th>Montant</th></tr></thead><tbody id="pDeductionsBody"></tbody></table>
+<div class="totals-grid">
+<div>TOTAL H.T. :</div><div id="pTotalHT">0,00</div>
+<div>TVA :</div><div id="pTotalTVA">0,00</div>
+<div id="pGarRow" style="display:none">RETENUE GARANTIE :</div><div id="pTotalGar" style="display:none">0,00</div>
+<div>TOTAL ACOMPTES :</div><div id="pTotalAcc">- 0,00</div>
+<div style="background:#e8f4f8">NET À PAYER :</div><div style="background:#e8f4f8" id="pNet">0,00</div>
+</div>
+<div class="amount-words">Arrêté le présent document à la somme de : <span id="pAmtWords">ZÉRO DINARS ALGÉRIENS</span></div>
+<div id="pNotesBlock" class="print-notes" style="display:none"><strong>Observations :</strong> <span id="pNotes"></span></div>
+<div class="print-footer">Document généré le <span id="pGenDate"></span> via Système EGTPH - Pro v9.8</div>
+</div>
+
+<script>
+// يبقى المفتاح نفسه لضمان بقاء وثيقة PDF 102/2026 وكل تعديلات v9.5 على الهاتف.
+const DB_KEY='egtph_v9_5_pdf_102_database';
+// وثيقة PDF مدمجة كوثيقة عادية قابلة للتعديل، مع مزامنة Firebase مفعلة كالمعتاد.
+const PDF_ONLY_MODE=false;
+const DB_BACKUP_PREFIX='egtp_v8_backup_';
+let db={clients:[],documents:[],currentDocId:null};
+let activeFilterClientId=null;
+let showAvan=false;
+let _localRecoveryDone=false;
+let _legacyRecovered=0;
+const fmt=n=>(isNaN(n)?0:n).toLocaleString('fr-DZ',{minimumFractionDigits:2,maximumFractionDigits:2});
+const uuid=()=>'doc_'+Date.now()+'_'+Math.random().toString(36).substr(2,9);
+const cliId=()=>'cli_'+Date.now()+'_'+Math.random().toString(36).substr(2,5);
+
+const DEFAULT_CO={name:'EGTPH ABDI YOUSSOUF ISLAM',sub:'Entreprise des Grands Travaux Publics et Hydrauliques – CHLEF',addr:'ANCIENNE ZEMALA, ANCIENNE CHORFA B1, Chlef',rc:'02/00-4566908A15',nif:'192020105006199',nis:'1 992 0201 05006 48',nin:'109920029050060008',_mod:0};
+function documentUsesAvancement(data){
+  if(data&&typeof data.useAvancement==='boolean')return data.useAvancement;
+  const type=String(data&&data.type||'');
+  if(type!=='SITUATION ACTUELLE'&&type!=='DÉCOMPTE FINAL')return false;
+  return _arr(data&&data.items).some(i=>{const n=parseFloat(i&&i.avancement);return Number.isFinite(n)&&n!==100;});
+}
+
+
+function _arr(v){return Array.isArray(v)?v:(v&&typeof v==='object'?Object.values(v):[]);}
+function _emptyFactDB(){return {clients:[],documents:[],currentDocId:null,company:Object.assign({},DEFAULT_CO)};}
+function normalizeFactDB(raw){
+  const out=(raw&&typeof raw==='object'&&!Array.isArray(raw))?raw:_emptyFactDB();
+  out.documents=_arr(out.documents||out.docs).filter(d=>d&&typeof d==='object').map(d=>{
+    d.items=_arr(d.items);d.deductions=_arr(d.deductions);if(d.recovery&&typeof d.recovery!=='object')delete d.recovery;if(typeof d.useAvancement!=='boolean')d.useAvancement=documentUsesAvancement(d);return d;
+  });
+  out.clients=_arr(out.clients).filter(c=>c&&typeof c==='object').map(c=>{c.docs=_arr(c.docs);if(c.recoveryInfo&&typeof c.recoveryInfo!=='object')delete c.recoveryInfo;return c;});
+  if(!out.company||typeof out.company!=='object')out.company=Object.assign({},DEFAULT_CO);
+  if(!Object.prototype.hasOwnProperty.call(out,'currentDocId'))out.currentDocId=null;
+  return out;
+}
+function isFactDatabase(raw){
+  if(!raw||typeof raw!=='object'||Array.isArray(raw))return false;
+  const docs=_arr(raw.documents||raw.docs);
+  const clients=_arr(raw.clients);
+  if(!docs.length)return !!((raw.documents||raw.docs)&&Array.isArray(raw.documents||raw.docs)&&clients.length);
+  return docs.some(d=>d&&typeof d==='object'&&(Array.isArray(d.items)||Array.isArray(d.deductions)||Object.prototype.hasOwnProperty.call(d,'tvaRate')||Object.prototype.hasOwnProperty.call(d,'garantieRate')));
+}
+function docFingerprint(d){return [String(d&&d.num||'').trim().toLowerCase(),String(d&&d.date||''),String(d&&d.clientName||'').trim().toLowerCase(),String(d&&d.type||'')].join('|');}
+function clientFingerprint(c){return String(c&&c.name||'').trim().toLowerCase();}
+function coalesceFactClients(){
+  const result=[];const byName=new Map();const remap=new Map();
+  _arr(db.clients).forEach(c=>{
+    if(!c||typeof c!=='object')return;
+    if(!c.id)c.id=cliId();
+    const key=clientFingerprint(c);
+    const existing=key?byName.get(key):null;
+    if(!existing){c.docs=_arr(c.docs);result.push(c);if(key)byName.set(key,c);return;}
+    // Un même nom de client ne doit pas produire deux dossiers après une restauration ou une fusion cloud.
+    _arr(c.docs).forEach(id=>{if(existing.docs.indexOf(id)<0)existing.docs.push(id);});
+    const srcNewer=(Number(c._mod)||0)>(Number(existing._mod)||0);
+    if(srcNewer){const keepId=existing.id,keepDocs=existing.docs;Object.assign(existing,c);existing.id=keepId;existing.docs=keepDocs;}
+    remap.set(c.id,existing.id);
+  });
+  if(remap.size)db.documents=_arr(db.documents).map(d=>{if(d&&remap.has(d.clientId))d.clientId=remap.get(d.clientId);return d;});
+  db.clients=result;
+}
+function relinkFactClients(){
+  db.documents=_arr(db.documents);db.clients=_arr(db.clients);coalesceFactClients();
+  const clientsById=new Map(),clientsByName=new Map();
+  db.clients.forEach(c=>{if(!c.id)c.id=cliId();c.docs=[];clientsById.set(c.id,c);if(clientFingerprint(c))clientsByName.set(clientFingerprint(c),c);});
+  db.documents.forEach(d=>{
+    if(!d.id)d.id=uuid();d.items=_arr(d.items);d.deductions=_arr(d.deductions);
+    let c=d.clientId?clientsById.get(d.clientId):null;
+    if(!c&&d.clientName)c=clientsByName.get(String(d.clientName).trim().toLowerCase());
+    if(!c&&String(d.clientName||'').trim()){
+      c={id:cliId(),name:String(d.clientName).trim(),docs:[]};db.clients.push(c);clientsById.set(c.id,c);clientsByName.set(clientFingerprint(c),c);
+    }
+    if(c){d.clientId=c.id;if(c.docs.indexOf(d.id)<0)c.docs.push(d.id);}
+    if(!d.totals||typeof d.totals!=='object'){
+      try{d.totals=calcTotals({items:d.items,deductions:d.deductions,tvaRate:d.tvaRate,garantieRate:d.garantieRate});}catch(e){}
+    }
+  });
+  if(db.currentDocId&&!db.documents.some(d=>d.id===db.currentDocId))db.currentDocId=null;
+}
+function mergeFactDatabase(source){
+  source=normalizeFactDB(source);let added=0,updated=0;
+  const byId=new Map(db.documents.map(d=>[String(d.id||''),d]));
+  const byFingerprint=new Map(db.documents.map(d=>[docFingerprint(d),d]));
+  source.documents.forEach(rd=>{
+    const id=String(rd.id||'');const fp=docFingerprint(rd);const local=(id&&byId.get(id))||byFingerprint.get(fp);
+    if(!local){db.documents.push(rd);if(id)byId.set(id,rd);byFingerprint.set(fp,rd);added++;return;}
+    const rMod=Number(rd._mod)||Date.parse(rd.updatedAt||'')||0;
+    const lMod=Number(local._mod)||Date.parse(local.updatedAt||'')||0;
+    if(rMod>lMod){Object.assign(local,rd);updated++;}
+  });
+  const cById=new Map(db.clients.map(c=>[String(c.id||''),c]));
+  const cByName=new Map(db.clients.map(c=>[clientFingerprint(c),c]));
+  source.clients.forEach(rc=>{
+    const local=(rc.id&&cById.get(String(rc.id)))||cByName.get(clientFingerprint(rc));
+    if(!local){db.clients.push(rc);if(rc.id)cById.set(String(rc.id),rc);cByName.set(clientFingerprint(rc),rc);}
+    else if((Number(rc._mod)||0)>(Number(local._mod)||0))Object.assign(local,rc);
+  });
+  if(source.company&&(Number(source.company._mod)||0)>(Number(db.company&&db.company._mod)||0))db.company=source.company;
+  relinkFactClients();return added+updated;
+}
+function findLegacyFactDatabases(){
+  const found=[];
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const key=localStorage.key(i);if(!key||key===DB_KEY||key.indexOf(DB_BACKUP_PREFIX)===0||key.indexOf('egtph_auth_')===0)continue;
+      const raw=localStorage.getItem(key);if(!raw||raw.length<10)continue;
+      let parsed=null;try{parsed=JSON.parse(raw);}catch(e){continue;}
+      if(isFactDatabase(parsed))found.push({key,data:parsed,score:_arr(parsed.documents||parsed.docs).length*100+_arr(parsed.clients).length});
+    }
+  }catch(e){}
+  return found.sort((a,b)=>b.score-a.score);
+}
+function setCloudRecoveryVisible(show,hint){
+  const box=document.getElementById('cloudRecoveryActions');
+  const text=document.getElementById('cloudRecoveryHint');
+  const btn=document.getElementById('cloudReconnectBtn');
+  if(!box)return;
+  box.style.display=show?'flex':'none';
+  if(text)text.textContent=show?(hint||''):'';
+  if(btn)btn.style.display=show?'inline-block':'none';
+}
+function setCloudStatus(kind,msg,meta){
+  const el=document.getElementById('cloudStatus'),text=document.getElementById('cloudStatusText'),m=document.getElementById('cloudStatusMeta');
+  if(!el)return;el.className='cloud-status '+(kind||'');if(text)text.textContent=msg||'';if(m)m.textContent=meta||'';
+  if(kind==='error'&&_cloudAuthBlocked)setCloudRecoveryVisible(true,'المزامنة أوقفت تلقائيًا لحماية البيانات. إعادة الدخول لا تحذف بيانات الهاتف.');
+  else if(kind!=='error')setCloudRecoveryVisible(false,'');
+}
+function backupRawCurrent(raw){try{if(raw)localStorage.setItem(DB_BACKUP_PREFIX+Date.now(),raw);}catch(e){}}
+
+function applyCompany(){
+  const c=db.company||DEFAULT_CO;
+  const ids='RC: '+(c.rc||'')+' | NIF: '+(c.nif||'')+' | NIS: '+(c.nis||'')+' | NIN: '+(c.nin||'');
+  const set=(id,txt)=>{const el=document.getElementById(id);if(el)el.textContent=txt;};
+  set('pCoName','🏗️ '+(c.name||''));
+  set('pCoIds',ids);set('pCoSub',c.sub||'');
+  set('uiCoIds',ids);set('uiCoSub',c.sub||'');
+  const addr=c.addr||'';
+  ['pCoAddr','uiCoAddr'].forEach(id=>{const el=document.getElementById(id);if(el){el.textContent=addr;el.style.display=addr?'block':'none';}});
+}
+function fillCompanyForm(){
+  const c=db.company||DEFAULT_CO;
+  const v=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val||'';};
+  v('setCoName',c.name);v('setCoSub',c.sub);v('setCoAddr',c.addr);v('setCoRC',c.rc);v('setCoNIF',c.nif);v('setCoNIS',c.nis);v('setCoNIN',c.nin);
+  const p=document.getElementById('setPreview');
+  if(p)p.innerHTML='<strong>Aperçu en-tête :</strong><br>🏗️ '+(c.name||'')+'<br>RC: '+(c.rc||'')+' | NIF: '+(c.nif||'')+' | NIS: '+(c.nis||'')+' | NIN: '+(c.nin||'')+'<br>'+(c.sub||'')+(c.addr?'<br>'+c.addr:'');
+}
+function saveCompany(){
+  const g=id=>(document.getElementById(id).value||'').trim();
+  db.company={name:g('setCoName'),sub:g('setCoSub'),addr:g('setCoAddr'),rc:g('setCoRC'),nif:g('setCoNIF'),nis:g('setCoNIS'),nin:g('setCoNIN'),_mod:nextMod()};
+  saveDB();applyCompany();fillCompanyForm();toast('✅ Informations enregistrées (sync cloud en cours).');
+}
+function resetCompany(){
+  if(!confirm('Restaurer les valeurs par défaut ?'))return;
+  db.company=Object.assign({},DEFAULT_CO,{_mod:nextMod()});
+  saveDB();applyCompany();fillCompanyForm();toast('↺ Valeurs par défaut restaurées.');
+}
+
+function toast(msg,type='success',dur=3000){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className=type;t.style.display='block';
+  clearTimeout(t._t);t._t=setTimeout(()=>{t.style.display='none';},dur);
+}
+
+function checkStorage(){
+  try{localStorage.setItem('t','1');localStorage.removeItem('t');document.getElementById('storageAlert').style.display='none';}
+  catch(e){document.getElementById('storageAlert').style.display='block';}
+}
+function _storeDBSilently(){
+  try{localStorage.setItem(DB_KEY,JSON.stringify(normalizeFactDB(db)));}catch(e){}
+}
+function queueCloudSync(){
+  if(PDF_ONLY_MODE||window._cloudApplying||!navigator.onLine)return;
+  clearTimeout(window._cloudSaveTimer);
+  window._cloudSaveTimer=setTimeout(function(){
+    if(_cloudAuthReady&&!_cloudAuthBlocked&&!_cloudBusy)cloudSync(false);
+  },700);
+}
+function loadDB(){
+  let raw=null,parsed=null;
+  try{raw=localStorage.getItem(DB_KEY);if(raw)parsed=JSON.parse(raw);}catch(e){backupRawCurrent(raw);parsed=null;}
+  db=normalizeFactDB(parsed);
+  relinkFactClients();
+  // وثيقة PDF تبقى وثيقة برنامج عادية، ويُدمج معها ما يوجد في Firebase قبل أي كتابة.
+  const created=ensurePdfSituation102();
+  const firstCloudSeed=!db.cloudSyncInitialized&&(db.documents.length||db.clients.length);
+  _storeDBSilently();
+  if(!PDF_ONLY_MODE&&(created||firstCloudSeed))window._cloudDirty=true;
+  setCloudStatus('warn',created?'تم إدراج وثيقة PDF 102/2026 كوثيقة قابلة للتعديل؛ ستتزامن بعد تسجيل الدخول.':'تم تحميل البيانات المحلية؛ ستتزامن داخل مساحة PDF مستقلة دون استيراد السجلات القديمة.','بانتظار المزامنة');
+  applyCompany();fillCompanyForm();
+  populateClientDatalist();renderClients();renderHistory();updateStats();
+}
+function saveDB(){
+  try{localStorage.setItem(DB_KEY,JSON.stringify(normalizeFactDB(db)));}
+  catch(e){toast('⚠️ تعذر حفظ البيانات محليًا: '+e.message,'error',6000);}
+  updateStats();
+  if(!PDF_ONLY_MODE&&!window._cloudApplying){
+    window._cloudDirty=true;
+    queueCloudSync();
+  }
+}
+
+function updateStats(){
+  document.getElementById('statDocs').textContent=db.documents.length;
+  document.getElementById('statClients').textContent=db.clients.length;
+  const tf=db.documents.filter(d=>d.type==='FACTURE').reduce((s,d)=>s+(d.totals?.net||0),0);
+  const ts=db.documents.filter(d=>d.type==='SITUATION ACTUELLE').reduce((s,d)=>s+(d.totals?.net||0),0);
+  document.getElementById('statFact').textContent=fmt(tf);
+  document.getElementById('statSit').textContent=fmt(ts);
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  checkStorage();loadDB();
+  const sd=document.getElementById('sec-doc');
+  sd.addEventListener('input',_recordChange);
+  sd.addEventListener('change',_recordChange);
+  const initial=db.documents.find(d=>d.id===db.currentDocId)||db.documents.find(recovery102Match);
+  if(initial){loadDocById(initial.id);}
+  else{
+    document.getElementById('docDate').valueAsDate=new Date();
+    document.getElementById('payDate').valueAsDate=new Date();
+    addItem();addDeduction();calc();syncPrint();updateModeBadge();onTypeChange();_initUndo();
+  }
+  installMobileSwipeNavigation();
+});
+
+function switchTab(id,el){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if(el)el.classList.add('active');
+  if(id==='sec-history')renderHistory();
+  if(id==='sec-settings')fillCompanyForm();
+}
+
+// ── Navigation par balayage (téléphone) ────────────────────────────────────
+const MOBILE_TAB_FLOW=['sec-doc','sec-clients','sec-history','sec-settings'];
+let _mobileSwipeStart=null;
+function _isBlockedSwipeTarget(target){
+  if(!target||!target.closest)return false;
+  // La saisie et les actions gardent toujours leur geste naturel.
+  if(target.closest('input,textarea,select,button,a,[contenteditable="true"],.tabs,.table-wrap,.client-modal,.actions'))return true;
+  return false;
+}
+function _activeMobileTabIndex(){
+  const active=document.querySelector('.section.active');
+  return Math.max(0,MOBILE_TAB_FLOW.indexOf(active&&active.id));
+}
+function _switchMobileTabBySwipe(direction){
+  const current=_activeMobileTabIndex();
+  const next=current+direction;
+  if(next<0||next>=MOBILE_TAB_FLOW.length)return false;
+  const tab=document.querySelectorAll('.tab')[next];
+  switchTab(MOBILE_TAB_FLOW[next],tab);
+  // Centre l'onglet actif dans la barre défilante, sans déplacer brutalement la page.
+  try{tab&&tab.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});}catch(e){}
+  return true;
+}
+function installMobileSwipeNavigation(){
+  const root=document.querySelector('.container.no-print');
+  if(!root||root.dataset.swipeNavigationInstalled==='1')return;
+  root.dataset.swipeNavigationInstalled='1';
+  root.addEventListener('touchstart',function(event){
+    if(!event.touches||event.touches.length!==1){_mobileSwipeStart=null;return;}
+    const t=event.touches[0];
+    _mobileSwipeStart={x:t.clientX,y:t.clientY,at:Date.now(),blocked:_isBlockedSwipeTarget(event.target),moved:false};
+  },{passive:true});
+  root.addEventListener('touchmove',function(event){
+    if(!_mobileSwipeStart||!event.touches||event.touches.length!==1)return;
+    const t=event.touches[0],dx=t.clientX-_mobileSwipeStart.x,dy=t.clientY-_mobileSwipeStart.y;
+    // Après un défilement vertical net, le geste ne peut plus devenir une navigation.
+    if(Math.abs(dy)>Math.abs(dx)&&Math.abs(dy)>18)_mobileSwipeStart.moved=true;
+  },{passive:true});
+  root.addEventListener('touchend',function(event){
+    const start=_mobileSwipeStart;_mobileSwipeStart=null;
+    if(!start||start.blocked||start.moved||!event.changedTouches||event.changedTouches.length!==1)return;
+    const t=event.changedTouches[0],dx=t.clientX-start.x,dy=t.clientY-start.y,elapsed=Date.now()-start.at;
+    // Seul un vrai balayage horizontal volontaire sur une zone vide est accepté.
+    if(elapsed>900||Math.abs(dx)<70||Math.abs(dx)<=Math.abs(dy)*1.45)return;
+    _switchMobileTabBySwipe(dx<0?1:-1);
+  },{passive:true});
+  root.addEventListener('touchcancel',function(){_mobileSwipeStart=null;},{passive:true});
+}
+
+function updateModeBadge(){
+  const badge=document.getElementById('modeBadge');
+  if(db.currentDocId){
+    const doc=db.documents.find(d=>d.id===db.currentDocId);
+    badge.classList.add('active');
+    badge.textContent='📝 Édition: N°'+(doc?.num||'?')+' — '+(doc?.type||'');
+  }else{badge.classList.remove('active');}
+}
+
+function supportsAvancement(){
+  const type=document.getElementById('docType').value;
+  return type==='SITUATION ACTUELLE'||type==='DÉCOMPTE FINAL';
+}
+function applyAvanVisibility(){
+  const visible=showAvan&&supportsAvancement();
+  showAvan=visible;
+  const h=document.getElementById('colAvanH');if(h)h.style.display=visible?'table-cell':'none';
+  document.querySelectorAll('.avan-cell').forEach(c=>c.style.display=visible?'table-cell':'none');
+  const lnk=document.getElementById('avanLink');if(lnk)lnk.textContent=visible?'📊 Masquer Avancement %':'📊 Afficher Avancement %';
+}
+function onTypeChange(){
+  const lnk=document.getElementById('avanLink');
+  if(lnk)lnk.style.display=supportsAvancement()?'inline':'none';
+  if(!supportsAvancement())showAvan=false;
+  applyAvanVisibility();
+  applyPayDateVisibility();
+}
+function applyPayDateVisibility(){
+  const isFinal=document.getElementById('docType').value==='DÉCOMPTE FINAL';
+  const g=document.getElementById('payDateGroup');if(g)g.style.display=isFinal?'':'none';
+  const r=document.getElementById('pPayDateRow');if(r)r.style.display=isFinal?'':'none';
+}
+
+function toggleAvan(){
+  if(!supportsAvancement())return;
+  showAvan=!showAvan;
+  applyAvanVisibility();
+  calc();syncPrint();
+}
+
+function addItem(data=null){
+  const tbody=document.getElementById('itemsBody');
+  const tr=document.createElement('tr');
+  const av=data?.avancement!==undefined?data.avancement:100;
+  const clr=av>=100?'var(--success)':av>=50?'var(--accent)':'var(--danger)';
+  tr.innerHTML=`<td>${tbody.children.length+1}</td>
+    <td><textarea class="tbl desig" rows="2" oninput="calc();syncPrint();">${data?.desig||''}</textarea></td>
+    <td><input type="number" class="tbl qty" value="${data?.qty||'1'}" min="0" step="0.01" oninput="calc();syncPrint();"></td>
+    <td><input type="text" class="tbl unit" value="${data?.unit||'U'}" oninput="syncPrint();"></td>
+    <td><input type="number" class="tbl pu" value="${data?.pu||'0'}" min="0" step="0.01" oninput="calc();syncPrint();"></td>
+    <td class="avan-cell" style="display:${showAvan?'table-cell':'none'}">
+      <input type="number" class="tbl avan" value="${av}" min="0" max="100" step="1" style="font-weight:600;color:${clr}" oninput="calc();syncPrint();updatePb(this)">
+      <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${av}%;background:${clr}"></div></div>
+    </td>
+    <td class="row-total">0,00</td>
+    <td><button class="btn btn-danger" onclick="this.closest('tr').remove();renumber();calc();syncPrint();">X</button></td>`;
+  tbody.appendChild(tr);
+}
+
+function updatePb(inp){
+  const v=Math.min(100,Math.max(0,parseFloat(inp.value)||0));
+  const fill=inp.parentElement.querySelector('.progress-bar-fill');
+  const clr=v>=100?'var(--success)':v>=50?'var(--accent)':'var(--danger)';
+  fill.style.width=v+'%';fill.style.background=clr;inp.style.color=clr;
+}
+
+function addDeduction(data=null){
+  const tbody=document.getElementById('deductionsBody');
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td><input type="date" class="tbl ded-date" value="${data?.date||new Date().toISOString().split('T')[0]}" oninput="syncPrint();"></td>
+    <td><textarea class="tbl ded-desig" rows="1" oninput="syncPrint();">${data?.desig||''}</textarea></td>
+    <td><input type="number" class="tbl ded-amount" value="${data?.amount||'0'}" min="0" step="0.01" oninput="calc();syncPrint();"></td>
+    <td><button class="btn btn-danger" onclick="this.closest('tr').remove();calc();syncPrint();">X</button></td>`;
+  tbody.appendChild(tr);
+}
+
+function renumber(){document.querySelectorAll('#itemsBody tr').forEach((r,i)=>r.cells[0].textContent=i+1);}
+
+// ── CALC (منطق الحسابات المتحقق منه) ──────────────────────────────────────
+// row_total = qty × PU × (avancement/100)   [إذا كان عمود الإنجاز مفعّلاً]
+// HT        = Σ row_total
+// TVA       = HT × tvaRate
+// Garantie  = (HT + TVA) × garantieRate/100
+// Acomptes  = Σ déductions
+// NET       = max(0, HT + TVA - Garantie - Acomptes)
+function calc(){
+  let ht=0;
+  document.querySelectorAll('#itemsBody tr').forEach(r=>{
+    const q=parseFloat(r.querySelector('.qty').value)||0;
+    const p=parseFloat(r.querySelector('.pu').value)||0;
+    const aInp=r.querySelector('.avan');
+    const av=showAvan&&aInp?(parseFloat(aInp.value)||0)/100:1;
+    const t=q*p*av;
+    r.querySelector('.row-total').textContent=fmt(t);ht+=t;
+  });
+  let acc=0;
+  document.querySelectorAll('#deductionsBody tr').forEach(r=>acc+=parseFloat(r.querySelector('.ded-amount').value)||0);
+  const tvaR=parseFloat(document.getElementById('tvaRate').value)||0;
+  const garR=parseFloat(document.getElementById('garantieRate').value)||0;
+  const tva=ht*tvaR;
+  const gar=(ht+tva)*(garR/100);
+  const net=Math.max(0,ht+tva-gar-acc);
+  document.getElementById('tHT').textContent=fmt(ht);
+  document.getElementById('tTvaLbl').textContent=(tvaR*100).toFixed(0);
+  document.getElementById('tTVA').textContent=fmt(tva);
+  document.getElementById('tAcc').textContent='- '+fmt(acc);
+  document.getElementById('tNet').textContent=fmt(net);
+  if(garR>0){
+    document.getElementById('garRow').style.display='flex';
+    document.getElementById('tGarLbl').textContent=garR;
+    document.getElementById('tGar').textContent='- '+fmt(gar);
+  }else{document.getElementById('garRow').style.display='none';}
+  document.getElementById('amtWords').textContent=numToWords(Math.round(net))+' DINARS ALGÉRIENS';
+}
+
+function numToWords(n){
+  if(n===0)return 'ZÉRO';
+  const u=['','UN','DEUX','TROIS','QUATRE','CINQ','SIX','SEPT','HUIT','NEUF','DIX','ONZE','DOUZE','TREIZE','QUATORZE','QUINZE','SEIZE','DIX-SEPT','DIX-HUIT','DIX-NEUF'];
+  const t=['','','VINGT','TRENTE','QUARANTE','CINQUANTE','SOIXANTE','SOIXANTE','QUATRE-VINGT','QUATRE-VINGT'];
+  function c100(x){if(x<20)return u[x];let d=Math.floor(x/10),r=x%10;if(d===7||d===9)return t[d]+(r===0?'':'-'+u[10+r]);if(d===8&&r===0)return 'QUATRE-VINGTS';return t[d]+(r===0?'':'-'+u[r]);}
+  function c1000(x){if(x===0)return '';if(x<100)return c100(x);let h=Math.floor(x/100),r=x%100;return(h===1?'CENT':u[h]+' CENT'+(r===0?'S':''))+(r===0?'':' '+c100(r));}
+  let s='';
+  if(n>=1000000){let m=Math.floor(n/1000000);s+=(m===1?'UN ':c1000(m)+' ')+'MILLION'+(m>1?'S':' ');n%=1000000;}
+  if(n>=1000){let k=Math.floor(n/1000);s+=(k===1?'MILLE':c1000(k)+' MILLE')+' ';n%=1000;}
+  if(n>0)s+=c1000(n);
+  return s.trim().replace(/\s+/g,' ').replace(/- /g,'-');
+}
+
+function syncPrint(){
+  const gv=id=>document.getElementById(id).value;
+  document.getElementById('pType').textContent=gv('docType');
+  document.getElementById('pNum').textContent=gv('docNum');
+  document.getElementById('pDate').textContent=gv('docDate');
+  document.getElementById('pClient').textContent=gv('clientName');
+  document.getElementById('pRef').textContent=gv('refInt');
+  document.getElementById('pPayMode').textContent=gv('payMode');
+  document.getElementById('pPayRef').textContent=gv('payRef');
+  document.getElementById('pBank').textContent=gv('bank');
+  document.getElementById('pPayDate').textContent=gv('payDate');
+  applyPayDateVisibility();
+  document.getElementById('pGenDate').textContent=new Date().toLocaleDateString('fr-FR');
+  const garR=parseFloat(gv('garantieRate'))||0;
+  document.getElementById('pGarInfo').textContent=garR>0?garR+'%':'Néant';
+  const notes=gv('docNotes').trim();
+  document.getElementById('pNotesBlock').style.display=notes?'block':'none';
+  document.getElementById('pNotes').textContent=notes;
+  document.getElementById('pColAvan').style.display=showAvan?'table-cell':'none';
+  const pI=document.getElementById('pItemsBody');pI.innerHTML='';
+  let ht=0;
+  document.querySelectorAll('#itemsBody tr').forEach((row,i)=>{
+    const d=row.querySelector('.desig').value;
+    const q=row.querySelector('.qty').value;
+    const u=row.querySelector('.unit').value;
+    const p=row.querySelector('.pu').value;
+    const aInp=row.querySelector('.avan');
+    const av=showAvan&&aInp?(parseFloat(aInp.value)||0)/100:1;
+    const t=(parseFloat(q)||0)*(parseFloat(p)||0)*av;ht+=t;
+    const ac=showAvan?`<td>${aInp?aInp.value:'100'}%</td>`:'';
+    pI.innerHTML+=`<tr><td>${i+1}</td><td class="desig-cell">${d}</td><td>${q}</td><td>${u}</td><td>${fmt(parseFloat(p)||0)}</td>${ac}<td>${fmt(t)}</td></tr>`;
+  });
+  pI.innerHTML+=`<tr><td colspan="${showAvan?6:5}" style="text-align:right;font-weight:bold;">TOTAL H.T. :</td><td style="font-weight:bold;">${fmt(ht)}</td></tr>`;
+  const pD=document.getElementById('pDeductionsBody');pD.innerHTML='';
+  let acc=0;
+  document.querySelectorAll('#deductionsBody tr').forEach(row=>{
+    const dt=row.querySelector('.ded-date').value;
+    const d=row.querySelector('.ded-desig').value;
+    const a=parseFloat(row.querySelector('.ded-amount').value)||0;acc+=a;
+    pD.innerHTML+=`<tr><td>${dt}</td><td>${d}</td><td>${fmt(a)}</td></tr>`;
+  });
+  const tvaR=parseFloat(gv('tvaRate'))||0;
+  const tva=ht*tvaR;const gar=(ht+tva)*(garR/100);
+  const net=Math.max(0,ht+tva-gar-acc);
+  document.getElementById('pTotalHT').textContent=fmt(ht);
+  document.getElementById('pTotalTVA').textContent=fmt(tva);
+  document.getElementById('pTotalAcc').textContent='- '+fmt(acc);
+  document.getElementById('pNet').textContent=fmt(net);
+  if(garR>0){
+    document.getElementById('pGarRow').style.display='flex';
+    document.getElementById('pTotalGar').style.display='flex';
+    document.getElementById('pTotalGar').textContent='- '+fmt(gar);
+  }else{
+    document.getElementById('pGarRow').style.display='none';
+    document.getElementById('pTotalGar').style.display='none';
+  }
+  document.getElementById('pAmtWords').textContent=numToWords(Math.round(net))+' DINARS ALGÉRIENS';
+}
+
+function scrapeForm(){
+  const items=[];
+  document.querySelectorAll('#itemsBody tr').forEach(r=>{
+    const aInp=r.querySelector('.avan');
+    items.push({desig:r.querySelector('.desig').value,qty:r.querySelector('.qty').value,unit:r.querySelector('.unit').value,pu:r.querySelector('.pu').value,avancement:aInp?parseFloat(aInp.value):100});
+  });
+  const deductions=[];
+  document.querySelectorAll('#deductionsBody tr').forEach(r=>deductions.push({date:r.querySelector('.ded-date').value,desig:r.querySelector('.ded-desig').value,amount:r.querySelector('.ded-amount').value}));
+  return{type:document.getElementById('docType').value,num:document.getElementById('docNum').value,date:document.getElementById('docDate').value,clientName:document.getElementById('clientName').value,refInt:document.getElementById('refInt').value,payMode:document.getElementById('payMode').value,payRef:document.getElementById('payRef').value,bank:document.getElementById('bank').value,payDate:document.getElementById('payDate').value,tvaRate:document.getElementById('tvaRate').value,garantieRate:document.getElementById('garantieRate').value,notes:document.getElementById('docNotes').value,useAvancement:showAvan,items,deductions};
+}
+
+function calcTotals(data){
+  data=data||{};
+  const tvaR=parseFloat(data.tvaRate)||0;
+  const garR=parseFloat(data.garantieRate)||0;
+  const useAvan=documentUsesAvancement(data);
+  const items=_arr(data.items),deductions=_arr(data.deductions);
+  let ht=items.reduce((s,i)=>{
+    const raw=parseFloat(i&&i.avancement);
+    const avan=useAvan?(Number.isFinite(raw)?Math.max(0,Math.min(100,raw))/100:1):1;
+    return s+(parseFloat(i&&i.qty)||0)*(parseFloat(i&&i.pu)||0)*avan;
+  },0);
+  let acc=deductions.reduce((s,d)=>s+(parseFloat(d&&d.amount)||0),0);
+  let tva=ht*tvaR;let gar=(ht+tva)*(garR/100);
+  return{ht,tva,garantie:gar,acc,net:Math.max(0,ht+tva-gar-acc)};
+}
+
+function saveDoc(){
+  const data=scrapeForm();
+  if(!data.num){toast('⚠️ Veuillez entrer un N° Document.','error');return;}
+  let doc=db.documents.find(d=>d.id===db.currentDocId);
+  const isNew=!doc;
+  if(isNew)doc={id:uuid(),createdAt:new Date().toISOString()};
+  let c=db.clients.find(x=>x.name.toLowerCase()===data.clientName.toLowerCase());
+  if(!c&&data.clientName){c={id:cliId(),name:data.clientName,docs:[],_mod:nextMod()};db.clients.push(c);}
+  doc.clientId=c?c.id:null;
+  Object.assign(doc,data,{updatedAt:new Date().toISOString(),_mod:nextMod()});
+  doc.totals=calcTotals(data);
+  if(isNew)db.documents.push(doc);
+  db.currentDocId=doc.id;
+  if(c&&!c.docs.includes(doc.id))c.docs.push(doc.id);
+  if(c)c._mod=nextMod();
+  populateClientDatalist();saveDB();updateModeBadge();renderHistory();renderClients();
+  toast(isNew?'✅ Document créé et lié au client !':'✅ Document mis à jour !');
+}
+
+function loadDocById(id){
+  const doc=db.documents.find(d=>d.id===id);if(!doc)return;
+  db.currentDocId=id;
+  document.getElementById('docType').value=doc.type||'';
+  document.getElementById('docNum').value=doc.num||'';
+  document.getElementById('docDate').value=doc.date||'';
+  document.getElementById('clientName').value=doc.clientName||'';
+  document.getElementById('refInt').value=doc.refInt||'';
+  document.getElementById('payMode').value=doc.payMode||'ESPÈCES';
+  document.getElementById('payRef').value=doc.payRef||'';
+  document.getElementById('bank').value=doc.bank||'';
+  document.getElementById('payDate').value=doc.payDate||'';
+  document.getElementById('tvaRate').value=doc.tvaRate||'0';
+  document.getElementById('garantieRate').value=doc.garantieRate||'0';
+  document.getElementById('docNotes').value=doc.notes||'';
+  showAvan=documentUsesAvancement(doc);applyAvanVisibility();
+  document.getElementById('itemsBody').innerHTML='';
+  doc.items.forEach(i=>addItem(i));
+  document.getElementById('deductionsBody').innerHTML='';
+  doc.deductions.forEach(d=>addDeduction(d));
+  renumber();calc();syncPrint();updateModeBadge();onTypeChange();
+  _initUndo();
+  switchTab('sec-doc',document.querySelectorAll('.tab')[0]);
+}
+
+function newDoc(silent){
+  db.currentDocId=null;
+  showAvan=false;applyAvanVisibility();
+  ['itemsBody','deductionsBody'].forEach(id=>document.getElementById(id).innerHTML='');
+  document.getElementById('docNotes').value='';
+  document.getElementById('garantieRate').value='0';
+  // page vraiment vierge : on vide aussi les en-têtes
+  document.getElementById('docNum').value='';
+  document.getElementById('clientName').value='';
+  document.getElementById('refInt').value='';
+  document.getElementById('payRef').value='';
+  document.getElementById('bank').value='';
+  document.getElementById('docDate').valueAsDate=new Date();
+  document.getElementById('payDate').valueAsDate=new Date();
+  addItem();addDeduction();calc();syncPrint();updateModeBadge();onTypeChange();
+  activeFilterClientId=null;renderHistory();
+  _initUndo();
+  if(!silent)toast('📄 Nouveau document prêt.');
+}
+
+// Cliquer sur l'onglet « Document » depuis un autre onglet → page vierge.
+// (la modification d'un document existant se fait via Historique → 📥 Modifier)
+function enterDocTab(el){
+  // Ne jamais vider un document en cours en changeant simplement d'onglet.
+  switchTab('sec-doc',el);
+}
+
+// Enregistrer sous : crée un NOUVEAU document (nouveau N° + date du jour)
+// tout en conservant l'ancien document intact.
+function saveAsNew(){
+  const data=scrapeForm();
+  if(!data.num){toast('⚠️ Veuillez entrer un N° Document.','error');return;}
+  const proposed=prompt('🆕 Enregistrer comme NOUVEAU document.\nL\'ancien document est conservé.\n\nN° du nouveau document :',data.num);
+  if(proposed===null)return; // annulé
+  const newNum=(proposed||'').trim()||data.num;
+  db.currentDocId=null; // force la création d'un nouveau document
+  document.getElementById('docNum').value=newNum;
+  document.getElementById('docDate').valueAsDate=new Date(); // nouvelle date = aujourd'hui
+  syncPrint();
+  saveDoc(); // l'ancien reste, un nouveau est créé
+}
+
+// Annuler : abandonne les modifications non enregistrées.
+// - document existant → recharge la version sauvegardée (revient en arrière)
+// - nouveau document non enregistré → vide le formulaire
+function cancelEdit(){
+  if(db.currentDocId){
+    if(!confirm('↩️ Annuler les modifications et revenir à la version enregistrée ?'))return;
+    loadDocById(db.currentDocId);
+    toast('↩️ Modifications annulées.');
+  }else{
+    if(!confirm('↩️ Effacer ce document non enregistré ?'))return;
+    newDoc(true);toast('↩️ Annulé.');
+  }
+}
+
+// Retour : revenir à la liste (Historique) sans rien enregistrer.
+function goBackHistory(){
+  const tabs=document.querySelectorAll('.tab');
+  switchTab('sec-history',tabs[2]);
+}
+
+// ══ UNDO / REDO (annuler/rétablir une frappe pendant l'édition) ══
+let _undoStack=[],_redoStack=[],_lastState=null,_undoLock=false,_undoTimer=null;
+function _snap(){return JSON.stringify(scrapeForm());}
+function _initUndo(){_lastState=_snap();_undoStack=[];_redoStack=[];updateUndoBtns();}
+function updateUndoBtns(){
+  const u=document.getElementById('btnUndo'),r=document.getElementById('btnRedo');
+  if(u){u.disabled=!_undoStack.length;u.style.opacity=_undoStack.length?'1':'0.45';}
+  if(r){r.disabled=!_redoStack.length;r.style.opacity=_redoStack.length?'1':'0.45';}
+}
+function _recordChange(){
+  if(_undoLock)return;
+  clearTimeout(_undoTimer);
+  _undoTimer=setTimeout(()=>{
+    const now=_snap();
+    if(_lastState===null){_lastState=now;return;}
+    if(now!==_lastState){
+      _undoStack.push(_lastState);
+      if(_undoStack.length>60)_undoStack.shift();
+      _lastState=now;_redoStack=[];updateUndoBtns();
+    }
+  },500);
+}
+function restoreForm(d){
+  document.getElementById('docType').value=d.type||'SITUATION ACTUELLE';
+  document.getElementById('docNum').value=d.num||'';
+  document.getElementById('docDate').value=d.date||'';
+  document.getElementById('clientName').value=d.clientName||'';
+  document.getElementById('refInt').value=d.refInt||'';
+  document.getElementById('payMode').value=d.payMode||'ESPÈCES';
+  document.getElementById('payRef').value=d.payRef||'';
+  document.getElementById('bank').value=d.bank||'';
+  document.getElementById('payDate').value=d.payDate||'';
+  document.getElementById('tvaRate').value=d.tvaRate||'0';
+  document.getElementById('garantieRate').value=d.garantieRate||'0';
+  document.getElementById('docNotes').value=d.notes||'';
+  showAvan=documentUsesAvancement(d);applyAvanVisibility();
+  document.getElementById('itemsBody').innerHTML='';
+  (d.items||[]).forEach(i=>addItem(i));
+  document.getElementById('deductionsBody').innerHTML='';
+  (d.deductions||[]).forEach(x=>addDeduction(x));
+  renumber();calc();syncPrint();onTypeChange();
+}
+function undoEdit(){
+  if(!_undoStack.length){toast('Rien à défaire.','error');return;}
+  _undoLock=true;
+  _redoStack.push(_snap());
+  const prev=_undoStack.pop();
+  restoreForm(JSON.parse(prev));_lastState=prev;
+  _undoLock=false;updateUndoBtns();toast('↶ Défait.');
+}
+function redoEdit(){
+  if(!_redoStack.length){toast('Rien à refaire.','error');return;}
+  _undoLock=true;
+  _undoStack.push(_snap());
+  const nxt=_redoStack.pop();
+  restoreForm(JSON.parse(nxt));_lastState=nxt;
+  _undoLock=false;updateUndoBtns();toast('↷ Refait.');
+}
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){
+    if(!document.getElementById('sec-doc').classList.contains('active'))return;
+    e.preventDefault();e.shiftKey?redoEdit():undoEdit();
+  }
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeClientFile();});
+
+function duplicateDoc(){
+  if(!db.currentDocId){toast('⚠️ Ouvrez d\'abord un document à dupliquer.','error');return;}
+  const data=scrapeForm();
+  db.currentDocId=null;
+  data.num=data.num+' (copie)';
+  document.getElementById('docType').value=data.type;
+  document.getElementById('docNum').value=data.num;
+  document.getElementById('docDate').value=data.date;
+  document.getElementById('clientName').value=data.clientName;
+  document.getElementById('refInt').value=data.refInt;
+  document.getElementById('payMode').value=data.payMode;
+  document.getElementById('payRef').value=data.payRef;
+  document.getElementById('bank').value=data.bank;
+  document.getElementById('payDate').value=data.payDate;
+  document.getElementById('tvaRate').value=data.tvaRate;
+  document.getElementById('garantieRate').value=data.garantieRate||'0';
+  document.getElementById('docNotes').value=data.notes||'';
+  updateModeBadge();toast('📋 Document dupliqué. Modifiez le N° puis Sauvegardez.');
+}
+
+function deleteDoc(){
+  if(!db.currentDocId)return;
+  if(!confirm('🗑️ Supprimer définitivement ce document ?'))return;
+  _factDel(db.currentDocId);
+  db.documents=db.documents.filter(d=>d.id!==db.currentDocId);
+  db.clients.forEach(c=>c.docs=c.docs.filter(did=>did!==db.currentDocId));
+  saveDB();newDoc(true);renderHistory();renderClients();toast('🗑️ Document supprimé.','error');
+  if(typeof cloudSync==='function'){cloudSync();setTimeout(cloudSync,1500);} // propager tout de suite (+ relance si occupé)
+}
+
+// Supprimer directement depuis l'Historique (sans ouvrir le document)
+function deleteDocById(id){
+  if(!id)return;
+  const d=db.documents.find(x=>x.id===id);
+  if(!confirm('🗑️ Supprimer définitivement ce document'+(d?' N° '+d.num:'')+' ?'))return;
+  _factDel(id);
+  db.documents=db.documents.filter(x=>x.id!==id);
+  db.clients.forEach(c=>c.docs=c.docs.filter(did=>did!==id));
+  if(db.currentDocId===id){db.currentDocId=null;newDoc(true);}
+  saveDB();renderHistory();renderClients();updateModeBadge();toast('🗑️ Document supprimé.','error');
+  if(typeof cloudSync==='function'){cloudSync();setTimeout(cloudSync,1500);}
+}
+
+function populateClientDatalist(){
+  const dl=document.getElementById('clientsList');dl.innerHTML='';
+  db.clients.forEach(c=>{const o=document.createElement('option');o.value=c.name;dl.appendChild(o);});
+}
+function clientDocs(cid){
+  const cl=db.clients.find(c=>c.id===cid);
+  const nm=String(cl&&cl.name||'').trim().toLowerCase();
+  return db.documents.filter(d=>d&&(d.clientId===cid||(!d.clientId&&nm&&String(d.clientName||'').trim().toLowerCase()===nm)));
+}
+function escHtml(v){return String(v??'').replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));}
+function escAttr(v){return escHtml(v).replace(/`/g,'&#96;');}
+function docTotal(d,key){
+  if(d&&d.totals&&Number.isFinite(Number(d.totals[key])))return Number(d.totals[key]);
+  try{return Number(calcTotals(d||{})[key])||0;}catch(e){return 0;}
+}
+function addClient(){
+  const name=(prompt('Nom du client :')||'').trim();if(!name)return;
+  if(db.clients.find(c=>String(c.name||'').toLowerCase()===name.toLowerCase())){toast('Client existe déjà.','error');return;}
+  db.clients.push({id:cliId(),name,docs:[],_mod:nextMod()});saveDB();populateClientDatalist();renderClients();toast('✅ Client ajouté.');
+}
+function renderClients(){
+  const c=document.getElementById('clientsListContainer');c.innerHTML='';
+  const f=(document.getElementById('searchClient').value||'').toLowerCase();
+  const filtered=db.clients.filter(x=>String(x.name||'').toLowerCase().includes(f));
+  if(!filtered.length){c.innerHTML='<p style="color:#888;padding:20px;text-align:center;">Aucun client trouvé</p>';return;}
+  filtered.forEach(cl=>{
+    const docs=clientDocs(cl.id);
+    const tot=docs.reduce((s,d)=>s+docTotal(d,'net'),0);
+    const source=cl.recoveryInfo?'<span class="client-source">🛟 Dossier complété depuis PDF de secours</span>':'';
+    c.innerHTML+=`<div class="client-card"><div class="client-info"><h4>${escHtml(cl.name)}</h4><p>📄 ${docs.length} document(s) &nbsp;|&nbsp; 💰 Net total: <strong>${fmt(tot)} DA</strong></p>${source}</div>
+    <div class="client-actions"><button class="btn btn-sm btn-outline" data-client-id="${escAttr(cl.id)}" onclick="openClientFile(this.dataset.clientId)">📁 Fiche client</button>
+    <button class="btn btn-sm btn-outline" data-client-id="${escAttr(cl.id)}" onclick="viewClientDocs(this.dataset.clientId)">Voir Documents</button>
+    <button class="btn btn-sm btn-danger" data-client-id="${escAttr(cl.id)}" onclick="deleteClient(this.dataset.clientId)">Supprimer</button></div></div>`;
+  });
+}
+function viewClientDocs(cid){activeFilterClientId=cid;renderHistory();switchTab('sec-history',document.querySelectorAll('.tab')[2]);}
+function closeClientFile(){const m=document.getElementById('clientFileModal');if(m)m.classList.remove('open');}
+function openClientFile(cid){
+  const cl=db.clients.find(c=>c.id===cid);if(!cl){toast('Dossier client introuvable.','error');return;}
+  const docs=clientDocs(cid).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  const ht=docs.reduce((s,d)=>s+docTotal(d,'ht'),0);
+  const acc=docs.reduce((s,d)=>s+docTotal(d,'acc'),0);
+  const net=docs.reduce((s,d)=>s+docTotal(d,'net'),0);
+  const recovery=cl.recoveryInfo?`<div class="client-recovery-detail"><strong>Source de secours :</strong> ${escHtml(cl.recoveryInfo.source||'PDF')} - ${escHtml(cl.recoveryInfo.document||'')}<br><span>Ajouté le ${escHtml(cl.recoveryInfo.importedAt||'')}. Le document est éditable : ouvrez-le pour modifier les articles, prix, dates ou acomptes.</span></div>`:'';
+  const rows=docs.map(d=>{
+    const isRecovery=!!(d.recovery&&d.recovery.source==='PDF');
+    const src=isRecovery?'<span class="client-source">PDF secours</span>':'-';
+    return `<tr><td>${escHtml(d.date||'-')}</td><td>${escHtml(d.type||'-')}</td><td>${escHtml(d.num||'-')}</td><td>${fmt(docTotal(d,'ht'))}</td><td>- ${fmt(docTotal(d,'acc'))}</td><td><strong>${fmt(docTotal(d,'net'))}</strong></td><td>${src}</td><td><button class="btn btn-sm btn-outline" data-doc-id="${escAttr(d.id)}" onclick="loadDocById(this.dataset.docId);closeClientFile()">Ouvrir</button></td></tr>`;
+  }).join('')||'<tr><td colspan="8" style="color:#777;padding:18px;text-align:center;">Aucun document dans ce dossier.</td></tr>';
+  document.getElementById('clientFileContent').innerHTML=`<div class="client-file-head"><h3 id="clientFileTitle">📁 Fiche client - ${escHtml(cl.name)}</h3><p>Historique documentaire et synthèse financière du client.</p></div>${recovery}
+    <div class="client-file-grid"><div class="client-file-stat">Documents<strong>${docs.length}</strong></div><div class="client-file-stat">Total H.T.<strong>${fmt(ht)} DA</strong></div><div class="client-file-stat">Acomptes<strong>${fmt(acc)} DA</strong></div><div class="client-file-stat">Net cumulé<strong>${fmt(net)} DA</strong></div></div>
+    <div style="overflow:auto;"><table class="client-file-table"><thead><tr><th>Date</th><th>Type</th><th>N°</th><th>H.T.</th><th>Acomptes</th><th>Net</th><th>Source</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-outline" data-client-id="${escAttr(cid)}" onclick="closeClientFile();viewClientDocs(this.dataset.clientId)">Voir dans l’historique</button><button class="btn btn-outline" onclick="closeClientFile()">Fermer</button></div>`;
+  document.getElementById('clientFileModal').classList.add('open');
+}
+function deleteClient(cid){
+  const cl=db.clients.find(c=>c.id===cid);if(!cl)return;
+  const docs=clientDocs(cid);
+  if(docs.length){toast('Impossible de supprimer ce client : son historique contient '+docs.length+' document(s). Supprimez d’abord les documents concernés.','error',6000);return;}
+  if(!confirm('Supprimer définitivement ce dossier client vide ?'))return;
+  _cliDel(cid);db.clients=db.clients.filter(c=>c.id!==cid);saveDB();populateClientDatalist();renderClients();toast('Client supprimé.','error');
+}
+function clearClientFilter(){activeFilterClientId=null;renderHistory();}
+function matchesSearch(text,query){if(!query||!text)return!query;return query.toLowerCase().split(/\s+/).filter(w=>w).every(w=>text.toLowerCase().includes(w));}
+
+const TYPE_COLOR={'FACTURE':'#e74c3c','DEVIS':'#3498db','AVOIR':'#9b59b6','SITUATION ACTUELLE':'#e67e22','DÉCOMPTE FINAL':'#27ae60'};
+function clearHistFilters(){
+  ['histSearch','histDateFrom','histDateTo'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('histTypeFilter').value='';activeFilterClientId=null;renderHistory();
+}
+function renderHistory(){
+  const tb=document.getElementById('histBody');tb.innerHTML='';
+  const s=document.getElementById('histSearch').value;
+  const tf=document.getElementById('histTypeFilter').value;
+  const dfr=document.getElementById('histDateFrom').value;
+  const dto=document.getElementById('histDateTo').value;
+  const badge=document.getElementById('clientFilterBadge');
+  if(activeFilterClientId){
+    const c=db.clients.find(x=>x.id===activeFilterClientId);
+    badge.innerHTML=`<span class="active-filter-badge">🔍 ${c?c.name:'Client'} <span class="close" onclick="clearClientFilter()">✖</span></span>`;
+  }else{badge.innerHTML='';}
+  let list=db.documents.filter(d=>{
+    const cn=d.clientName||'';
+    const mCli=activeFilterClientId?(d.clientId===activeFilterClientId||(db.clients.find(c=>c.id===activeFilterClientId)?.name||'').toLowerCase()===cn.toLowerCase()):true;
+    return mCli&&(matchesSearch(d.num,s)||matchesSearch(cn,s))&&(tf?d.type===tf:true)&&(dfr?d.date>=dfr:true)&&(dto?d.date<=dto:true);
+  }).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const totNet=list.reduce((s,d)=>s+(d.totals?.net||0),0);
+  const totHT=list.reduce((s,d)=>s+(d.totals?.ht||0),0);
+  document.getElementById('histStats').innerHTML=`
+    <div class="hist-stat">${list.length} document(s)</div>
+    <div class="hist-stat">Total H.T. : <strong>${fmt(totHT)} DA</strong></div>
+    <div class="hist-stat">Total Net : <strong>${fmt(totNet)} DA</strong></div>`;
+  list.forEach(d=>{
+    const clr=TYPE_COLOR[d.type]||'#95a5a6';
+    tb.innerHTML+=`<tr><td>${d.date}</td>
+      <td><span style="background:${clr};color:white;padding:2px 6px;border-radius:4px;font-size:0.75rem;">${d.type}</span></td>
+      <td>${d.num}</td><td>${d.clientName||'-'}</td>
+      <td>${fmt(d.totals?.ht||0)}</td><td><strong>${fmt(d.totals?.net||0)}</strong></td>
+      <td><button class="btn btn-sm btn-outline" onclick="loadDocById('${d.id}')">📥 Modifier</button>
+      <button class="btn btn-sm btn-danger" onclick="deleteDocById('${d.id}')">🗑️</button></td></tr>`;
+  });
+  if(!list.length)tb.innerHTML='<tr><td colspan="7" style="color:#777;padding:20px;text-align:center;">Aucun document trouvé</td></tr>';
+}
+
+function loadDemoData(){
+  if(!confirm('Charger une démonstration comme nouveau document ? Aucun document existant ne sera remplacé.'))return;
+  db.currentDocId=null;
+  document.getElementById('docType').value='SITUATION ACTUELLE';
+  document.getElementById('docNum').value='101/2026';
+  document.getElementById('docDate').value='2026-05-14';
+  document.getElementById('clientName').value='DJALOUL RAHMOUN';
+  document.getElementById('payMode').value='ESPÈCES';
+  document.getElementById('payDate').value='2026-05-07';
+  document.getElementById('tvaRate').value='0';
+  document.getElementById('garantieRate').value='0';
+  document.getElementById('itemsBody').innerHTML='';
+  [{desig:'Pose de tube annelé Ø500 mm(fourniture non incluse) › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable › Remblaiement en matériaux de terre',qty:'153.2',unit:'ML',pu:'2500'},
+  {desig:'Pose de tube annelé Ø315 mm(fourniture non incluse) › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable › Remblaiement en matériaux de tuf',qty:'721.25',unit:'ML',pu:'2500'},
+  {desig:'Fourniture de tube annelé Ø315 mm',qty:'159',unit:'ML',pu:'1100'},
+  {desig:'Fourniture de tube annelé Ø200 mm',qty:'72',unit:'ML',pu:'670'},
+  {desig:'Fourniture et pose de regard double nappe(profondeur ≤ 2 m)',qty:'23',unit:'U',pu:'30000'},
+  {desig:'Fourniture et pose de regard double nappe(profondeur> 2 m)',qty:'1',unit:'U',pu:'35000'},
+  {desig:'Fourniture et pose de tampon CPH 850×850 Série lourde',qty:'31',unit:'U',pu:'25000'},
+  {desig:'Fourniture et pose de boite de raccordement › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable carriére › Remblaiement en matériaux de grave',qty:'27',unit:'U',pu:'34000'}
+  ].forEach(i=>addItem(i));
+  document.getElementById('deductionsBody').innerHTML='';
+  addDeduction({date:'2026-05-07',desig:'Versement',amount:'3000000'});
+  showAvan=false;onTypeChange();calc();syncPrint();saveDoc();
+  toast('✅ بيانات التجربة محملة ومحفوظة!');
+}
+
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='EGTPH_Backup_'+new Date().toISOString().split('T')[0]+'.json';a.click();
+  toast('📤 JSON exporté.');
+}
+function importJSON(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const imp=JSON.parse(e.target.result);
+      if(!imp.documents)throw new Error('Format invalide');
+      if(confirm('⚠️ Importer '+imp.documents.length+' documents ?\nCela remplacera la base actuelle.')){
+        db=imp;saveDB();loadDB();newDoc();toast('✅ Importation réussie !');
+      }
+    }catch(err){toast('❌ Erreur: '+err.message,'error');}
+    input.value='';
+  };
+  reader.readAsText(file);
+}
+
+function exportCSV(){
+  const rows=[['Date','Type','N°','Client','Total HT','TVA','Garantie','Acomptes','Net']];
+  db.documents.forEach(d=>rows.push([d.date,d.type,d.num,d.clientName||'',(d.totals?.ht||0).toFixed(2),(d.totals?.tva||0).toFixed(2),(d.totals?.garantie||0).toFixed(2),(d.totals?.acc||0).toFixed(2),(d.totals?.net||0).toFixed(2)]));
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='EGTPH_Export_'+new Date().toISOString().split('T')[0]+'.csv';a.click();
+  toast('📊 CSV exporté.');
+}
+window.onbeforeprint=syncPrint;
+
+// ══ CLOUD SYNC (Firebase) ══
+const _CLOUD_URL='https://egtph-abdi-youssouf-islam-default-rtdb.europe-west1.firebasedatabase.app';
+const _CLOUD_KEY='EGTPH-FACT-xB9U6PtjCLYVz8d0NdNTELtq';
+// مساحة مستقلة داخل المسار المسموح في القواعد: لا تستورد السجلات القديمة الموجودة في الجذر.
+const _CLOUD_BRANCH='facture_pdf_active';
+// طابع زمني تصاعدي صارم بدقّة دون-المللي ثانية — يمنع تساوي/تراجع _mod
+// عند حفظ متتالٍ سريع أو تطابق ساعة جهازين (يُستعمل في الدمج "الأحدث يغلب")
+let _modLast=0;
+function nextMod(){ let t=Date.now()+(performance.now()%1)/1000; if(t<=_modLast)t=_modLast+0.001; _modLast=t; return t; }
+let _cloudBusy=false,_cloudStamp=localStorage.getItem('egtp_fact_stamp')||'';
+// Stop automatic retries after a Firebase 401. A repeated request cannot restore data and only obscures the real cause.
+let _cloudAuthBlocked=false;
+window._cloudDirty=false;window._cloudApplying=false;
+let FACTDEL=[];try{FACTDEL=JSON.parse(localStorage.getItem('egtp_fact_del')||'[]');}catch(e){FACTDEL=[];}
+// تومبستون مستقل للعملاء (نفس آلية الوثائق — لا يعود محذوف حتى لو وصل من جهاز آخر)
+let CLIDEL=[];try{CLIDEL=JSON.parse(localStorage.getItem('egtp_fact_cli_del')||'[]');}catch(e){CLIDEL=[];}
+function _cliDel(id){
+  if(id&&CLIDEL.indexOf(id)<0){CLIDEL.push(id);localStorage.setItem('egtp_fact_cli_del',JSON.stringify(CLIDEL.slice(-300)));}
+  if(id)_pushTomb([],[id]); // يكتب تومبستون العميل في العقدة الدائمة فوراً
+}
+function _factDel(id){
+  if(id&&FACTDEL.indexOf(id)<0){FACTDEL.push(id);localStorage.setItem('egtp_fact_del',JSON.stringify(FACTDEL.slice(-300)));}
+  if(id)_pushTomb([id]); // écrit le tombstone dans le nœud durable tout de suite
+}
+let _cloudAuthReady=false;
+function _authToken(){
+  try{
+    if(window.EGTPHAuth&&typeof window.EGTPHAuth.getToken==='function'){
+      const t=window.EGTPHAuth.getToken('facture');if(t)return t;
+    }
+    // Compatibilité avec l'ancien egtph-auth.js, qui expose authParam() mais pas getToken().
+    if(window.EGTPHAuth&&typeof window.EGTPHAuth.authParam==='function'){
+      const q=String(window.EGTPHAuth.authParam('facture')||'');
+      const m=q.match(/[?&]auth=([^&]+)/);return m?decodeURIComponent(m[1]):null;
+    }
+  }catch(e){}
+  return null;
+}
+// القواعد تسمح بكل ما تحت /EGTPH-FACT-… . تستعمل هذه النسخة فرعًا نظيفًا خاصًا بها
+// حتى تتزامن الوثيقة المأخوذة من PDF دون استرجاع قاعدة الجذر القديمة.
+function _cloudNodeEP(child){
+  const token=_authToken();if(!token)return null;
+  const clean=String(child||'').replace(/^\/+|\/+$/g,'');
+  const base=_CLOUD_URL+'/'+encodeURIComponent(_CLOUD_KEY)+'/'+encodeURIComponent(_CLOUD_BRANCH);
+  return base+(clean?'/'+clean:'')+'.json?auth='+encodeURIComponent(token);
+}
+function _cloudEP(){return _cloudNodeEP('');}
+// v8/v9.2 écrivaient historiquement sous /egtph/<clé>. Cette route ne sera lue
+// qu'à la demande de l'utilisateur pour importer les archives puis les migrer vers la racine actuelle.
+function _legacyCloudEP(){
+  const token=_authToken();if(!token)return null;
+  return _CLOUD_URL+'/egtph/'+encodeURIComponent(_CLOUD_KEY)+'.json?auth='+encodeURIComponent(token);
+}
+function _onCloudAuthReady(token){
+  _cloudAuthReady=!!(token||_authToken());
+  if(!_cloudAuthReady){setCloudStatus('warn','تم فتح وحدة الدخول لكن رمز Firebase غير جاهز بعد. لن يتم إرسال أي بيانات.','انتظار الرمز');return;}
+  _cloudAuthBlocked=false;
+  setCloudRecoveryVisible(false,'');
+  setTimeout(function(){try{cloudSync(false);startCloudStream();}catch(e){}},0);
+}
+function reconnectFirebase(){
+  if(!confirm('سيتم حذف رمز الدخول المحفوظ فقط ثم إعادة فتح البرنامج لطلب كلمة السر من جديد.\n\nلن تُحذف الوثائق أو العملاء المحفوظون على هذا الهاتف.'))return;
+  try{if(_sse){_sse.close();_sse=null;}}catch(e){}
+  try{if(window.EGTPHAuth&&typeof window.EGTPHAuth.logout==='function')window.EGTPHAuth.logout('facture');}catch(e){}
+  try{localStorage.removeItem('egtph_auth_facture');}catch(e){}
+  _cloudAuthBlocked=false;_cloudAuthReady=false;
+  setCloudRecoveryVisible(false,'');
+  setCloudStatus('warn','تمت إزالة جلسة Firebase فقط. سيُطلب منك تسجيل الدخول من جديد الآن.','إعادة الدخول');
+  setTimeout(function(){window.location.reload();},120);
+}
+// لا نبدأ أي قراءة أو كتابة قبل الحصول على رمز دخول صالح؛ هذا يمنع مزامنة قاعدة فارغة أو غير مصادق عليها.
+if(!PDF_ONLY_MODE&&window.EGTPHAuth&&typeof window.EGTPHAuth.init==='function'){
+  window.EGTPHAuth.init({
+    appId:'facture',apiKey:'AIzaSyBqMfhLqRm-GWR4HgPkLH-erCFg8EsrLcA',email:'abdiyoucefislam@gmail.com',
+    onReady:_onCloudAuthReady,
+    onTokenChange:_onCloudAuthReady
+  });
+}else if(!PDF_ONLY_MODE){setCloudStatus('error','تعذر تحميل وحدة تسجيل الدخول؛ البيانات المحلية محفوظة، لكن الاسترجاع السحابي متوقف.','المصادقة غير متاحة');}
+// Nœud SÉPARÉ pour les suppressions : écrit en PATCH (additif), jamais écrasé par un PUT complet.
+// Les suppressions suivent les mêmes règles que les documents : elles sont rangées
+// sous le nœud autorisé afin de ne jamais être bloquées par le .read/.write global à false.
+function _tombEP(){return _cloudNodeEP('tombstones/documents');}
+function _tombEPcli(){return _cloudNodeEP('tombstones/clients');}
+function _tombstoneMap(ids){
+  const out={};(ids||[]).slice(-300).forEach(id=>{if(id)out[_safeKey(id)]=true;});return out;
+}
+function _safeKey(id){return String(id).replace(/[.$#\[\]\/]/g,'_');}
+async function _pushTomb(ids,cliIds){
+  if(PDF_ONLY_MODE||!_cloudAuthReady)return;
+  try{
+    const body={};(ids||[]).forEach(id=>{if(id)body[_safeKey(id)]=true;});const ep=_tombEP();
+    if(ep&&Object.keys(body).length)await fetch(ep,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  }catch(e){}
+  try{
+    const cbody={};(cliIds||[]).forEach(id=>{if(id)cbody[_safeKey(id)]=true;});const ep=_tombEPcli();
+    if(ep&&Object.keys(cbody).length)await fetch(ep,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(cbody)});
+  }catch(e){}
+}
+async function _pullTomb(){
+  if(!_cloudAuthReady)return false;
+  let added=false;
+  try{
+    const ep=_tombEP();if(!ep)throw new Error('AUTH_REQUIRED');
+    const r=await fetch(ep);
+    if(r.ok){
+      const tm=await r.json();
+      if(tm&&typeof tm==='object'){
+        Object.keys(tm).forEach(k=>{if(tm[k]&&FACTDEL.indexOf(k)<0){FACTDEL.push(k);added=true;}});
+        if(added)localStorage.setItem('egtp_fact_del',JSON.stringify(FACTDEL.slice(-300)));
+      }
+    }
+  }catch(e){}
+  try{
+    const ep2=_tombEPcli();if(!ep2)throw new Error('AUTH_REQUIRED');
+    const r2=await fetch(ep2);
+    if(r2.ok){
+      const tm2=await r2.json();
+      if(tm2&&typeof tm2==='object'){
+        Object.keys(tm2).forEach(k=>{if(tm2[k]&&CLIDEL.indexOf(k)<0){CLIDEL.push(k);added=true;}});
+        localStorage.setItem('egtp_fact_cli_del',JSON.stringify(CLIDEL.slice(-300)));
+      }
+    }
+  }catch(e){}
+  return added;
+}
+function _setDot(t,title){const el=document.getElementById('cloudDot');if(el){el.textContent=t;if(title)el.title=title;}}
+// Firebase peut renvoyer un tableau sous forme d'objet {0:..,1:..} ou null → on normalise.
+function _normArr(x){if(Array.isArray(x))return x;if(x&&typeof x==='object')return Object.values(x);return[];}
+function mergeRemoteFact(remote){
+  if(!remote||typeof remote!=='object')return false;
+  let changed=false;
+  const rDel=_normArr(remote.deleted);
+  if(rDel.length){
+    rDel.forEach(id=>{if(id&&FACTDEL.indexOf(id)<0){FACTDEL.push(id);changed=true;}});
+    localStorage.setItem('egtp_fact_del',JSON.stringify(FACTDEL.slice(-300)));
+  }
+  const rCliDel=_normArr(remote.deletedClients);
+  if(rCliDel.length){
+    rCliDel.forEach(id=>{if(id&&CLIDEL.indexOf(id)<0){CLIDEL.push(id);changed=true;}});
+    localStorage.setItem('egtp_fact_cli_del',JSON.stringify(CLIDEL.slice(-300)));
+  }
+  const before=db.documents.length;db.documents=db.documents.filter(d=>FACTDEL.indexOf(d.id)<0);if(db.documents.length!==before)changed=true;
+  const beforeC=db.clients.length;db.clients=db.clients.filter(c=>CLIDEL.indexOf(c.id)<0);if(db.clients.length!==beforeC)changed=true;
+
+  // Document match = id, puis empreinte métier (type + N° + date + client). Cela évite le doublon si une copie PDF de secours est créée avant une restauration cloud.
+  const byId=new Map(db.documents.map(d=>[String(d.id||''),d]));
+  const byFp=new Map(db.documents.map(d=>[docFingerprint(d),d]));
+  _normArr(remote.documents).forEach(rd=>{
+    if(!rd||!rd.id||FACTDEL.indexOf(rd.id)>=0)return;
+    const fp=docFingerprint(rd);const loc=byId.get(String(rd.id))||byFp.get(fp);
+    if(!loc){db.documents.push(rd);byId.set(String(rd.id),rd);byFp.set(fp,rd);changed=true;return;}
+    const rModN=Number(rd._mod)||Date.parse(rd.updatedAt||'')||0;
+    const lModN=Number(loc._mod)||Date.parse(loc.updatedAt||'')||0;
+    if(rModN>lModN){
+      const keepId=loc.id;Object.assign(loc,rd);
+      // Une correspondance par empreinte garde l'identifiant local : aucune tombstone ancienne ne peut supprimer la copie de secours par erreur.
+      if(String(keepId)!==String(rd.id))loc.id=keepId;
+      byId.set(String(loc.id),loc);byFp.set(fp,loc);changed=true;
+    }
+  });
+
+  // Client match = id, puis nom normalisé. Les métadonnées du dossier (notamment source PDF) suivent le plus récent _mod.
+  const cById=new Map(db.clients.map(c=>[String(c.id||''),c]));
+  const cByName=new Map(db.clients.map(c=>[clientFingerprint(c),c]));
+  _normArr(remote.clients).forEach(rc=>{
+    if(!rc||!rc.id||CLIDEL.indexOf(rc.id)>=0)return;
+    const key=clientFingerprint(rc);const loc=cById.get(String(rc.id))||cByName.get(key);
+    if(!loc){rc.docs=_normArr(rc.docs);db.clients.push(rc);cById.set(String(rc.id),rc);cByName.set(key,rc);changed=true;return;}
+    const localDocs=_normArr(loc.docs),remoteDocs=_normArr(rc.docs);
+    const rModN=Number(rc._mod)||0,lModN=Number(loc._mod)||0;
+    if(rModN>lModN){const keepId=loc.id;Object.assign(loc,rc);loc.id=keepId;}
+    loc.docs=[...new Set([..._normArr(loc.docs),...localDocs,...remoteDocs])];
+  });
+  if(remote.company && (Number(remote.company._mod)||0) > (Number(db.company&&db.company._mod)||0)){
+    db.company=remote.company;applyCompany();fillCompanyForm();changed=true;
+  }
+  if(FACTDEL.length){const b2=db.documents.length;db.documents=db.documents.filter(d=>FACTDEL.indexOf(d.id)<0);if(db.documents.length!==b2)changed=true;}
+  if(CLIDEL.length){const b3=db.clients.length;db.clients=db.clients.filter(c=>CLIDEL.indexOf(c.id)<0);if(db.clients.length!==b3)changed=true;}
+  coalesceFactClients();
+  return changed;
+}
+function _remoteFactShape(remote){
+  if(remote===null)return 'empty';
+  if(!remote||typeof remote!=='object'||Array.isArray(remote))return 'unknown';
+  const keys=Object.keys(remote);if(!keys.length)return 'empty';
+  if(Object.prototype.hasOwnProperty.call(remote,'documents')||Object.prototype.hasOwnProperty.call(remote,'clients')||Object.prototype.hasOwnProperty.call(remote,'company')||Object.prototype.hasOwnProperty.call(remote,'syncedAt')||Object.prototype.hasOwnProperty.call(remote,'deleted'))return 'facture';
+  return 'unknown';
+}
+async function recoverLegacyCloud(){
+  if(_cloudAuthBlocked){toast('🔐 أعد تسجيل الدخول إلى Firebase أولاً.','error',5000);return;}
+  if(!_cloudAuthReady||!_authToken()){
+    toast('🔐 سجّل الدخول أولاً ثم أعد تشغيل استرجاع البيانات القديمة.','error',5000);return;
+  }
+  if(_cloudBusy){toast('☁️ توجد عملية مزامنة جارية. انتظر لحظات ثم أعد المحاولة.','error',4000);return;}
+  if(!confirm('استرجاع السجلات القديمة من المسار /egtph/ ثم دمجها مع السجلات الحالية؟\n\nلن يحذف البرنامج أي وثيقة محلية. عند نجاح القراءة تُنسخ البيانات أيضًا إلى المسار الحالي المسموح في قواعد Firebase.'))return;
+  _cloudBusy=true;
+  let shouldPush=false;
+  try{
+    const endpoint=_legacyCloudEP();if(!endpoint)throw new Error('AUTH_REQUIRED');
+    _setDot('🔄','Lecture de l’archive Firebase v8/v9.2');
+    setCloudStatus('warn','جارٍ قراءة المسار السحابي القديم ودمج السجلات دون حذف أي وثيقة…','استرجاع قديم');
+    const r=await fetch(endpoint);
+    if(!r.ok)throw new Error('LEGACY GET '+r.status);
+    let remote=null;try{remote=await r.json();}catch(e){throw new Error('Réponse legacy invalide');}
+    const shape=_remoteFactShape(remote);
+    if(shape==='unknown')throw new Error('Format legacy inconnu — import bloqué par sécurité');
+    if(shape==='empty'){
+      setCloudStatus('warn','المسار السحابي القديم فارغ. لا توجد بيانات إضافية لاسترجاعها.','لا توجد سجلات قديمة');
+      toast('☁️ لم أجد سجلات في المسار السحابي القديم.');
+      return;
+    }
+    const beforeDocs=db.documents.length,beforeClients=db.clients.length;
+    const changed=mergeRemoteFact(remote);
+    relinkFactClients();
+    if(changed){
+      window._cloudApplying=true;saveDB();window._cloudApplying=false;
+      populateClientDatalist();renderHistory();renderClients();updateStats();
+      window._cloudDirty=true;shouldPush=true;
+    }
+    const addedDocs=Math.max(0,db.documents.length-beforeDocs);
+    const addedClients=Math.max(0,db.clients.length-beforeClients);
+    setCloudStatus('ok',addedDocs||addedClients?'تم استرجاع ودمج '+addedDocs+' وثيقة و'+addedClients+' ملف عميل من المسار القديم.':'تم فحص المسار القديم؛ لا توجد سجلات جديدة لدمجها.','الاسترجاع القديم مكتمل');
+    toast(addedDocs||addedClients?'☁️ تم دمج البيانات القديمة بأمان.':'☁️ لا توجد بيانات قديمة إضافية.');
+  }catch(e){
+    const msg=String(e&&e.message||e||'Erreur inconnue');
+    const denied=/LEGACY GET 401|LEGACY GET 403|permission_denied|AUTH_REQUIRED/i.test(msg);
+    if(denied){
+      setCloudStatus('error','المسار القديم /egtph/ محجوب بقواعد Firebase الحالية. أضف سماحًا مؤقتًا لنفس المفتاح تحت egtph، ثم اضغط «استرجاع البيانات القديمة». لا تُرسل هذه المحاولة أي بيانات.','صلاحية المسار القديم مطلوبة');
+      toast('☁️ يلزم السماح المؤقت لمسار egtph في قواعد Firebase لاسترجاع النسخة القديمة.','error',7000);
+    }else{
+      setCloudStatus('error','تعذر قراءة النسخة السحابية القديمة. لم تُحذف ولم تُرسل أي بيانات.','استرجاع قديم متوقف');
+      toast('☁️ خطأ في استرجاع المسار القديم: '+msg,'error',6000);
+    }
+  }finally{
+    _cloudBusy=false;
+    if(shouldPush)setTimeout(function(){cloudSync(true);},0);
+  }
+}
+
+async function cloudSync(manual){
+  if(PDF_ONLY_MODE){if(manual)toast('💾 وضع الحفظ المحلي مفعّل مؤقتًا.');return;}
+  if(_cloudAuthBlocked){
+    _setDot('🔴','Firebase login refused — automatic retry paused');
+    setCloudStatus('error','Firebase رفض جلسة الدخول السابقة. أوقفت المحاولات المتكررة لحماية البيانات المحلية.','401 — إعادة الدخول مطلوبة');
+    if(manual)toast('☁️ اضغط «إعادة تسجيل الدخول» لتجديد جلسة Firebase.','error',5000);
+    return;
+  }
+  if(!_cloudAuthReady||!_authToken()){
+    _setDot('🟠','En attente de connexion sécurisée');setCloudStatus('warn','سجّل الدخول أولاً لاسترجاع النسخة السحابية؛ لم يتم إرسال أي بيانات.','بانتظار الدخول');
+    if(manual)toast('☁️ سجّل الدخول أولاً لاسترجاع بياناتك.','error',5000);return;
+  }
+  if(_cloudBusy)return;_cloudBusy=true;
+  try{
+    const endpoint=_cloudEP();if(!endpoint)throw new Error('AUTH_REQUIRED');
+    _setDot('🔄','Restauration / synchronisation en cours');setCloudStatus('warn','جارٍ قراءة النسخة السحابية ودمجها دون حذف أي سجل…','قراءة فقط');
+    await _pullTomb();
+    const g=await fetch(endpoint);
+    if(!g.ok)throw new Error('GET '+g.status);
+    let remote=null;try{remote=await g.json();}catch(e){throw new Error('Réponse cloud invalide');}
+    const shape=_remoteFactShape(remote);
+    if(shape==='unknown')throw new Error('Format cloud inconnu — écriture bloquée par sécurité');
+    const localBefore=db.documents.length;
+    const ch=shape==='facture'?mergeRemoteFact(remote):false;
+    relinkFactClients();
+    if(ch){
+      window._cloudApplying=true;saveDB();populateClientDatalist();renderHistory();renderClients();window._cloudApplying=false;
+    }
+    const remoteDocs=shape==='facture'?_normArr(remote.documents):[];
+    const remoteClients=shape==='facture'?_normArr(remote.clients):[];
+    // Dispositif anti-perte : aucun élément distant valide non supprimé ne peut disparaître avant une écriture.
+    const docIds=new Set(db.documents.map(d=>String(d.id||'')));
+    const docFps=new Set(db.documents.map(docFingerprint));
+    remoteDocs.forEach(rd=>{const fp=docFingerprint(rd);if(rd&&rd.id&&FACTDEL.indexOf(rd.id)<0&&!docIds.has(String(rd.id))&&!docFps.has(fp)){db.documents.push(rd);docIds.add(String(rd.id));docFps.add(fp);}});
+    const clientIds=new Set(db.clients.map(c=>String(c.id||'')));
+    const clientNames=new Set(db.clients.map(clientFingerprint));
+    remoteClients.forEach(rc=>{const key=clientFingerprint(rc);if(rc&&rc.id&&CLIDEL.indexOf(rc.id)<0&&!clientIds.has(String(rc.id))&&!clientNames.has(key)){rc.docs=_normArr(rc.docs);db.clients.push(rc);clientIds.add(String(rc.id));clientNames.add(key);}});
+    relinkFactClients();
+    if(FACTDEL.length||CLIDEL.length)_pushTomb(FACTDEL,CLIDEL);
+    // Un clic de synchronisation ne doit jamais, à lui seul, écraser la base distante par une base locale vide.
+    const localHasData=!!(db.documents.length||db.clients.length);
+    const needPut=!!(window._cloudDirty||ch||FACTDEL.length||CLIDEL.length);
+    if(needPut && (localHasData || FACTDEL.length || CLIDEL.length)){
+      const stamp=String(Date.now());
+      const payload={documents:db.documents,clients:db.clients,company:db.company,deleted:FACTDEL.slice(-300),deletedClients:CLIDEL.slice(-300),tombstones:{documents:_tombstoneMap(FACTDEL),clients:_tombstoneMap(CLIDEL)},syncedAt:stamp,device:navigator.userAgent.slice(0,60)};
+      const p=await fetch(endpoint,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      if(!p.ok)throw new Error('PUT '+p.status);
+      _cloudStamp=stamp;localStorage.setItem('egtp_fact_stamp',stamp);window._cloudDirty=false;
+    }else if(shape==='facture'&&remote&&remote.syncedAt){
+      _cloudStamp=String(remote.syncedAt);localStorage.setItem('egtp_fact_stamp',_cloudStamp);window._cloudDirty=false;
+    }
+    // Marque uniquement après une lecture Firebase réussie (et après le PUT si nécessaire).
+    // Cela garantit qu'une ancienne base v9.5 contenant le PDF soit envoyée au moins une fois.
+    if(!db.cloudSyncInitialized){db.cloudSyncInitialized=true;_storeDBSilently();}
+    updateStats();populateClientDatalist();renderHistory();renderClients();
+    const restored=Math.max(0,db.documents.length-localBefore);
+    _setDot('🟢','Synchronisation sécurisée OK '+new Date().toLocaleTimeString('fr-FR'));
+    setCloudStatus('ok',restored?'تم استرجاع '+restored+' سجل من السحابة ودمجه بأمان.':'تم التحقق من النسخة السحابية دون فقدان بيانات.','متزامن');
+    if(manual)toast(restored?'☁️ تم استرجاع البيانات ودمجها.':'☁️ تمت المزامنة الآمنة.');
+  }catch(e){
+    const msg=String(e&&e.message||e||'Erreur inconnue');
+    _setDot('🔴','Hors ligne / erreur: '+msg);
+    const denied=/\b(?:GET|PUT|PATCH) 401\b|permission_denied|AUTH_REQUIRED/i.test(msg);
+    if(denied){
+      _cloudAuthBlocked=true;
+      try{if(_sse){_sse.close();_sse=null;}}catch(_e){}
+      setCloudStatus('error','Firebase رفض طلب المزامنة. لم تُرسل هذه النسخة أي بيانات إلى السحابة. اضغط «إعادة تسجيل الدخول» وأدخل كلمة المرور الصحيحة؛ إن استمر 401 فتأكد من تفعيل Email/Password وأن الحساب abdiyoucefislam@gmail.com موجود في Firebase Authentication.','401 — إعادة الدخول مطلوبة');
+    }else{
+      setCloudStatus('error','تعذر الوصول إلى السحابة. لم تُحذف ولم تُرسل أي بيانات من هذه النسخة.','المزامنة متوقفة');
+    }
+    if(manual)toast('☁️ خطأ مزامنة: '+msg+' — بياناتك لم تُمس.','error',6500);
+  }finally{_cloudBusy=false;}
+}
+
+// ══ RÉCUPÉRATION PDF MANUELLE : Situation 102/2026 - DJALOUL RAHMOUN ══
+// Ne s'injecte jamais automatiquement : l'utilisateur doit confirmer. Ainsi une restauration cloud tardive ne peut pas être écrasée par une copie partielle.
+const PDF_RECOVERY_102={
+  type:'SITUATION ACTUELLE',num:'102/2026',date:'2026-06-18',clientName:'DJALOUL RAHMOUN',
+  refInt:'',payMode:'ESPÈCES',payRef:'/',bank:'/',payDate:'',tvaRate:'0',garantieRate:'0',notes:'',useAvancement:false,
+  items:[
+    {desig:'Pose de tube annelé Ø500 mm (fourniture non incluse) › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable › Remblaiement en matériaux de terre',qty:'153.2',unit:'ML',pu:'2500',avancement:100},
+    {desig:'Pose de tube annelé Ø315 mm (fourniture non incluse) › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable › Remblaiement en matériaux de tuf',qty:'721.25',unit:'ML',pu:'2500',avancement:100},
+    {desig:'Fourniture de tube annelé Ø315 mm',qty:'159',unit:'ML',pu:'1100',avancement:100},
+    {desig:'Fourniture de tube annelé Ø200 mm',qty:'87',unit:'ML',pu:'670',avancement:100},
+    {desig:'Fourniture et pose de regard double nappe (profondeur ≤ 2 m)',qty:'23',unit:'U',pu:'30000',avancement:100},
+    {desig:'Fourniture et pose de regard double nappe (profondeur > 2 m)',qty:'1',unit:'U',pu:'35000',avancement:100},
+    {desig:'Fourniture et pose de tampon CPH 850×850 Série lourde',qty:'31',unit:'U',pu:'25000',avancement:100},
+    {desig:'Fourniture et pose de boite de raccordement › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable carrière › Remblaiement en matériaux de grave',qty:'25',unit:'U',pu:'34000',avancement:100},
+    {desig:'pose de boite de raccordement › Évacuation et transport des déblais de terrassement › Lit de pose et couverture en sable carrière › Remblaiement en matériaux de grave',qty:'6',unit:'U',pu:'0',avancement:100}
+  ],
+  deductions:[{date:'2026-05-07',desig:'Versement',amount:'3000000'}]
+};
+function clonePdfRecovery102(){return JSON.parse(JSON.stringify(PDF_RECOVERY_102));}
+function recovery102Match(d){return d&&docFingerprint(d)===docFingerprint(PDF_RECOVERY_102);}
+// Crée une seule fois le document normal issu du PDF. Ce n'est pas une restauration cloud :
+// les champs sont des données éditables dans la base locale, comme tout document créé dans l'application.
+function ensurePdfSituation102(){
+  const existing=db.documents.find(recovery102Match);
+  if(existing){
+    existing.totals=calcTotals(existing);
+    db.pdf102Seeded=true;
+    if(!db.currentDocId)db.currentDocId=existing.id;
+    return false;
+  }
+  // بعد الحذف المتعمد لا تعيد النسخة إنشاء الوثيقة في كل تشغيل.
+  if(db.pdf102Seeded===true)return false;
+  const data=clonePdfRecovery102();
+  let c=db.clients.find(x=>clientFingerprint(x)===clientFingerprint({name:data.clientName}));
+  if(!c){c={id:'cli_djaloul_rahmoun',name:data.clientName,docs:[],_mod:nextMod()};db.clients.push(c);}
+  const doc=Object.assign({
+    id:'doc_102_2026_djaloul_rahmoun',
+    createdAt:'2026-06-18T00:00:00.000Z',
+    updatedAt:'2026-06-18T00:00:00.000Z',
+    _mod:nextMod(),clientId:c.id
+  },data);
+  doc.totals=calcTotals(doc);
+  db.documents.push(doc);
+  if(!Array.isArray(c.docs))c.docs=[];
+  if(!c.docs.includes(doc.id))c.docs.push(doc.id);
+  c._mod=nextMod();
+  db.currentDocId=doc.id;
+  db.pdf102Seeded=true;
+  relinkFactClients();
+  return true;
+}
+function restorePdfSituation102(){
+  ensurePdfSituation102();
+  const doc=db.documents.find(recovery102Match);
+  saveDB();populateClientDatalist();renderHistory();renderClients();updateStats();
+  if(doc)loadDocById(doc.id);
+  toast('📝 Situation 102/2026 ouverte en mode modification.');
+}
+// تبدأ المزامنة بعد نجاح تسجيل الدخول فقط.
+
+// ── البثّ المباشر (SSE) الأذكى: يبثّ syncedAt فقط (طابع خفيف)؛ عند تغيّره يُزامِن فوراً ──
+//    أخفّ بكثير على النت من فحص دوري كل 5 ثوانٍ.
+let _sse=null,_sseRetry=null;
+function startCloudStream(){
+  if(_cloudAuthBlocked||!_cloudAuthReady||!_authToken())return;
+  if(!('EventSource' in window))return; // متصفّح قديم → الفحص الدوري يكفي
+  if(_sse){try{_sse.close();}catch(e){}_sse=null;}
+  if(!navigator.onLine)return;
+  try{
+    const streamEP=_cloudEP();if(!streamEP)return;
+    _sse=new EventSource(streamEP.replace('.json?','/syncedAt.json?'));
+    const onCh=()=>{ if(_sseDeb)clearTimeout(_sseDeb); _sseDeb=setTimeout(()=>{ if(!_cloudBusy)cloudSync(false); },300); };
+    _sse.addEventListener('put',onCh);
+    _sse.addEventListener('patch',onCh);
+    _sse.onerror=()=>{
+      try{_sse.close();}catch(e){} _sse=null;
+      if(_sseRetry)clearTimeout(_sseRetry);
+      _sseRetry=setTimeout(startCloudStream,8000);
+    };
+  }catch(e){_sse=null;}
+}
+let _sseDeb=null;
+if(!PDF_ONLY_MODE)startCloudStream();
+// فحص دوري خفيف كل 15ث كخطّة بديلة (يغطّي انقطاع SSE المؤقّت)
+if(!PDF_ONLY_MODE)setInterval(()=>{if(_cloudAuthReady&&!_cloudAuthBlocked)cloudSync(false);},15000);
+
+// ── تثبيت الخانة النشطة تلقائياً: لو كنت تكتب في خانة (onchange) ولم تخرج منها بعد،
+//    نُطلق حفظها (blur) قبل الإغلاق/التصغير — حتى لا تبقى القيمة «أمام عينيك فقط» ──
+function _commitActiveField(){
+  try{
+    const el=document.activeElement;
+    if(el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'||el.isContentEditable)){
+      el.blur();
+    }
+  }catch(e){}
+}
+window.addEventListener('beforeunload',function(e){
+  _commitActiveField();
+  if(window._cloudDirty){ e.preventDefault(); e.returnValue=''; }
+});
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='hidden'){
+    _commitActiveField();
+    if(!PDF_ONLY_MODE&&window._cloudDirty&&navigator.onLine&&!_cloudBusy&&_cloudAuthReady&&!_cloudAuthBlocked)cloudSync(false);
+  } else {
+    if(!PDF_ONLY_MODE){try{startCloudStream();}catch(e){}
+    if(!_cloudBusy&&_cloudAuthReady&&!_cloudAuthBlocked)cloudSync(false);}
+  }
+});
+window.addEventListener('online',function(){ if(!PDF_ONLY_MODE){try{startCloudStream();}catch(e){} if(!_cloudBusy&&_cloudAuthReady&&!_cloudAuthBlocked)cloudSync(false);} });
+</script>
+</body>
+</html>
