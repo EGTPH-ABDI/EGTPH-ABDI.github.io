@@ -3082,7 +3082,15 @@ function plTotalsFrom(texts, items){
   const pickv = k => { const vals=reads.map(r=>r[k]).filter(Boolean); if(!vals.length) return undefined;
     if(k==="ht"){ const ok=vals.find(v=>Math.abs(v-sum)<1); if(ok) return ok; }
     const cnt={}; vals.forEach(v=>cnt[v]=(cnt[v]||0)+1); return +Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0]; };
-  return {ht:pickv("ht"), tva:pickv("tva"), ttc:pickv("ttc"), rate:pickv("rate")||19};
+  const ht=pickv("ht"), tva=pickv("tva"), ttc=pickv("ttc");
+  let rate=pickv("rate"), rateRead=!!rate;
+  if(!rate && tva && (ht||sum)){ rate=tva/(ht||sum)*100; rateRead=true; }       // TVA ÷ HT écrits sur le devis
+  if(!rate && ttc && (ht||sum)){ rate=(ttc/(ht||sum)-1)*100; rateRead=true; }   // TTC ÷ HT − 1
+  rate = TVA_RATES.reduce((b,r)=>Math.abs(r-(rate||19))<Math.abs(b-(rate||19))?r:b, 19);
+  return {ht, tva, ttc, rate, rateRead};
+}
+const TVA_RATES=[19,9];
+function plSnapRate(r){ r=Number(r); return TVA_RATES.reduce((b,x)=>Math.abs(x-r)<Math.abs(b-r)?x:b,19);
 }
 function plAddItems(items){
   if(!items.length){ plStatus(px("plNoItem")); return; }
@@ -3435,7 +3443,7 @@ function plTotals(){
   const p=store.planning, items=p.items.filter(i=>i.on!==false);
   const ht = Math.round(items.reduce((a,i)=>a+(Number(i.mt)||0),0)*100)/100;
   const d=p.doc||{}, rs=(d.rateSet!=null&&d.rateSet!=="")?Number(d.rateSet):NaN;
-  const rate = !isNaN(rs) ? rs : (Number(d.rate)>0 ? Number(d.rate) : 19);
+  const rate = !isNaN(rs) ? plSnapRate(rs) : (Number(d.rate)>0 ? plSnapRate(d.rate) : 19);
   const tva = Math.round(ht*rate)/100, ttc = Math.round((ht+tva)*100)/100;
   return {ht, rate, tva, ttc};
 }
@@ -3447,19 +3455,17 @@ function totalsHTML(){
   const bad = p.items.filter(i=>i.on!==false && i.ok===false).length, fixed = p.items.filter(i=>i.fixed).length;
   return `<table class="pl-tot"><tbody>
     <tr><th>${px("ttHT")}</th><td class="num">${fmt2(t.ht)}</td><td>${chk(t.ht,d.ht)}</td></tr>
-    <tr><th>${px("ttTVA")} <select class="pl-rate" onchange="plSetRate(this.value)" title="${px("ttRateT")}">${[0,7,9,17,19].concat([0,7,9,17,19].includes(t.rate)?[]:[t.rate]).map(r=>`<option value="${r}"${r===t.rate?" selected":""}>${String(r).replace(".",",")} %</option>`).join("")}<option value="x">${px("ttRateX")}</option></select></th><td class="num">${fmt2(t.tva)}</td><td>${chk(t.tva,d.tva)}</td></tr>
+    <tr><th>${px("ttTVA")} <select class="pl-rate" onchange="plSetRate(this.value)" title="${px("ttRateT")}">${TVA_RATES.map(r=>`<option value="${r}"${r===t.rate?" selected":""}>${r} %</option>`).join("")}</select>${(d.rateSet==null&&d.rateRead)?` <small class="pl-muted">${px("ttRateRead")}</small>`:""}</th><td class="num">${fmt2(t.tva)}</td><td>${chk(t.tva,d.tva)}</td></tr>
     <tr><th>${px("ttTTC")}</th><td class="num"><b>${fmt2(t.ttc)}</b></td><td>${chk(t.ttc,d.ttc)}</td></tr>
   </tbody></table>
   <p class="pl-muted">${px("ttCheck")} · ✓ ${p.items.length-bad} ${bad?`· ⚠ ${bad} ${px("plToCheck")}`:""} ${fixed?`· ✎ ${fixed} ${px("ttFixed")}`:""}</p>`;
 }
 function plSetRate(v){
-  if(v==="x"){ const a=prompt(px("ttRateT")+" (%)", String(plTotals().rate)); if(a==null){ renderPlanning(); return; } v=a; }
-  const r=parseFloat(String(v).replace(",","."));
-  if(isNaN(r)||r<0||r>100){ renderPlanning(); return; }
+  const r=plSnapRate(parseFloat(v));
   store.planning.doc=Object.assign({},store.planning.doc,{rateSet:r}); persist(); renderPlanning();
 }
-Object.assign(PX.fr,{ttHT:"Montant HT", ttTVA:"TVA", ttTTC:"Montant TTC", ttRead:"devis :", ttCheck:"Chaque ligne est vérifiée : quantité × prix unitaire = montant", ttFixed:"corrigé(s) automatiquement par le calcul", ttRateT:"Taux de TVA de ce projet", ttRateX:"Autre…", colPU:"P.U"});
-Object.assign(PX.ar,{ttHT:"المبلغ خارج الرسوم", ttTVA:"الرسم على القيمة المضافة", ttTTC:"المجموع بكل الرسوم", ttRead:"في الكشف:", ttCheck:"كل سطر محقق: الكمية × سعر الوحدة = المبلغ", ttFixed:"صُحّح تلقائياً بالحساب", ttRateT:"نسبة الرسم على القيمة المضافة لهذا المشروع", ttRateX:"نسبة أخرى…", colPU:"سعر الوحدة"});
+Object.assign(PX.fr,{ttHT:"Montant HT", ttTVA:"TVA", ttTTC:"Montant TTC", ttRead:"devis :", ttCheck:"Chaque ligne est vérifiée : quantité × prix unitaire = montant", ttFixed:"corrigé(s) automatiquement par le calcul", ttRateT:"Taux de TVA de ce projet", ttRateRead:"(lu sur le devis)", colPU:"P.U"});
+Object.assign(PX.ar,{ttHT:"المبلغ خارج الرسوم", ttTVA:"الرسم على القيمة المضافة", ttTTC:"المجموع بكل الرسوم", ttRead:"في الكشف:", ttCheck:"كل سطر محقق: الكمية × سعر الوحدة = المبلغ", ttFixed:"صُحّح تلقائياً بالحساب", ttRateT:"نسبة الرسم على القيمة المضافة لهذا المشروع", ttRateRead:"(مقروءة من الكشف)", colPU:"سعر الوحدة"});
 Object.keys(PX).forEach(l=>Object.assign(I18N[l], PX[l]));
 
 /* =================================================================
