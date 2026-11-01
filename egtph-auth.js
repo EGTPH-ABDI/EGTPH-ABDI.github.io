@@ -140,6 +140,8 @@
       }
       var userInput = document.getElementById("egtphAuthUser");
       var other = document.getElementById("egtphAuthOther");
+      if (userInput) { userInput.style.display = "none"; userInput.value = ""; }
+      if (other) other.textContent = "حساب آخر";
       if (other) other.onclick = function (ev) {
         ev.preventDefault();
         var showIt = userInput.style.display === "none";

@@ -497,6 +497,22 @@ body[dir="rtl"] #p_days, body[dir="rtl"] #p_days_w{ text-align:right; }
   .doc-table thead{display:table-header-group}
   .doc-table th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+.pl-tot{border-collapse:collapse;margin:12px 0 6px;font-size:13px;min-width:320px}
+.pl-tot th,.pl-tot td{border:1px solid #999;padding:6px 10px;text-align:start}
+.pl-tot th{background:#f0f0f0;font-weight:700}
+.pl-tot .num{text-align:end;font-family:var(--font-mono)}
+.tt-ok{font-size:12px}
+.tt-bad{font-size:12px;font-weight:700;text-decoration:underline}
+.pl-tab input.fx{font-style:italic;text-decoration:underline dotted}
+.arc-row{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 4px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.arc-main{min-width:200px;flex:1;font-size:13.5px;line-height:1.5}
+.arc-act{display:flex;gap:6px;flex-wrap:wrap}
+.arc-act .btn{padding:6px 10px}
+.arc-banner{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;border:2px solid #111;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-weight:600;background:#fff}
+@media print{.arc-banner{display:none!important}}
+.rh-fn{display:block;margin-top:4px;width:100%;max-width:260px;border:1px solid var(--line-2);border-radius:7px;padding:5px;font-size:12px;font-family:inherit;background:#fff}
+.rh-docs{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.rh-docs button{border:1px solid var(--line-2);background:#fff;border-radius:6px;padding:3px 7px;font-size:11px;cursor:pointer;font-family:inherit}
 </style>
 </head>
 <body dir="ltr">
@@ -793,7 +809,6 @@ body[dir="rtl"] #p_days, body[dir="rtl"] #p_days_w{ text-align:right; }
         </div>
         <div class="card">
           <div class="card-h"><span class="dot"></span><h3 data-i18n="moyHumTitle">Moyens humains</h3>
-            <button class="btn btn-ghost" style="margin-inline-start:auto;padding:6px 12px" onclick="addHum()">＋ <span data-i18n="addRow">Ajouter une ligne</span></button>
           </div>
           <div class="card-b">
             <p class="pl-muted" data-i18n="moyHumHint"></p>
@@ -868,6 +883,16 @@ body[dir="rtl"] #p_days, body[dir="rtl"] #p_days_w{ text-align:right; }
         </div>
       </section>
 
+
+      <!-- ===== VIEW: Archive ===== -->
+      <section class="view" id="view-archive">
+        <div class="section-head">
+          <h2 data-i18n="arcTitle">Archive des mémoires</h2>
+          <p data-i18n="arcHint"></p>
+        </div>
+        <div style="margin-bottom:16px"><button class="btn btn-accent" onclick="arcSave(false)">📁 <span data-i18n="arcSave">Archiver</span></button></div>
+        <div class="card"><div class="card-b" id="arcList"></div></div>
+      </section>
       <!-- ===== VIEW: Design ===== -->
       <section class="view" id="view-design">
         <div class="section-head">
@@ -2430,7 +2455,7 @@ const PX = {
     nav_planning:"Planning des travaux", t_planning:["Planning des travaux","Lecture du devis → planning"],
     secMoy:"Moyens matériels et humains", secPlan:"Planning prévisionnel des travaux",
     moyMatTitle:"Moyens matériels (liste du parc)", moyMatHint:"Liste lue depuis l'onglet Matériel. Cochez le matériel à présenter.",
-    moyHumTitle:"Moyens humains (encadrement et personnel)", moyHumHint:"Personnel affecté au chantier (repris dans le mémoire).",
+    moyHumTitle:"Moyens humains (programme RH)", rhLinked:"Liste lue en direct depuis le programme RH", rhRefresh:"Actualiser", rhInactive:"inactif", rhLoading:"Lecture de la liste du personnel (RH)…", rhLogin:"Le personnel est lu directement depuis le programme RH. Connectez-vous à RH une fois.", rhConnect:"Relier au programme RH", rhDenied:"Ce compte n'a pas accès au programme RH.", rhError:"Lecture impossible du programme RH (réseau).", rhSaved:"Poste modifié dans le programme RH", rhSaveErr:"Modification refusée", rhReadOnly:"Compte en lecture seule", rhOther:"Intitulé du poste", rhOtherOpt:"Autre…", rhAtt:"Attestation", rhCnt:"Contrat", rhPay:"Paie", rhFile:"Fiche", moyHumHint:"Cochez les travailleurs à présenter. Toute modification faite dans RH apparaît ici.",
     moyLoading:"Chargement de la liste du matériel…", moyNone:"Aucun matériel trouvé (connectez-vous ou ajoutez le matériel dans l'onglet Matériel).",
     colDes:"Désignation", colDesMat:"Désignation du matériel", colFact:"N° facture", colNom:"Nom, prénom et fonction", colRec:"Date de recrutement", colDob:"Date de naissance", colDip:"Diplôme", colAss:"N° d'assurance", colModel:"Marque / modèle", colMat:"Immatriculation", colYear:"Année", colEtat:"État", colFonction:"Fonction", colNb:"Nombre", colQualif:"Qualification / expérience",
     addRow:"Ajouter une ligne", all:"Tout cocher", none:"Tout décocher", saved:"Enregistré",
@@ -2458,7 +2483,7 @@ const PX = {
     nav_planning:"مخطط الأشغال", t_planning:["مخطط إنجاز الأشغال","قراءة الكشف ← المخطط"],
     secMoy:"الوسائل المادية والبشرية", secPlan:"المخطط التقديري لإنجاز الأشغال",
     moyMatTitle:"الوسائل المادية (من قائمة العتاد)", moyMatHint:"القائمة مأخوذة من تبويب العتاد. اختر العتاد الذي يظهر في المذكرة.",
-    moyHumTitle:"الوسائل البشرية (التأطير والعمال)", moyHumHint:"العمال المخصّصون للورشة (يظهرون في المذكرة).",
+    moyHumTitle:"الوسائل البشرية (برنامج RH)", rhLinked:"القائمة تُقرأ مباشرة من برنامج الموارد البشرية", rhRefresh:"تحديث", rhInactive:"غير نشط", rhLoading:"جارٍ قراءة قائمة العمال من RH…", rhLogin:"العمال يُقرؤون مباشرة من برنامج RH. اربطه مرة واحدة.", rhConnect:"الربط مع برنامج RH", rhDenied:"هذا الحساب لا يملك صلاحية برنامج RH.", rhError:"تعذّرت قراءة برنامج RH (الشبكة).", rhSaved:"تم تعديل المنصب في برنامج RH", rhSaveErr:"رُفض التعديل", rhReadOnly:"حساب للعرض فقط", rhOther:"اسم المنصب", rhOtherOpt:"أخرى…", rhAtt:"شهادة عمل", rhCnt:"عقد", rhPay:"كشف الراتب", rhFile:"البطاقة", moyHumHint:"اختر العمال الذين يظهرون في المذكرة. كل تعديل في RH يظهر هنا.",
     moyLoading:"جارٍ تحميل قائمة العتاد…", moyNone:"لا يوجد عتاد (سجّل الدخول أو أضف العتاد في تبويب العتاد).",
     colDes:"التعيين", colDesMat:"تعيين العتاد", colFact:"رقم الفاتورة", colNom:"الاسم واللقب والوظيفة", colRec:"تاريخ التوظيف", colDob:"تاريخ الميلاد", colDip:"الشهادة", colAss:"رقم الضمان الاجتماعي", colModel:"العلامة / الطراز", colMat:"الترقيم", colYear:"السنة", colEtat:"الحالة", colFonction:"الوظيفة", colNb:"العدد", colQualif:"المؤهل / الخبرة",
     addRow:"إضافة سطر", all:"تحديد الكل", none:"إلغاء الكل", saved:"تم الحفظ",
@@ -2493,17 +2518,7 @@ PRN_SECTIONS.push({id:"moyens", key:"secMoy"},{id:"planning", key:"secPlan"});
 
 const DEFAULT_MOYENS = {
   sel:null,   /* null = tout le matériel en bon état ; sinon liste d'ids cochés */
-  hum:[],     /* [{nom, rec, dob, dip, ass}] — données de l'équipe, gardées dans le cloud */
-  _humOld:[
-    {fr:"Directeur technique / Ingénieur en hydraulique", ar:"مدير تقني / مهندس في الري", nb:"1", q_fr:"Diplôme d'ingénieur, 5 ans et plus", q_ar:"شهادة مهندس، 5 سنوات فأكثر"},
-    {fr:"Conducteur de travaux", ar:"مسؤول الأشغال", nb:"1", q_fr:"Technicien supérieur, expérience confirmée", q_ar:"تقني سامي، خبرة مؤكدة"},
-    {fr:"Chef de chantier", ar:"رئيس الورشة", nb:"1", q_fr:"Expérience en réseaux", q_ar:"خبرة في الشبكات"},
-    {fr:"Topographe", ar:"طوبوغرافي", nb:"1", q_fr:"", q_ar:""},
-    {fr:"Conducteurs d'engins", ar:"سائقو الآلات", nb:"3", q_fr:"Permis et habilitation", q_ar:"رخصة وتأهيل"},
-    {fr:"Chauffeurs poids lourds", ar:"سائقو الوزن الثقيل", nb:"2", q_fr:"Permis C / E", q_ar:"رخصة C / E"},
-    {fr:"Maçons / coffreurs", ar:"بنّاؤون / مختصو القوالب", nb:"4", q_fr:"", q_ar:""},
-    {fr:"Manœuvres", ar:"عمال", nb:"10", q_fr:"", q_ar:""}
-  ]
+  humSel:null /* null = tous les travailleurs actifs du programme RH */
 };
 const DEFAULT_PLANNING = { unit:"j", total:"", start:"", hpd:8, spd:2, sh:8, overlap:40, detail:"phase", items:[], tasks:[] };
 
@@ -2523,7 +2538,7 @@ function normalizeStore(s){
   if(s.print.pagenum===undefined) s.print.pagenum = true;
   if(!s.design) s.design = JSON.parse(JSON.stringify(DEFAULT_DESIGN));
   if(!s.moyens) s.moyens = JSON.parse(JSON.stringify(DEFAULT_MOYENS));
-  if(!Array.isArray(s.moyens.hum)) s.moyens.hum = s.moyens.hum ? Object.values(s.moyens.hum) : [];
+  delete s.moyens.hum; /* l'équipe vient du programme RH (lien direct) */
   s.planning = Object.assign(JSON.parse(JSON.stringify(DEFAULT_PLANNING)), s.planning||{});
   ["items","tasks"].forEach(k=>{ if(!Array.isArray(s.planning[k])) s.planning[k] = s.planning[k] ? Object.values(s.planning[k]) : []; });
   return s;
@@ -2585,6 +2600,59 @@ persist = function(){
   cloudPush();
 };
 
+/* ---------- Moyens humains : lien direct avec le programme RH ---------- */
+const RH_FB = "https://egtph-rh-default-rtdb.europe-west1.firebasedatabase.app/egtph-rh/rh_v3_MBInR2bhdTMRnHOL1ts1g187pZhstcz1VwtcHtjz8";
+const RH_KEY = "AIzaSyA7xH8pwmEjzIM98lE6C-GmK-cSrAvs9gc";
+const RH_POSTES = {ing_hydro_p:["Ingénieur en hydraulique","مهندس في الري"],tech_hydro_p:["Technicien / TS supérieur en hydraulique","تقني / تقني سامٍ في الري"],topo_sup:["TS / TS supérieur en topographie","تقني / تقني سامٍ في الطوبوغرافيا"],fusionneur:["Fusionneur PEHD","لاحم أنابيب PEHD"],chef_chantier:["Chef de chantier","رئيس الورشة"],conducteur_engin:["Conducteur d'engins","سائق آليات"],chauffeur:["Chauffeur","سائق"],macon:["Maçon","بنّاء"],conducteur:["Conducteur de travaux","مدير الأشغال"],chef_equipe:["Chef d'équipe","رئيس الفريق"],ingenieur:["Ingénieur","مهندس"],technicien:["Technicien","تقني"],tech_sup:["Technicien supérieur","تقني سامٍ"],topographe:["Topographe","طوبوغرافي"],manoeuvre:["Manœuvre","عامل"],ferrailleur:["Ferrailleur","حدّاد تسليح"],coffreur:["Coffreur","نجّار قوالب"],soudeur:["Soudeur","لحّام"],magasinier:["Magasinier","أمين المخزن"],secretaire:["Secrétaire","كاتب(ة)"],comptable:["Comptable","محاسب"],resp_achat:["Responsable Achat","مسؤول المشتريات"],gerant:["Gérant","المسيّر"]};
+const RH_DIPL = {master_hydro:["Master en Hydraulique","ماستر في الري"],licence_hydro:["Licence en Hydraulique","ليسانس في الري"],techsup_topo:["TS en Topographie","تقني سامٍ في الطوبوغرافيا"],pehd:["Diplôme de soudeur PEHD","شهادة لحام PEHD"],ing_hydro:["Ingénieur d'État en Hydraulique","مهندس دولة في الري"],tech_hydro:["Technicien en Hydraulique","تقني في الري"],techsup_hydro:["Technicien supérieur en Hydraulique","تقني سامٍ في الري"],tech_topo:["Technicien en Topographie","تقني في الطوبوغرافيا"],master_gc:["Master en Génie Civil","ماستر في الهندسة المدنية"],licence_gc:["Licence en Génie Civil","ليسانس في الهندسة المدنية"],tech_gc:["Technicien en Génie Civil","تقني في الهندسة المدنية"],cap:["CAP","شهادة الكفاءة المهنية"],bep:["BEP","شهادة التعليم المهني"]};
+let rhWorkers = null, rhState = "idle";   /* idle | loading | ok | login | error */
+function rhPoste(w,L){ if(!w.fn) return ""; if(w.fn==="__autre") return w.fnx||""; const p=RH_POSTES[w.fn]; return p?p[L==="ar"?1:0]:w.fn; }
+function rhDipl(w,L){ if(!w.dp||w.dp==="sans") return L==="ar"?"عامل":"Main-d'œuvre"; if(w.dp==="__autre") return w.dpx||""; const d=RH_DIPL[w.dp]; return d?d[L==="ar"?1:0]:w.dp; }
+function fmtDate(v){ const s=String(v||""); const m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${m[1]}`:s; }
+function rhToken(){ try{ return window.EGTPHAuth && EGTPHAuth.getToken("rh"); }catch(e){ return null; } }
+function rhHasSession(){ try{ const s=JSON.parse(localStorage.getItem("egtph_auth_rh")); return !!(s&&s.refreshToken); }catch(e){ return false; } }
+function rhConnect(silent){
+  if(!window.EGTPHAuth) return;
+  if(silent && !rhHasSession()){ rhState="login"; renderMoyens(); return; }
+  rhState="loading"; renderMoyens();
+  EGTPHAuth.init({appId:"rh", apiKey:RH_KEY, email:"abdiyoucefislam@gmail.com", onReady:function(){ loadRhWorkers(); }, onTokenChange:function(){}});
+}
+async function loadRhWorkers(){
+  const tk = rhToken(); if(!tk){ rhState="login"; renderMoyens(); return; }
+  rhState="loading"; renderMoyens();
+  try{
+    const r = await fetch(RH_FB+"/records/workers.json?auth="+encodeURIComponent(tk), {cache:"no-store"});
+    if(!r.ok){ rhState = r.status===401?"denied":"error"; renderMoyens(); return; }
+    const v = await r.json()||{};
+    rhWorkers = Object.values(v).map(x=>x&&x.data).filter(w=>w&&w.id&&(w.N||w.P)&&!w.deleted)
+      .sort((a,b)=>(parseInt(a.rk,10)||999)-(parseInt(b.rk,10)||999));
+    rhState="ok";
+  }catch(e){ rhState="error"; }
+  renderMoyens();
+}
+/* modification du poste depuis la mémoire → écrit dans le programme RH (même enregistrement) */
+async function rhSetPoste(id, fn){
+  if(window.EGTPHAuth && EGTPHAuth.isViewer && (EGTPHAuth.isViewer("rh")||EGTPHAuth.isViewer(AUTH_APP))){ toast(px("rhReadOnly"), true); renderMoyens(); return; }
+  const w=(rhWorkers||[]).find(x=>String(x.id)===String(id)); const tk=rhToken(); if(!w||!tk) return;
+  let fnx=w.fnx||"";
+  if(fn==="__autre"){ const v=prompt(px("rhOther"), w.fnx||""); if(v===null){ renderMoyens(); return; } fnx=v.trim(); }
+  const data=Object.assign({}, w, {fn, fnx});
+  try{
+    const r=await fetch(RH_FB+"/records/workers/"+encodeURIComponent(id)+".json?auth="+encodeURIComponent(tk), {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({data, updatedAtMs:Date.now(), updatedBy:"memoire-technique"})});
+    if(r.ok){ w.fn=fn; w.fnx=fnx; toast(px("rhSaved")); } else toast(px("rhSaveErr")+" ("+r.status+")", true);
+  }catch(e){ toast(px("rhSaveErr"), true); }
+  renderMoyens();
+}
+function rhOpen(doc, id){ window.open("../egtph-rh/index.html#doc="+doc+(id?"&w="+encodeURIComponent(id):""), "_blank"); }
+function humSelected(w){ const sel=store.moyens.humSel; return Array.isArray(sel) ? sel.indexOf(String(w.id))>=0 : w.st!=="INACTIF"; }
+function toggleHum(id){
+  if(!Array.isArray(store.moyens.humSel)) store.moyens.humSel=(rhWorkers||[]).filter(humSelected).map(w=>String(w.id));
+  id=String(id); const i=store.moyens.humSel.indexOf(id); if(i>=0) store.moyens.humSel.splice(i,1); else store.moyens.humSel.push(id);
+  renderMoyens();
+}
+function humAll(on){ store.moyens.humSel = on ? (rhWorkers||[]).filter(w=>w.st!=="INACTIF").map(w=>String(w.id)) : []; renderMoyens(); }
+function rhRows(L){ return (rhWorkers||[]).filter(humSelected).map(w=>({nom:(w.N+" "+(w.P||"")).trim()+(rhPoste(w,L)?" — "+rhPoste(w,L):""), rec:fmtDate(w.et), dob:fmtDate(w.dd), dip:rhDipl(w,L), ass:w.ss||""})); }
+
 /* ---------- Moyens ---------- */
 const CAT_LBL = {fr:{1:"Moyens matériels de fouilles, excavation et terrassement",2:"Moyens matériels de transport",3:"Moyens matériels de production",4:"Moyens matériels et outillage de chantier",0:"Autres matériels"},
                  ar:{1:"عتاد الحفر والترابيات",2:"عتاد النقل",3:"عتاد الإنتاج",4:"عتاد وأدوات الورشة",0:"عتاد آخر"}};
@@ -2610,9 +2678,6 @@ function toggleEquip(id){
   renderMoyens();
 }
 function equipAll(on){ store.moyens.sel = on ? (parcEquip||[]).map(e=>String(e.id)) : []; renderMoyens(); }
-function addHum(){ store.moyens.hum.push({nom:"",rec:"",dob:"",dip:"",ass:""}); renderMoyens(); }
-function delHum(i){ store.moyens.hum.splice(i,1); renderMoyens(); }
-function updHum(i,k,v){ const h=store.moyens.hum[i]; if(h) h[k]=v; }
 function saveMoyens(){ persist(); toast(px("saved")); }
 function renderMoyens(){
   const wrap = document.getElementById("moyMatList"); if(!wrap) return;
@@ -2633,12 +2698,22 @@ function renderMoyens(){
   }
   const hum = document.getElementById("moyHumList");
   if(hum){
-    const cols=[["nom","colNom"],["rec","colRec"],["dob","colDob"],["dip","colDip"],["ass","colAss"]];
-    hum.innerHTML = `<div class="pl-scroll"><table class="dtab pl-tab"><thead><tr><th style="width:34px">N°</th>${cols.map(c=>`<th>${px(c[1])}</th>`).join("")}<th style="width:40px"></th></tr></thead><tbody>
-      ${store.moyens.hum.map((h,i)=>`<tr><td class="num">${String(i+1).padStart(2,"0")}</td>
-        ${cols.map(c=>`<td><input value="${esc(h[c[0]]||"")}" oninput="updHum(${i},'${c[0]}',this.value)"></td>`).join("")}
-        <td><button class="del-btn" onclick="delHum(${i})">✕</button></td></tr>`).join("")}
-      </tbody></table></div>`;
+    if(rhState==="ok" && rhWorkers){
+      hum.innerHTML = `<p class="pl-muted">🔗 ${px("rhLinked")} · ${rhWorkers.filter(humSelected).length} / ${rhWorkers.length}
+          <button class="btn btn-ghost" style="padding:4px 10px;margin-inline-start:8px" onclick="loadRhWorkers()">↻ ${px("rhRefresh")}</button>
+          <button class="btn btn-ghost" style="padding:4px 10px" onclick="humAll(true)">${px("all")}</button>
+          <button class="btn btn-ghost" style="padding:4px 10px" onclick="humAll(false)">${px("none")}</button></p>
+        <div class="pl-scroll"><table class="dtab pl-tab"><thead><tr><th style="width:34px"></th><th>${px("colNom")}</th><th>${px("colRec")}</th><th>${px("colDob")}</th><th>${px("colDip")}</th><th>${px("colAss")}</th></tr></thead><tbody>
+        ${rhWorkers.map(w=>`<tr class="${humSelected(w)?'':'off'}"><td><input type="checkbox" ${humSelected(w)?'checked':''} onchange="toggleHum('${esc(w.id)}')"></td>
+          <td>${esc((w.N+" "+(w.P||"")).trim())}${w.st==="INACTIF"?` <small class="pl-muted">· ${px("rhInactive")}</small>`:""}
+            <select class="rh-fn" onchange="rhSetPoste('${esc(w.id)}',this.value)">${Object.keys(RH_POSTES).concat(["__autre"]).map(k=>`<option value="${k}" ${w.fn===k?"selected":""}>${k==="__autre"?(w.fn==="__autre"&&w.fnx?esc(w.fnx):px("rhOtherOpt")):RH_POSTES[k][lang==="ar"?1:0]}</option>`).join("")}${w.fn&&!RH_POSTES[w.fn]&&w.fn!=="__autre"?`<option selected>${esc(w.fn)}</option>`:""}</select>
+            <div class="rh-docs"><button onclick="rhOpen('att','${esc(w.id)}')">📄 ${px("rhAtt")}</button><button onclick="rhOpen('cnt','${esc(w.id)}')">📝 ${px("rhCnt")}</button><button onclick="rhOpen('pay','${esc(w.id)}')">💰 ${px("rhPay")}</button><button onclick="rhOpen('wk','${esc(w.id)}')">👷 ${px("rhFile")}</button></div></td>
+          <td class="num">${esc(fmtDate(w.et))}</td><td class="num">${esc(fmtDate(w.dd))}</td><td>${esc(rhDipl(w,lang))}</td><td class="num">${esc(w.ss||"")}</td></tr>`).join("")}
+        </tbody></table></div>`;
+    } else {
+      const msg = rhState==="loading" ? px("rhLoading") : rhState==="denied" ? px("rhDenied") : rhState==="error" ? px("rhError") : px("rhLogin");
+      hum.innerHTML = `<p class="pl-muted">${msg}</p>${rhState==="loading"?"":`<button class="btn btn-accent" onclick="rhConnect(false)">🔗 ${px("rhConnect")}</button>`}`;
+    }
   }
 }
 function equipDedup(list){ const seen={}; return list.filter(e=>{ const k=e.id+"|"+e.name; if(seen[k]) return false; seen[k]=1; return true; }); }
@@ -2647,7 +2722,7 @@ function moyensDocSection(){
   const list = equipDedup((parcEquip||[]).filter(equipSelected));
   const rou = list.filter(e=>e.veh), nrou = list.filter(e=>!e.veh);
   let html = "";
-  const hum = store.moyens.hum.filter(h=>(h.nom||"").trim());
+  const hum = rhRows(L);
   if(hum.length){
     html += `<h4>${L==='ar'?'الوسائل البشرية':'Moyens humains'}</h4>
       <table class="doc-table"><thead><tr><th style="width:30px">N°</th><th>${pxd("colNom")}</th><th>${pxd("colRec")}</th><th>${pxd("colDob")}</th><th>${pxd("colDip")}</th><th>${pxd("colAss")}</th></tr></thead><tbody>
@@ -2889,27 +2964,35 @@ async function prepCanvas(src, rot, mode){
 }
 /* OCR avec positions : les nombres sont regroupés selon l'écart réel entre les mots */
 function ocrScore(txt){ const it=parseDevisText(txt); return {n:it.filter(i=>i.ok).length, all:it.length}; }
+/* toutes les techniques : image d'origine, image nettoyée (lignes effacées), niveaux de gris ;
+   rotation automatique si rien n'est lisible ; la langue est détectée au premier passage */
 async function ocrImage(src, label){
   const T = await getTess();
-  const rot = parseInt((document.getElementById("plRot")||{}).value||"0",10)||0;
+  const rotSel = parseInt((document.getElementById("plRot")||{}).value||"0",10)||0;
   const pick = (document.getElementById("plLang")||{}).value||"auto";
-  const base = rot ? await prepCanvas(src, rot, "scale") : src;
-  // passe 1 : image d'origine (meilleure pour les scans nets)
+  const texts = [];
+  const run = async (rot, mode, langs, tag)=>{
+    const cv = (mode==="raw" && !rot) ? src : await prepCanvas(src, rot, mode==="raw"?"scale":mode);
+    const t = await ocrCanvas(T, cv, langs, label+" "+tag);
+    texts.push(t); return t;
+  };
   let langs = pick==="auto" ? "ara+fra" : pick;
-  let best = await ocrCanvas(T, base, langs, label+" (1)");
+  let rot = rotSel;
+  let t1 = await run(rot, "raw", langs, "1/3");
   if(pick==="auto"){
-    const ar=(best.match(/[\u0600-\u06FF]/g)||[]).length, la=(best.match(/[A-Za-zÀ-ÿ]/g)||[]).length;
-    if(la > ar*2){ langs="fra"; best = await ocrCanvas(T, base, langs, label+" (1)"); }
+    const ar=(t1.match(/[؀-ۿ]/g)||[]).length, la=(t1.match(/[A-Za-zÀ-ÿ]/g)||[]).length;
+    if(la > ar*2){ langs="fra"; texts.pop(); t1 = await run(rot, "raw", langs, "1/3"); }
   }
-  let sc = ocrScore(best);
-  // passe 2 : image nettoyée (photos au téléphone, lignes du tableau effacées) si la 1re est faible
-  if(sc.n < Math.max(3, sc.all*0.6)){
-    const cv = await prepCanvas(src, rot, "bin");
-    const t2 = await ocrCanvas(T, cv, langs, label+" (2)");
-    const s2 = ocrScore(t2);
-    if(s2.n > sc.n || (s2.n===sc.n && s2.all > sc.all)){ best=t2; sc=s2; }
+  // photo couchée / à l'envers : essai des autres rotations si presque rien n'est lu
+  if(!rotSel && ocrScore(t1).n===0 && ocrScore(t1).all<3){
+    for(const r of [90,270,180]){
+      const tr = await run(r, "raw", langs, "↻"+r+"°");
+      if(ocrScore(tr).n>=2){ rot=r; break; }
+    }
   }
-  return best;
+  await run(rot, "bin", langs, "2/3");
+  await run(rot, "gray", langs, "3/3");
+  return texts;
 }
 async function ocrCanvas(T, cv, langs, label){
   const w = await T.createWorker(langs, 1, {logger:m=>{ if(m&&m.status==="recognizing text") plStatus(px("plReading")+" "+(label||"")+" "+Math.round((m.progress||0)*100)+"%", true); }});
@@ -2943,10 +3026,10 @@ async function ocrCanvas(T, cv, langs, label){
   });
   return out.join("\n");
 }
-async function pdfText(file){
+async function pdfTexts(file){
   const pdfjs = await getPdf();
   const doc = await pdfjs.getDocument({data: await file.arrayBuffer()}).promise;
-  let all = "";
+  let digital = "", scans = [];
   for(let p=1;p<=Math.min(doc.numPages,30);p++){
     plStatus(px("plReading")+" "+px("plPage")+" "+p+"/"+doc.numPages, true);
     const page = await doc.getPage(p);
@@ -2954,33 +3037,51 @@ async function pdfText(file){
     const rows = {};
     tc.items.forEach(it=>{ const y = Math.round(it.transform[5]/3); (rows[y]=rows[y]||[]).push({x:it.transform[4], s:it.str}); });
     const txt = Object.keys(rows).map(Number).sort((a,b)=>b-a).map(y=>rows[y].sort((a,b)=>a.x-b.x).map(o=>o.s).join(" ")).join("\n");
-    if(txt.replace(/\s/g,"").length > 40){ all += txt+"\n"; continue; }
+    if(txt.replace(/\s/g,"").length > 40){ digital += txt+"\n"; continue; }
     const vp = page.getViewport({scale:2.2});
     const cv = document.createElement("canvas"); cv.width=vp.width; cv.height=vp.height;
     await page.render({canvasContext:cv.getContext("2d"), viewport:vp}).promise;
-    all += await ocrImage(cv, px("plPage")+" "+p) + "\n";
+    const blob = await new Promise(r=>cv.toBlob(r,"image/png"));
+    const tx = await ocrImage(blob, px("plPage")+" "+p);
+    tx.forEach((t,i)=>{ scans[i]=(scans[i]||"")+t+"\n"; });
   }
-  return all;
+  if(!scans.length) return [digital];
+  return scans.map(t=>digital+t);
 }
 async function plFile(ev){
   const file = ev.target.files && ev.target.files[0]; ev.target.value=""; if(!file) return;
   const name = file.name.toLowerCase();
-  let items = [];
+  let items = [], texts = [];
   try{
     plStatus(px("plReading"), true);
     if(/\.(xlsx|xls|ods)$/.test(name)){
       const X = await getXlsx(); const wb = X.read(await file.arrayBuffer(), {type:"array"});
-      wb.SheetNames.forEach(sn=>{ items = items.concat(parseDevisRows(X.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:false}))); });
+      wb.SheetNames.forEach(sn=>{ const rows=X.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:false}); items = items.concat(parseDevisRows(rows)); texts.push(rows.map(r=>(r||[]).join(" ")).join("\n")); });
+      items = mergePasses([items]);
     } else if(/\.csv$/.test(name) || file.type==="text/plain" || /\.txt$/.test(name)){
-      const t = await file.text();
-      items = /;|\t/.test(t) ? parseDevisRows(t.split(/\r?\n/).map(l=>l.split(/;|\t/))) : parseDevisText(t);
+      const t = await file.text(); texts=[t];
+      items = mergePasses([/;|\t/.test(t) ? parseDevisRows(t.split(/\r?\n/).map(l=>l.split(/;|\t/))) : parseDevisText(t)]);
     } else if(/\.pdf$/.test(name) || file.type==="application/pdf"){
-      items = parseDevisText(await pdfText(file));
+      texts = await pdfTexts(file);
+      items = mergePasses(texts.map(parseDevisText));
     } else {
-      items = parseDevisText(await ocrImage(file, ""));
+      texts = await ocrImage(file, "");
+      items = mergePasses(texts.map(parseDevisText));
     }
   }catch(e){ plStatus("⚠ "+(e&&e.message||e)); return; }
+  // totaux écrits sur le devis (le meilleur relevé parmi les lectures)
+  const t = plTotalsFrom(texts, items);
+  store.planning.doc = t;
+  reconcileWithHT(items, t);
   plAddItems(items);
+}
+function plTotalsFrom(texts, items){
+  const sum = items.reduce((a,i)=>a+(Number(i.mt)||0),0);
+  const reads = texts.map(readTotals);
+  const pickv = k => { const vals=reads.map(r=>r[k]).filter(Boolean); if(!vals.length) return undefined;
+    if(k==="ht"){ const ok=vals.find(v=>Math.abs(v-sum)<1); if(ok) return ok; }
+    const cnt={}; vals.forEach(v=>cnt[v]=(cnt[v]||0)+1); return +Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0]; };
+  return {ht:pickv("ht"), tva:pickv("tva"), ttc:pickv("ttc"), rate:pickv("rate")||19};
 }
 function plAddItems(items){
   if(!items.length){ plStatus(px("plNoItem")); return; }
@@ -2990,9 +3091,12 @@ function plAddItems(items){
   if(!store.planning.total) plDefaultTotal();
   renderPlanning();
 }
-function plPasteGo(){ const t=document.getElementById("plPasteText").value; plAddItems(parseDevisText(t)); }
+function plPasteGo(){ const t=document.getElementById("plPasteText").value; const items=mergePasses([parseDevisText(t)]); const tt=plTotalsFrom([t],items); store.planning.doc=tt; reconcileWithHT(items,tt); plAddItems(items); }
 function plTogglePaste(){ const b=document.getElementById("plPasteBox"); b.style.display = b.style.display==="none"?"block":"none"; }
-function plItemUpd(i,k,v){ const it=store.planning.items[i]; if(!it) return; if(k==="q"||k==="mt") it[k]=parseNum(v); else if(k==="on") it.on=!!v; else it[k]=v; }
+function plItemUpd(i,k,v){ const it=store.planning.items[i]; if(!it) return;
+  if(k==="q"||k==="mt"||k==="pu"){ it[k]=parseNum(v); if(k!=="mt" && it.q>0 && it.pu>0) it.mt=Math.round(it.q*it.pu*100)/100; it.ok = it.q>0 && it.pu>0 && Math.abs(it.q*it.pu-it.mt)/Math.max(1,it.mt)<0.006; delete it.fixed; renderPlanning(); }
+  else if(k==="on"){ it.on=!!v; const tb=document.getElementById("plTotals"); if(tb) tb.innerHTML=totalsHTML(); }
+  else it[k]=v; }
 function plItemDel(i){ store.planning.items.splice(i,1); renderPlanning(); }
 function plItemAdd(){ store.planning.items.push({id:"i"+Date.now().toString(36), n:String(store.planning.items.length+1), des:"", u:"", q:"", pu:"", mt:"", phase:"div", on:true}); renderPlanning(); }
 function plClear(){ if(!confirm(px("plClear")+" ?")) return; store.planning.items=[]; store.planning.tasks=[]; renderPlanning(); }
@@ -3118,17 +3222,18 @@ function drawGantt(){
 function renderPlanning(){
   const host = document.getElementById("plItemList"); if(!host) return;
   const p = store.planning;
-  host.innerHTML = p.items.length ? `<div class="pl-scroll"><table class="dtab pl-tab"><thead><tr><th style="width:34px"></th><th style="width:54px">${px("colN")}</th><th>${px("colDes")}</th><th style="width:60px">${px("colU")}</th><th style="width:90px">${px("colQ")}</th><th style="width:120px">${px("colMt")}</th><th style="width:190px">${px("colPhase")}</th><th style="width:36px"></th></tr></thead><tbody>
+  host.innerHTML = p.items.length ? `<div class="pl-scroll"><table class="dtab pl-tab"><thead><tr><th style="width:34px"></th><th style="width:54px">${px("colN")}</th><th>${px("colDes")}</th><th style="width:60px">${px("colU")}</th><th style="width:90px">${px("colQ")}</th><th style="width:100px">${px("colPU")}</th><th style="width:130px">${px("colMt")}</th><th style="width:190px">${px("colPhase")}</th><th style="width:36px"></th></tr></thead><tbody>
     ${p.items.map((it,i)=>`<tr class="${it.on===false?'off':''} ${it.ok===false?'chk':''}" title="${it.ok===false?esc(px("plCheck")):''}">
       <td><input type="checkbox" ${it.on===false?'':'checked'} onchange="plItemUpd(${i},'on',this.checked);this.closest('tr').classList.toggle('off',!this.checked)"></td>
       <td><input value="${esc(it.n)}" oninput="plItemUpd(${i},'n',this.value)"></td>
       <td><input value="${esc(it.des)}" oninput="plItemUpd(${i},'des',this.value)"></td>
       <td><input value="${esc(it.u)}" oninput="plItemUpd(${i},'u',this.value)"></td>
       <td><input inputmode="decimal" value="${it.q===""||isNaN(it.q)?"":fmtDoc(it.q)}" onchange="plItemUpd(${i},'q',this.value)"></td>
-      <td><input inputmode="decimal" value="${it.mt===""||isNaN(it.mt)?"":fmtDoc(it.mt)}" onchange="plItemUpd(${i},'mt',this.value)"></td>
+      <td><input inputmode="decimal" value="${it.pu===""||isNaN(it.pu)?"":fmt2(it.pu)}" onchange="plItemUpd(${i},'pu',this.value)"></td>
+      <td><input inputmode="decimal" value="${it.mt===""||isNaN(it.mt)?"":fmt2(it.mt)}" onchange="plItemUpd(${i},'mt',this.value)" title="${it.fixed?esc(px("ttFixed")):''}" class="${it.fixed?'fx':''}"></td>
       <td><select onchange="plItemUpd(${i},'phase',this.value)">${PHASES.slice().sort((a,b)=>a.o-b.o).map(ph=>`<option value="${ph.id}" ${it.phase===ph.id?'selected':''}>${lang==='ar'?ph.ar:ph.fr}</option>`).join("")}</select></td>
       <td><button class="del-btn" onclick="plItemDel(${i})">✕</button></td></tr>`).join("")}
-    </tbody></table></div>` : `<p class="pl-muted">${px("plEmpty")}</p>`;
+    </tbody></table></div><div id="plTotals">${totalsHTML()}</div>` : `<p class="pl-muted">${px("plEmpty")}</p>`;
   const units=["h","j","s","m","p"];
   const prm = document.getElementById("plParamsBox");
   if(prm){
@@ -3186,6 +3291,8 @@ function planningDocSection(){
 }
 
 /* ---------- démarrage : session partagée avec Matériel & soumissions ---------- */
+const _go0 = go;
+go = function(id){ _go0(id); if(id==="moyens"||id==="print"){ if(rhState==="ok") loadRhWorkers(); parcEquip=null; renderMoyens(); } };
 const _setLang0 = setLang;
 setLang = function(l){ _setLang0(l); renderMoyens(); renderPlanning(); renderTxt(); };
 function memoStart(){
@@ -3197,7 +3304,7 @@ function memoStart(){
   renderMoyens(); renderPlanning(); renderTxt();
   if(window.EGTPHAuth && typeof EGTPHAuth.init==="function"){
     EGTPHAuth.init({appId:AUTH_APP, apiKey:"AIzaSyBf7NU7QPvS824duUE78uaXZuCzGdX6Grg", email:"abdiyoucefislam@gmail.com",
-      onReady:function(){ parcEquip=null; cloudPull().then(()=>renderMoyens()); },
+      onReady:function(){ parcEquip=null; cloudPull().then(()=>{ renderMoyens(); rhConnect(true); }); },
       onTokenChange:function(){}});
   } else setCloudStamp(px("needLogin"));
 }
@@ -3245,6 +3352,199 @@ function memoDocHook(secs){
   }
   if(P.planning!==false && store.planning.tasks.length) secs.push(planningDocSection());
 }
+
+/* =================================================================
+   CONTRÔLE ARITHMÉTIQUE : quantité × prix unitaire = montant ; Σ = HT ; HT × TVA ; TTC
+   ================================================================= */
+const CONFUS = {"0":"869","1":"74","2":"7","3":"858","4":"19","5":"638","6":"580","7":"12","8":"0369","9":"408"};
+function digits(n){ return String(Math.round(Number(n)*100)/100).replace(/\.0+$/,""); }
+function lev(a,b){ a=String(a); b=String(b); const m=a.length,n=b.length; if(Math.abs(m-n)>2) return 9; const d=[]; for(let i=0;i<=m;i++){ d[i]=[i]; } for(let j=1;j<=n;j++) d[0][j]=j;
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++){ const c=a[i-1]===b[j-1]?0:(CONFUS[a[i-1]]&&CONFUS[a[i-1]].indexOf(b[j-1])>=0?0.5:1); d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+c); } return d[m][n]; }
+function near(read, calc){ if(read===""||read==null||isNaN(read)) return 1.5; return lev(digits(read).replace(/\D/g,""), digits(calc).replace(/\D/g,"")); }
+/* corrige un article : retrouve le nombre mal lu à partir des deux autres */
+function plausible(it){ const q=Number(it.q), pu=Number(it.pu), mt=Number(it.mt); return q>0 && q<1e6 && pu>=5 && pu<1e7 && mt>=1000 && mt<1e10; }
+function realWords(des){ return String(des||"").split(/\s+/).filter(w=>(w.match(/[A-Za-zÀ-ÿ\u0600-\u06FF]/g)||[]).length>=3).length; }
+function repairItem(it){ repairItem0(it); if(it.ok && !plausible(it)){ it.ok=false; delete it.fixed; } }
+function repairItem0(it){
+  const q=Number(it.q), pu=Number(it.pu), mt=Number(it.mt);
+  const has=v=>v!==""&&v!=null&&!isNaN(v)&&Number(v)>0;
+  if(has(it.q)&&has(it.pu)&&has(it.mt) && Math.abs(q*pu-mt)/Math.max(1,mt)<0.006){ const ex=Math.round(q*pu*100)/100; if(Math.abs(ex-mt)>0.01){ it.mt=ex; it.fixed="mt"; } it.ok=true; return; }
+  if(has(it.q)&&has(it.pu)&&!has(it.mt)){ it.mt=Math.round(q*pu*100)/100; it.ok=true; it.fixed="mt"; return; }
+  const cands=[];
+  if(has(it.q)&&has(it.pu)) cands.push({k:"mt", v:Math.round(q*pu*100)/100, d:near(it.mt, q*pu)});
+  if(has(it.mt)&&has(it.pu)){ const v=mt/pu; if(Math.abs(v-Math.round(v*100)/100)<1e-6 || Math.abs(v-Math.round(v))<0.02) cands.push({k:"q", v:Math.round(v*100)/100, d:near(it.q, v)}); }
+  if(has(it.mt)&&has(it.q)){ const v=mt/q; if(Math.abs(v-Math.round(v*100)/100)<0.005) cands.push({k:"pu", v:Math.round(v*100)/100, d:near(it.pu, v)}); }
+  cands.sort((a,b)=>a.d-b.d);
+  const c=cands[0];
+  if(c && c.d<=1){ it[c.k]=c.v; it.ok=true; it.fixed=c.k; }
+}
+function simDes(a,b){ const A=new Set(String(a).toLowerCase().split(/\s+/).filter(w=>w.length>2)), B=new Set(String(b).toLowerCase().split(/\s+/).filter(w=>w.length>2)); if(!A.size||!B.size) return 0; let n=0; A.forEach(w=>{ if(B.has(w)) n++; }); return n/Math.min(A.size,B.size); }
+/* fusionne plusieurs lectures du même document : garde pour chaque article la lecture vérifiée */
+function mergePasses(lists){
+  lists = lists.filter(l=>l&&l.length);
+  if(!lists.length) return [];
+  lists.forEach(l=>l.forEach(repairItem));
+  lists.sort((a,b)=>(b.filter(i=>i.ok).length - a.filter(i=>i.ok).length) || (b.length-a.length));
+  const base = lists[0].map(i=>Object.assign({},i));
+  const sameArt = (x,y)=> x.n && y.n && String(parseInt(x.n,10))===String(parseInt(y.n,10));
+  lists.slice(1).forEach(l=>l.filter(i=>i.ok).forEach(v=>{
+    const m = base.find(b=>(sameArt(b,v) && simDes(b.des,v.des)>=0.3) || simDes(b.des,v.des)>=0.6);
+    if(m){ if(!m.ok){ m.q=v.q; m.pu=v.pu; m.mt=v.mt; m.u=m.u||v.u; m.ok=true; m.fixed=m.fixed||"x"; if(v.des.length>m.des.length && simDes(m.des,v.des)>=0.6) m.des=v.des; } }
+    else {
+      const nv=parseInt(v.n,10), used=new Set(base.map(b=>parseInt(b.n,10)));
+      if(nv>=1 && nv<=80 && !used.has(nv) && realWords(v.des)>=2 && !base.some(b=>Math.abs(Number(b.mt)-Number(v.mt))<0.01)) base.push(Object.assign({},v));
+    }
+  }));
+  // nettoyage : lignes illisibles sans chiffres cohérents, doublons
+  const seen=new Set();
+  const clean = base.filter(i=>{ if(!i.ok && (realWords(i.des)<2 || !(Number(i.mt)>=1000 || Number(i.q)>0 && Number(i.pu)>=5))) return false;
+    const k=i.ok?("m"+Math.round(Number(i.mt))):null; if(k){ if(seen.has(k)) return false; seen.add(k); } return true; });
+  base.length=0; clean.forEach(i=>base.push(i));
+  // ordre des articles
+  const nums = base.map(i=>parseInt(i.n,10)).filter(n=>!isNaN(n));
+  if(nums.length>=base.length*0.7 && new Set(nums).size===nums.length) base.sort((a,b)=>(parseInt(a.n,10)||999)-(parseInt(b.n,10)||999));
+  return base;
+}
+/* totaux écrits sur le devis (HT, TVA, TTC) */
+function readTotals(text){
+  const out={};
+  String(text||"").split("\n").forEach(l=>{
+    const nums=(l.match(/\d[\d .,]*\d/g)||[]).map(x=>parseNum(x.replace(/\s/g,""))).filter(x=>!isNaN(x)&&x>=100);
+    const big = nums.length?Math.max(...nums):null;
+    const rate = (l.match(/(\d{1,2})\s*%/)||[])[1];
+    if(/t\.?\s*t\.?\s*c|بكل الرسوم|الرسوم المحتواة|المجموع بكل/i.test(l)){ if(big) out.ttc=big; }
+    else if(/t\.?\s*v\.?\s*a|القيمة المضافة/i.test(l)){ if(rate) out.rate=+rate; const v=nums.filter(x=>x!==+rate); if(v.length) out.tva=Math.max(...v); }
+    else if(/h\.?\s*t\b|hors\s*taxe|خارج الرسوم|بدون رسوم|montant\s+en\s+h/i.test(l)){ if(big) out.ht=big; }
+  });
+  return out;
+}
+/* si un seul article reste faux, le HT écrit sur le devis permet de le retrouver */
+function reconcileWithHT(items, doc){
+  if(!doc||!doc.ht) return;
+  const bad = items.filter(i=>i.ok===false);
+  if(bad.length!==1) return;
+  const others = items.filter(i=>i!==bad[0]).reduce((a,i)=>a+(Number(i.mt)||0),0);
+  const mt = Math.round((doc.ht-others)*100)/100; if(mt<=0) return;
+  const it=bad[0], q=Number(it.q), pu=Number(it.pu);
+  if(q>0 && Math.abs(q*pu-mt)/mt<0.006){ it.mt=mt; it.ok=true; it.fixed="mt"; return; }
+  if(q>0){ const v=mt/q; if(Math.abs(v-Math.round(v*100)/100)<0.005){ it.mt=mt; it.pu=Math.round(v*100)/100; it.ok=true; it.fixed="pu"; return; } }
+  if(pu>0){ const v=mt/pu; if(Math.abs(v-Math.round(v))<0.02){ it.mt=mt; it.q=Math.round(v); it.ok=true; it.fixed="q"; return; } }
+}
+function plTotals(){
+  const p=store.planning, items=p.items.filter(i=>i.on!==false);
+  const ht = Math.round(items.reduce((a,i)=>a+(Number(i.mt)||0),0)*100)/100;
+  const rate = (p.doc&&p.doc.rate)||19;
+  const tva = Math.round(ht*rate)/100, ttc = Math.round((ht+tva)*100)/100;
+  return {ht, rate, tva, ttc};
+}
+function fmt2(n){ if(n===""||n==null||isNaN(n)) return ""; return Number(n).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2}).replace(/[\u202f\u00a0]/g," "); }
+function totalsHTML(){
+  const p=store.planning; if(!p.items.length) return "";
+  const t=plTotals(), d=p.doc||{};
+  const chk=(calc,read)=> (read && calc>0 && read>=calc*0.5 && read<=calc*2) ? (Math.abs(calc-read)<1 ? `<span class="tt-ok">✓ ${px("ttRead")} ${fmt2(read)}</span>` : `<span class="tt-bad">⚠ ${px("ttRead")} ${fmt2(read)}</span>`) : "";
+  const bad = p.items.filter(i=>i.on!==false && i.ok===false).length, fixed = p.items.filter(i=>i.fixed).length;
+  return `<table class="pl-tot"><tbody>
+    <tr><th>${px("ttHT")}</th><td class="num">${fmt2(t.ht)}</td><td>${chk(t.ht,d.ht)}</td></tr>
+    <tr><th>${px("ttTVA")} ${t.rate}%</th><td class="num">${fmt2(t.tva)}</td><td>${chk(t.tva,d.tva)}</td></tr>
+    <tr><th>${px("ttTTC")}</th><td class="num"><b>${fmt2(t.ttc)}</b></td><td>${chk(t.ttc,d.ttc)}</td></tr>
+  </tbody></table>
+  <p class="pl-muted">${px("ttCheck")} · ✓ ${p.items.length-bad} ${bad?`· ⚠ ${bad} ${px("plToCheck")}`:""} ${fixed?`· ✎ ${fixed} ${px("ttFixed")}`:""}</p>`;
+}
+function plSetRate(v){ store.planning.doc=Object.assign({},store.planning.doc,{rate:parseFloat(v)||19}); renderPlanning(); }
+Object.assign(PX.fr,{ttHT:"Montant HT", ttTVA:"TVA", ttTTC:"Montant TTC", ttRead:"devis :", ttCheck:"Chaque ligne est vérifiée : quantité × prix unitaire = montant", ttFixed:"corrigé(s) automatiquement par le calcul", colPU:"P.U"});
+Object.assign(PX.ar,{ttHT:"المبلغ خارج الرسوم", ttTVA:"الرسم على القيمة المضافة", ttTTC:"المجموع بكل الرسوم", ttRead:"في الكشف:", ttCheck:"كل سطر محقق: الكمية × سعر الوحدة = المبلغ", ttFixed:"صُحّح تلقائياً بالحساب", colPU:"سعر الوحدة"});
+Object.keys(PX).forEach(l=>Object.assign(I18N[l], PX[l]));
+
+/* =================================================================
+   ARCHIVE DES MÉMOIRES — par année, date et projet ; chaque version garde tout
+   (données, méthodologie, planning, matériel et personnel tels qu'imprimés)
+   ================================================================= */
+const ARC_INDEX = PARC_FB + PARC_PATH + "_memo_archive_index";
+const ARC_DATA  = PARC_FB + PARC_PATH + "_memo_archive";
+let arcStash = null;
+NAV.push({id:"archive", icon:'<path d="M3 4h18v4H3zM5 8v12h14V8M10 12h4"/>'});
+Object.assign(PX.fr,{nav_archive:"Archive", t_archive:["Archive des mémoires","Par année, date et projet"], arcTitle:"Archive des mémoires", arcHint:"Chaque mémoire imprimé est archivé automatiquement (s'il a changé). Vous pouvez aussi archiver la version actuelle.",
+  arcSave:"Archiver le mémoire actuel", arcEmpty:"Aucun mémoire archivé pour le moment.", arcView:"Aperçu / imprimer", arcRestore:"Reprendre", arcDel:"Supprimer", arcSaved:"Mémoire archivé",
+  arcBanner:"Version archivée du", arcBack:"Revenir au mémoire actuel", arcAskRestore:"Remplacer le mémoire actuel par cette version archivée ?", arcAskDel:"Supprimer définitivement cette version archivée ?", arcRestored:"Version reprise", arcNoTitle:"(sans intitulé)", arcCount:"version(s)"});
+Object.assign(PX.ar,{nav_archive:"الأرشيف", t_archive:["أرشيف المذكرات","حسب السنة والتاريخ والمشروع"], arcTitle:"أرشيف المذكرات", arcHint:"كل مذكرة تُطبع تُؤرشف تلقائياً (إذا تغيّرت). ويمكنك أيضاً أرشفة النسخة الحالية.",
+  arcSave:"أرشفة المذكرة الحالية", arcEmpty:"لا توجد مذكرات في الأرشيف بعد.", arcView:"معاينة / طباعة", arcRestore:"استرجاع", arcDel:"حذف", arcSaved:"تمت أرشفة المذكرة",
+  arcBanner:"نسخة مؤرشفة بتاريخ", arcBack:"الرجوع إلى المذكرة الحالية", arcAskRestore:"استبدال المذكرة الحالية بهذه النسخة المؤرشفة؟", arcAskDel:"حذف هذه النسخة المؤرشفة نهائياً؟", arcRestored:"تم استرجاع النسخة", arcNoTitle:"(بدون عنوان)", arcCount:"نسخة"});
+Object.keys(PX).forEach(l=>Object.assign(I18N[l], PX[l]));
+function arcKey(){ const s=JSON.parse(JSON.stringify(store)); delete s.lastSave; delete s._arcHash; return JSON.stringify(s); }
+function arcHash(str){ let h=5381; for(let i=0;i<str.length;i++) h=((h<<5)+h+str.charCodeAt(i))|0; return String(h>>>0); }
+async function arcSave(auto){
+  if(window.ARC_VIEW) return;
+  const q = authQ(); if(!q) return;
+  if(window.EGTPHAuth && EGTPHAuth.isViewer && EGTPHAuth.isViewer(AUTH_APP)) return;
+  const key = arcKey(), h = arcHash(key);
+  if(auto && store._arcHash===h) return;
+  const now = new Date(), id = "a"+now.getTime();
+  const DLx=(o,b)=>o[b+"_"+lang]||o[b+"_fr"]||o[b+"_ar"]||"";
+  const meta = {id, date:now.toISOString(), year:now.getFullYear(), title:DLx(store.projet,"obj"), owner:DLx(store.projet,"owner"), days:store.projet.days||"", ttc:store.planning.items.length?plTotals().ttc:""};
+  const snap = {meta, store:JSON.parse(key), equip:(parcEquip||[]).filter(equipSelected), rh:(rhWorkers||[]).filter(humSelected)};
+  try{
+    const r1 = await fetch(ARC_DATA+"/"+id+".json"+q, {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(snap)});
+    const r2 = await fetch(ARC_INDEX+"/"+id+".json"+q, {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(meta)});
+    if(r1.ok && r2.ok){ store._arcHash = h; persist(); if(!auto) toast(px("arcSaved")); renderArchive(); }
+  }catch(e){}
+}
+async function renderArchive(){
+  const host = document.getElementById("arcList"); if(!host) return;
+  const q = authQ(); if(!q){ host.innerHTML=`<p class="pl-muted">${px("needLogin")}</p>`; return; }
+  let idx = {};
+  try{ const r = await fetch(ARC_INDEX+".json"+q, {cache:"no-store"}); idx = (r.ok && await r.json()) || {}; }catch(e){}
+  const list = Object.values(idx).filter(Boolean).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  if(!list.length){ host.innerHTML=`<p class="pl-muted">${px("arcEmpty")}</p>`; return; }
+  const years = {}; list.forEach(m=>{ (years[m.year]=years[m.year]||[]).push(m); });
+  host.innerHTML = Object.keys(years).sort((a,b)=>b-a).map(y=>`<h4 class="pl-h4">${y} <small class="pl-muted">(${years[y].length} ${px("arcCount")})</small></h4>
+    ${years[y].map(m=>{ const d=new Date(m.date); const ds=`${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+      return `<div class="arc-row"><div class="arc-main"><b>${esc(m.title||px("arcNoTitle"))}</b><br><small class="num">${ds}</small>${m.owner?` · <small>${esc(m.owner)}</small>`:""}${m.days?` · <small>${esc(m.days)} ${px("txDays")}</small>`:""}${m.ttc?` · <small class="num">${fmtDoc(m.ttc)} DA TTC</small>`:""}</div>
+        <div class="arc-act"><button class="btn btn-ghost" onclick="arcView('${m.id}')">👁 ${px("arcView")}</button><button class="btn btn-ghost" onclick="arcRestore('${m.id}')">↺ ${px("arcRestore")}</button><button class="btn btn-ghost" onclick="arcDelete('${m.id}')">🗑 ${px("arcDel")}</button></div></div>`; }).join("")}`).join("");
+}
+async function arcGet(id){ const r = await fetch(ARC_DATA+"/"+id+".json"+authQ(), {cache:"no-store"}); return r.ok ? await r.json() : null; }
+async function arcView(id){
+  const snap = await arcGet(id); if(!snap) return;
+  if(!window.ARC_VIEW) arcStash = {store, parcEquip, rhWorkers, rhState};
+  window.ARC_VIEW = true;
+  store = normalizeStore(snap.store); parcEquip = (snap.equip||[]); rhWorkers = (snap.rh||[]); rhState = "ok";
+  store.moyens.sel = parcEquip.map(e=>String(e.id)); store.moyens.humSel = rhWorkers.map(w=>String(w.id));
+  _go0("print"); renderPrintOpts(); buildPreview();
+  const d = new Date(snap.meta.date);
+  let b = document.getElementById("arcBanner");
+  if(!b){ b=document.createElement("div"); b.id="arcBanner"; b.className="arc-banner"; const v=document.getElementById("view-print"); v.insertBefore(b, v.firstChild); }
+  b.style.display="flex";
+  b.innerHTML = `<span>📁 ${px("arcBanner")} ${d.toLocaleDateString(lang==="ar"?"ar-DZ":"fr-FR")} — ${esc(snap.meta.title||"")}</span><button class="btn btn-solid" onclick="arcExit()">${px("arcBack")}</button>`;
+}
+function arcExit(silent){
+  if(!window.ARC_VIEW) return;
+  window.ARC_VIEW = false;
+  if(arcStash){ store=arcStash.store; parcEquip=arcStash.parcEquip; rhWorkers=arcStash.rhWorkers; rhState=arcStash.rhState; arcStash=null; }
+  const b=document.getElementById("arcBanner"); if(b) b.style.display="none";
+  rerenderAll(); const host=document.getElementById("previewHost"); if(host) host.innerHTML="";
+  if(!silent) _go0("archive");
+}
+async function arcRestore(id){
+  if(!confirm(px("arcAskRestore"))) return;
+  const snap = await arcGet(id); if(!snap) return;
+  if(window.ARC_VIEW) arcExit(true);
+  const keepEnt = store.ent;
+  store = normalizeStore(snap.store); store.ent = store.ent || keepEnt;
+  persist(); rerenderAll(); toast(px("arcRestored"));
+}
+async function arcDelete(id){
+  if(!confirm(px("arcAskDel"))) return;
+  const q=authQ();
+  try{ await fetch(ARC_DATA+"/"+id+".json"+q, {method:"DELETE"}); await fetch(ARC_INDEX+"/"+id+".json"+q, {method:"DELETE"}); }catch(e){}
+  renderArchive();
+}
+/* pas d'enregistrement pendant l'aperçu d'une version archivée */
+const _persistArc = persist;
+persist = function(){ if(window.ARC_VIEW) return; _persistArc(); };
+/* archivage automatique à l'impression du mémoire */
+const _printDoc0 = printDoc;
+printDoc = function(){ if(!window.ARC_VIEW) arcSave(true); _printDoc0(); };
+const _goArc = go;
+go = function(id){ if(window.ARC_VIEW && id!=="print") arcExit(true); _goArc(id); if(id==="archive") renderArchive(); if(id==="planning") renderPlanning(); };
 
 memoStart();
 </script>

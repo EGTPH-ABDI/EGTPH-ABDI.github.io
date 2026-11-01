@@ -3342,6 +3342,26 @@ window.addEventListener('DOMContentLoaded',async()=>{
   applyOneTimeFixes();buildPosteSelects();bindEvents();bindCnasDocEvents();loadCnasIndex().then(()=>{if(document.querySelector('#pg-db.on'))renderDB();cnasCloudSync();});showAuthGate('auth_loading','info');applyLang();renderDB();setSyncStatus('connecting');
   await initCloudSync();
 });
+
+/* Lien direct depuis la Mémoire technique : #doc=att|cnt|pay|cg|wk&w=<id> ouvre la page et choisit le travailleur */
+(function(){
+  const SEL={att:'aW',cnt:'cW',pay:'pW',cg:'cgW',av:'avW'};
+  function run(tries){
+    const m=(location.hash||'').match(/doc=(att|cnt|pay|cg|av|wk|ats)(?:&w=([^&]+))?/);
+    if(!m)return;
+    const ready=typeof S!=='undefined'&&S&&Array.isArray(S.workers)&&S.workers.length&&(!m[2]||S.workers.some(x=>x.id===decodeURIComponent(m[2])));
+    if(!ready){if((tries||0)<40)setTimeout(()=>run((tries||0)+1),500);return;}
+    try{sp(m[1],document.querySelector('.ni[onclick*="\''+m[1]+'\'"]'));}catch(e){}
+    const wid=m[2]&&decodeURIComponent(m[2]);
+    if(wid){
+      if(m[1]==='wk'){try{editWorker(wid);}catch(e){}return;}
+      const el=document.getElementById(SEL[m[1]]);
+      if(el){el.value=wid;el.dispatchEvent(new Event('change',{bubbles:true}));}
+    }
+  }
+  window.addEventListener('hashchange',()=>run(0));
+  if(document.readyState==='complete')setTimeout(()=>run(0),800);else window.addEventListener('load',()=>setTimeout(()=>run(0),800));
+})();
 </script>
 </body>
 </html>
