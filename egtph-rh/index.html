@@ -2024,7 +2024,7 @@ function parseCnasEmployer(items,all){
   return meta;
 }
 function isEmployerAffiliation(all){
-  return /ATTESTATION\s*D.?\s*AFFILIATION/i.test(all)&&!/Sous le num|Pr[ée]nom\s*:|Nom\s*:/i.test(all)&&/TASRIHAT|AffiliationInvoice|administratif|منتسب|اجتماعية|جتماعية/i.test(all);
+  return /ATTESTATION\s*D.?\s*AFFILIATION/i.test(all)&&!/Sous le num|Pr[ée]nom\s*:|\d{10}\s*\/\s*\d{2}/i.test(all)&&/TASRIHAT|AffiliationInvoice|administratif|منتسب|اجتماعية|جتماعية/i.test(all);
 }
 function parseCnasItems(items,fileName){
   const all=items.map(i=>i.s).join(' ');
@@ -2100,18 +2100,85 @@ async function storeCnasDoc(wid,kind,file,meta,force){
 }
 /* Photo d'une attestation d'affiliation : lecture OCR + conversion en PDF (remplace l'ancienne automatiquement) */
 function cnasIsImage(f){return /^image\//i.test(f.type||'')||/\.(jpe?g|png|webp|heic)$/i.test(f.name||'');}
+/* La photo est gardée telle quelle (octets d'origine, sans recompression) dans un PDF A4 prêt à imprimer.
+   Si sa qualité est faible (petite, sombre, terne ou floue), elle est d'abord améliorée puis enregistrée. */
+function cnasExifOrientation(u8){
+  if(u8[0]!==0xFF||u8[1]!==0xD8)return 1;
+  let o=2;
+  while(o+4<u8.length){
+    if(u8[o]!==0xFF)return 1;const mk=u8[o+1],len=(u8[o+2]<<8)|u8[o+3];
+    if(mk===0xE1&&u8[o+4]===0x45&&u8[o+5]===0x78){ // "Exif"
+      const t=o+10,le=u8[t]===0x49,r16=a=>le?u8[a]|(u8[a+1]<<8):(u8[a]<<8)|u8[a+1],r32=a=>le?(u8[a]|(u8[a+1]<<8)|(u8[a+2]<<16)|(u8[a+3]<<24))>>>0:((u8[a]<<24)|(u8[a+1]<<16)|(u8[a+2]<<8)|u8[a+3])>>>0;
+      const ifd=t+r32(t+4),n=r16(ifd);
+      for(let k=0;k<n;k++){const e=ifd+2+k*12;if(r16(e)===0x0112)return r16(e+8)||1;}
+      return 1;
+    }
+    if(mk===0xDA)break;o+=2+len;
+  }
+  return 1;
+}
+function cnasImageQuality(bmp){
+  const sc=Math.min(1,800/Math.max(bmp.width,bmp.height)),w=Math.max(1,Math.round(bmp.width*sc)),h=Math.max(1,Math.round(bmp.height*sc));
+  const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.drawImage(bmp,0,0,w,h);
+  const d=x.getImageData(0,0,w,h).data,g=new Float32Array(w*h),hist=new Uint32Array(256);let sum=0;
+  for(let i=0,k=0;i<d.length;i+=4,k++){const v=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];g[k]=v;hist[v|0]++;sum+=v;}
+  const pct=q=>{let a=0,t=q*w*h;for(let v=0;v<256;v++){a+=hist[v];if(a>=t)return v;}return 255;};
+  let lap=0,lc=0;
+  for(let y=1;y<h-1;y+=2)for(let xx=1;xx<w-1;xx+=2){const k=y*w+xx,l=4*g[k]-g[k-1]-g[k+1]-g[k-w]-g[k+w];lap+=l*l;lc++;}
+  const q={long:Math.max(bmp.width,bmp.height),lo:pct(0.003),hi:pct(0.95),mean:sum/(w*h),sharp:lc?lap/lc:0}; // lo = encre, hi = papier
+  q.reasons=[];
+  if(q.long<1400)q.reasons.push('petite');
+  if(q.hi-q.lo<150)q.reasons.push('terne');
+  if(q.hi<190)q.reasons.push('sombre');
+  if(q.sharp<60)q.reasons.push('floue');
+  q.poor=q.reasons.length>0;
+  return q;
+}
+function cnasEnhanceCanvas(bmp,q){
+  const target=Math.min(3000,Math.max(2000,q.long)),sc=target/q.long;
+  const c=document.createElement('canvas');c.width=Math.round(bmp.width*sc);c.height=Math.round(bmp.height*sc);
+  const x=c.getContext('2d');x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';
+  x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(bmp,0,0,c.width,c.height);
+  const im=x.getImageData(0,0,c.width,c.height),d=im.data,W=c.width,H=c.height;
+  // niveaux : noir → 0, fond papier → blanc ; gamma si la photo est sombre
+  const lo=Math.max(0,q.lo-4),hi=Math.max(lo+40,Math.min(255,q.hi+2)),gam=q.hi<170?0.85:1,lut=new Uint8ClampedArray(256);
+  for(let v=0;v<256;v++){let t=(v-lo)/(hi-lo);t=Math.min(1,Math.max(0,t));lut[v]=Math.round(255*Math.pow(t,gam));}
+  for(let i=0;i<d.length;i+=4){d[i]=lut[d[i]];d[i+1]=lut[d[i+1]];d[i+2]=lut[d[i+2]];}
+  // netteté (masque flou léger)
+  const src=new Uint8ClampedArray(d),a=0.6;
+  for(let y=1;y<H-1;y++)for(let xx=1;xx<W-1;xx++){const k=(y*W+xx)*4;
+    for(let ch=0;ch<3;ch++){const v=src[k+ch],bl=(src[k-4+ch]+src[k+4+ch]+src[k-W*4+ch]+src[k+W*4+ch])/4;d[k+ch]=v+a*(v-bl);}}
+  x.putImageData(im,0,0);
+  return c;
+}
 async function cnasImageToPdf(file){
   await ensurePdfLib();
-  const bmp=await createImageBitmap(file);
-  const sc=Math.min(1,2200/Math.max(bmp.width,bmp.height)),c=document.createElement('canvas');
-  c.width=Math.round(bmp.width*sc);c.height=Math.round(bmp.height*sc);
-  const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(bmp,0,0,c.width,c.height);
-  const jpg=await new Promise(r=>c.toBlob(r,'image/jpeg',0.9));
-  const pdf=await PDFLib.PDFDocument.create(),img=await pdf.embedJpg(new Uint8Array(await jpg.arrayBuffer()));
-  const W=595.28,H=841.89,k=Math.min(W/c.width,H/c.height),page=pdf.addPage([W,H]);
-  page.drawImage(img,{x:(W-c.width*k)/2,y:(H-c.height*k)/2,width:c.width*k,height:c.height*k});
-  const bytes=await pdf.save();
-  return {pdf:new File([bytes],String(file.name||'affiliation').replace(/\.[a-z0-9]+$/i,'')+'.pdf',{type:'application/pdf'}),canvas:c};
+  const bytes=new Uint8Array(await file.arrayBuffer());
+  const bmp=await createImageBitmap(file); // orientation EXIF appliquée
+  const q=cnasImageQuality(bmp);
+  const isJpg=bytes[0]===0xFF&&bytes[1]===0xD8,isPng=bytes[0]===0x89&&bytes[1]===0x50;
+  let embedBytes=null,kind='jpg',canvas,enhanced=false;
+  if(q.poor){
+    canvas=cnasEnhanceCanvas(bmp,q);enhanced=true;
+    embedBytes=new Uint8Array(await (await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.93))).arrayBuffer());
+  }else if((isJpg&&cnasExifOrientation(bytes)===1)||isPng){
+    embedBytes=bytes;kind=isPng?'png':'jpg'; // image d'origine, octet pour octet
+  }else{ // photo tournée (EXIF) ou autre format : redressée en pleine résolution
+    canvas=document.createElement('canvas');canvas.width=bmp.width;canvas.height=bmp.height;
+    const x=canvas.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,bmp.width,bmp.height);x.drawImage(bmp,0,0);
+    embedBytes=new Uint8Array(await (await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.95))).arrayBuffer());
+  }
+  const pdf=await PDFLib.PDFDocument.create(),img=kind==='png'?await pdf.embedPng(embedBytes):await pdf.embedJpg(embedBytes);
+  const iw=img.width,ih=img.height,land=iw>ih*1.15,W=land?841.89:595.28,H=land?595.28:841.89,m=14,k=Math.min((W-2*m)/iw,(H-2*m)/ih),page=pdf.addPage([W,H]);
+  page.drawImage(img,{x:(W-iw*k)/2,y:(H-ih*k)/2,width:iw*k,height:ih*k});
+  const out=await pdf.save();
+  // image pour la lecture OCR (réduite pour la vitesse)
+  const oc=document.createElement('canvas'),os=Math.min(1,2200/Math.max(bmp.width,bmp.height));
+  oc.width=Math.round(bmp.width*os);oc.height=Math.round(bmp.height*os);
+  const ox=oc.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,oc.width,oc.height);ox.drawImage(canvas||bmp,0,0,oc.width,oc.height);
+  try{bmp.close();}catch(e){}
+  return {pdf:new File([out],String(file.name||'attestation').replace(/\.[a-z0-9]+$/i,'')+'.pdf',{type:'application/pdf'}),canvas:oc,
+    img:{w:iw,h:ih,enhanced,orig:!enhanced&&embedBytes===bytes,why:q.reasons.join(',')}};
 }
 async function cnasOcrItems(canvas){
   await ensureTesseract();
@@ -2128,7 +2195,7 @@ async function importCnasFiles(fileList,opts){
   opts=opts||{};
   const files=[...(fileList||[])].filter(f=>/pdf/i.test(f.type||'')||/\.pdf$/i.test(f.name||'')||cnasIsImage(f));
   if(!files.length){toast(L('Choisissez des fichiers PDF ou des photos.','اختر ملفات PDF أو صوراً.'),'wa');return;}
-  const prog=$('cdProgress');let saved=0,older=0,errors=0,unknown=0,filled=0;const newUnmatched=[],created=[],stChanged=[];
+  const prog=$('cdProgress');let saved=0,older=0,errors=0,unknown=0,filled=0,enhancedN=0;const newUnmatched=[],created=[],stChanged=[];
   for(let i=0;i<files.length;i++){
     const f=files[i];if(prog)prog.textContent='⏳ '+(i+1)+' / '+files.length+' — '+f.name;
     try{
@@ -2137,11 +2204,15 @@ async function importCnasFiles(fileList,opts){
       if(cnasIsImage(f)){
         if(prog)prog.textContent='⏳ '+(i+1)+' / '+files.length+' — OCR '+f.name;
         const conv=await cnasImageToPdf(f);
-        meta=parseCnasItems(await cnasOcrItems(conv.canvas),f.name)||cnasMetaFromFileName(f.name||'')||(opts.targetWid?{kind:'af',source:'photo'}:opts.companyKind?{kind:opts.companyKind,source:'photo'}:null);
+        const ocrItems=await cnasOcrItems(conv.canvas);
+        meta=parseCnasItems(ocrItems,f.name)||cnasMetaFromFileName(f.name||'')||(opts.targetWid?{kind:'af',source:'photo'}:opts.companyKind?{kind:opts.companyKind,source:'photo'}:null);
         if(meta)meta.source='photo';
+        if(meta&&opts.companyKind==='afe'&&meta.kind!=='afe'&&!ssDigits(meta.ss))meta=parseCnasEmployer(ocrItems,ocrItems.map(z=>z.s).join(' '));
+        if(meta){meta.source='photo';meta.img=conv.img;if(conv.img.enhanced)enhancedN++;}
         files[i]=conv.pdf;
       } else meta=await readCnasPdfMeta(f);
       if(!meta&&opts.companyKind)meta={kind:opts.companyKind,source:'pdf'};
+      if(meta&&opts.companyKind&&!CNAS_CO_KINDS.includes(meta.kind)&&!ssDigits(meta.ss))meta.kind=opts.companyKind;
       if(!meta){unknown++;continue;}
       let wid=CNAS_CO_KINDS.includes(meta.kind)?CNAS_COMPANY:(opts.targetWid||matchWorkerBySS(meta.ss));
       if(meta.kind==='af'&&opts.targetWid&&meta.ss){
@@ -2173,6 +2244,7 @@ async function importCnasFiles(fileList,opts){
   if(stChanged.length)parts.push(stChanged.join(' — '));
   if(filled)parts.push(L(filled+' fiche(s) complétée(s)',filled+' ملف عامل تم إكماله'));
   if(newUnmatched.length)parts.push(L(newUnmatched.length+' sans travailleur correspondant',newUnmatched.length+' بدون عامل مطابق'));
+  if(enhancedN)parts.push(L(enhancedN+' photo(s) de faible qualité améliorée(s) avant l’enregistrement',enhancedN+' صورة ضعيفة الجودة حُسّنت قبل الحفظ'));
   if(older)parts.push(L(older+' plus ancienne(s) ignorée(s)',older+' أقدم من المحفوظة (تم تجاهلها)'));
   if(unknown)parts.push(L(unknown+' non reconnue(s)',unknown+' غير معروفة'));
   if(errors)parts.push(L(errors+' erreur(s)',errors+' خطأ'));
@@ -2258,7 +2330,7 @@ function renderCnasDocs(){
       ?'<b>N°</b> '+esc(m.employer||'—')+(m.raison?' &nbsp; '+esc(m.raison):'')+(m.since?' &nbsp; <b>'+L('Affilié depuis','منتسب منذ')+'</b> '+esc(fd(m.since)):'')+(m.effectif?' &nbsp; <b>'+L('Effectif','عدد العمال')+'</b> '+esc(m.effectif):'')+' &nbsp; <b>'+L('Du','بتاريخ')+'</b> '+esc(fd(m.issued)||'—')
       :'<b>N°</b> '+esc(m.num||'—')+' &nbsp; <b>'+L('Au','بتاريخ')+'</b> '+esc(fd(m.issued)||'—')+(m.effectif?' &nbsp; <b>'+L('Effectif','عدد العمال')+'</b> '+esc(m.effectif):'');
     return h+'<div class="cd-company"><label class="chip"><input type="checkbox" class="cdSel" value="'+id+'" onchange="this.parentElement.classList.toggle(\'on\',this.checked)"> '+L('Inclure dans l’impression groupée','ضمن الطباعة الجماعية')+'</label>'+
-      '<div>'+info+' '+(m.source==='photo'?'📷 ':'')+cnasCloudTag(r)+'</div>'+
+      '<div>'+info+' '+(m.source==='photo'?'<span title="'+esc(m.img&&m.img.enhanced?L('Photo améliorée','صورة محسّنة'):L('Photo d’origine','الصورة الأصلية'))+'">📷'+(m.img&&m.img.enhanced?'✨':'')+'</span> ':'')+cnasCloudTag(r)+'</div>'+
       '<div class="cd-dates"><label>'+L('Validité','صالحة إلى')+' <input type="date" class="cd-date" value="'+esc(m.validUntil||'')+'" onchange="editCnasDate(\''+id+'\',\'validUntil\',this.value)"></label> '+(kind==='afe'&&!m.validUntil?'':'<span class="cd-st '+s2.k+'">'+esc(s2.txt)+'</span>')+'</div>'+
       '<div class="act"><button class="ib" title="'+L('Voir','عرض')+'" onclick="viewCnasDoc(\''+id+'\')">👁️</button><button class="ib" title="'+L('Imprimer','طباعة')+'" onclick="printCnasIds([\''+id+'\'])">🖨️</button><button class="ib" title="'+L('Remplacer','استبدال')+'" onclick="replaceCnasFor(\''+CNAS_COMPANY+':'+kind+'\')">📤</button><button class="ib del" title="'+L('Supprimer','حذف')+'" onclick="deleteCnasDoc(\''+id+'\')">🗑️</button></div></div>';
   };
