@@ -15994,6 +15994,21 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
           + '<td class="n" style="color:var(--gold2)">'+money(tr)+'</td>'
           + '<td class="n" style="font-weight:700">'+money(tr-tc)+'</td></tr>'
           + '</tbody></table></div></div>';
+        // فائدتي حسب سجل العميل
+        var byR = {};
+        rows.forEach(function(x){
+          var l = map[x.recordId+'|'+x.truck]; if (!l) return;
+          var k = x.recordId;
+          byR[k] = byR[k] || { nm:(x.recordName||'—'), cost:0, rev:0 };
+          byR[k].cost += num(x.qty)*((typeof window.egtphCostPrice==='function' && l.sr) ? window.egtphCostPrice(l.link, l.sr, x.date) : num(l.cost));
+          byR[k].rev += num(x.amount);
+        });
+        var rl = Object.keys(byR).map(function(k){ return byR[k]; });
+        tbl = '<div class="eg-sec" id="eg-tsrec"><div class="h"><span class="t">💰 فائدتي حسب سجل العميل</span></div>'
+          + '<div class="wrap"><table class="eg-tbl"><thead><tr><th>السجل</th><th style="text-align:left">فائدتي</th></tr></thead><tbody>'
+          + rl.map(function(d){ return '<tr><td class="nm">📋 '+e(d.nm)+'</td><td class="n" style="font-weight:700">'+money(d.rev-d.cost)+'</td></tr>'; }).join('')
+          + '<tr class="tot"><td>∑ المجموع</td><td class="n" style="font-weight:700">'+money(tr-tc)+'</td></tr>'
+          + '</tbody></table></div></div>' + tbl;
         var host2 = document.getElementById('content');
         if (host2 && !document.getElementById('eg-tsdet')) host2.insertAdjacentHTML('beforeend', tbl);
 
