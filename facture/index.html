@@ -241,6 +241,7 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <button class="btn btn-primary btn-sm" onclick="addItem();calc();syncPrint();">+ Ajouter Article</button>
 <button class="btn btn-outline btn-sm" onclick="openArticlePicker()">📚 Insérer article existant</button>
 <label style="margin-left:8px;font-size:.85rem;white-space:nowrap"><input type="checkbox" id="optCachet" checked onchange="syncPrint()"> Cachet automatique</label>
+<label style="margin-left:8px;font-size:.85rem;white-space:nowrap"><input type="checkbox" id="optHideFisc" onchange="try{localStorage.setItem('egtp_hide_fisc',this.checked?'1':'')}catch(e){};syncPrint()"> Masquer infos fiscales (nom seul)</label>
 
 <h3 style="margin:20px 0 8px;color:var(--primary)">💰 Acomptes / Déductions</h3>
 <div class="table-wrap" aria-label="Table des acomptes"><table><thead><tr><th style="width:100px">Date</th><th>Désignation / Mode</th><th style="width:100px">Montant (DA)</th><th style="width:35px"></th></tr></thead><tbody id="deductionsBody"></tbody></table></div>
@@ -849,6 +850,9 @@ function syncPrint(){
     document.getElementById('pTotalGar').style.display='none';
   }
   document.getElementById('pAmtWords').textContent=numToWords(Math.round(net))+' DINARS ALGÉRIENS';
+  const hf=document.getElementById('optHideFisc');
+  if(hf&&hf.dataset.init!=='1'){hf.dataset.init='1';try{hf.checked=localStorage.getItem('egtp_hide_fisc')==='1';}catch(e){}}
+  ['pCoIds','pCoSub','pCoAddr'].forEach(id=>{const e=document.getElementById(id);if(!e)return;if(hf&&hf.checked){if(e.dataset.fd===undefined)e.dataset.fd=e.style.display;e.style.display='none';}else if(e.dataset.fd!==undefined){e.style.display=e.dataset.fd;delete e.dataset.fd;}});
   const oc=document.getElementById('optCachet');
   document.getElementById('pSign').style.display=(!oc||oc.checked)?'block':'none';
   const pd=document.getElementById('pDeductionsBody');pd.closest('table').style.display=pd.children.length?'':'none';
