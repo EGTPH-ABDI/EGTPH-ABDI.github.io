@@ -211,7 +211,7 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <div class="form-group"><label>N° Document</label><input type="text" id="docNum" placeholder="Ex: 101/2026" oninput="syncPrint()"></div>
 <div class="form-group"><label>Date</label><input type="date" id="docDate" oninput="syncPrint()"></div>
 <div class="form-group"><label>Client / Projet</label>
-<input type="text" id="clientName" placeholder="Nom du client" list="clientsList" oninput="syncPrint()">
+<input type="text" id="clientName" placeholder="Nom du client" list="clientsList" onchange="maybeOfferClientArticles()" oninput="syncPrint()">
 <datalist id="clientsList"></datalist></div>
 <div class="form-group"><label>Réf. Interne</label><input type="text" id="refInt" placeholder="REF-XXX" oninput="syncPrint()"></div>
 <div class="form-group"><label>Mode Paiement</label>
@@ -337,9 +337,14 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <div id="artModal" class="client-modal no-print" onclick="if(event.target===this)this.style.display='none'">
   <div class="client-modal-card">
     <button class="client-modal-close" type="button" onclick="document.getElementById('artModal').style.display='none'">×</button>
-    <h3 style="margin:0 0 10px">📚 Articles déjà utilisés</h3>
+    <h3 style="margin:0 0 6px">📚 Articles du client <span id="artClient" style="color:#2980b9"></span></h3>
+    <label style="display:block;margin-bottom:8px;font-size:.9rem"><input type="checkbox" id="artAll" onchange="renderArticlePicker()"> Afficher les articles de tous les clients</label>
     <input id="artSearch" type="search" placeholder="Rechercher..." oninput="renderArticlePicker()" style="width:100%;padding:10px;font-size:16px;border:1px solid #ccc;border-radius:6px;margin-bottom:10px">
-    <div id="artList" style="max-height:60vh;overflow:auto"></div>
+    <div id="artList" style="max-height:55vh;overflow:auto"></div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn btn-outline btn-sm" type="button" onclick="artSelectAll()">☑️ Tout cocher</button>
+      <button class="btn btn-primary" type="button" onclick="insertSelectedArticles()">➕ Insérer la sélection (<span id="artCount">0</span>)</button>
+    </div>
   </div>
 </div>
 <!-- PRINT AREA -->
@@ -850,38 +855,61 @@ function syncPrint(){
 }
 
 // ── ARTICLES EXISTANTS ─────────────────────────────────────
-function _allArticles(){
+function _normName(v){return String(v||'').trim().toLowerCase().replace(/\s+/g,' ');}
+function _currentClientDocs(){
+  const nm=_normName(document.getElementById('clientName').value);if(!nm)return[];
+  const c=(db.clients||[]).find(x=>_normName(x.name)===nm);
+  return (db.documents||[]).filter(d=>d&&d.id!==db.currentDocId&&((c&&d.clientId===c.id)||_normName(d.clientName)===nm));
+}
+function _allArticles(onlyClient){
+  const docs=onlyClient?_currentClientDocs():(db.documents||[]);
   const map=new Map();
-  (db.documents||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).forEach(doc=>{
+  docs.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).forEach(doc=>{
     (doc.items||[]).forEach(it=>{
       const d=String(it.desig||'').trim();if(!d)return;
-      const k=d.toLowerCase()+'|'+(it.unit||'')+'|'+(it.pu||'');
-      if(!map.has(k))map.set(k,{desig:d,unit:it.unit||'U',pu:it.pu||'0',qty:it.qty||'1',src:(doc.type||'')+' '+(doc.num||'')});
+      const k=_normName(d)+'|'+_normName(it.unit);
+      if(!map.has(k))map.set(k,{desig:d,unit:it.unit||'U',pu:it.pu||'0',src:(doc.type||'')+' '+(doc.num||'')+' — '+(doc.date||'')});
     });
   });
   return [...map.values()];
 }
 function openArticlePicker(){
+  const nm=document.getElementById('clientName').value.trim();
+  document.getElementById('artClient').textContent=nm||'(aucun client saisi)';
+  document.getElementById('artAll').checked=!nm||!_allArticles(true).length;
   document.getElementById('artSearch').value='';
   renderArticlePicker();
   document.getElementById('artModal').style.display='block';
 }
 function renderArticlePicker(){
-  const q=document.getElementById('artSearch').value.trim().toLowerCase();
-  const list=_allArticles().filter(a=>!q||a.desig.toLowerCase().includes(q)).slice(0,300);
+  const q=_normName(document.getElementById('artSearch').value);
+  const list=_allArticles(!document.getElementById('artAll').checked).filter(a=>!q||_normName(a.desig).includes(q)).slice(0,400);
   window._artList=list;
   document.getElementById('artList').innerHTML=list.length?list.map((a,i)=>
-    `<div onclick="insertArticle(${i})" style="padding:10px;border:1px solid #ddd;border-radius:6px;margin-bottom:6px;cursor:pointer;background:#fafafa">
-      <div style="font-weight:600;white-space:pre-wrap">${escHtml(a.desig)}</div>
-      <div style="font-size:.8rem;color:#555">${escHtml(a.unit)} — P.U ${fmt(parseFloat(a.pu)||0)} DA · <i>${escHtml(a.src)}</i></div></div>`).join('')
-    :'<p style="color:#777">Aucun article trouvé.</p>';
+    `<label style="display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid #ddd;border-radius:6px;margin-bottom:6px;cursor:pointer;background:#fafafa">
+      <input type="checkbox" class="art-chk" data-i="${i}" onchange="artCountUpd()" style="width:22px;height:22px;flex:none;margin-top:2px">
+      <span style="flex:1"><span style="display:block;font-weight:600;white-space:pre-wrap">${escHtml(a.desig)}</span>
+      <span style="display:block;font-size:.85rem;color:#333">${escHtml(a.unit)} — <b>P.U ${fmt(parseFloat(a.pu)||0)} DA</b></span>
+      <span style="display:block;font-size:.75rem;color:#777">${escHtml(a.src)}</span></span></label>`).join('')
+    :'<p style="color:#777">Aucun article trouvé pour ce client. Cochez « tous les clients ».</p>';
+  artCountUpd();
 }
-function insertArticle(i){
-  const a=(window._artList||[])[i];if(!a)return;
-  addItem({desig:a.desig,unit:a.unit,pu:a.pu,qty:'1',avancement:100});
-  calc();syncPrint();
+function artCountUpd(){document.getElementById('artCount').textContent=document.querySelectorAll('#artList .art-chk:checked').length;}
+function artSelectAll(){const c=[...document.querySelectorAll('#artList .art-chk')];const on=c.some(x=>!x.checked);c.forEach(x=>x.checked=on);artCountUpd();}
+function insertSelectedArticles(){
+  const sel=[...document.querySelectorAll('#artList .art-chk:checked')].map(x=>(window._artList||[])[+x.dataset.i]).filter(Boolean);
+  if(!sel.length){toast('Cochez au moins un article','error');return;}
+  // supprimer une ligne vide par défaut
+  document.querySelectorAll('#itemsBody tr').forEach(r=>{if(!r.querySelector('.desig').value.trim()&&!(parseFloat(r.querySelector('.pu').value)>0))r.remove();});
+  sel.forEach(a=>addItem({desig:a.desig,unit:a.unit,pu:a.pu,qty:'1',avancement:100}));
+  renumber();calc();syncPrint();
   document.getElementById('artModal').style.display='none';
-  toast('Article inséré ✅');
+  toast(sel.length+' article(s) inséré(s) ✅ — saisissez les quantités');
+}
+function maybeOfferClientArticles(){
+  const filled=[...document.querySelectorAll('#itemsBody tr')].some(r=>r.querySelector('.desig').value.trim());
+  if(filled)return;
+  if(_allArticles(true).length)openArticlePicker();
 }
 
 // ── IMPRESSION / PDF (fonctionne aussi dans l'application iPhone) ──
