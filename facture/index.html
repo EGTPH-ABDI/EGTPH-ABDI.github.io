@@ -151,7 +151,7 @@ textarea.tbl.desig{text-align:left;min-height:40px;}
 }
 @media print{
 body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-.no-print{display:none !important;}
+.no-print,#toast,#artModal{display:none !important;}
 #print-area{display:block !important;width:100%;max-width:210mm;margin:0 auto;padding:12px;font-family:'Arial',sans-serif;color:#000;font-size:10px;line-height:1.3;}
 .print-header{text-align:center;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:8px;}
 .print-header h2{margin:0 0 2px;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;}
@@ -166,6 +166,7 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 .totals-grid > div{border-bottom:1px solid #000;padding:4px 6px;display:flex;justify-content:space-between;}
 .totals-grid > div:last-child{border-bottom:none;background:#e8f4f8;font-weight:bold;font-size:10px;}
 .amount-words{margin-top:6px;font-style:italic;font-size:9px;padding:5px;border:1px solid #000;background:#fafafa;text-align:center;}
+.print-sign{margin-top:14px;margin-left:auto;width:62mm;text-align:center;page-break-inside:avoid;}.print-sign .sig-lbl{font-weight:bold;font-size:10px;margin-bottom:4px;}.print-sign img{width:60mm;height:auto;}
 .print-footer{margin-top:15px;font-size:8px;text-align:center;color:#555;}
 .print-notes{margin-top:6px;font-size:9px;padding:5px;border:1px solid #000;background:#fafafa;}
 }
@@ -237,7 +238,9 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <th style="width:95px">Montant HT</th>
 <th style="width:35px"></th>
 </tr></thead><tbody id="itemsBody"></tbody></table></div>
-<button class="btn btn-primary btn-sm" onclick="addItem()">+ Ajouter Article</button>
+<button class="btn btn-primary btn-sm" onclick="addItem();calc();syncPrint();">+ Ajouter Article</button>
+<button class="btn btn-outline btn-sm" onclick="openArticlePicker()">📚 Insérer article existant</button>
+<label style="margin-left:8px;font-size:.85rem;white-space:nowrap"><input type="checkbox" id="optCachet" checked onchange="syncPrint()"> Cachet automatique</label>
 
 <h3 style="margin:20px 0 8px;color:var(--primary)">💰 Acomptes / Déductions</h3>
 <div class="table-wrap" aria-label="Table des acomptes"><table><thead><tr><th style="width:100px">Date</th><th>Désignation / Mode</th><th style="width:100px">Montant (DA)</th><th style="width:35px"></th></tr></thead><tbody id="deductionsBody"></tbody></table></div>
@@ -303,7 +306,7 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 </div>
 
 <div class="actions">
-<button class="btn btn-success" onclick="window.print()">🖨️ Imprimer / PDF</button>
+<button class="btn btn-success" onclick="printDoc()">🖨️ Imprimer / PDF</button>
 <button class="btn btn-primary" onclick="saveDoc()">💾 Sauvegarder</button>
 <button class="btn" style="background:#16a085;color:white" onclick="saveAsNew()">🆕 Enregistrer sous</button>
 <button class="btn btn-outline" onclick="cancelEdit()">↩️ Annuler</button>
@@ -331,6 +334,14 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
   </div>
 </div>
 
+<div id="artModal" class="client-modal no-print" onclick="if(event.target===this)this.style.display='none'">
+  <div class="client-modal-card">
+    <button class="client-modal-close" type="button" onclick="document.getElementById('artModal').style.display='none'">×</button>
+    <h3 style="margin:0 0 10px">📚 Articles déjà utilisés</h3>
+    <input id="artSearch" type="search" placeholder="Rechercher..." oninput="renderArticlePicker()" style="width:100%;padding:10px;font-size:16px;border:1px solid #ccc;border-radius:6px;margin-bottom:10px">
+    <div id="artList" style="max-height:60vh;overflow:auto"></div>
+  </div>
+</div>
 <!-- PRINT AREA -->
 <div id="print-area">
 <div class="print-header">
@@ -360,6 +371,7 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 </div>
 <div class="amount-words">Arrêté le présent document à la somme de : <span id="pAmtWords">ZÉRO DINARS ALGÉRIENS</span></div>
 <div id="pNotesBlock" class="print-notes" style="display:none"><strong>Observations :</strong> <span id="pNotes"></span></div>
+<div id="pSign" class="print-sign"><div class="sig-lbl">Signature et cachet</div><img id="pCachet" src="cachet.png" alt=""></div>
 <div class="print-footer">Document généré le <span id="pGenDate"></span> via Système EGTPH - Pro v9.8</div>
 </div>
 
@@ -693,16 +705,16 @@ function addItem(data=null){
   const av=data?.avancement!==undefined?data.avancement:100;
   const clr=av>=100?'var(--success)':av>=50?'var(--accent)':'var(--danger)';
   tr.innerHTML=`<td>${tbody.children.length+1}</td>
-    <td><textarea class="tbl desig" rows="2" oninput="calc();syncPrint();">${data?.desig||''}</textarea></td>
-    <td><input type="number" class="tbl qty" value="${data?.qty||'1'}" min="0" step="0.01" oninput="calc();syncPrint();"></td>
-    <td><input type="text" class="tbl unit" value="${data?.unit||'U'}" oninput="syncPrint();"></td>
-    <td><input type="number" class="tbl pu" value="${data?.pu||'0'}" min="0" step="0.01" oninput="calc();syncPrint();"></td>
+    <td><textarea class="tbl desig" rows="2" oninput="calc();syncPrint();">${escHtml(data?.desig||'')}</textarea></td>
+    <td><input type="number" class="tbl qty" value="${escAttr(data?.qty??'1')}" min="0" step="0.01" oninput="calc();syncPrint();"></td>
+    <td><input type="text" class="tbl unit" value="${escAttr(data?.unit||'U')}" oninput="syncPrint();"></td>
+    <td><input type="number" class="tbl pu" value="${escAttr(data?.pu??'0')}" min="0" step="0.01" oninput="calc();syncPrint();"></td>
     <td class="avan-cell" style="display:${showAvan?'table-cell':'none'}">
       <input type="number" class="tbl avan" value="${av}" min="0" max="100" step="1" style="font-weight:600;color:${clr}" oninput="calc();syncPrint();updatePb(this)">
       <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${av}%;background:${clr}"></div></div>
     </td>
     <td class="row-total">0,00</td>
-    <td><button class="btn btn-danger" onclick="this.closest('tr').remove();renumber();calc();syncPrint();">X</button></td>`;
+    <td><button class="btn btn-danger" onclick="if(confirm('Supprimer cet article ?')){this.closest('tr').remove();renumber();calc();syncPrint();}">X</button></td>`;
   tbody.appendChild(tr);
 }
 
@@ -717,7 +729,7 @@ function addDeduction(data=null){
   const tbody=document.getElementById('deductionsBody');
   const tr=document.createElement('tr');
   tr.innerHTML=`<td><input type="date" class="tbl ded-date" value="${data?.date||new Date().toISOString().split('T')[0]}" oninput="syncPrint();"></td>
-    <td><textarea class="tbl ded-desig" rows="1" oninput="syncPrint();">${data?.desig||''}</textarea></td>
+    <td><textarea class="tbl ded-desig" rows="1" oninput="syncPrint();">${escHtml(data?.desig||'')}</textarea></td>
     <td><input type="number" class="tbl ded-amount" value="${data?.amount||'0'}" min="0" step="0.01" oninput="calc();syncPrint();"></td>
     <td><button class="btn btn-danger" onclick="this.closest('tr').remove();calc();syncPrint();">X</button></td>`;
   tbody.appendChild(tr);
@@ -805,7 +817,7 @@ function syncPrint(){
     const av=showAvan&&aInp?(parseFloat(aInp.value)||0)/100:1;
     const t=(parseFloat(q)||0)*(parseFloat(p)||0)*av;ht+=t;
     const ac=showAvan?`<td>${aInp?aInp.value:'100'}%</td>`:'';
-    pI.innerHTML+=`<tr><td>${i+1}</td><td class="desig-cell">${d}</td><td>${q}</td><td>${u}</td><td>${fmt(parseFloat(p)||0)}</td>${ac}<td>${fmt(t)}</td></tr>`;
+    pI.innerHTML+=`<tr><td>${i+1}</td><td class="desig-cell">${escHtml(d)}</td><td>${escHtml(q)}</td><td>${escHtml(u)}</td><td>${fmt(parseFloat(p)||0)}</td>${ac}<td>${fmt(t)}</td></tr>`;
   });
   pI.innerHTML+=`<tr><td colspan="${showAvan?6:5}" style="text-align:right;font-weight:bold;">TOTAL H.T. :</td><td style="font-weight:bold;">${fmt(ht)}</td></tr>`;
   const pD=document.getElementById('pDeductionsBody');pD.innerHTML='';
@@ -814,7 +826,7 @@ function syncPrint(){
     const dt=row.querySelector('.ded-date').value;
     const d=row.querySelector('.ded-desig').value;
     const a=parseFloat(row.querySelector('.ded-amount').value)||0;acc+=a;
-    pD.innerHTML+=`<tr><td>${dt}</td><td>${d}</td><td>${fmt(a)}</td></tr>`;
+    pD.innerHTML+=`<tr><td>${escHtml(dt)}</td><td>${escHtml(d)}</td><td>${fmt(a)}</td></tr>`;
   });
   const tvaR=parseFloat(gv('tvaRate'))||0;
   const tva=ht*tvaR;const gar=(ht+tva)*(garR/100);
@@ -832,6 +844,83 @@ function syncPrint(){
     document.getElementById('pTotalGar').style.display='none';
   }
   document.getElementById('pAmtWords').textContent=numToWords(Math.round(net))+' DINARS ALGÉRIENS';
+  const oc=document.getElementById('optCachet');
+  document.getElementById('pSign').style.display=(!oc||oc.checked)?'block':'none';
+  const pd=document.getElementById('pDeductionsBody');pd.closest('table').style.display=pd.children.length?'':'none';
+}
+
+// ── ARTICLES EXISTANTS ─────────────────────────────────────
+function _allArticles(){
+  const map=new Map();
+  (db.documents||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).forEach(doc=>{
+    (doc.items||[]).forEach(it=>{
+      const d=String(it.desig||'').trim();if(!d)return;
+      const k=d.toLowerCase()+'|'+(it.unit||'')+'|'+(it.pu||'');
+      if(!map.has(k))map.set(k,{desig:d,unit:it.unit||'U',pu:it.pu||'0',qty:it.qty||'1',src:(doc.type||'')+' '+(doc.num||'')});
+    });
+  });
+  return [...map.values()];
+}
+function openArticlePicker(){
+  document.getElementById('artSearch').value='';
+  renderArticlePicker();
+  document.getElementById('artModal').style.display='block';
+}
+function renderArticlePicker(){
+  const q=document.getElementById('artSearch').value.trim().toLowerCase();
+  const list=_allArticles().filter(a=>!q||a.desig.toLowerCase().includes(q)).slice(0,300);
+  window._artList=list;
+  document.getElementById('artList').innerHTML=list.length?list.map((a,i)=>
+    `<div onclick="insertArticle(${i})" style="padding:10px;border:1px solid #ddd;border-radius:6px;margin-bottom:6px;cursor:pointer;background:#fafafa">
+      <div style="font-weight:600;white-space:pre-wrap">${escHtml(a.desig)}</div>
+      <div style="font-size:.8rem;color:#555">${escHtml(a.unit)} — P.U ${fmt(parseFloat(a.pu)||0)} DA · <i>${escHtml(a.src)}</i></div></div>`).join('')
+    :'<p style="color:#777">Aucun article trouvé.</p>';
+}
+function insertArticle(i){
+  const a=(window._artList||[])[i];if(!a)return;
+  addItem({desig:a.desig,unit:a.unit,pu:a.pu,qty:'1',avancement:100});
+  calc();syncPrint();
+  document.getElementById('artModal').style.display='none';
+  toast('Article inséré ✅');
+}
+
+// ── IMPRESSION / PDF (fonctionne aussi dans l'application iPhone) ──
+function _needsPdfMode(){
+  const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  let framed=false;try{framed=window.self!==window.top;}catch(e){framed=true;}
+  return ios||framed||window.matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+}
+function _loadScript(src){return new Promise((ok,ko)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=ko;document.head.appendChild(s);});}
+async function printDoc(){
+  syncPrint();
+  if(!_needsPdfMode()){window.print();return;}
+  toast('Préparation du PDF...');
+  try{
+    if(!window.html2pdf)await _loadScript('https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js');
+    const src=document.getElementById('print-area');
+    const box=document.createElement('div');
+    box.style.cssText='position:fixed;left:-10000px;top:0;width:190mm;background:#fff;';
+    const clone=src.cloneNode(true);clone.id='print-clone';
+    box.appendChild(clone);document.body.appendChild(box);
+    const st=document.createElement('style');st.id='pdfCloneCss';
+    st.textContent=[...document.querySelectorAll('style')].map(x=>x.textContent).join('\n').match(/@media print\{([\s\S]*?)\n\}/)?.[1]?.replace(/#print-area/g,'#print-clone').replace(/\.no-print\{[^}]*\}/,'')||'';
+    st.textContent+='#print-clone{display:block!important}';
+    document.head.appendChild(st);
+    const name=((document.getElementById('docType').value||'Document')+'_'+(document.getElementById('docNum').value||'')).replace(/[^\w\-]+/g,'_')+'.pdf';
+    const blob=await html2pdf().set({margin:[8,8,8,8],filename:name,image:{type:'jpeg',quality:0.97},html2canvas:{scale:2,useCORS:true,backgroundColor:'#fff'},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy']}}).from(clone).outputPdf('blob');
+    box.remove();st.remove();
+    const file=new File([blob],name,{type:'application/pdf'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:name});return;}catch(e){if(e&&e.name==='AbortError')return;}
+    }
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(e){
+    console.error(e);document.getElementById('print-clone')?.parentElement?.remove();document.getElementById('pdfCloneCss')?.remove();
+    toast('PDF indisponible, impression directe...');
+    try{window.print();}catch(_){}
+  }
 }
 
 function scrapeForm(){
