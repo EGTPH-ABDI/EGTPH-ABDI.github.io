@@ -3023,11 +3023,11 @@ function saveMis(){const c=_misCalc();if(!c)return;const w=c.w;const on=document
  const note=document.getElementById("mis_note").value.trim();const paid=document.getElementById("mis_paid").value==="yes";const op="MISOP_"+genId();
  if(!DB.bonuses[_wid])DB.bonuses[_wid]={};
  let rec=Math.round((+w.misRecover||0)*100)/100;const recNote=w.misRecoverNote||"";
- c.segs.forEach(g=>{g.adj="";if(rec>0){const d=Math.min(rec,g.grant);if(d>0){g.grant=Math.round((g.grant-d)*100)/100;rec=Math.round((rec-d)*100)/100;g.adj=" — خُصم "+fmt(d)+" منحة زائدة من مهمة سابقة ("+recNote+")"}}else if(rec<0){g.grant=Math.round((g.grant-rec)*100)/100;g.adj=" — أُضيف "+fmt(-rec)+" تصحيح لصالح العامل ("+recNote+")";rec=0}});
+ c.segs.forEach(g=>{g.adj="";g.rApp=0;if(rec>0){const d=Math.min(rec,g.grant);if(d>0){g.rApp=d;g.grant=Math.round((g.grant-d)*100)/100;rec=Math.round((rec-d)*100)/100;g.adj=" — خُصم "+fmt(d)+" منحة زائدة من مهمة سابقة ("+recNote+")"}}else if(rec<0){g.rApp=rec;g.grant=Math.round((g.grant-rec)*100)/100;g.adj=" — أُضيف "+fmt(-rec)+" تصحيح لصالح العامل ("+recNote+")";rec=0}});
  w.misRecover=rec;if(!rec)w.misRecoverNote="";w._mod=nextMod();
  c.segs.forEach((g,k)=>{const m=_toDate(g.from).getMonth();if(!DB.bonuses[_wid][m])DB.bonuses[_wid][m]=[];
   const reason="منحة مهمة: "+g.days+" يوم × ("+fmt(c.wage)+" − "+fmt(c.daily)+") من "+isoToD(g.from)+" إلى "+isoToD(g.to)+(c.segs.length>1?" (جزء "+(k+1)+"/"+c.segs.length+")":"")+(note?" — "+note:"")+g.adj;
-  DB.bonuses[_wid][m].push({id:genId(),operationId:op,amount:g.grant,net:g.grant,tax:0,date:isoToD(g.from),reason:reason,paid:paid,by:DB.settings.userName||"مستخدم",mission:true,misDays:g.days,misWage:c.wage,misDaily:Math.round(c.daily*100)/100,misFrom:g.from,misTo:g.to,misIsoDays:g.isos,misCorr:0,_mod:nextMod()})});
+  DB.bonuses[_wid][m].push({id:genId(),operationId:op,amount:g.grant,net:g.grant,tax:0,date:isoToD(g.from),reason:reason,paid:paid,by:DB.settings.userName||"مستخدم",mission:true,misDays:g.days,misWage:c.wage,misDaily:Math.round(c.daily*100)/100,misFrom:g.from,misTo:g.to,misIsoDays:g.isos,misCorr:0,misRecApplied:g.rApp||0,misMoved:0,_mod:nextMod()})});
  audit(`منحة مهمة ${fmt(c.grant)} (${c.days} يوم) — ${w.name}`);saveDB();closeModal("mExtra");renderDash();if(S.bw===_wid)renderBonContent();if(S.sw===_wid)renderSalContent();toast(`✅ منحة مهمة: ${fmt(c.grant)} (${c.days} يوم)`)}
 
 /* تصحيح تلقائي: غياب سُجّل بعد المهمة داخل أيامها (أو حُذف) */
@@ -3037,13 +3037,23 @@ function misReconcile(wid){const w=getW(wid);if(!w)return false;const recs=_misA
   const why=(diff>0?"غياب لاحق ":"حذف غياب ")+Math.abs(diff)+" يوم في مهمة "+isoToD(r.misFrom)+"→"+isoToD(r.misTo);
   r.misCorr=hit.length;
   if(!r.paid){r.misDays=Math.round(((+r.misDays||0)-diff)*100)/100;r.amount=Math.round(((+r.amount||0)-amt)*100)/100;r.net=r.amount;r.reason=(r.reason||"")+" — تصحيح تلقائي: "+(diff>0?"−":"+")+Math.abs(diff)+" يوم ("+why+") = "+(diff>0?"−":"+")+fmt(Math.abs(amt))}
-  else{w.misRecover=Math.round(((+w.misRecover||0)+amt)*100)/100;w.misRecoverNote=((w.misRecoverNote?w.misRecoverNote+"؛ ":"")+why+" = "+fmt(Math.abs(amt))).slice(-300);w._mod=nextMod()}
+  else{r.misMoved=Math.round(((+r.misMoved||0)+amt)*100)/100;w.misRecover=Math.round(((+w.misRecover||0)+amt)*100)/100;w.misRecoverNote=((w.misRecoverNote?w.misRecoverNote+"؛ ":"")+why+" = "+fmt(Math.abs(amt))).slice(-300);w._mod=nextMod()}
   r._mod=nextMod();changed=true;try{audit("تصحيح منحة مهمة تلقائياً — "+w.name+" — "+why)}catch(e){}});
+ /* تغيّر الراتب: تُعاد حساب المنح غير المسددة فقط (المسددة أُغلقت بدورتها) */
+ const cur=Math.round(((+w.salary||0)/30)*100)/100;
+ recs.forEach(r=>{if(r.paid||del.has(String(r.id)))return;const old=+r.misDaily||0;if(Math.abs(old-cur)<0.01)return;const d=+r.misDays||0;let na=Math.round(((+r.amount||0)+d*(old-cur))*100)/100;let note=" — تصحيح تلقائي: تغيّر الراتب، الأجر اليومي "+fmt(old)+" ← "+fmt(cur)+" ("+(na>=(+r.amount||0)?"+":"−")+fmt(Math.abs(na-(+r.amount||0)))+")";if(na<0){note+=" — أجر المهمة صار أقل من الأجر الأساسي: المنحة 0";na=0}r.amount=na;r.net=na;r.misDaily=cur;r.reason=(r.reason||"")+note;r._mod=nextMod();changed=true;try{audit("تصحيح منحة مهمة (تغيّر الراتب) — "+w.name)}catch(e){}});
+ /* إلغاء خروج العامل: يرجع دين استرجاع المنحة غير المسدد إلى رصيد المهمة القادمة */
+ if(!w.exitDate){const dl=DB.debts[String(wid)]||DB.debts[wid]||[];dl.filter(x=>x&&x._misRecover&&x.type==="debt"&&!del.has(String(x.id))).forEach(x=>{if(dl.some(y=>y&&y.type==="return"&&String(y.debtId||"")===String(x.id)))return;const i=dl.indexOf(x);if(i<0)return;dl.splice(i,1);try{_markDeleted(x.id)}catch(e){}w.misRecover=Math.round(((+w.misRecover||0)+(+x.amount||0))*100)/100;w.misRecoverNote=(x.note||"").replace(/^[^:]*:\s*/,"");w._mod=nextMod();changed=true})}
  return changed}
 function misReconcileAll(){let ch=false;(DB.workers||[]).forEach(w=>{try{if(misReconcile(w.id))ch=true}catch(e){}});return ch}
 (function(){let busy=false;const oSave=window.saveDB;if(typeof oSave==="function"){window.saveDB=function(){if(!busy){busy=true;try{misReconcileAll()}catch(e){}finally{busy=false}}return oSave.apply(this,arguments)};try{saveDB=window.saveDB}catch(e){}}
  const oFin=window.calcFinalSettlement;if(typeof oFin==="function"){window.calcFinalSettlement=function(w){try{if(w&&w.id){misReconcile(w.id);if(w.exitDate&&(+w.misRecover||0)>0){const wid=String(w.id);if(!DB.debts[wid])DB.debts[wid]=[];DB.debts[wid].push({id:genId(),type:"debt",amount:Math.round(+w.misRecover),date:isoToD(_isoDate(_toDate(w.exitDate))),note:"استرجاع منحة مهمة زائدة (لا توجد مهمة لاحقة): "+(w.misRecoverNote||""),_misRecover:true,_mod:nextMod()});w.misRecover=0;w.misRecoverNote="";w._mod=nextMod();try{audit("استرجاع منحة مهمة زائدة في التصفية — "+w.name)}catch(e){}setTimeout(()=>{try{saveDB()}catch(e){}},0)}}}catch(e){}return oFin.apply(this,arguments)};try{calcFinalSettlement=window.calcFinalSettlement}catch(e){}}
  const oOpen=window.openMisPane;window.openMisPane=function(){try{misReconcile(_wid)}catch(e){}return oOpen.apply(this,arguments)};
- setTimeout(()=>{try{if(misReconcileAll())saveDB()}catch(e){}},4000)})();
+ setTimeout(()=>{try{if(misReconcileAll())saveDB()}catch(e){}},4000);
+ const after=fn=>{const o=window[fn];if(typeof o!=="function")return;const wr=function(){const r=o.apply(this,arguments);const go=()=>{try{if(misReconcileAll())saveDB()}catch(e){}};if(r&&typeof r.then==="function")r.then(go,go);else setTimeout(go,0);return r};window[fn]=wr;try{eval(fn+"=wr")}catch(e){}};
+ ["saveAbs","delAbs","editAbs","closeOpenAbs","pendAbs"].forEach(after);
+ const oDel=window.delBon;if(typeof oDel==="function"){const wr=function(wid,m,idx){const r=((DB.bonuses[wid]||{})[m]||[])[idx];const snap=r&&r.mission?{a:+r.misRecApplied||0,mv:+r.misMoved||0,note:r.misFrom}:null;const n0=((DB.bonuses[wid]||{})[m]||[]).length;const res=oDel.apply(this,arguments);const n1=((DB.bonuses[wid]||{})[m]||[]).length;if(snap&&n1<n0){const w=getW(wid);if(w){const back=Math.round((snap.a-snap.mv)*100)/100;if(back){w.misRecover=Math.round(((+w.misRecover||0)+back)*100)/100;w.misRecoverNote=(w.misRecoverNote?w.misRecoverNote+"؛ ":"")+"حذف مهمة "+isoToD(snap.note);w._mod=nextMod();saveDB()}}}return res};window.delBon=wr;try{delBon=wr}catch(e){}}
+ const oTg=window.toggleBonPaid;if(typeof oTg==="function"){const wr=function(wid,m,idx){const r=((DB.bonuses[wid]||{})[m]||[])[idx];const was=r&&r.paid;const res=oTg.apply(this,arguments);if(r&&r.mission&&was&&!r.paid&&(+r.misMoved||0)){const w=getW(wid);const mv=+r.misMoved;r.amount=Math.max(0,Math.round(((+r.amount||0)-mv)*100)/100);r.net=r.amount;r.reason=(r.reason||"")+" — أُعيد إلى معلقة: طُبّق التصحيح "+(mv>0?"−":"+")+fmt(Math.abs(mv));r.misMoved=0;if(w){w.misRecover=Math.round(((+w.misRecover||0)-mv)*100)/100;w._mod=nextMod()}r._mod=nextMod();saveDB();try{renderBonContent()}catch(e){}}return res};window.toggleBonPaid=wr;try{toggleBonPaid=wr}catch(e){}}
+})();
 </script>
 </body></html>

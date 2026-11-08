@@ -2985,7 +2985,7 @@ function updateWeekEntry(id,f,v){
   const e=DB.currentWeek.entries.find(x=>x.id===id);if(!e)return;
   if(isArchivedEdit()&&f==='workerId'&&isOriginalArchivedEntryId(id)){showToast('لا يمكن تغيير عامل صف قديم لأنه مرتبط بحركات مالية سابقة. أضف صفاً جديداً بدل ذلك.','warning');return;}
   if(f==='workerId'){e.workerId=v;e.services=[];e.days=0;e.extraHours=0;e.debtDeduction=0;e.paidNow=null;e.pendingAmount=0;e.settlePending=0;}
-  else if(f==='days'){e.days=num(v); if(num(e.missionDays)>e.days){e.missionDays=e.days; showToast('أيام المهمة لا تتجاوز عدد الأيام','warning');}}
+  else if(f==='days'){e.days=num(v); if(e.missionFrom&&e.missionTo){const r=missionRangeDays(e.missionFrom,e.missionTo); if(r!==null) e.missionDays=r;} if(num(e.missionDays)>e.days){e.missionDays=e.days; showToast('أيام المهمة لا تتجاوز عدد الأيام','warning');}}
   else if(f==='missionDays'){const d=Math.max(0,num(v)); if(d>num(e.days)){showToast('❌ أيام المهمة لا تتجاوز عدد أيام العمل ('+num(e.days)+')','error');} e.missionDays=Math.min(d,num(e.days)); e.missionFrom=''; e.missionTo='';}
   else if(f==='missionFrom'||f==='missionTo'){e[f]=v||''; const r=missionRangeDays(e.missionFrom,e.missionTo); if(r!==null){ if(r>num(e.days)) showToast('❌ فترة المهمة ('+r+' يوم) أكثر من عدد أيام العمل ('+num(e.days)+')، صحّح عدد الأيام','error'); e.missionDays=Math.min(r,num(e.days)); }}
   else if(f==='extraHours')e.extraHours=num(v);
