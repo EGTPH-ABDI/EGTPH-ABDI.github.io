@@ -88,7 +88,7 @@
       '<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M50 4L90 18v34c0 22-18 38-40 44C28 90 10 74 10 52V18Z" fill="#111f35" stroke="#f4aa21" stroke-width="3"/><text x="50" y="58" text-anchor="middle" font-family="Georgia,serif" font-size="31" font-weight="700" fill="#f4aa21">EG</text></svg>' +
       "<h2>" + t("البرنامج مقفل", "Application verrouillée") + "</h2>" +
       "<p>" + (c.face && c.pin ? t("استعمل Face ID أو رمز PIN", "Utilisez Face ID ou le code PIN") : c.face ? t("استعمل Face ID", "Utilisez Face ID") : t("أدخل رمز PIN", "Saisissez le code PIN")) + "</p>" +
-      (c.face ? '<button type="button" class="face" id="egtphLockFace">🙂 ' + t("فتح بـ Face ID", "Déverrouiller avec Face ID") + "</button>" : "") +
+      (c.face ? '<button type="button" class="face" id="egtphLockFace">' + t("فتح بـ Face ID", "Déverrouiller avec Face ID") + "</button>" : "") +
       (c.pin ? '<input id="egtphLockPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="9" autocomplete="off" placeholder="••••••" aria-label="PIN" style="margin-top:' + (c.face ? "12px" : "0") + '">' : "") +
       '<div class="m" id="egtphLockMsg"></div>' +
       '<button type="button" class="alt" id="egtphLockAlt">' + t("الدخول بكلمة السر بدلاً من ذلك", "Se connecter avec le mot de passe") + "</button>" +
@@ -108,6 +108,8 @@
 
   // لوحة التحكم لها قفلها الخاص (apps.html): هذا الملف للبرامج فقط.
   if (/\/apps(?:-diagnostic)?\.html$/.test(location.pathname)) return;
+  // داخل لوحة التحكم (iframe): القفل تتكفل به اللوحة وحدها، فلا يظهر Face ID مرتين.
+  try { if (global.top !== global && /\/apps(?:-diagnostic)?\.html$/.test(global.top.location.pathname)) return; } catch (e) {}
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", check); else check();
   document.addEventListener("visibilitychange", function () {
