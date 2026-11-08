@@ -1830,7 +1830,10 @@ function refreshEntryCardAmounts(entryId,sourceEl=null){
   const settleLimit=getPendingSettlementLimitForEntry(e);
   const settleNow=Math.min(Math.max(0,num(e.settlePending)),settleLimit);
   card.querySelectorAll('[data-entry-total]').forEach(el=>el.textContent=money(parts.net)+' دج');
-  card.querySelectorAll('[data-entry-base]').forEach(el=>el.textContent=money(parts.base)+' دج');
+  card.querySelectorAll('[data-entry-base]').forEach(el=>el.textContent=money(parts.base-num(parts.mission))+' دج');
+  card.querySelectorAll('[data-entry-mission]').forEach(el=>el.textContent=money(parts.mission)+' دج');
+  card.querySelectorAll('[data-entry-mission-count]').forEach(el=>el.textContent=parts.missionDays);
+  card.querySelectorAll('[data-entry-mission-days]').forEach(el=>{ if(document.activeElement!==el) el.value=e.missionDays||0; });
   card.querySelectorAll('[data-entry-overtime]').forEach(el=>el.textContent=money(parts.overtime)+' دج');
   card.querySelectorAll('[data-entry-piece-total]').forEach(el=>el.textContent=money(parts.piece)+' دج');
   card.querySelectorAll('[data-entry-paid-now-input]').forEach(el=>{ if(document.activeElement!==el) el.value=e.paidNow??''; });
@@ -2185,6 +2188,7 @@ function openWorkerModal(id=null){
         <option value="أخرى" ${w?.type==='أخرى'?'selected':''}>🛠️ أخرى</option>
       </select></div>
       <div class="form-group" id="dailyWageGroup"><label>الأجر اليومي (دج)</label><input type="number" id="wDailyWage" value="${w?.dailyWage||''}"></div>
+      <div class="form-group" id="missionWageGroup" style="display:${w?.type==='قطعة'?'none':'flex'}"><label><input type="checkbox" id="wMissionOn" ${w?.missionEnabled?'checked':''} style="width:auto;margin-left:6px"> تفعيل أجر المهمة (خارج الولاية) — الأجر اليومي للمهمة (دج)</label><input type="number" id="wMissionWage" value="${w?.missionWage||''}" placeholder="أجر يوم المهمة"></div>
       <div class="form-group"><label>المشروع</label><select id="wProject"><option value="">— بدون —</option>${po}</select></div>
       <div class="form-group"><label>الهاتف</label><input type="text" id="wPhone" value="${w?.phone||''}"></div>
       <div class="form-group"><label>ملاحظة</label><input type="text" id="wNote" value="${w?.note||''}"></div>
@@ -2207,6 +2211,7 @@ function addServiceField(){ const c=document.createElement('div'); c.innerHTML=s
 function toggleWorkerType(){
   const t=document.getElementById('wType').value;
   document.getElementById('dailyWageGroup').style.display=t==='قطعة'?'none':'flex';
+  {const mg=document.getElementById('missionWageGroup'); if(mg) mg.style.display=t==='قطعة'?'none':'flex';}
   document.getElementById('taskServicesGroup').style.display=t==='قطعة'?'block':'none';
 }
 function saveWorker(){
@@ -2221,8 +2226,11 @@ function saveWorker(){
     name,type, dailyWage:type==='قطعة'?0:dw, projectId:pid||null,
     phone:cleanText(document.getElementById('wPhone').value.trim()),
     note:cleanText(document.getElementById('wNote').value.trim()),
-    services:[], createdAt:new Date().toISOString(), _mod:nextMod()
+    services:[], createdAt:new Date().toISOString(), _mod:nextMod(),
+    missionEnabled:type!=='قطعة'&&!!document.getElementById('wMissionOn')?.checked,
+    missionWage:type==='قطعة'?0:num(document.getElementById('wMissionWage')?.value)
   };
+  if(wd.missionEnabled&&!(wd.missionWage>0)){ showToast('❌ أدخل الأجر اليومي للمهمة أو ألغِ التفعيل','error'); return false; }
   if(type==='قطعة'){
     const ns=document.querySelectorAll('#taskServicesList .serviceName');
     const ps=document.querySelectorAll('#taskServicesList .servicePrice');
@@ -2682,14 +2690,18 @@ function updateOvertimeRate(){
 function calcEntryParts(e){
   const w=DB.workers.find(x=>x.id===e.workerId);
   const rate=DB.currentWeek.overtimeRate??1.5;
-  let base=0, overtime=0, piece=0;
+  let base=0, overtime=0, piece=0, missionDays=0, missionAmount=0;
   if(!w) return {base:0,overtime:0,piece:0,bonus:num(e.bonus),deduction:num(e.debtDeduction),additions:0,gross:0,net:0,type:''};
   const workerType=e.workerType||w.type;
   if(workerType==='قطعة'){
     piece=(e.services||[]).reduce((s,it)=>s+num(it.qty)*num(it.price),0);
   } else {
     const dailyWage=(e.dailyWageSnapshot!==undefined&&e.dailyWageSnapshot!==null)?num(e.dailyWageSnapshot):num(w.dailyWage);
-    base=num(e.days)*dailyWage;
+    const missionWage=(e.missionWageSnapshot!==undefined&&e.missionWageSnapshot!==null)?num(e.missionWageSnapshot):num(w.missionWage);
+    const missionOn=(e.missionWageSnapshot!=null)||(w.missionEnabled&&missionWage>0);
+    missionDays=missionOn?Math.min(Math.max(0,num(e.missionDays)),num(e.days)):0; // لا ازدواجية: أيام المهمة جزء من أيام العمل
+    missionAmount=missionDays*missionWage;
+    base=(num(e.days)-missionDays)*dailyWage+missionAmount;
     const manualWorkerRate=num(e.manualHourlyRate),globalManualRate=num(DB.currentWeek.manualHourlyRate);
     let hourlyRate;
     if(manualWorkerRate>0) hourlyRate=manualWorkerRate; else if(globalManualRate>0) hourlyRate=globalManualRate; else hourlyRate=dailyWage>0?dailyWage/8:0;
@@ -2707,7 +2719,7 @@ function calcEntryParts(e){
   const additions=overtime+bonus-deduction;
   const gross=base+piece+bonus+overtime;
   const net=Math.round(gross-deduction);
-  return {base:Math.round(base),overtime:Math.round(overtime),piece:Math.round(piece),bonus,deduction,additions:Math.round(additions),gross:Math.round(gross),net,type:workerType};
+  return {base:Math.round(base),mission:Math.round(missionAmount),missionDays,overtime:Math.round(overtime),piece:Math.round(piece),bonus,deduction,additions:Math.round(additions),gross:Math.round(gross),net,type:workerType};
 }
 function calculateEntryTotal(e){ return calcEntryParts(e).net; }
 
@@ -2819,12 +2831,19 @@ function renderWeek(){
       const globalRate=num(DB.currentWeek.manualHourlyRate);
       const effectiveHourlyRate=workerManualRate>0?workerManualRate:(globalRate>0?globalRate:(w.dailyWage?w.dailyWage/8:0));
       const hourlyRateLabel=workerManualRate>0?'يدوي شخصي':(globalRate>0?'يدوي عالمي':'تلقائي: '+money(w.dailyWage)+' ÷ 8');
+      const mOn=(w.missionEnabled&&num(w.missionWage)>0)||e.missionWageSnapshot!=null;
+      const missionHTML=mOn?`<div class="entry-field" style="grid-column:1/-1;border:1px dashed var(--text3)"><label><i class="fas fa-route"></i> أيام المهمة (خارج الولاية) — ${money(e.missionWageSnapshot??w.missionWage)} دج/يوم <small style="color:var(--text3)">جزء من عدد الأيام، والباقي بالأجر الأساسي</small></label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input type="number" min="0" max="7" step="0.5" style="width:80px" value="${e.missionDays||0}" oninput="updateWeekEntry('${e.id}','missionDays',this.value)" data-entry-mission-days>
+          <span>أو من</span><input type="date" style="width:140px" value="${e.missionFrom||''}" onchange="updateWeekEntry('${e.id}','missionFrom',this.value)">
+          <span>إلى</span><input type="date" style="width:140px" value="${e.missionTo||''}" onchange="updateWeekEntry('${e.id}','missionTo',this.value)"></div>
+          <div style="font-weight:800;padding-top:4px">أجر المهمة: <span data-entry-mission>${money(parts.mission)} دج</span> (<span data-entry-mission-count>${parts.missionDays}</span> يوم)</div></div>`:'';
       bodyHTML=`<div class="entry-body">
         <div class="entry-field"><label><i class="fas fa-calendar-day"></i> عدد الأيام</label><input type="number" min="0" max="7" step="0.5" value="${e.days||0}" oninput="updateWeekEntry('${e.id}','days',this.value)"></div>
         <div class="entry-field"><label><i class="fas fa-clock"></i> ساعات إضافية</label><input type="number" min="0" step="0.5" value="${e.extraHours||0}" oninput="updateWeekEntry('${e.id}','extraHours',this.value)"></div>
-        <div class="entry-field" style="background:var(--accent-soft)"><label>الأجر الأساسي</label><div data-entry-base style="font-weight:800;padding:6px 0;color:var(--accent)">${money(parts.base)} دج</div></div>
+        <div class="entry-field" style="background:var(--accent-soft)"><label>الأجر الأساسي</label><div data-entry-base style="font-weight:800;padding:6px 0;color:var(--accent)">${money(parts.base-num(parts.mission))} دج</div></div>
         <div class="entry-field" style="background:var(--gold-soft)"><label>قيمة الساعات الإضافية</label><div data-entry-overtime style="font-weight:800;padding:6px 0;color:var(--gold)">${money(parts.overtime)} دج</div></div>
         <div class="entry-field" style="background:rgba(184,120,0,0.08);border:1px dashed rgba(184,120,0,0.35)"><label style="color:var(--gold)"><i class="fas fa-coins"></i> أجر الساعة اليدوي (دج) <small style="font-weight:500;color:var(--text3)">${hourlyRateLabel}</small></label><input type="number" min="0" step="50" placeholder="${Math.round(effectiveHourlyRate)}" value="${e.manualHourlyRate||''}" oninput="updateWeekEntry('${e.id}','manualHourlyRate',this.value)" style="background:var(--glass);border-color:var(--gold)" title="اتركه فارغاً لاستخدام الحساب التلقائي"></div>
+        ${missionHTML}
       </div>`;
     }
     // --- جسم: عامل قطعة ---
@@ -2966,7 +2985,9 @@ function updateWeekEntry(id,f,v){
   const e=DB.currentWeek.entries.find(x=>x.id===id);if(!e)return;
   if(isArchivedEdit()&&f==='workerId'&&isOriginalArchivedEntryId(id)){showToast('لا يمكن تغيير عامل صف قديم لأنه مرتبط بحركات مالية سابقة. أضف صفاً جديداً بدل ذلك.','warning');return;}
   if(f==='workerId'){e.workerId=v;e.services=[];e.days=0;e.extraHours=0;e.debtDeduction=0;e.paidNow=null;e.pendingAmount=0;e.settlePending=0;}
-  else if(f==='days')e.days=num(v);
+  else if(f==='days'){e.days=num(v); if(num(e.missionDays)>e.days){e.missionDays=e.days; showToast('أيام المهمة لا تتجاوز عدد الأيام','warning');}}
+  else if(f==='missionDays'){const d=Math.max(0,num(v)); if(d>num(e.days)){showToast('❌ أيام المهمة لا تتجاوز عدد أيام العمل ('+num(e.days)+')','error');} e.missionDays=Math.min(d,num(e.days)); e.missionFrom=''; e.missionTo='';}
+  else if(f==='missionFrom'||f==='missionTo'){e[f]=v||''; const r=missionRangeDays(e.missionFrom,e.missionTo); if(r!==null){ if(r>num(e.days)) showToast('❌ فترة المهمة ('+r+' يوم) أكثر من عدد أيام العمل ('+num(e.days)+')، صحّح عدد الأيام','error'); e.missionDays=Math.min(r,num(e.days)); }}
   else if(f==='extraHours')e.extraHours=num(v);
   else if(f==='note')e.note=cleanText(v);
   else if(f==='debtDeduction')e.debtDeduction=num(v);
@@ -2975,6 +2996,12 @@ function updateWeekEntry(id,f,v){
   else if(f==='settlePending')e.settlePending=num(v);
   else if(f==='manualHourlyRate')e.manualHourlyRate=num(v)||null;
   stampCW(e);saveDB();refreshEntryCardAmounts(id);renderWeekSummary();if(f==='workerId')renderWeek();
+}
+function missionRangeDays(a,b){
+  if(!a||!b) return null; let s=new Date(a), t=new Date(b);
+  const cw=DB.currentWeek||{}; if(cw.startDate&&new Date(cw.startDate)>s) s=new Date(cw.startDate); if(cw.endDate&&new Date(cw.endDate)<t) t=new Date(cw.endDate);
+  if(isNaN(s)||isNaN(t)||t<s){ showToast('❌ تواريخ المهمة خارج الأسبوع أو غير صحيحة','error'); return 0; }
+  return Math.round((t-s)/86400000)+1;
 }
 function updateEntryPendingAmount(id,v){
   const e=DB.currentWeek.entries.find(x=>x.id===id); if(!e)return;
@@ -3476,7 +3503,7 @@ function makeArchivedEntriesWithTotals(weekId){
     const paidNow=Math.min(Math.max(0,num(e.paidNow??p.net)),p.net);
     const pendingAmount=Math.max(0,p.net-paidNow);
     const settlePending=Math.max(0,num(e.settlePending));
-    return {...e,services:(e.services||[]).map(x=>({...x})),workerName:w?.name||'غير معروف',workerNumber:w?.number||0,workerType:w?.type||'',dailyWageSnapshot:w?.type==='قطعة'?0:num(w?.dailyWage),parts:p,total:p.net,paidNow,pendingAmount,settlePending,debtDeduction:p.deduction,postedNet:p.net,postArchiveAdjustment:0,weekId};
+    return {...e,services:(e.services||[]).map(x=>({...x})),workerName:w?.name||'غير معروف',workerNumber:w?.number||0,workerType:w?.type||'',dailyWageSnapshot:w?.type==='قطعة'?0:num(w?.dailyWage),missionWageSnapshot:(e.missionWageSnapshot!=null?e.missionWageSnapshot:(w?.type!=='قطعة'&&w?.missionEnabled&&num(e.missionDays)>0?num(w.missionWage):null)),parts:p,total:p.net,paidNow,pendingAmount,settlePending,debtDeduction:p.deduction,postedNet:p.net,postArchiveAdjustment:0,weekId};
   });
 }
 
@@ -5134,7 +5161,7 @@ function buildPrintHTML(weekObj,fromArchive){
     <tr>
       <td style="text-align:center;font-weight:800">${d.num}</td>
       <td style="text-align:right;font-weight:700">${d.name}</td>
-      <td style="text-align:center;font-weight:800">${d.days||'—'}</td>
+      <td style="text-align:center;font-weight:800">${d.days||'—'}${num(d.parts.missionDays)>0?`<br><small>منها مهمة ${d.parts.missionDays} = ${money(d.parts.mission)}</small>`:''}</td>
       <td style="text-align:center">${d.parts.overtime>0?money(d.parts.overtime):'—'}</td>
       <td style="text-align:center">${d.parts.bonus>0?money(d.parts.bonus):'—'}</td>
       <td style="text-align:center;color:#dc2626">${d.parts.deduction>0?'('+money(d.parts.deduction)+')':'—'}</td>
