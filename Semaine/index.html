@@ -2189,7 +2189,8 @@ function openWorkerModal(id=null){
         <option value="أخرى" ${w?.type==='أخرى'?'selected':''}>🛠️ أخرى</option>
       </select></div>
       <div class="form-group" id="dailyWageGroup"><label>الأجر اليومي (دج)</label><input type="number" id="wDailyWage" value="${w?.dailyWage||''}"></div>
-      <div class="form-group" id="missionWageGroup" style="display:${w?.type==='قطعة'?'none':'flex'}"><label><input type="checkbox" id="wMissionOn" ${w?.missionEnabled?'checked':''} style="width:auto;margin-left:6px"> تفعيل أجر المهمة (خارج الولاية) — الأجر اليومي للمهمة (دج)</label><input type="number" id="wMissionWage" value="${w?.missionWage||''}" placeholder="أجر يوم المهمة"></div>
+      <div class="form-group" id="missionWageGroup" style="display:${w?.type==='قطعة'?'none':'flex'}"><label>نوع الأجر المفعّل</label><select id="wPayMode">${(()=>{const pm=w?.payMode||(w?.missionEnabled?'both':'base');return [['base','الأجر الأساسي وحده'],['mission','أجر المهمة وحده (خارج الولاية)'],['both','الأساسي + المهمة معاً']].map(([v,t])=>`<option value="${v}" ${pm===v?'selected':''}>${t}</option>`).join('')})()}</select></div>
+      <div class="form-group" id="missionWageGroup2" style="display:${w?.type==='قطعة'?'none':'flex'}"><label>الأجر اليومي للمهمة (دج)</label><input type="number" id="wMissionWage" value="${w?.missionWage||''}" placeholder="أجر يوم المهمة"></div>
       <div class="form-group"><label>المشروع</label><select id="wProject"><option value="">— بدون —</option>${po}</select></div>
       <div class="form-group"><label>الهاتف</label><input type="text" id="wPhone" value="${w?.phone||''}"></div>
       <div class="form-group"><label>ملاحظة</label><input type="text" id="wNote" value="${w?.note||''}"></div>
@@ -2212,7 +2213,7 @@ function addServiceField(){ const c=document.createElement('div'); c.innerHTML=s
 function toggleWorkerType(){
   const t=document.getElementById('wType').value;
   document.getElementById('dailyWageGroup').style.display=t==='قطعة'?'none':'flex';
-  {const mg=document.getElementById('missionWageGroup'); if(mg) mg.style.display=t==='قطعة'?'none':'flex';}
+  ['missionWageGroup','missionWageGroup2'].forEach(id=>{const mg=document.getElementById(id); if(mg) mg.style.display=t==='قطعة'?'none':'flex';});
   document.getElementById('taskServicesGroup').style.display=t==='قطعة'?'block':'none';
 }
 function saveWorker(){
@@ -2228,10 +2229,12 @@ function saveWorker(){
     phone:cleanText(document.getElementById('wPhone').value.trim()),
     note:cleanText(document.getElementById('wNote').value.trim()),
     services:[], createdAt:new Date().toISOString(), _mod:nextMod(),
-    missionEnabled:type!=='قطعة'&&!!document.getElementById('wMissionOn')?.checked,
+    payMode:type==='قطعة'?'base':(document.getElementById('wPayMode')?.value||'base'),
+    missionEnabled:type!=='قطعة'&&(document.getElementById('wPayMode')?.value||'base')!=='base',
     missionWage:type==='قطعة'?0:num(document.getElementById('wMissionWage')?.value)
   };
-  if(wd.missionEnabled&&!(wd.missionWage>0)){ showToast('❌ أدخل الأجر اليومي للمهمة أو ألغِ التفعيل','error'); return false; }
+  if(wd.missionEnabled&&!(wd.missionWage>0)){ showToast('❌ أدخل الأجر اليومي للمهمة أو اختر «الأجر الأساسي وحده»','error'); return false; }
+  if(type!=='قطعة'&&wd.payMode!=='mission'&&!(dw>0)){ showToast('⚠️ الأجر اليومي الأساسي غير محدد','warning'); }
   if(type==='قطعة'){
     const ns=document.querySelectorAll('#taskServicesList .serviceName');
     const ps=document.querySelectorAll('#taskServicesList .servicePrice');
@@ -2688,6 +2691,7 @@ function updateOvertimeRate(){
 }
 
 /* ----- حساب أجرة المدخل ----- */
+function weekPayMode(e,w){ if(e&&e.payModeSnapshot) return e.payModeSnapshot; if(e&&e.missionWageSnapshot!=null) return 'both'; const pm=w?.payMode||(w?.missionEnabled?'both':'base'); return (pm!=='base'&&!(num(w?.missionWage)>0))?'base':pm; }
 function calcEntryParts(e){
   const w=DB.workers.find(x=>x.id===e.workerId);
   const rate=DB.currentWeek.overtimeRate??1.5;
@@ -2699,13 +2703,14 @@ function calcEntryParts(e){
   } else {
     const dailyWage=(e.dailyWageSnapshot!==undefined&&e.dailyWageSnapshot!==null)?num(e.dailyWageSnapshot):num(w.dailyWage);
     const missionWage=(e.missionWageSnapshot!==undefined&&e.missionWageSnapshot!==null)?num(e.missionWageSnapshot):num(w.missionWage);
-    const missionOn=(e.missionWageSnapshot!=null)||(w.missionEnabled&&missionWage>0);
-    missionDays=missionOn?Math.min(Math.max(0,num(e.missionDays)),num(e.days)):0; // لا ازدواجية: أيام المهمة جزء من أيام العمل
+    const pm=weekPayMode(e,w);
+    missionDays=pm!=='base'?Math.min(Math.max(0,num(e.missionDays)),num(e.days)):0; // لا ازدواجية: مجموع الأيام = أساسي + مهمة
     missionAmount=missionDays*missionWage;
-    base=(num(e.days)-missionDays)*dailyWage+missionAmount;
+    const baseDays=pm==='mission'?0:(num(e.days)-missionDays);
+    base=baseDays*dailyWage+missionAmount;
     const manualWorkerRate=num(e.manualHourlyRate),globalManualRate=num(DB.currentWeek.manualHourlyRate);
     let hourlyRate;
-    if(manualWorkerRate>0) hourlyRate=manualWorkerRate; else if(globalManualRate>0) hourlyRate=globalManualRate; else hourlyRate=dailyWage>0?dailyWage/8:0;
+    if(manualWorkerRate>0) hourlyRate=manualWorkerRate; else if(globalManualRate>0) hourlyRate=globalManualRate; else hourlyRate=dailyWage>0?dailyWage/8:(missionWage>0?missionWage/8:0);
     overtime=hourlyRate*rate*num(e.extraHours);
   }
   const bonus=num(e.bonus);
@@ -2832,13 +2837,13 @@ function renderWeek(){
       const globalRate=num(DB.currentWeek.manualHourlyRate);
       const effectiveHourlyRate=workerManualRate>0?workerManualRate:(globalRate>0?globalRate:(w.dailyWage?w.dailyWage/8:0));
       const hourlyRateLabel=workerManualRate>0?'يدوي شخصي':(globalRate>0?'يدوي عالمي':'تلقائي: '+money(w.dailyWage)+' ÷ 8');
-      const mOn=(w.missionEnabled&&num(w.missionWage)>0)||e.missionWageSnapshot!=null;
-      const missionHTML=mOn?`<div class="entry-field" style="grid-column:1/-1;border:1px dashed var(--text3)"><label><i class="fas fa-route"></i> أيام المهمة (خارج الولاية) — ${money(e.missionWageSnapshot??w.missionWage)} دج/يوم <small style="color:var(--text3)">مستقلة عن أيام الأجر الأساسي (مثلاً: مهمة 6 وأساسي 0)</small></label>
+      const pmode=weekPayMode(e,w), mOn=pmode!=='base';
+      const missionHTML=mOn?`<div class="entry-field" style="grid-column:1/-1;border:1px dashed var(--text3)"><label><i class="fas fa-route"></i> أيام المهمة (خارج الولاية) — ${money(e.missionWageSnapshot??w.missionWage)} دج/يوم <small style="color:var(--text3)">${pmode==='mission'?'هذا العامل بأجر المهمة وحده':'مستقلة عن أيام الأجر الأساسي (مثلاً: مهمة 6 وأساسي 0)'}</small></label>
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input type="number" min="0" max="7" step="0.5" style="width:80px" value="${e.missionDays||0}" oninput="updateWeekEntry('${e.id}','missionDays',this.value)" data-entry-mission-days>
 </div>
           <div style="font-weight:800;padding-top:4px">أجر المهمة: <span data-entry-mission>${money(parts.mission)} دج</span> (<span data-entry-mission-count>${parts.missionDays}</span> يوم) — مجموع الأيام: <span data-entry-days-total>${num(e.days)}</span></div></div>`:'';
       bodyHTML=`<div class="entry-body">
-        ${mOn?`<div class="entry-field"><label><i class="fas fa-calendar-day"></i> أيام الأجر الأساسي</label><input type="number" min="0" max="7" step="0.5" value="${Math.max(0,num(e.days)-num(e.missionDays))}" oninput="updateWeekEntry('${e.id}','baseDays',this.value)"></div>`:`<div class="entry-field"><label><i class="fas fa-calendar-day"></i> عدد الأيام</label><input type="number" min="0" max="7" step="0.5" value="${e.days||0}" oninput="updateWeekEntry('${e.id}','days',this.value)"></div>`}
+        ${pmode==='mission'?'':mOn?`<div class="entry-field"><label><i class="fas fa-calendar-day"></i> أيام الأجر الأساسي</label><input type="number" min="0" max="7" step="0.5" value="${Math.max(0,num(e.days)-num(e.missionDays))}" oninput="updateWeekEntry('${e.id}','baseDays',this.value)"></div>`:`<div class="entry-field"><label><i class="fas fa-calendar-day"></i> عدد الأيام</label><input type="number" min="0" max="7" step="0.5" value="${e.days||0}" oninput="updateWeekEntry('${e.id}','days',this.value)"></div>`}
         <div class="entry-field"><label><i class="fas fa-clock"></i> ساعات إضافية</label><input type="number" min="0" step="0.5" value="${e.extraHours||0}" oninput="updateWeekEntry('${e.id}','extraHours',this.value)"></div>
         <div class="entry-field" style="background:var(--accent-soft)"><label>الأجر الأساسي</label><div data-entry-base style="font-weight:800;padding:6px 0;color:var(--accent)">${money(parts.base-num(parts.mission))} دج</div></div>
         <div class="entry-field" style="background:var(--gold-soft)"><label>قيمة الساعات الإضافية</label><div data-entry-overtime style="font-weight:800;padding:6px 0;color:var(--gold)">${money(parts.overtime)} دج</div></div>
@@ -2986,7 +2991,7 @@ function updateWeekEntry(id,f,v){
   if(isArchivedEdit()&&f==='workerId'&&isOriginalArchivedEntryId(id)){showToast('لا يمكن تغيير عامل صف قديم لأنه مرتبط بحركات مالية سابقة. أضف صفاً جديداً بدل ذلك.','warning');return;}
   if(f==='workerId'){e.workerId=v;e.services=[];e.days=0;e.extraHours=0;e.debtDeduction=0;e.paidNow=null;e.pendingAmount=0;e.settlePending=0;}
   else if(f==='days'){e.days=num(v); if(e.missionFrom&&e.missionTo){const r=missionRangeDays(e.missionFrom,e.missionTo); if(r!==null) e.missionDays=r;} if(num(e.missionDays)>e.days){e.missionDays=e.days; showToast('أيام المهمة لا تتجاوز عدد الأيام','warning');}}
-  else if(f==='missionDays'){const base=Math.max(0,num(e.days)-num(e.missionDays));let d=Math.max(0,num(v)); if(base+d>7){d=Math.max(0,7-base);showToast('❌ مجموع الأيام لا يتجاوز 7 في الأسبوع','error');} e.missionDays=d; e.days=base+d; e.missionFrom=''; e.missionTo='';}
+  else if(f==='missionDays'){const _w=DB.workers.find(x=>x.id===e.workerId);if(weekPayMode(e,_w)==='base'){return;}const base=weekPayMode(e,_w)==='mission'?0:Math.max(0,num(e.days)-num(e.missionDays));let d=Math.max(0,num(v)); if(base+d>7){d=Math.max(0,7-base);showToast('❌ مجموع الأيام لا يتجاوز 7 في الأسبوع','error');} e.missionDays=d; e.days=base+d; e.missionFrom=''; e.missionTo='';}
   else if(f==='baseDays'){let b=Math.max(0,num(v)); const md=num(e.missionDays); if(b+md>7){b=Math.max(0,7-md);showToast('❌ مجموع الأيام لا يتجاوز 7 في الأسبوع','error');} e.days=b+md;}
   else if(f==='missionFrom'||f==='missionTo'){e[f]=v||''; const r=missionRangeDays(e.missionFrom,e.missionTo); if(r!==null){ if(r>num(e.days)) showToast('❌ فترة المهمة ('+r+' يوم) أكثر من عدد أيام العمل ('+num(e.days)+')، صحّح عدد الأيام','error'); e.missionDays=Math.min(r,num(e.days)); }}
   else if(f==='extraHours')e.extraHours=num(v);
@@ -3505,7 +3510,7 @@ function makeArchivedEntriesWithTotals(weekId){
     const paidNow=Math.min(Math.max(0,num(e.paidNow??p.net)),p.net);
     const pendingAmount=Math.max(0,p.net-paidNow);
     const settlePending=Math.max(0,num(e.settlePending));
-    return {...e,services:(e.services||[]).map(x=>({...x})),workerName:w?.name||'غير معروف',workerNumber:w?.number||0,workerType:w?.type||'',dailyWageSnapshot:w?.type==='قطعة'?0:num(w?.dailyWage),missionWageSnapshot:(e.missionWageSnapshot!=null?e.missionWageSnapshot:(w?.type!=='قطعة'&&w?.missionEnabled&&num(e.missionDays)>0?num(w.missionWage):null)),parts:p,total:p.net,paidNow,pendingAmount,settlePending,debtDeduction:p.deduction,postedNet:p.net,postArchiveAdjustment:0,weekId};
+    return {...e,services:(e.services||[]).map(x=>({...x})),workerName:w?.name||'غير معروف',workerNumber:w?.number||0,workerType:w?.type||'',dailyWageSnapshot:w?.type==='قطعة'?0:num(w?.dailyWage),missionWageSnapshot:(e.missionWageSnapshot!=null?e.missionWageSnapshot:(w?.type!=='قطعة'&&weekPayMode(e,w)!=='base'&&num(e.missionDays)>0?num(w.missionWage):null)),payModeSnapshot:e.payModeSnapshot||(w&&w.type!=='قطعة'?weekPayMode(e,w):'base'),parts:p,total:p.net,paidNow,pendingAmount,settlePending,debtDeduction:p.deduction,postedNet:p.net,postArchiveAdjustment:0,weekId};
   });
 }
 
