@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="robots" content="noindex">
+<meta name="referrer" content="same-origin">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://*.google.com">
 <title>EGTPH — لوحة التحكم</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -326,7 +328,7 @@ html[lang="ar"] body{font-family:-apple-system,"SF Arabic",var(--ar)}
       </div>
     </section>
 
-    <section class="frame" id="framePanel" hidden><iframe id="appFrame" title="EGTPH"></iframe></section>
+    <section class="frame" id="framePanel" hidden><iframe id="appFrame" title="EGTPH" referrerpolicy="same-origin" allow="camera; publickey-credentials-get *"></iframe></section>
     <section class="loading" id="loadingPanel" hidden><div class="message"><div class="spinner"></div><p data-ar="جارٍ تحميل البرنامج…" data-fr="Chargement de l'application…">جارٍ تحميل البرنامج…</p></div></section>
     <section class="error" id="errorPanel" hidden><div class="message"><h2 data-ar="تعذّر تحميل البرنامج" data-fr="Impossible de charger l'application">تعذّر تحميل البرنامج</h2><p id="errorText"></p><div class="message-actions"><button class="action gold" id="retryButton" data-ar="إعادة المحاولة" data-fr="Réessayer">إعادة المحاولة</button><button class="action" id="directButton" data-ar="فتح مباشرة" data-fr="Ouvrir directement">فتح مباشرة</button></div></div></section>
   </main>
@@ -461,12 +463,14 @@ function now(){return Date.now()}
 function esc(v){var d=document.createElement("div");d.textContent=String(v==null?"":v);return d.innerHTML}
 function t(ar,fr){return lang==="fr"?fr:ar}
 function svg(k){return '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+(ICONS[k]||ICONS.grid)+'</svg>'}
-function app(id){return BUILTIN[id]||state.apps[id]||null}
+function safeHref(u){u=String(u||"").trim();if(/^https:\/\//i.test(u))return u;if(/^[a-z][a-z0-9+.-]*:/i.test(u)||/^\/\//.test(u)||/[<>"'\s]/.test(u))return "about:blank";return u}
+function safeImg(u){u=String(u||"");return /^data:image\/(png|jpe?g|webp|gif);base64,[a-z0-9+\/=]+$/i.test(u)||/^https:\/\/[^"'<>\s]+$/i.test(u)?u:""}
+function app(id){if(BUILTIN[id])return BUILTIN[id];var a=state.apps&&state.apps[id];if(!a)return null;var c={};for(var k in a)c[k]=a[k];c.href=safeHref(a.href);return c}
 function appLabel(id){var n=state.labels[id];if(n&&String(n.value||"").trim())return n.value;var a=app(id);return a?(lang==="fr"?(a.fr||a.label||id):(a.ar||a.label||id)):id}
 function category(id){var a=app(id);return a?a.cat:"other"}
 function favorite(id){return !!(state.favorites[id]&&state.favorites[id].value)}
 function visual(id){var v=state.visuals&&state.visuals[id];return v||defaultVisual(id)}
-function art(id){var v=visual(id),a=app(id)||{};if(v.mode==="custom"&&v.image)return v.image;return ASSETS[v.art]||ASSETS[a.art]||ASSETS.settings}
+function art(id){var v=visual(id),a=app(id)||{};if(v.mode==="custom"&&safeImg(v.image))return safeImg(v.image);return ASSETS[v.art]||ASSETS[a.art]||ASSETS.settings}
 function visualMode(id){return visual(id).mode}
 function isLive(id){var a=app(id),dead=Number(state.tombstones[id])||0;return !!a&&dead<(Number(a.updatedAt)||0)+1}
 function ids(){return state.order.value.filter(isLive)}
@@ -520,7 +524,7 @@ function renderHero(){var s=state.settings||defaultSettings();document.getElemen
 function widget(k){return state.widgets[k]||{visible:false,value:"",unit:"",title:"",updatedAt:0}}
 function renderMetrics(){}
 function renderCategories(){var out=CATEGORIES.map(function(c){return '<button class="'+(filterCategory===c.key?"active":"")+'" data-category="'+c.key+'">'+esc(lang==="ar"?c.ar:c.fr)+'</button>'}).join("");document.getElementById("categoryBar").innerHTML=out;var b=document.getElementById("favoriteFilter");b.classList.toggle("on",favoritesOnly);b.innerHTML=(favoritesOnly?"★":"☆")+' '+esc(t("المفضلة","Favoris"))}
-function renderApps(){var list=ids().filter(function(id){return viewerAllowedApp(id)&&(filterCategory==="all"||category(id)===filterCategory)&&(!favoritesOnly||favorite(id))});var grid=document.getElementById("appGrid");if(!list.length){grid.innerHTML='<div class="empty">'+esc(t("لا توجد برامج ضمن هذا الاختيار.","Aucune application dans cette sélection."))+'</div>';return}grid.innerHTML=list.map(function(id){var a=app(id),isFav=favorite(id),v=visual(id),artHtml=v.mode!=="custom"?'<span class="app-art ios" data-i="'+esc(a.icon||"grid")+'">'+(CICONS[a.icon]?CICONS[a.icon].replace(/id="(\w+)"/g,'id="$1'+id+'"').replace(/url\(#(\w+)\)/g,'url(#$1'+id+')'):svg(a.icon||"grid").replace("<svg","<svg class=\"mode-svg\""))+"</span>":'<span class="app-art"><img src="'+art(id)+'" alt=""></span>';var edit=editing?'<div class="card-edit"><button data-favorite="'+esc(id)+'" class="'+(isFav?"on":"")+'" title="favorite">'+svg("star")+'</button><button data-visual="'+esc(id)+'" title="visual">◈</button><button data-rename="'+esc(id)+'" title="rename">'+svg("edit")+'</button>'+(!BUILTIN[id]?'<button data-delete="'+esc(id)+'" title="delete">'+svg("trash")+'</button>':'')+'</div>':'';return '<article class="app-card">'+edit+'<button class="app-main" data-open="'+esc(id)+'">'+artHtml+'<span class="app-title">'+esc(appLabel(id))+'</span><span class="app-path">'+esc(a.href)+'</span><span class="app-cat">'+esc(categoryName(category(id)))+'</span></button></article>'}).join("")}
+function renderApps(){var list=ids().filter(function(id){return viewerAllowedApp(id)&&(filterCategory==="all"||category(id)===filterCategory)&&(!favoritesOnly||favorite(id))});var grid=document.getElementById("appGrid");if(!list.length){grid.innerHTML='<div class="empty">'+esc(t("لا توجد برامج ضمن هذا الاختيار.","Aucune application dans cette sélection."))+'</div>';return}grid.innerHTML=list.map(function(id){var a=app(id),isFav=favorite(id),v=visual(id),artHtml=v.mode!=="custom"?'<span class="app-art ios" data-i="'+esc(a.icon||"grid")+'">'+(CICONS[a.icon]?CICONS[a.icon].replace(/id="(\w+)"/g,'id="$1'+id+'"').replace(/url\(#(\w+)\)/g,'url(#$1'+id+')'):svg(a.icon||"grid").replace("<svg","<svg class=\"mode-svg\""))+"</span>":'<span class="app-art"><img src="'+esc(art(id))+'" alt=""></span>';var edit=editing?'<div class="card-edit"><button data-favorite="'+esc(id)+'" class="'+(isFav?"on":"")+'" title="favorite">'+svg("star")+'</button><button data-visual="'+esc(id)+'" title="visual">◈</button><button data-rename="'+esc(id)+'" title="rename">'+svg("edit")+'</button>'+(!BUILTIN[id]?'<button data-delete="'+esc(id)+'" title="delete">'+svg("trash")+'</button>':'')+'</div>':'';return '<article class="app-card">'+edit+'<button class="app-main" data-open="'+esc(id)+'">'+artHtml+'<span class="app-title">'+esc(appLabel(id))+'</span><span class="app-path">'+esc(a.href)+'</span><span class="app-cat">'+esc(categoryName(category(id)))+'</span></button></article>'}).join("")}
 function categoryName(k){var c=CATEGORIES.find(function(x){return x.key===k});return c?(lang==="ar"?c.ar:c.fr):k}
 function renderControls(){var shell=document.getElementById("shell"),count=alertBadgeCount(),badge=document.getElementById("alertsBadge");shell.classList.toggle("editing",editing);document.getElementById("editButton").classList.toggle("active",editing);document.getElementById("editButton").innerHTML=editing?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';document.getElementById("zoomValue").textContent=Math.round(uiZoom*100)+"%";document.getElementById("focusButton").classList.toggle("active",shell.classList.contains("focus"));badge.hidden=!count;badge.textContent=count>99?"99+":String(count)}
 function updateClock(){var d=new Date(),h=d.getHours(),s=state.settings||defaultSettings(),custom=lang==="ar"?String(s.greetingAr||"").trim():String(s.greetingFr||"").trim();document.getElementById("greeting").textContent=custom||(lang==="ar"?(h<12?"صباح الخير":"مساء الخير"):(h<18?"Bonjour":"Bonsoir"));document.getElementById("clock").textContent=String(h).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0");try{document.getElementById("today").textContent=d.toLocaleDateString(lang==="ar"?"ar-DZ":"fr-FR",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}catch(e){document.getElementById("today").textContent=d.toLocaleDateString()}}
