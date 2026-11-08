@@ -2273,7 +2273,7 @@ function renderWorkers(){
     const rem=d?d.total-d.paid:0;
     let wd=w.type==='قطعة'
       ?((w.services||[]).length?(w.services||[]).map(x=>`<span class="badge badge-gold" style="margin:1px">${x.name}: ${money(x.price)}</span>`).join(' '):'<span class="text-muted">لا خدمات</span>')
-      :(w.dailyWage?`<b>${money(w.dailyWage)} دج</b>/يوم`:'—');
+      :((w.payMode==='mission'&&w.missionWage)?`مهمة <b>${money(w.missionWage)} دج</b>/يوم`:(w.dailyWage?`<b>${money(w.dailyWage)} دج</b>/يوم${(w.payMode==='both'&&w.missionWage)?` · مهمة <b>${money(w.missionWage)}</b>`:''}`:'—'));
     const start=w.startDate||w.joinDate||w.entryDate||'';
     const last=workerLastWeekInfo(w.id);
     const wageLabel=w.type==='قطعة'?'خدمات/قطعة':(w.dailyWage?money(w.dailyWage)+' دج/يوم':'غير محدد');
@@ -2783,7 +2783,7 @@ function renderWeekWorkerPicker(){
   if(pf==='none')list=list.filter(w=>!w.projectId);else if(pf!=='all'&&pf!=='current')list=list.filter(w=>w.projectId===pf);
   list.sort((a,b)=>{if(pf==='current'||pf==='all'){const ap=a.projectId===pid?0:1,bp=b.projectId===pid?0:1;if(ap!==bp)return ap-bp;}return (a.number||0)-(b.number||0);});
   if(!list.length){root.innerHTML='<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-user-slash"></i><h4>لا يوجد عمال مطابقون</h4></div>';}
-  else root.innerHTML=list.map(w=>{const selected=_weekPickerSelected.has(w.id),blocked=(_weekPickerMode==='add'||_weekPickerMode==='replace')&&currentIds.has(w.id)&&w.id!==target;const p=DB.projects.find(x=>x.id===w.projectId);const wage=w.type==='قطعة'?'عامل قطعة':(w.dailyWage?money(w.dailyWage)+' دج/يوم':'أجر غير محدد');return `<button type="button" class="week-worker-chip ${selected?'selected':''} ${blocked?'disabled':''}" ${blocked?'disabled':''} onclick="toggleWeekWorkerChip('${w.id}')"><span class="chip-check"><i class="fas fa-check"></i></span><div class="chip-name">${w.number||'—'} — ${escapeHTML(w.name||'')}</div><div class="chip-meta">${escapeHTML(w.type||'')} · ${escapeHTML(wage)}${p?' · '+escapeHTML(p.name):''}${blocked?' · موجود في الأسبوع':''}</div></button>`;}).join('');
+  else root.innerHTML=list.map(w=>{const selected=_weekPickerSelected.has(w.id),blocked=(_weekPickerMode==='add'||_weekPickerMode==='replace')&&currentIds.has(w.id)&&w.id!==target;const p=DB.projects.find(x=>x.id===w.projectId);const wage=w.type==='قطعة'?'عامل قطعة':((w.payMode==='mission'&&w.missionWage)?'مهمة '+money(w.missionWage)+' دج/يوم':(w.dailyWage?money(w.dailyWage)+' دج/يوم'+((w.payMode==='both'&&w.missionWage)?' · مهمة '+money(w.missionWage):''):'أجر غير محدد'));return `<button type="button" class="week-worker-chip ${selected?'selected':''} ${blocked?'disabled':''}" ${blocked?'disabled':''} onclick="toggleWeekWorkerChip('${w.id}')"><span class="chip-check"><i class="fas fa-check"></i></span><div class="chip-name">${w.number||'—'} — ${escapeHTML(w.name||'')}</div><div class="chip-meta">${escapeHTML(w.type||'')} · ${escapeHTML(wage)}${p?' · '+escapeHTML(p.name):''}${blocked?' · موجود في الأسبوع':''}</div></button>`;}).join('');
   const count=document.getElementById('weekPickerCount');if(count)count.textContent=String(_weekPickerSelected.size);
 }
 function toggleWeekWorkerChip(id){
@@ -2918,7 +2918,7 @@ function renderWeek(){
       <div class="entry-head">
         <div class="flex gap-2" style="align-items:center;flex:1;flex-wrap:wrap">
           <span class="entry-num">${i+1}</span>
-          ${w?`<div class="week-worker-fixed"><span class="worker-avatar"><i class="fas fa-user"></i></span><div style="flex:1;min-width:0"><div class="worker-name">${escapeHTML(w.name||'')}</div><div class="worker-sub">${escapeHTML(w.type||'')} · ${w.type==='قطعة'?'حسب الخدمات':money(w.dailyWage||0)+' دج/يوم'}</div></div>${!(isArchivedEdit()&&isOriginalArchivedEntryId(e.id))?`<button type="button" class="btn btn-outline btn-xs" onclick="openWeekWorkerPicker('replace','${e.id}')"><i class="fas fa-arrows-rotate"></i> تغيير</button>`:''}</div>`:`<button type="button" class="btn btn-warning btn-sm" onclick="openWeekWorkerPicker('replace','${e.id}')"><i class="fas fa-user-plus"></i> اختيار عامل لهذا الصف</button>`}
+          ${w?`<div class="week-worker-fixed"><span class="worker-avatar"><i class="fas fa-user"></i></span><div style="flex:1;min-width:0"><div class="worker-name">${escapeHTML(w.name||'')}</div><div class="worker-sub">${escapeHTML(w.type||'')} · ${w.type==='قطعة'?'حسب الخدمات':(w.payMode==='mission'?'مهمة '+money(w.missionWage||0)+' دج/يوم':money(w.dailyWage||0)+' دج/يوم'+((w.payMode==='both'&&w.missionWage)?' · مهمة '+money(w.missionWage):''))}</div></div>${!(isArchivedEdit()&&isOriginalArchivedEntryId(e.id))?`<button type="button" class="btn btn-outline btn-xs" onclick="openWeekWorkerPicker('replace','${e.id}')"><i class="fas fa-arrows-rotate"></i> تغيير</button>`:''}</div>`:`<button type="button" class="btn btn-warning btn-sm" onclick="openWeekWorkerPicker('replace','${e.id}')"><i class="fas fa-user-plus"></i> اختيار عامل لهذا الصف</button>`}
         </div>
         <div class="entry-total"><i class="fas fa-money-bill-wave"></i> <span data-entry-total>${money(parts.net)} دج</span></div>
       </div>
@@ -5168,7 +5168,7 @@ function buildPrintHTML(weekObj,fromArchive){
     <tr>
       <td style="text-align:center;font-weight:800">${d.num}</td>
       <td style="text-align:right;font-weight:700">${d.name}</td>
-      <td style="text-align:center;font-weight:800">${d.days||'—'}${num(d.parts.missionDays)>0?`<br><small>منها مهمة ${d.parts.missionDays} = ${money(d.parts.mission)}</small>`:''}</td>
+      <td style="text-align:center;font-weight:800">${d.days||'—'}${num(d.parts.missionDays)>0?`<br><small>أساسي ${Math.round((num(d.days)-num(d.parts.missionDays))*100)/100} = ${money(num(d.parts.base)-num(d.parts.mission))}<br>مهمة ${d.parts.missionDays} = ${money(d.parts.mission)}</small>`:''}</td>
       <td style="text-align:center">${d.parts.overtime>0?money(d.parts.overtime):'—'}</td>
       <td style="text-align:center">${d.parts.bonus>0?money(d.parts.bonus):'—'}</td>
       <td style="text-align:center;color:#dc2626">${d.parts.deduction>0?'('+money(d.parts.deduction)+')':'—'}</td>
@@ -6893,7 +6893,7 @@ function aiAnswer(q){
   }
   // أجر غير محدد
   if(s.includes('لم يحدد')||s.includes('بدون اجر')||s.includes('بدون أجر')||s.includes('ناقص')){
-    const nw=DB.workers.filter(w=>w.type!=='قطعة'&&!w.dailyWage);
+    const nw=DB.workers.filter(w=>w.type!=='قطعة'&&!w.dailyWage&&!(w.payMode==='mission'&&num(w.missionWage)>0));
     if(!nw.length) return '✅ كل العمال اليوميين لديهم أجر محدد.';
     return `⚠️ عمال بدون أجر محدد:<br>`+nw.map(w=>`• ${w.name}`).join('<br>');
   }
