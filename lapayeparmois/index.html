@@ -3063,7 +3063,11 @@ function misReconcileAll(){let ch=false;(DB.workers||[]).forEach(w=>{try{if(misR
 </script>
 <style>
 #mUni .modal{max-width:480px;max-height:92vh;display:flex;flex-direction:column;padding-bottom:0}
-#uniBody{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;padding-bottom:8px}
+#mUni .modal{overflow:hidden!important}
+#uniBody{overflow-y:auto!important;-webkit-overflow-scrolling:touch;flex:1 1 auto;min-height:0;max-height:calc(92vh - 260px);overscroll-behavior:contain;touch-action:pan-y;padding-bottom:8px}
+body.uni-lock{overflow:hidden!important;position:fixed;width:100%;left:0;right:0}
+#mUni{overscroll-behavior:contain;touch-action:none}
+#mUni .modal{touch-action:pan-y}
 #mUni .uni-sec{border:1px solid rgba(255,255,255,.55);border-radius:16px;margin:0 0 12px;overflow:hidden;background:linear-gradient(135deg,rgba(214,230,255,.92),rgba(236,244,255,.60))!important;border-color:rgba(70,110,190,.45)!important;backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%);box-shadow:0 8px 20px rgba(20,50,110,.18),inset 0 1px 0 rgba(255,255,255,.9),inset 0 -1px 0 rgba(70,110,190,.15)}
 #mUni .uni-sec+.uni-sec{position:relative}
 #mUni .uni-sec+.uni-sec:before{content:"";position:absolute;top:-7px;right:12%;left:12%;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,rgba(30,70,140,.75),transparent)}
@@ -3123,8 +3127,8 @@ function touch(e){var b=e.target.closest&&e.target.closest("#mUni .uni-sec");if(
 document.addEventListener("change",touch);
 window.openUniModal=function(wid){if(busy)return;uniWid=wid;savedK=[];touched=[];restore();
  try{openAdvModal(wid)}catch(e){}try{openExtraModal(wid,"hrs")}catch(e){}try{openMisPane()}catch(e){}try{openAbsModal(wid)}catch(e){}
- hideOld();var w=getW(wid);g("uniInfo").innerHTML=w?"<b>"+(w.name||"")+"</b> — الراتب: "+fmt(w.salary||0):"";g("uniCfg").style.display="none";build();openModal("mUni");g("uniBody").scrollTop=0};
-window.closeUni=function(){var e=g("mUni");if(e)e.classList.remove("open");restore()};
+ hideOld();var w=getW(wid);g("uniInfo").innerHTML=w?"<b>"+(w.name||"")+"</b> — الراتب: "+fmt(w.salary||0):"";g("uniCfg").style.display="none";build();openModal("mUni");g("uniBody").scrollTop=0;if(!document.body.classList.contains("uni-lock")){window._uniY=window.scrollY||0;document.body.style.top=(-window._uniY)+"px";document.body.classList.add("uni-lock")}};
+function _unlock(){if(document.body.classList.contains("uni-lock")){document.body.classList.remove("uni-lock");document.body.style.top="";window.scrollTo(0,window._uniY||0)}}setTimeout(function(){var m=g("mUni");if(m&&window.MutationObserver)new MutationObserver(function(){if(!m.classList.contains("open")){_unlock();if(moved.length&&!busy)restore()}}).observe(m,{attributes:true,attributeFilter:["class"]})},0);window.closeUni=function(){var e=g("mUni");if(e)e.classList.remove("open");restore();if(document.body.classList.contains("uni-lock")){document.body.classList.remove("uni-lock");document.body.style.top="";window.scrollTo(0,window._uniY||0)}};
 window.saveUni=async function(){if(busy)return;var c=cfg(),list=c.order.filter(function(k){return c.hide.indexOf(k)<0&&savedK.indexOf(k)<0&&touched.indexOf(k)>=0&&sec(k).filled()});if(!list.length){toast("⚠️ لم تُعبّأ أي عملية",true);return}
  busy=true;var btn=g("uniSaveBtn");btn.disabled=true;btn.textContent="⏳ حفظ…";var done=[],fail=null;
  try{for(var i=0;i<list.length;i++){var s=sec(list[i]);_wid=uniWid;var r,err=false,ot=window.toast;window.toast=function(m,e){if(e===true||/^❌/.test(String(m||"")))err=true;return ot.apply(this,arguments)};try{r=await s.save()}catch(e){r=false}finally{window.toast=ot}hideOld();if(r===false||err){fail=s.t;break}done.push(s.t);savedK.push(s.k);var bx=document.querySelector("#uniBody .uni-sec[data-k='"+s.k+"']");if(bx)bx.style.display="none";if(window._egWaitIdle&&window.EGTPH_SYNC)await _egWaitIdle(window.EGTPH_SYNC)}}
