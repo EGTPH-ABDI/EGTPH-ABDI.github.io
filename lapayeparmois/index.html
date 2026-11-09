@@ -3124,7 +3124,7 @@ document.addEventListener("change",touch);
 window.openUniModal=function(wid){if(busy)return;uniWid=wid;savedK=[];touched=[];restore();
  try{openAdvModal(wid)}catch(e){}try{openExtraModal(wid,"hrs")}catch(e){}try{openMisPane()}catch(e){}try{openAbsModal(wid)}catch(e){}
  hideOld();var w=getW(wid);g("uniInfo").innerHTML=w?"<b>"+(w.name||"")+"</b> — الراتب: "+fmt(w.salary||0):"";g("uniCfg").style.display="none";build();openModal("mUni");g("uniBody").scrollTop=0};
-window.closeUni=function(){closeModal("mUni");restore()};
+window.closeUni=function(){var e=g("mUni");if(e)e.classList.remove("open");restore()};
 window.saveUni=async function(){if(busy)return;var c=cfg(),list=c.order.filter(function(k){return c.hide.indexOf(k)<0&&savedK.indexOf(k)<0&&touched.indexOf(k)>=0&&sec(k).filled()});if(!list.length){toast("⚠️ لم تُعبّأ أي عملية",true);return}
  busy=true;var btn=g("uniSaveBtn");btn.disabled=true;btn.textContent="⏳ حفظ…";var done=[],fail=null;
  try{for(var i=0;i<list.length;i++){var s=sec(list[i]);_wid=uniWid;var r,err=false,ot=window.toast;window.toast=function(m,e){if(e===true||/^❌/.test(String(m||"")))err=true;return ot.apply(this,arguments)};try{r=await s.save()}catch(e){r=false}finally{window.toast=ot}hideOld();if(r===false||err){fail=s.t;break}done.push(s.t);savedK.push(s.k);var bx=document.querySelector("#uniBody .uni-sec[data-k='"+s.k+"']");if(bx)bx.style.display="none";if(window._egWaitIdle&&window.EGTPH_SYNC)await _egWaitIdle(window.EGTPH_SYNC)}}
