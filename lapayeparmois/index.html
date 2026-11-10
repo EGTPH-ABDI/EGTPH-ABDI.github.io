@@ -2229,6 +2229,7 @@ body.egtph-theme-night .sec,body.egtph-theme-night .twrap{
 </div>
 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
 <button class="btn2" onclick="verifyProgramIntegrity(true)">🩺 فحص سلامة البرنامج الآن</button>
+<button class="btn2" onclick="openArchive()">📦 فتح الأرشيف (هذه الجلسة فقط)</button>
 <span id="integrityStatus" style="font-size:11px;color:var(--gray)">لم يُنفذ الفحص بعد</span>
 </div>
 </div>
@@ -3171,6 +3172,31 @@ window.confirmBulkPay=function(){var p=picked();if(!p.length){toast("⚠️ لم
  if(!confirm("تسديد "+n+" عملية معلقة لـ"+p.length+" عامل بمجموع "+fmt(t)+"؟"))return;var mod=typeof nextMod==="function"?nextMod():Date.now(),now=(new Date).toISOString();
  p.forEach(function(r){r.items.forEach(function(it){it.e.paid=true;it.e.paidAt=now;it.e._mod=mod;it.e._updatedAt=now})});
  audit("تسديد جماعي للمعلّقات (ساعات/مكافآت/مهمة/فطور): "+p.length+" عامل — "+fmt(t));saveDB();closeModal("mBulkPay");try{renderDash()}catch(e){}try{updateBadges()}catch(e){}toast("✔️ تم تسديد "+n+" عملية بمجموع "+fmt(t))};
+})();
+</script>
+<div class="mo" id="mArchive"><div class="modal" style="max-width:560px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+<h3 style="margin:0 0 4px">📦 الأرشيف — عرض لهذه الجلسة فقط</h3>
+<div style="font-size:11px;color:var(--gray);margin-bottom:8px">سجل العمليات القديم وسلة المهملات القديمة. للقراءة فقط: لا يدخل في الحسابات ولا يُحفظ من جديد.</div>
+<div style="display:flex;gap:6px;margin-bottom:8px"><button class="btn2" id="ar_t1" style="flex:1" onclick="archiveTab('audit')">📜 السجل القديم</button><button class="btn2" id="ar_t2" style="flex:1" onclick="archiveTab('trash')">🗑️ السلة القديمة</button></div>
+<input id="ar_q" type="text" placeholder="🔍 بحث…" oninput="renderArchive()" style="margin-bottom:8px"/>
+<div id="ar_list" style="overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1 1 auto;min-height:0;overscroll-behavior:contain;font-size:12px"></div>
+<div class="mbtns" style="margin:8px 0 0"><button class="btn2" onclick="closeModal('mArchive')">إغلاق</button></div>
+</div></div>
+<script>
+(function(){
+var URL_A="https://egtph-pay-default-rtdb.europe-west1.firebasedatabase.app/egtph/EGTPH-pay-archive-v1.json",tab="audit";
+function esc(x){return String(x==null?"":x).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+window.openArchive=async function(){var host=document.getElementById("ar_list");openModal("mArchive");
+ if(!window.__EG_ARCHIVE){host.innerHTML='<div style="padding:18px;text-align:center">⏳ تحميل الأرشيف…</div>';
+  try{var ap=window.EGTPHAuth&&EGTPHAuth.authParam?EGTPHAuth.authParam(typeof EGTPH_AUTH_APP_ID!=="undefined"?EGTPH_AUTH_APP_ID:"lapayeparmois"):"";var r=await fetch(URL_A+(ap||""),{cache:"no-store"});if(!r.ok)throw new Error("HTTP "+r.status);var d=await r.json();if(!d)throw new Error("الأرشيف فارغ");window.__EG_ARCHIVE=d}
+  catch(e){host.innerHTML='<div style="padding:18px;text-align:center">❌ تعذر تحميل الأرشيف: '+esc(e.message||e)+'</div>';return}}
+ archiveTab(tab)};
+window.archiveTab=function(t){tab=t;document.getElementById("ar_t1").style.fontWeight=t==="audit"?"900":"400";document.getElementById("ar_t2").style.fontWeight=t==="trash"?"900":"400";renderArchive()};
+window.renderArchive=function(){var d=window.__EG_ARCHIVE,host=document.getElementById("ar_list");if(!d)return;var q=(document.getElementById("ar_q").value||"").trim(),rows=[];
+ if(tab==="audit"){var al=(Array.isArray(d.auditLog)?d.auditLog:Object.values(d.auditLog||{})).filter(Boolean).slice().sort(function(a,b){return String(b.createdAt||"").localeCompare(String(a.createdAt||""))||(+b.seq||0)-(+a.seq||0)});
+  al.forEach(function(x){var line=(x.time||"")+" — "+(x.user||"")+" — "+(x.action||"");if(!q||line.indexOf(q)>=0)rows.push('<div style="padding:6px 2px;border-bottom:1px solid #ccc"><b>'+esc(x.time||"")+'</b> · '+esc(x.user||"")+'<br>'+esc(x.action||"")+'</div>')})}
+ else{var L={workers:"👷 عمال",advances:"💰 تسبيقات",hours:"⏱️ ساعات",absences:"📅 غيابات",bonuses:"🎁 مكافآت",debts:"📋 ديون"};Object.keys(d.trash||{}).forEach(function(k){var arr=d.trash[k];arr=(Array.isArray(arr)?arr:Object.values(arr||{})).filter(Boolean);arr.forEach(function(x){var w=null;try{w=getW(x._wid||x.workerId||x.wid)}catch(e){}var line=(L[k]||k)+" — "+(x.name||(w&&w.name)||x._wname||"")+" — "+(x.amount!=null?fmt(+x.amount||0):x.total!=null?fmt(+x.total||0):x.days!=null?x.days+" يوم":"")+" — "+(x.date||x.from||"")+(x._deletedAt?" — حُذف: "+x._deletedAt:"")+(x.note?" — "+x.note:"");if(!q||line.indexOf(q)>=0)rows.push('<div style="padding:6px 2px;border-bottom:1px solid #ccc">'+esc(line)+'</div>')})})}
+ host.innerHTML='<div style="font-weight:800;padding:4px 2px">'+rows.length+' سطر</div>'+(rows.join("")||'<div style="padding:18px;text-align:center">لا شيء</div>')};
 })();
 </script>
 <style id="egtph-modern-card">
