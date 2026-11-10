@@ -1755,6 +1755,7 @@ body.egtph-theme-night .sec,body.egtph-theme-night .twrap{
 <div id="dashAlerts"></div>
 <button class="btn1" id="bulkHrsBtn" onclick="openBulkHrsModal()" style="width:100%;margin:0 0 10px;display:flex;align-items:center;justify-content:center;gap:8px">👥⏱️ ساعات إضافية جماعية لعدة عمال</button>
 <button class="btn1" id="bulkAdvBtn" onclick="openBulkAdvModal()" style="width:100%;margin:0 0 12px;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,#0d9488,#0f9c57)">💰 تسبيقات جماعية مقترحة (حسب أيام العمل)</button>
+<button class="btn1" id="bulkPayBtn" onclick="openBulkPayModal()" style="width:100%;margin:0 0 12px;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,#1d4ed8,#2563eb)">✅ تسديد جماعي للمعلّقات (ساعات • مكافآت • مهمة • فطور)</button>
 <div class="crow" id="dashCards"></div>
 <div id="qsearchWrap"><span style="font-size:13px;opacity:.65">🔍</span><input type="text" id="qsearchInp" placeholder="بحث عن عامل..." autocomplete="off" oninput="filterQuickCards()"><button type="button" class="wtab-search-clr" onclick="clearQuickSearch()" title="مسح">✕</button></div>
 <div class="qgrid" id="qgrid"></div>
@@ -3135,6 +3136,41 @@ window.saveUni=async function(){if(busy)return;var c=cfg(),list=c.order.filter(f
  finally{busy=false;btn.disabled=false;btn.textContent="💾 حفظ الكل"}
  if(fail){toast("❌ لم يُحفظ: "+fail+(done.length?" (حُفظ قبله: "+done.join("، ")+")":""),true);sum();return}
  closeUni();toast("✔️ "+done.join(" + "))};
+})();
+</script>
+<div class="mo" id="mBulkPay"><div class="modal" style="max-width:520px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+<h3 style="margin:0 0 6px">✅ تسديد جماعي للمعلّقات</h3>
+<div style="font-size:11px;color:var(--gray);margin-bottom:8px">ساعات إضافية • مكافآت • منحة مهمة • فطور — تتحول من «معلقة» إلى «مسددة»</div>
+<label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:8px"><input type="checkbox" id="bp_old" style="width:auto" onchange="renderBulkPay()"/> تشمل أيضاً المعلّقات من الدورات السابقة</label>
+<div id="bp_list" style="overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1 1 auto;min-height:0;overscroll-behavior:contain"></div>
+<div id="bp_sum" style="font-weight:800;text-align:center;padding:8px 0"></div>
+<div class="mbtns" style="margin:0"><button class="btn2" onclick="closeModal('mBulkPay')">إلغاء</button><button class="btn1" onclick="confirmBulkPay()">✅ تسديد المحدد</button></div>
+</div></div>
+<script>
+(function(){
+var rows=[];
+function amtOf(k,e){return k==="h"?(+e.total||0):k==="b"?(+e.net||+e.amount||0):(+e.amount||0)}
+function collect(){rows=[];var old=document.getElementById("bp_old").checked,today=todayISO();
+ sw().forEach(function(w){if(w.exitDate&&String(w.exitDate)<today)return;var wid=w.id,ac=getActiveCycle(wid),win=cycleWindow(w,ac.m,ac.yr),items=[];
+  function inScope(d){var t=_toDate(d);if(!t)return false;if(_inCycle(d,win))return true;return old&&t<win.from}
+  (DB.hours[wid]||[]).forEach(function(h){if(h&&!h.paid&&inScope(h.date))items.push({k:"h",e:h})});
+  Object.values(DB.bonuses[wid]||{}).forEach(function(a){(a||[]).forEach(function(b){if(b&&!b.paid&&inScope(b.date))items.push({k:"b",e:b})})});
+  Object.values((DB.meals||{})[wid]||{}).forEach(function(a){(a||[]).forEach(function(b){if(b&&!b.paid&&inScope(b.date))items.push({k:"m",e:b})})});
+  if(!items.length)return;var hrs=0,bon=0,mis=0,meal=0,future=false;
+  items.forEach(function(it){var v=amtOf(it.k,it.e);if(it.k==="h")hrs+=v;else if(it.k==="m")meal+=v;else if(it.e.mission){mis+=v;if(Array.isArray(it.e.misIsoDays)&&it.e.misIsoDays.some(function(d){return String(d)>today}))future=true}else bon+=v});
+  rows.push({w:w,items:items,hrs:hrs,bon:bon,mis:mis,meal:meal,total:hrs+bon+mis+meal,future:future})})}
+window.renderBulkPay=function(){collect();var host=document.getElementById("bp_list");
+ if(!rows.length){host.innerHTML='<div style="padding:18px;text-align:center;color:var(--gray)">لا توجد معلّقات</div>';document.getElementById("bp_sum").textContent="";return}
+ host.innerHTML='<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:12px;font-weight:800;border-bottom:2px solid #999"><input type="checkbox" id="bp_all" checked style="width:auto" onchange="bulkPayAll(this.checked)"/> تحديد الكل</label>'+rows.map(function(r,i){var p=[];if(r.hrs)p.push("⏱️ ساعات "+fmt(r.hrs));if(r.bon)p.push("🎁 مكافآت "+fmt(r.bon));if(r.mis)p.push("🚚 مهمة "+fmt(r.mis));if(r.meal)p.push("🍽️ فطور "+fmt(r.meal));
+  return'<label style="display:flex;align-items:flex-start;gap:8px;padding:8px 4px;border-bottom:1px solid #ccc"><input type="checkbox" class="bp_c" data-i="'+i+'" checked style="width:auto;margin-top:4px" onchange="bulkPaySum()"/><span style="flex:1"><b>'+r.w.name+'</b><br><span style="font-size:11px">'+p.join(" • ")+'</span>'+(r.future?'<br><span style="font-size:10px;font-weight:800">⚠️ فيها مهمة لم تنتهِ أيامها بعد</span>':'')+'</span><b>'+fmt(r.total)+'</b></label>'}).join("");bulkPaySum()};
+window.bulkPayAll=function(on){document.querySelectorAll("#bp_list .bp_c").forEach(function(c){c.checked=on});bulkPaySum()};
+function picked(){return Array.from(document.querySelectorAll("#bp_list .bp_c")).filter(function(c){return c.checked}).map(function(c){return rows[+c.dataset.i]})}
+window.bulkPaySum=function(){var p=picked(),t=p.reduce(function(s,r){return s+r.total},0);document.getElementById("bp_sum").textContent=p.length?"المحدد: "+p.length+" عامل — "+fmt(t):"لم يُحدَّد أحد"};
+window.openBulkPayModal=function(){document.getElementById("bp_old").checked=false;renderBulkPay();openModal("mBulkPay")};
+window.confirmBulkPay=function(){var p=picked();if(!p.length){toast("⚠️ لم يُحدَّد أي عامل",true);return}var n=0,t=0;p.forEach(function(r){n+=r.items.length;t+=r.total});
+ if(!confirm("تسديد "+n+" عملية معلقة لـ"+p.length+" عامل بمجموع "+fmt(t)+"؟"))return;var mod=typeof nextMod==="function"?nextMod():Date.now(),now=(new Date).toISOString();
+ p.forEach(function(r){r.items.forEach(function(it){it.e.paid=true;it.e.paidAt=now;it.e._mod=mod;it.e._updatedAt=now})});
+ audit("تسديد جماعي للمعلّقات (ساعات/مكافآت/مهمة/فطور): "+p.length+" عامل — "+fmt(t));saveDB();closeModal("mBulkPay");try{renderDash()}catch(e){}try{updateBadges()}catch(e){}toast("✔️ تم تسديد "+n+" عملية بمجموع "+fmt(t))};
 })();
 </script>
 <style id="egtph-modern-card">
