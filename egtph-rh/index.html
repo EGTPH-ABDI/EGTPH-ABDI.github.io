@@ -243,6 +243,7 @@ body.auth-locked{overflow:hidden}
   .pg{display:none!important}.pg.on{display:block!important}
   .card,.docwrap{background:none!important;border:none;padding:0;box-shadow:none;margin:0}
   .doc{width:210mm!important;min-height:296mm;box-shadow:none;margin:0;color:#000}
+  #payDoc,#attDoc{min-height:285mm!important;break-inside:avoid;page-break-inside:avoid;page-break-after:avoid;overflow:hidden}
   .doc-pad{padding-top:6mm}
   .printArea,.printArea *{visibility:visible}
   .lh,.lh-band,.doc-fband{-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -596,6 +597,14 @@ body.auth-locked{overflow:hidden}
         <div class="mft"><button class="btp solid" onclick="saveSettings()" data-t="btn_save_apply">💾 Enregistrer</button></div>
       </div>
       <div class="card">
+        <div class="ctit"><span class="t" data-t="st_stamp">🖋️ Cachet & signature</span></div>
+        <p class="hint" data-t="st_stamp_hint">Image du cachet signé, ajoutée aux documents quand « Document cacheté » est coché.</p>
+        <div id="stStampPrev" style="margin:10px 0;min-height:40px;background:#fff;border-radius:8px;padding:8px;text-align:center"></div>
+        <div class="mft"><button class="btp" type="button" onclick="$('stStampFile').click()" data-t="st_stamp_pick">📎 Choisir l’image</button>
+          <button class="btp danger" type="button" id="stStampDel" onclick="clearStamp()" data-t="st_stamp_del">🗑️ Retirer</button>
+          <input type="file" id="stStampFile" accept="image/*" hidden onchange="pickStamp(this)" oninput="pickStamp(this)"></div>
+      </div>
+      <div class="card">
         <div class="ctit"><span class="t" data-t="st_data">🗄️ Données</span></div>
         <p class="hint" data-t="st_doc_backup">Les scans CNAS restent dans le navigateur et ne sont pas inclus dans l'export JSON.</p>
         <div class="doc-store" style="margin:12px 0">
@@ -821,7 +830,7 @@ const I18N = {
   bul_entree:"Date d'entrée", bul_anc:"Ancienneté", bul_sit:"Situation familiale",
   bul_snmg_warn:"⚠️ Salaire inférieur au SNMG (20 000 DA)",
   sec_ident:"Bloc identité", sec_alloc:"Allocations", sec_band:"Bandeau légal (NIS/NIN/CNAS)",
-  sec_sign:"Signature & cachet", sec_fband:"Pied de page", sec_recap:"Tableau récapitulatif", sec_exp:"Ancienneté (expérience)", sec_ref:"Ligne référence",
+  sec_sign:"Signature & cachet", sec_stamp:"✅ Document cacheté (cachet + signature)", st_stamp:"🖋️ Cachet & signature", st_stamp_hint:"Image du cachet signé, ajoutée aux documents quand « Document cacheté » est coché (bulletin de paie, attestations). Le fond blanc est rendu transparent automatiquement.", st_stamp_pick:"📎 Choisir l’image", st_stamp_del:"🗑️ Retirer", st_stamp_none:"Aucune image de cachet.", st_stamp_ok:"✅ Cachet enregistré.", sec_fband:"Pied de page", sec_recap:"Tableau récapitulatif", sec_exp:"Ancienneté (expérience)", sec_ref:"Ligne référence",
   // documents généraux
   doc_poste_over:"Poste (modifiable)", doc_objet:"Objet", doc_dest_lieu:"Destination",
   doc_du:"Du", doc_au:"Au", doc_moyen:"Moyen de transport", doc_nbjours:"Nombre de jours",
@@ -920,7 +929,7 @@ const I18N = {
   bul_entree:"تاريخ التوظيف", bul_anc:"الأقدمية", bul_sit:"الحالة العائلية",
   bul_snmg_warn:"⚠️ الأجر أقل من الأجر الأدنى المضمون (20 000 دج)",
   sec_ident:"خانة الهوية", sec_alloc:"المنح", sec_band:"الشريط القانوني (NIS/NIN/CNAS)",
-  sec_sign:"الإمضاء والختم", sec_fband:"تذييل الصفحة", sec_recap:"الجدول الإجمالي", sec_exp:"الأقدمية (الخبرة)", sec_ref:"سطر المرجع",
+  sec_sign:"الإمضاء والختم", sec_stamp:"✅ وثيقة مختومة (الختم والإمضاء)", st_stamp:"🖋️ الختم والإمضاء", st_stamp_hint:"صورة الختم مع الإمضاء، تُضاف إلى الوثائق عند اختيار «وثيقة مختومة» (كشف الراتب والشهادات). تُحذف الخلفية البيضاء تلقائياً.", st_stamp_pick:"📎 اختيار الصورة", st_stamp_del:"🗑️ حذف", st_stamp_none:"لا توجد صورة ختم.", st_stamp_ok:"✅ تم حفظ الختم.", sec_fband:"تذييل الصفحة", sec_recap:"الجدول الإجمالي", sec_exp:"الأقدمية (الخبرة)", sec_ref:"سطر المرجع",
   doc_poste_over:"المنصب (قابل للتعديل)", doc_objet:"الموضوع", doc_dest_lieu:"الوجهة",
   doc_du:"من", doc_au:"إلى", doc_moyen:"وسيلة النقل", doc_nbjours:"عدد الأيام",
   doc_reprise:"تاريخ الاستئناف", doc_motif:"السبب",
@@ -995,8 +1004,8 @@ const DEF_SET={
   refAtt:1, refCnt:1,
   payDisp:{poste:true,et:true,anc:true,sit:true,ss:true,af:false,alloc:true},
   secs:{
-    pay:{ident:true,band:true,sign:true,fband:true},
-    att:{recap:true,exp:true,ref:true,band:true,sign:true,fband:true},
+    pay:{ident:true,band:true,sign:true,fband:true,stamp:false},
+    att:{recap:true,exp:true,ref:true,band:true,sign:true,fband:true,stamp:false},
     cnt:{band:true,sign:true,fband:true},
     doc:{band:true,sign:true,fband:true,ref:true}
   },
@@ -1560,7 +1569,22 @@ function fillSettings(){const s=S.settings;const set=(k,v)=>{if($(k))$(k).value=
   set('stSalBase',s.salBase);set('stCotis',s.cotis);set('stJref',s.jref);
   set('stSnmg',s.snmg);set('stPanier',s.panierJour);set('stPanierCap',s.panierExoCap==null?160:s.panierExoCap);set('stAlloc',s.allocEnfant);
   set('stExpFmt',s.expFmt||'ym');
+  renderStampPrev();
 }
+function renderStampPrev(){const b=$('stStampPrev');if(!b)return;const im=S.settings.stampImg;
+  b.innerHTML=im?'<img src="'+im+'" alt="" style="max-height:34mm;max-width:100%">':'<span style="color:#888">'+esc(t('st_stamp_none'))+'</span>';
+  if($('stStampDel'))$('stStampDel').disabled=!im;}
+/* Image du cachet : réduite (max 600 px) et fond blanc rendu transparent, puis synchronisée avec les paramètres. */
+function pickStamp(inp){const f=inp&&inp.files&&inp.files[0];if(!f)return;inp.value='';
+  if(typeof fbIsViewer==='function'&&fbIsViewer())return;
+  const rd=new FileReader();rd.onload=()=>{const img=new Image();img.onload=()=>{
+    const k=Math.min(1,600/Math.max(img.width,img.height)),w=Math.round(img.width*k),h=Math.round(img.height*k);
+    const cv=document.createElement('canvas');cv.width=w;cv.height=h;const cx=cv.getContext('2d');cx.drawImage(img,0,0,w,h);
+    const d=cx.getImageData(0,0,w,h),p=d.data;
+    for(let i=0;i<p.length;i+=4){const mn=Math.min(p[i],p[i+1],p[i+2]);if(mn>215)p[i+3]=0;else if(mn>170)p[i+3]=Math.round(p[i+3]*(215-mn)/45);}
+    cx.putImageData(d,0,0);let u=cv.toDataURL('image/webp',0.92);if(u.indexOf('data:image/webp')!==0)u=cv.toDataURL('image/png');S.settings.stampImg=u;saveAll(true);renderStampPrev();rerenderCurrent();toast(t('st_stamp_ok'),'ok');
+  };img.src=rd.result;};rd.readAsDataURL(f);}
+function clearStamp(){if(!S.settings.stampImg||!confirm(t('st_stamp_del')+' ?'))return;delete S.settings.stampImg;saveAll(true);renderStampPrev();}
 function saveSettings(){const g=k=>($(k)?$(k).value:'');
   Object.assign(S.settings,{rsFr:g('stRsFr'),rsAr:g('stRsAr'),gerant:g('stGerant'),rc:g('stRC'),nif:g('stNIF'),
    nis:g('stNIS'),nin:g('stNIN'),tel:g('stTel'),cnasNum:g('stCnasNum'),cnasSect:g('stCnasSect'),
@@ -1637,32 +1661,34 @@ function docFband(){
 }
 // close doc-body, insert signature inside doc-pad, close doc-pad, add band (per flags D)
 function docClose(signHtml,D){ D=D||{}; return '</div>'+(D.sign===false?'':signHtml)+'</div>'+(D.fband===false?'':docFband()); }
-function signBlock(compact){
+function canStamp(){return !!(S.settings&&S.settings.stampImg)&&!(typeof fbIsViewer==='function'&&fbIsViewer());}
+function signBlock(compact,stamp){
   const s=S.settings, G=LANG==='ar', sigH=compact?'18mm':'24mm';
+  const stampBox=(stamp&&canStamp())?'<div style="height:'+(compact?'26mm':'30mm')+';margin:1mm 0 3mm;display:flex;align-items:center;justify-content:center"><img src="'+s.stampImg+'" alt="" style="max-height:100%;max-width:70mm;object-fit:contain"></div>':'';
   return '<div style="margin-top:'+(compact?'7mm':'12mm')+';display:flex;justify-content:'+(G?'flex-start':'flex-end')+'">'+
      '<div style="text-align:center;min-width:64mm">'+
        '<p style="font-size:11pt;font-weight:700;color:#1a2a52">'+t('doc_fait')+' '+esc(s.wilaya)+', '+t('doc_le')+' '+fd(tod())+'</p>'+
        '<p style="font-size:11.5pt;font-weight:700;color:#1a2a52;margin-top:3mm">'+t('sign_gerant')+'</p>'+
        '<p style="font-size:10.5pt;color:#333;margin-top:1mm">'+esc(s.gerant)+'</p>'+
-       '<div style="height:'+sigH+';margin-top:2mm;border:1px dashed #aab;border-radius:6px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:2mm">'+
+       (stampBox||('<div style="height:'+sigH+';margin-top:2mm;border:1px dashed #aab;border-radius:6px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:2mm">'+
          '<span style="font-size:8.5pt;color:#99a;font-style:italic">'+t('sign_stamp')+'</span>'+
-       '</div>'+
+       '</div>'))+
      '</div>'+
    '</div>';
 }
-function docFooter(compact,D){ return docClose(signBlock(compact),D); }
+function docFooter(compact,D){ return docClose(signBlock(compact,D&&D.stamp),D); }
 function docFooterBand(){ return docClose(''); }
 function dwrap(html,w){return '<div style="font-size:12.5pt;line-height:1.95;color:#15151f;text-align:'+(LANG==='ar'?'right':'justify')+'">'+html+'</div>';}
 /* ---- print-section & display toggles (user controls what shows / prints) ---- */
 const SEC_DEFS={
-  pay:[{k:'ident',t:'sec_ident'},{k:'band',t:'sec_band'},{k:'sign',t:'sec_sign'},{k:'fband',t:'sec_fband'}],
-  att:[{k:'exp',t:'sec_exp'},{k:'recap',t:'sec_recap'},{k:'ref',t:'sec_ref'},{k:'band',t:'sec_band'},{k:'sign',t:'sec_sign'},{k:'fband',t:'sec_fband'}],
+  pay:[{k:'ident',t:'sec_ident'},{k:'band',t:'sec_band'},{k:'sign',t:'sec_sign'},{k:'stamp',t:'sec_stamp'},{k:'fband',t:'sec_fband'}],
+  att:[{k:'exp',t:'sec_exp'},{k:'recap',t:'sec_recap'},{k:'ref',t:'sec_ref'},{k:'band',t:'sec_band'},{k:'sign',t:'sec_sign'},{k:'stamp',t:'sec_stamp'},{k:'fband',t:'sec_fband'}],
   cnt:[{k:'band',t:'sec_band'},{k:'sign',t:'sec_sign'},{k:'fband',t:'sec_fband'}],
   doc:[{k:'ref',t:'sec_ref'},{k:'band',t:'sec_band'},{k:'sign',t:'sec_sign'},{k:'fband',t:'sec_fband'}]
 };
 const PAYDISP_DEFS=[{k:'poste',t:'f_poste'},{k:'et',t:'bul_entree'},{k:'anc',t:'bul_anc'},{k:'sit',t:'bul_sit'},{k:'ss',t:'bul_matricule'},{k:'af',t:'f_af'},{k:'alloc',t:'sec_alloc'}];
 function chipsHtml(defs,cfg,handler){return defs.map(d=>'<label class="chip '+(cfg[d.k]?'on':'')+'"><input type="checkbox" '+(cfg[d.k]?'checked':'')+' onchange="'+handler+'(\''+d.k+'\',this)">'+esc(t(d.t))+'</label>').join('');}
-function buildSecChips(containerId,page){const c=$(containerId);if(!c)return;c.dataset.page=page;c.innerHTML=(SEC_DEFS[page]||[]).map(d=>'<label class="chip '+(S.settings.secs[page][d.k]?'on':'')+'"><input type="checkbox" '+(S.settings.secs[page][d.k]?'checked':'')+' onchange="toggleSec(\''+page+'\',\''+d.k+'\',this)">'+esc(t(d.t))+'</label>').join('');}
+function buildSecChips(containerId,page){const c=$(containerId);if(!c)return;c.dataset.page=page;c.innerHTML=(SEC_DEFS[page]||[]).filter(d=>d.k!=='stamp'||canStamp()).map(d=>'<label class="chip '+(S.settings.secs[page][d.k]?'on':'')+'"><input type="checkbox" '+(S.settings.secs[page][d.k]?'checked':'')+' onchange="toggleSec(\''+page+'\',\''+d.k+'\',this)">'+esc(t(d.t))+'</label>').join('');}
 function toggleSec(page,k,el){S.settings.secs[page][k]=el.checked;el.parentElement.classList.toggle('on',el.checked);saveAll(true);rerenderCurrent();}
 function buildPayDisp(){const c=$('payChips');if(!c)return;c.innerHTML=chipsHtml(PAYDISP_DEFS,S.settings.payDisp,'togglePayDisp');}
 function togglePayDisp(k,el){S.settings.payDisp[k]=el.checked;el.parentElement.classList.toggle('on',el.checked);saveAll(true);calcPay();}
@@ -2849,10 +2875,10 @@ function isMobilePrint(){
   return false;
 }
 /* Ajuste le document à UNE page à l'impression (réduction automatique si le contenu dépasse). */
-function printPageHmm(id){return (id==='lnDoc'&&$('lnOrient')&&$('lnOrient').value==='landscape')?210:297;}
+function printPageHmm(id){if(id==='payDoc'||id==='attDoc')return 285;return (id==='lnDoc'&&$('lnOrient')&&$('lnOrient').value==='landscape')?210:297;}
 const FIT_SCRIPT=function(sel,pageHmm){
   var d=document.querySelector(sel);if(!d)return;
-  var ph=pageHmm*96/25.4,h=d.scrollHeight;
+  var ph=pageHmm*96/25.4,mh=d.style.minHeight;d.style.minHeight='0';var h=d.scrollHeight;d.style.minHeight=mh;
   var old=document.getElementById('pfit');if(old)old.remove();
   if(h>ph*1.01){var r=Math.max(0.5,(ph-6)/h);var st=document.createElement('style');st.id='pfit';
     st.textContent='@media print{'+sel+'{zoom:'+r.toFixed(4)+';margin:0 auto!important;min-height:0!important}}';document.head.appendChild(st);}
