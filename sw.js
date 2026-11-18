@@ -1,6 +1,6 @@
 // EGTPH — عمل دون إنترنت: الشبكة أولاً، ثم النسخة المحفوظة إن انقطع الاتصال.
 // لا يحفظ بيانات Firebase (تبقى مزامنتها كما هي)، فقط ملفات البرامج والخطوط.
-var CACHE = "egtph-v1";
+var CACHE = "egtph-v2";
 var CORE = ["/apps.html", "/egtph-auth.js", "/egtph-lock.js", "/manifest.webmanifest", "/icons/icon-180.png"];
 var EXTERNAL = /^https:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com\/firebasejs\/)/;
 
@@ -19,7 +19,9 @@ self.addEventListener("fetch", function (e) {
   var u = new URL(r.url);
   var same = u.origin === self.location.origin;
   if (!same && !EXTERNAL.test(r.url)) return; // Firebase, Google login...: بدون تدخل
-  e.respondWith(fetch(r).then(function (res) {
+  // الصفحات: دائماً من الشبكة دون ذاكرة المتصفح، حتى تظهر آخر نسخة فوراً
+  var req = r.mode === "navigate" ? new Request(r.url, { cache: "no-store", credentials: "same-origin" }) : r;
+  e.respondWith(fetch(req).then(function (res) {
     if (res && (res.ok || res.type === "opaque")) {
       var copy = res.clone();
       caches.open(CACHE).then(function (c) { c.put(r, copy); });
