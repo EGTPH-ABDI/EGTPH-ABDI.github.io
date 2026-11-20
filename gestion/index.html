@@ -16083,14 +16083,21 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
 .eg-tbl .ml2 .mp.pend{color:#fdba74;font-family:inherit;direction:rtl}
 .eg-tbl .ml2 .ma{font-size:12px!important;color:var(--tx3);white-space:nowrap}
 .eg-tbl .ml2 .ma b{font-family:'Inter';font-size:12.5px;color:var(--tx);font-weight:800;margin-inline-start:3px}
-/* تمييز الكمية والسعر بإطارات ملونة واضحة + فصل بسيط بين الأصناف */
-.eg-tbl .mats:has(.ml2){background:transparent;border:0;display:flex;flex-direction:column;gap:10px;overflow:visible}
-.eg-tbl .mats .ml.ml2{border:1px solid rgba(255,255,255,.14);border-radius:10px;background:var(--bg3,rgba(255,255,255,.03))}
-.eg-tbl .mats .ml.ml2:last-child{border-bottom:1px solid rgba(255,255,255,.14)}
-.eg-tbl .ml2 .mq{color:#fff!important;background:#16a34a!important;border:0!important;border-radius:7px;padding:3px 10px}
-.eg-tbl .ml2 .mp:not(.pend){color:#1c1917!important;background:#fbbf24!important;border:0!important;border-radius:7px;padding:3px 10px}
-.eg-tbl .ml2 .mp:not(.pend) small{color:#44403c!important;opacity:1}
-.eg-tbl .ml2 .ma b{color:#fff}
+/* كل صنف في جدول صغير مستقل (ألوان هادئة) */
+.egm{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.egm-t{border:1px solid rgba(255,255,255,.16);border-radius:10px;overflow:hidden;background:var(--bg3)}
+.egm-h{padding:8px 11px;background:var(--bg4);border-bottom:1px solid rgba(255,255,255,.16);font-size:13px;font-weight:800;color:var(--tx);
+  direction:ltr;unicode-bidi:isolate;text-align:right;white-space:normal;word-break:break-word}
+.egm-r{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.egm-c{padding:7px 6px;text-align:center;border-inline-start:1px solid rgba(255,255,255,.16)}
+.egm-c:first-child{border-inline-start:0}
+.egm-c small{display:block;font-size:10.5px;font-weight:700;color:var(--tx3);margin-bottom:3px;white-space:nowrap}
+.egm-c b{display:block;font-family:'Inter';font-size:13px;font-weight:800;color:var(--tx);direction:ltr;unicode-bidi:isolate;white-space:nowrap}
+.egm-c b.q{color:#4ade80}
+.egm-c b.p{color:var(--gold2)}
+.egm-c b.w{font-family:inherit;font-size:11px;color:#fdba74;direction:rtl}
+.egm-x{padding:8px 11px;border:1px dashed rgba(255,255,255,.18);border-radius:10px;font-size:12px;color:var(--tx3)}
+.egm-x b{font-family:'Inter';color:var(--tx);margin-inline-start:4px}
 .eg-sec{margin:0 13px 12px;background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--rm);overflow:hidden}
 .eg-sec>.h{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg4);border-bottom:1px solid var(--bdr)}
 .eg-sec>.h .t{flex:1;font-size:12px;font-weight:900}
@@ -16164,18 +16171,20 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
             if (!pend) m[k].a += num(it.qty)*num(it.unitPrice);
           });
         });
-        var extra = (nNoItems ? '<div class="ml ml2"><div class="mrow s"><span class="ma">'+nNoItems+' فاتورة بمبلغ إجمالي بلا أصناف <b>'+money(noItems)+'</b></span></div></div>' : '')
-                  + (initD ? '<div class="ml ml2"><div class="mrow s"><span class="ma">دين سابق (رصيد افتتاحي) <b>'+money(initD)+'</b></span></div></div>' : '');
+        var extra = (nNoItems ? '<div class="egm-x">'+nNoItems+' فاتورة بمبلغ إجمالي بلا أصناف <b>'+money(noItems)+'</b></div>' : '')
+                  + (initD ? '<div class="egm-x">دين سابق (رصيد افتتاحي) <b>'+money(initD)+'</b></div>' : '');
         var ks = Object.keys(m).sort(function(a,b){ var x=m[a], y=m[b]; return String(x.n).localeCompare(String(y.n),'ar') || (x.p-y.p); });
-        qty = ks.length ? ('<div class="mats">' + ks.map(function(k){
+        // كل صنف في جدول صغير مستقل: الاسم ثم (الكمية · سعر الوحدة · المبلغ)
+        qty = ks.length ? ('<div class="egm">' + ks.map(function(k){
           var x = m[k], u = x.u ? (' '+e(x.u)) : '';
-          return '<div class="ml ml2">'
-               + '<div class="mrow"><span class="mn">'+e(x.n)+'</span><span class="mq">'+fn(x.q)+u+'</span></div>'
-               + '<div class="mrow s">'
-               +   (x.pend ? '<span class="ma">المبلغ <b>—</b></span><span class="mp pend">⚠ سعر غير متفق عليه</span>'
-                           : '<span class="ma">المبلغ <b>'+money(x.a)+'</b></span><span class="mp"><small>سعر الوحدة</small> <bdi>'+money(x.p)+'</bdi>'+(x.u?(' / '+e(x.u)):'')+'</span>')
+          return '<div class="egm-t">'
+               + '<div class="egm-h">'+e(x.n)+'</div>'
+               + '<div class="egm-r">'
+               +   '<div class="egm-c"><small>الكمية</small><b class="q">'+fn(x.q)+u+'</b></div>'
+               +   (x.pend ? '<div class="egm-c"><small>سعر الوحدة</small><b class="w">⚠ غير متفق عليه</b></div><div class="egm-c"><small>المبلغ</small><b>—</b></div>'
+                           : '<div class="egm-c"><small>سعر الوحدة'+(x.u?(' / '+e(x.u)):'')+'</small><b class="p">'+money(x.p)+'</b></div><div class="egm-c"><small>المبلغ</small><b>'+money(x.a)+'</b></div>')
                + '</div></div>'; }).join('')
-          + extra + '</div>') : (extra ? '<div class="mats">'+extra+'</div>' : '');
+          + extra + '</div>') : (extra ? '<div class="egm">'+extra+'</div>' : '');
       } catch(_) {}
       var payFn = rid ? ("egtphPayForRec('"+spId+"','"+rid+"',") : ("egtphPayForAccount('"+spId+"','"+jsA(r.name)+"',");
       var acts = locked ? '' : '<div class="acts">'
