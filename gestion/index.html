@@ -14101,7 +14101,7 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
       var sp = (typeof suppliers!=='undefined'?suppliers:[]).find(function(x){ return x && x.id===spId; });
       var sell = sp && /سلعة/.test(String(sp.type||''));
       var ar = /[\u0600-\u06FF]/.test(nm.charAt(0));
-      return ar ? ((sell?'توريد ':'نقل ')+nm) : ((sell?'Fourniture ':'Transport ')+nm);
+      return ar ? ((sell?'توريد ':'نقل ')+nm) : (sell ? ('Fourniture de '+nm) : ('Transport de matériaux : '+nm));
     }
     var groups = {};   // supRecId → {supplierId, items:{key:{name,unit,qty,price}}, last, trucks:[]}
     links.forEach(function(l){
@@ -20051,16 +20051,17 @@ body.light-mode .tst{box-shadow:0 8px 24px rgba(0,0,0,.12)!important}
   // تصحيح اسم صنف واحد حسب الكلمات المعروفة ونوع المورد
   function fix(name, s){
     var v = String(name || '').replace(/\s+/g,' ').trim(); if (!v) return v;
+    v = v.replace(/^transport buses? en béton armé/i,'Transport de buses en béton armé');
     var low = v.toLowerCase();
     // القنوات الإسمنتية (buse / buss / buses)
-    if (/\bbus+e?s?\b|بوس|قنوات? (الا|ال)?[إا]سمنت/.test(low) && !/^(fourniture|transport) (de )?buse en béton armé/i.test(v)) {
+    if (/\bbus+e?s?\b|بوس|قنوات? (الا|ال)?[إا]سمنت/.test(low) && !/^(fourniture|transport) (de )?buses? en béton armé/i.test(v)) {
       var d = (low.match(/(?:ø|dn|d|qtr)?\s*(\d{3,4})/) || [])[1];
       var cl = (low.match(/class(?:e)?\s*(\d{2,3})\s*a\b/) || low.match(/\b(\d{2,3})\s*a\b/) || [])[1] || '135';
       var onlyT = /^(نقل|transport)(\s|$)/.test(low) || (s && isTransport(s) && !sel(s));
       var sans = /sans\s*transport|بدون نقل/.test(low);
       var dj = /djelfa|الجلفة|جلفة/.test(low);
       if (d) {
-        v = (onlyT ? 'Transport buse en béton armé Ø' : 'Fourniture de buse en béton armé Ø') + d + ' classe ' + cl + ' A'
+        v = (onlyT ? 'Transport de buses en béton armé Ø' : 'Fourniture de buse en béton armé Ø') + d + ' classe ' + cl + ' A'
           + (onlyT ? '' : (sans ? ' - sans transport' : ' - avec transport')) + (dj ? ' - Djelfa' : '');
         return v;
       }
@@ -20080,7 +20081,9 @@ body.light-mode .tst{box-shadow:0 8px 24px rgba(0,0,0,.12)!important}
     if (/^(نقل )?(مادة )?الحصى$/.test(v)) v = (/^نقل/.test(v) ? 'Transport ' : '') + 'Grave';
     else if (/^(نقل )?(مادة )?الحجرة$/.test(v)) v = (/^نقل/.test(v) ? 'Transport ' : '') + 'Roche';
     if (/^roche$/i.test(v)) v = 'Roche';
-    if (s && isTransport(s) && /^(TUF|Grave|Roche)$/.test(v)) v = 'Transport ' + v;
+    var tm = v.match(/^transport\s+(?:de\s+matériaux\s*:\s*)?(tuf|grave|roche)$/i);
+    if (tm) v = 'Transport de matériaux : ' + ({tuf:'TUF',grave:'Grave',roche:'Roche'})[tm[1].toLowerCase()];
+    if (s && isTransport(s) && /^(TUF|Grave|Roche)$/.test(v)) v = 'Transport de matériaux : ' + v;
     return v;
   }
   window.egNameFix = fix;
@@ -20094,7 +20097,7 @@ body.light-mode .tst{box-shadow:0 8px 24px rgba(0,0,0,.12)!important}
     else sups().forEach(addSup);
     var t = String(s && s.type || '');
     if (!s || /سلعة/.test(t)) DIAM.forEach(function(d){ out.add('Fourniture de buse en béton armé Ø'+d+' classe 135 A - avec transport'); out.add('Fourniture de buse en béton armé Ø'+d+' classe 135 A - sans transport'); });
-    if (!s || /نقل|كراء شاحنة/.test(t)) { DIAM.forEach(function(d){ out.add('Transport buse en béton armé Ø'+d+' classe 135 A'); }); ['Transport TUF','Transport Grave','Transport Roche'].forEach(function(x){ out.add(x); }); }
+    if (!s || /نقل|كراء شاحنة/.test(t)) { DIAM.forEach(function(d){ out.add('Transport de buses en béton armé Ø'+d+' classe 135 A'); }); ['TUF','Grave','Roche'].forEach(function(x){ out.add('Transport de matériaux : '+x); }); }
     if (!s || /وقود/.test(t)) ['مازوت','Gasoil'].forEach(function(x){ out.add(x); });
     return Array.from(out).sort(function(a,b){ return String(a).localeCompare(String(b),'fr'); });
   }
