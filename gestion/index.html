@@ -14096,6 +14096,8 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     if (!rec) return 0;
     function egSupLineName(nm, spId){
       nm = String(nm||'').trim(); if (!nm || /^(transport|fourniture|نقل|توريد)(\s|$)/i.test(nm)) return nm;
+      // الأسماء الفرنسية المعتمدة: الحصى = Grave، الحجرة = Roche
+      if (/^(مادة )?الحصى$/.test(nm)) nm = 'Grave'; else if (/^(مادة )?الحجرة$/.test(nm)) nm = 'Roche';
       var sp = (typeof suppliers!=='undefined'?suppliers:[]).find(function(x){ return x && x.id===spId; });
       var sell = sp && /سلعة/.test(String(sp.type||''));
       var ar = /[\u0600-\u06FF]/.test(nm.charAt(0));
@@ -20075,7 +20077,10 @@ body.light-mode .tst{box-shadow:0 8px 24px rgba(0,0,0,.12)!important}
     var bl = v.match(/^(?:fourniture\s+(?:de\s+)?)?(?:بلوك|blo[ck]k?)\s*(.*)$/i);
     if (bl) v = 'Fourniture de bloc' + (bl[1] ? ' ' + bl[1] : '');
     // مورد النقل: TUF والحصى… تصبح «Transport …» / «نقل …»
-    if (s && isTransport(s) && /^(TUF|Grave|مادة الحصى|الحصى|الحجرة)$/.test(v)) v = (/^[A-Z]/.test(v) ? 'Transport ' : 'نقل ') + v;
+    if (/^(نقل )?(مادة )?الحصى$/.test(v)) v = (/^نقل/.test(v) ? 'Transport ' : '') + 'Grave';
+    else if (/^(نقل )?(مادة )?الحجرة$/.test(v)) v = (/^نقل/.test(v) ? 'Transport ' : '') + 'Roche';
+    if (/^roche$/i.test(v)) v = 'Roche';
+    if (s && isTransport(s) && /^(TUF|Grave|Roche)$/.test(v)) v = 'Transport ' + v;
     return v;
   }
   window.egNameFix = fix;
@@ -20089,7 +20094,7 @@ body.light-mode .tst{box-shadow:0 8px 24px rgba(0,0,0,.12)!important}
     else sups().forEach(addSup);
     var t = String(s && s.type || '');
     if (!s || /سلعة/.test(t)) DIAM.forEach(function(d){ out.add('Fourniture de buse en béton armé Ø'+d+' classe 135 A - avec transport'); out.add('Fourniture de buse en béton armé Ø'+d+' classe 135 A - sans transport'); });
-    if (!s || /نقل|كراء شاحنة/.test(t)) { DIAM.forEach(function(d){ out.add('Transport buse en béton armé Ø'+d+' classe 135 A'); }); ['Transport TUF','Transport Grave','نقل مادة الحصى','نقل الحجرة'].forEach(function(x){ out.add(x); }); }
+    if (!s || /نقل|كراء شاحنة/.test(t)) { DIAM.forEach(function(d){ out.add('Transport buse en béton armé Ø'+d+' classe 135 A'); }); ['Transport TUF','Transport Grave','Transport Roche'].forEach(function(x){ out.add(x); }); }
     if (!s || /وقود/.test(t)) ['مازوت','Gasoil'].forEach(function(x){ out.add(x); });
     return Array.from(out).sort(function(a,b){ return String(a).localeCompare(String(b),'fr'); });
   }
