@@ -47,8 +47,11 @@
     try { localStorage.removeItem(storageKey(appId)); } catch (e) {}
   }
   // جلسة أقدم من 10 أيام → تُمسح ويُطلب كلمة السر
+  // Face ID مفعّل على هذا الهاتف: الجلسة لا تنتهي بعد 10 أيام (Face ID يحمي كل فتح)، فلا تُطلب كلمة السر بعده
+  function faceOn() { try { var c = JSON.parse(localStorage.getItem("egtph_apps_lock_v1")) || {}; return !!c.face; } catch (e) { return false; } }
   function tooOld(sess) {
     if (!sess) return true;
+    if (faceOn()) return false;
     if (!sess.loginAt) return false; // جلسة قديمة بلا تاريخ: تُؤرَّخ عند أول تجديد
     return (Date.now() - Number(sess.loginAt)) > MAX_SESSION_MS;
   }

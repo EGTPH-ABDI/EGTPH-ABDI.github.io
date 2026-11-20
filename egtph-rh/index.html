@@ -3257,7 +3257,7 @@ async function initCloudSync(){
     await ensureFirebaseApp();fbUser=await getFirebaseUser();
     if(fbUser){let la=0;try{la=Number(localStorage.getItem('egtph_rh_login_at'))||0;}catch(e){}
       if(!la){try{localStorage.setItem('egtph_rh_login_at',String(Date.now()));}catch(e){}}
-      else if(Date.now()-la>10*24*60*60*1000){try{localStorage.removeItem('egtph_rh_login_at');await fbAuth.signOut();}catch(e){}fbUser=null;}}
+      else if(Date.now()-la>10*24*60*60*1000&&!(function(){try{return !!(JSON.parse(localStorage.getItem('egtph_apps_lock_v1'))||{}).face}catch(e){return false}})()){try{localStorage.removeItem('egtph_rh_login_at');await fbAuth.signOut();}catch(e){}fbUser=null;}}
     if(!fbUser){closeFirebaseListener();setSyncStatus('offline',t('sync_auth_required'));showAuthGate('auth_required','info');return false;}
     if(!fbAllowedUser(fbUser)){closeFirebaseListener();setSyncStatus('error',t('sync_auth_wrong'));showAuthGate('auth_wrong_account','error');return false;}
     fbDb=firebase.database(fbApp);
