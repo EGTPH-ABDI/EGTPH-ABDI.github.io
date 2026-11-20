@@ -14094,6 +14094,13 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
     var rec = (typeof records!=='undefined'?records:[]).find(function(r){ return r.id===recId; });
     // سجل العميل حُذف (أو نُقل للسلة): تكلفة المورد تبقى كما هي — المورد عمل فعلاً (قرار المستخدم)
     if (!rec) return 0;
+    function egSupLineName(nm, spId){
+      nm = String(nm||'').trim(); if (!nm || /^(transport|fourniture|نقل|توريد)(\s|$)/i.test(nm)) return nm;
+      var sp = (typeof suppliers!=='undefined'?suppliers:[]).find(function(x){ return x && x.id===spId; });
+      var sell = sp && /سلعة/.test(String(sp.type||''));
+      var ar = /[\u0600-\u06FF]/.test(nm.charAt(0));
+      return ar ? ((sell?'توريد ':'نقل ')+nm) : ((sell?'Fourniture ':'Transport ')+nm);
+    }
     var groups = {};   // supRecId → {supplierId, items:{key:{name,unit,qty,price}}, last, trucks:[]}
     links.forEach(function(l){
       var sr = supRecOf(l.supRecId); if (!sr) return;
@@ -14108,6 +14115,8 @@ body[data-eg-skin="C"] .rtab.on{border-color:var(--gold);box-shadow:0 0 0 1px rg
         var price = (typeof window.egtphCostPrice==='function') ? window.egtphCostPrice(l, sr, en.date) : basePrice;
         var mat = (typeof prices!=='undefined'?prices:[]).find(function(p){ return p.id===en.materialId; });
         var mname = (mat && mat.name) ? mat.name : sr.name;
+        // اسم السطر في فاتورة المورد: نقل المادة (أو توريدها إن كان المورد يبيع السلعة)
+        mname = egSupLineName(mname, sr.supplierId);
         var unit  = (mat && mat.priceUnit) ? mat.priceUnit : (sr.priceUnit||'وحدة');
         var k = mname+'|'+unit+'|'+price;
         var it = g.items[k] || (g.items[k] = {name:mname, unit:unit, qty:0, price:price});
@@ -20063,6 +20072,10 @@ body.light-mode .tst{box-shadow:0 8px 24px rgba(0,0,0,.12)!important}
          .replace(/^b[eé]ton\b/i,'Béton').replace(/^tuf\b/i,'TUF').replace(/^grave\b(?!-)/i,'Grave');
     // المورد الذي يبيع السلعة: تُضاف «Fourniture de» للبيتون والغرافسيمون
     if (s && sel(s) && /^(béton|grave-ciment)/i.test(v)) v = 'Fourniture de ' + v.charAt(0).toLowerCase() + v.slice(1);
+    var bl = v.match(/^(?:fourniture\s+(?:de\s+)?)?(?:بلوك|blo[ck]k?)\s*(.*)$/i);
+    if (bl) v = 'Fourniture de bloc' + (bl[1] ? ' ' + bl[1] : '');
+    // مورد النقل: TUF والحصى… تصبح «Transport …» / «نقل …»
+    if (s && isTransport(s) && /^(TUF|Grave|مادة الحصى|الحصى|الحجرة)$/.test(v)) v = (/^[A-Z]/.test(v) ? 'Transport ' : 'نقل ') + v;
     return v;
   }
   window.egNameFix = fix;
@@ -20076,7 +20089,7 @@ body.light-mode .tst{box-shadow:0 8px 24px rgba(0,0,0,.12)!important}
     else sups().forEach(addSup);
     var t = String(s && s.type || '');
     if (!s || /سلعة/.test(t)) DIAM.forEach(function(d){ out.add('Fourniture de buse en béton armé Ø'+d+' classe 135 A - avec transport'); out.add('Fourniture de buse en béton armé Ø'+d+' classe 135 A - sans transport'); });
-    if (!s || /نقل|كراء شاحنة/.test(t)) { DIAM.forEach(function(d){ out.add('Transport buse en béton armé Ø'+d+' classe 135 A'); }); ['TUF','Grave','مادة الحصى','الحجرة'].forEach(function(x){ out.add(x); }); }
+    if (!s || /نقل|كراء شاحنة/.test(t)) { DIAM.forEach(function(d){ out.add('Transport buse en béton armé Ø'+d+' classe 135 A'); }); ['Transport TUF','Transport Grave','نقل مادة الحصى','نقل الحجرة'].forEach(function(x){ out.add(x); }); }
     if (!s || /وقود/.test(t)) ['مازوت','Gasoil'].forEach(function(x){ out.add(x); });
     return Array.from(out).sort(function(a,b){ return String(a).localeCompare(String(b),'fr'); });
   }
