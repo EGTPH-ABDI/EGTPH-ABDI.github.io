@@ -13,13 +13,20 @@
 (function (global) {
   "use strict";
   var LOCK_KEY = "egtph_apps_lock_v1", SESSION_KEY = "egtph_apps_unlocked", IDLE_MS = 5 * 60 * 1000;
+  // فتح مشترك بين كل البرامج واللوحة على نفس الهاتف: Face ID مرة واحدة يكفي ما دام الاستعمال متواصلاً (أقل من 5 دقائق انقطاع)
+  var UNTIL_KEY = "egtph_apps_unlock_until";
+  function touch() { try { localStorage.setItem(UNTIL_KEY, String(Date.now() + IDLE_MS)); } catch (e) {} }
   var hiddenAt = 0, shown = false;
 
   // PIN أُلغي بطلب المسير: Face ID فقط (يُمسح أي PIN قديم محفوظ)
   function cfg() { try { var c = JSON.parse(localStorage.getItem(LOCK_KEY)) || {}; if (c.pin) { delete c.pin; try { localStorage.setItem(LOCK_KEY, JSON.stringify(c)); } catch (e) {} } return c; } catch (e) { return {}; } }
   function save(c) { try { localStorage.setItem(LOCK_KEY, JSON.stringify(c)); } catch (e) {} }
   function enabled() { var c = cfg(); return !!(c.pin || c.face); }
-  function unlocked() { try { return sessionStorage.getItem(SESSION_KEY) === "1"; } catch (e) { return false; } }
+  function unlocked() {
+    try { if (sessionStorage.getItem(SESSION_KEY) === "1") return true; } catch (e) {}
+    try { if (Number(localStorage.getItem(UNTIL_KEY) || 0) > Date.now()) { try { sessionStorage.setItem(SESSION_KEY, "1"); } catch (e) {} return true; } } catch (e) {}
+    return false;
+  }
   function fr() { try { return (localStorage.getItem("egtph_lang") || document.documentElement.lang || "ar").indexOf("fr") === 0; } catch (e) { return false; } }
   function t(ar, f) { return fr() ? f : ar; }
   function b64(buf) { var a = new Uint8Array(buf), s = ""; for (var i = 0; i < a.length; i++) s += String.fromCharCode(a[i]); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
@@ -50,7 +57,7 @@
   }
 
   function hide() { var el = document.getElementById("egtphLock"); if (el) el.remove(); shown = false; }
-  function ok() { try { sessionStorage.setItem(SESSION_KEY, "1"); } catch (e) {} var c = cfg(); c.fails = 0; save(c); hide(); }
+  function ok() { try { sessionStorage.setItem(SESSION_KEY, "1"); } catch (e) {} touch(); var c = cfg(); c.fails = 0; save(c); hide(); }
   function useGmail() {
     // تُمسح جلسات البرامج المحفوظة فيُطلب كلمة السر عند إعادة التحميل.
     try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf("egtph_auth_") === 0) localStorage.removeItem(k); }); } catch (e) {}
@@ -100,11 +107,13 @@
       if (!c.face) setTimeout(function () { pin.focus(); }, 60);
     }
     var f = document.getElementById("egtphLockFace"); if (f) f.onclick = tryFace;
+    // يبدأ Face ID وحده دون الضغط على الزر (إن رفضه المتصفح يبقى الزر)
+    if (c.face) setTimeout(tryFace, 250);
     document.getElementById("egtphLockAlt").onclick = useGmail;
   }
 
   function check() { if (enabled() && !unlocked()) show(); }
-  function relock() { try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {} check(); }
+  function relock() { try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {} try { if (Number(localStorage.getItem(UNTIL_KEY) || 0) <= Date.now()) localStorage.removeItem(UNTIL_KEY); } catch (e) {} check(); }
 
   // لوحة التحكم لها قفلها الخاص (apps.html): هذا الملف للبرامج فقط.
   if (/\/apps(?:-diagnostic)?\.html$/.test(location.pathname)) return;
@@ -113,12 +122,15 @@
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", check); else check();
   document.addEventListener("visibilitychange", function () {
-    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (document.hidden) { hiddenAt = Date.now(); if (enabled() && unlocked() && !shown) touch(); return; }
     if (hiddenAt && Date.now() - hiddenAt > IDLE_MS) relock();
     hiddenAt = 0;
   });
   // قفل فُتح في لوحة التحكم أو في برنامج آخر بنفس النافذة يُغلق هنا أيضاً.
   global.addEventListener("storage", function (e) { if (e.key === LOCK_KEY && !enabled()) hide(); });
+
+  // أثناء الاستعمال: يُمدَّد الفتح المشترك كل دقيقة
+  setInterval(function () { if (!document.hidden && enabled() && !shown && unlocked()) touch(); }, 60000);
 
   global.EGTPHLock = { check: check, relock: relock, enabled: enabled };
 })(window);
