@@ -20025,4 +20025,88 @@ body.light-mode .tst{box-shadow:0 8px 24px rgba(0,0,0,.12)!important}
   });
 })();
 </script>
+<script id="egtph-namefix-js">
+/* EGTPH — تصحيح أسماء الأصناف واقتراحها حسب نوع خدمة المورد (فواتير الموردين والكتالوج) */
+(function(){
+  'use strict';
+  if (window.__egNameFix) return; window.__egNameFix = true;
+  var DIAM = [300,400,500,600,800,1000,1200];
+  function sups(){ try { return (typeof suppliers !== 'undefined' ? suppliers : window.suppliers) || []; } catch(_) { return window.suppliers || []; } }
+  function supById(id){ return sups().find(function(s){ return s && s.id === id; }) || null; }
+  function curSup(){ var id = window._inv && window._inv.spId; return id ? supById(id) : null; }
+  function isTransport(s){ var t = String((s && (s.type||'')) + ' ' + (s && (s.product||''))).toLowerCase(); return /نقل|كراء شاحنة|transport/.test(t) && !/سلعة/.test(String(s && s.type || '')); }
+  function sel(s){ return /سلعة/.test(String(s && s.type || '')); }
+
+  // تصحيح اسم صنف واحد حسب الكلمات المعروفة ونوع المورد
+  function fix(name, s){
+    var v = String(name || '').replace(/\s+/g,' ').trim(); if (!v) return v;
+    var low = v.toLowerCase();
+    // القنوات الإسمنتية (buse / buss / buses)
+    if (/\bbus+e?s?\b|بوس|قنوات? (الا|ال)?[إا]سمنت/.test(low) && !/^(fourniture|transport) (de )?buse en béton armé/i.test(v)) {
+      var d = (low.match(/(?:ø|dn|d|qtr)?\s*(\d{3,4})/) || [])[1];
+      var cl = (low.match(/class(?:e)?\s*(\d{2,3})\s*a\b/) || low.match(/\b(\d{2,3})\s*a\b/) || [])[1] || '135';
+      var onlyT = /^(نقل|transport)(\s|$)/.test(low) || (s && isTransport(s) && !sel(s));
+      var sans = /sans\s*transport|بدون نقل/.test(low);
+      var dj = /djelfa|الجلفة|جلفة/.test(low);
+      if (d) {
+        v = (onlyT ? 'Transport buse en béton armé Ø' : 'Fourniture de buse en béton armé Ø') + d + ' classe ' + cl + ' A'
+          + (onlyT ? '' : (sans ? ' - sans transport' : ' - avec transport')) + (dj ? ' - Djelfa' : '');
+        return v;
+      }
+    }
+    // الأنابيب المحلزنة
+    var m = /^(fourniture|transport)/i.test(v) ? null : low.match(/tube\s*ann?el+[eé]?\s*(?:dn)?\s*(\d{3,4})\s*(.*)$/);
+    if (m) { var c = m[2].replace(/^[\s-]+/,'').trim(); return 'Fourniture de tube annelé DN' + m[1] + (c ? ' - ' + c : ''); }
+    v = v.replace(/مازوط/g,'مازوت').replace(/\bga[sz]oil\b/ig,'Gasoil')
+         .replace(/\b(perili|pireli|pirili|pirreli)\b/ig,'Pirelli')
+         .replace(/\bgrave[\s-]*ciment\b/ig,'Grave-ciment')
+         .replace(/^b[eé]ton\b/i,'Béton').replace(/^tuf\b/i,'TUF').replace(/^grave\b(?!-)/i,'Grave');
+    // المورد الذي يبيع السلعة: تُضاف «Fourniture de» للبيتون والغرافسيمون
+    if (s && sel(s) && /^(béton|grave-ciment)/i.test(v)) v = 'Fourniture de ' + v.charAt(0).toLowerCase() + v.slice(1);
+    return v;
+  }
+  window.egNameFix = fix;
+
+  // اقتراحات: أصناف هذا المورد + أصناف الموردين من نفس النوع + أسماء معيارية
+  function suggest(s){
+    var out = new Set(), invs = window._supInvs || [];
+    function addSup(x){ (x.catalog||[]).forEach(function(c){ if (c && c.name) out.add(c.name); });
+      invs.forEach(function(v){ if (v && v.supplierId === x.id) (v.items||[]).forEach(function(it){ if (it && it.name) out.add(it.name); }); }); }
+    if (s) { addSup(s); sups().forEach(function(x){ if (x && x !== s && x.type && x.type === s.type) addSup(x); }); }
+    else sups().forEach(addSup);
+    var t = String(s && s.type || '');
+    if (!s || /سلعة/.test(t)) DIAM.forEach(function(d){ out.add('Fourniture de buse en béton armé Ø'+d+' classe 135 A - avec transport'); out.add('Fourniture de buse en béton armé Ø'+d+' classe 135 A - sans transport'); });
+    if (!s || /نقل|كراء شاحنة/.test(t)) { DIAM.forEach(function(d){ out.add('Transport buse en béton armé Ø'+d+' classe 135 A'); }); ['TUF','Grave','مادة الحصى','الحجرة'].forEach(function(x){ out.add(x); }); }
+    if (!s || /وقود/.test(t)) ['مازوت','Gasoil'].forEach(function(x){ out.add(x); });
+    return Array.from(out).sort(function(a,b){ return String(a).localeCompare(String(b),'fr'); });
+  }
+  window.egNameSuggest = suggest;
+
+  function isNameInput(el){ return el && el.tagName === 'INPUT' && /^(inv-n-\d+|icn-n|cat-n)$/.test(el.id || ''); }
+  function esc(x){ return String(x).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+  document.addEventListener('focusin', function(e){
+    var el = e.target; if (!isNameInput(el)) return;
+    try {
+      var dl = document.getElementById('eg-nf-dl');
+      if (!dl) { dl = document.createElement('datalist'); dl.id = 'eg-nf-dl'; document.body.appendChild(dl); }
+      dl.innerHTML = suggest(curSup()).map(function(n){ return '<option value="'+esc(n)+'">'; }).join('');
+      el.setAttribute('list','eg-nf-dl'); el.setAttribute('autocomplete','off');
+    } catch(_) {}
+  }, true);
+
+  // قبل حفظ الاسم: يُصحَّح تلقائياً ويظهر تنبيه بالاسم الجديد
+  document.addEventListener('change', function(e){
+    var el = e.target; if (!isNameInput(el)) return;
+    try {
+      var old = el.value, nv = fix(old, curSup());
+      if (nv && nv !== old.trim()) {
+        el.value = nv;
+        if (typeof T === 'function') T('✏️ صُحّح الاسم إلى: ' + nv, 'info', 4000);
+      }
+    } catch(_) {}
+  }, true);
+})();
+</script>
+
 </body></html>
