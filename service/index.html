@@ -2310,6 +2310,33 @@ function postponeItem(id,mcId){
       doPostpone(mc,[pc]);}}
   ]);
 }
+// سجلّ بند واحد: كل مرات الصيانة لهذا البند (التاريخ، العدّاد، الفرق عن المرة السابقة) — عرض فقط
+function itemHistory(id,mcId){
+  const mc=machineById(mcId);if(!mc)return;const it=itemsFor(mc).find(x=>x.id===id),u=unit(mc),name=(it&&it.ar)||id;
+  const L=v=>'<span class="ltr" style="unicode-bidi:isolate">'+v+'</span>';
+  const list=(mc.history||[]).filter(h=>h&&Array.isArray(h.ids)&&h.ids.includes(id)).slice()
+    .sort((a,b)=>(String(a.d||'')).localeCompare(String(b.d||''))||((Number(a.r)||0)-(Number(b.r)||0)));
+  let msg;
+  if(!list.length){msg='لا توجد أي صيانة مسجّلة لهذا البند بعد.';}
+  else{
+    const rows=list.map((h,i)=>{const prev=i>0?list[i-1]:null;
+      const gapKm=prev&&Number.isFinite(Number(h.r))&&Number.isFinite(Number(prev.r))?Number(h.r)-Number(prev.r):null;
+      const gapDays=prev&&validISODate(String(h.d||''))&&validISODate(String(prev.d||''))?Math.round((Date.parse(h.d)-Date.parse(prev.d))/86400000):null;
+      const src=h.meterSource==='actual'?'✅ فعلي':h.meterSource==='estimated'?'≈ تقديري':'⚠️ غير محسوم';
+      return '<tr><td style="padding:6px 4px;border-bottom:1px solid #ddd;text-align:center"><b>'+(i+1)+'</b></td>'
+        +'<td style="padding:6px 4px;border-bottom:1px solid #ddd">'+L(esc(String(h.d||'—')))+'</td>'
+        +'<td style="padding:6px 4px;border-bottom:1px solid #ddd"><b>'+L((h.meterSource==='estimated'?'≈ ':'')+fmt(h.r)+' '+u)+'</b><div style="font-size:.85em;color:#666">'+src+'</div></td>'
+        +'<td style="padding:6px 4px;border-bottom:1px solid #ddd;font-size:.9em">'+(gapKm!=null?L('+'+fmt(gapKm)+' '+u):'— أول مرة')+(gapDays!=null?'<div style="color:#666">بعد '+gapDays+' يوماً</div>':'')+'</td></tr>'
+        +(h.note?'<tr><td></td><td colspan="3" style="padding:0 4px 6px;font-size:.85em;color:#555;border-bottom:1px solid #ddd">📝 '+esc(String(h.note))+'</td></tr>':'');}).reverse().join('');
+    const last=list[list.length-1];
+    msg='<div style="margin-bottom:8px">عدد المرات: <b>'+list.length+'</b> · آخرها: <b>'+L(esc(String(last.d||'')))+'</b> عند <b>'+L(fmt(last.r)+' '+u)+'</b></div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="background:#f1f1f1"><th style="padding:5px 4px">#</th><th style="padding:5px 4px;text-align:start">التاريخ</th><th style="padding:5px 4px;text-align:start">العدّاد</th><th style="padding:5px 4px;text-align:start">منذ المرة السابقة</th></tr></thead><tbody>'+rows+'</tbody></table>'
+      +'<div style="font-size:.85em;color:#666;margin-top:6px">الأحدث في الأعلى.</div>';
+  }
+  const pp=it?activePostpone(mc,it,lastReadOf(mc,id),lastDateOf(mc,id)):null;
+  if(pp)msg+='<div style="margin-top:8px;padding:6px 8px;border:1px dashed #9fb6d6;border-radius:8px">⏭ مؤجّل حالياً: الموعد الجديد '+(pp.to!=null?'<b>'+L(fmt(pp.to)+' '+u)+'</b>'+(pp.toDate?' أو بتاريخ <b>'+L(esc(String(pp.toDate)))+'</b>':''):'بتاريخ <b>'+L(esc(String(pp.toDate||'')))+'</b>')+'</div>';
+  openChoice('📜 سجلّ: '+name,msg,[],'إغلاق');
+}
 function cancelPostpone(id,mcId){
   const mc=machineById(mcId);if(!mc||!mc.postpone||!mc.postpone[id]||mc.postpone[id].x)return;const it=itemsFor(mc).find(x=>x.id===id);
   if(!confirm('إلغاء تأجيل «'+((it&&it.ar)||id)+'» والعودة إلى الموعد الأصلي؟'))return;
@@ -3146,7 +3173,7 @@ function renderDetail(){
     const canPp=!isManualMaintenance(it)&&last!=null&&['late','now','soon'].includes(st.urgency);
     const ppBtn=canPp?'<button class="pp-btn" onclick="postponeItem(\''+it.id+'\')">⏭ أجّل</button>':'';
     const d=document.createElement('div');d.className='item';
-    d.innerHTML='<div class="item-top"><div class="item-info"><div class="item-name">'+it.ar+'</div><div class="item-fr">'+it.fr+'</div><div class="item-spec">'+tags.join('')+'</div></div><div class="status '+st.cls+'">'+(remTxt?'<span class="big ltr">'+remTxt+'</span>':'')+st.label+'</div></div><div class="item-bottom">'+lastInfo+'<button class="set-btn" onclick="setLast(\''+it.id+'\')">✎</button>'+ppBtn+'<button class="done-btn" onclick="markDone(\''+it.id+'\')">'+doneTxt+'</button></div>'+conditionCtl;
+    d.innerHTML='<div class="item-top"><div class="item-info"><div class="item-name">'+it.ar+'</div><div class="item-fr">'+it.fr+'</div><div class="item-spec">'+tags.join('')+'</div></div><div class="status '+st.cls+'">'+(remTxt?'<span class="big ltr">'+remTxt+'</span>':'')+st.label+'</div></div><div class="item-bottom">'+lastInfo+'<button class="set-btn" title="سجلّ هذا البند" onclick="itemHistory(\''+it.id+'\')">📜</button><button class="set-btn" onclick="setLast(\''+it.id+'\')">✎</button>'+ppBtn+'<button class="done-btn" onclick="markDone(\''+it.id+'\')">'+doneTxt+'</button></div>'+conditionCtl;
     wrap.appendChild(d);});
 
   renderHistory(mc);
