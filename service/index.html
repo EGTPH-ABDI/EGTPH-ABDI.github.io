@@ -3281,7 +3281,7 @@ function renderHistory(mc){const el=document.getElementById('histRef');if(!el)re
   (mc.history||[]).forEach((e,i)=>ev.push({type:'maint',r:e.r,d:e.d,ids:e.ids,note:e.note,manual:e.manual,meterSource:e.meterSource,idx:i}));
   (mc.readings||[]).forEach((e,i)=>ev.push({type:'read',r:e.r,d:e.d,idx:i}));
   airFilterCleaningEntries(mc).forEach((e,i)=>ev.push({type:'airclean',r:e.r,d:e.d,idx:i}));
-  Object.keys((mc.postpone&&typeof mc.postpone==='object')?mc.postpone:{}).forEach(id=>{const p=mc.postpone[id];if(p&&p.d&&(p.to!=null||p.toDate))ev.push({type:'pp',d:p.d,id,p});});
+  {const ppByDay={};Object.keys((mc.postpone&&typeof mc.postpone==='object')?mc.postpone:{}).forEach(id=>{const p=mc.postpone[id];if(p&&p.d&&(p.to!=null||p.toDate)){(ppByDay[p.d]=ppByDay[p.d]||[]).push({id,p});}});Object.keys(ppByDay).forEach(d=>ev.push({type:'pp',d,list:ppByDay[d]}));}
   const rate=usageRate(mc);
   let head='';
   if(rate){head='<div class="hentry" style="background:rgba(10,125,58,.06);border-color:#bfe3cb"><div class="htop"><span>📊 معدّل الاستعمال</span></div><div class="hitems">≈ <b>'+fmt(Math.round(rate.perMonth))+' '+u+'</b> في الشهر ('+fmt(Math.round(rate.perDay*10)/10)+'/يوم) — محسوب من '+esc(rate.from.d)+' إلى '+esc(rate.to.d)+'</div></div>';}
@@ -3294,9 +3294,20 @@ function renderHistory(mc){const el=document.getElementById('histRef');if(!el)re
     if(e.type==='read'){
       return '<div class="hentry" style="border-style:dashed"><div class="htop"><span>📈 قراءة عدّاد: '+fmt(e.r)+' '+u+'</span><span class="hdate">📅 '+esc(e.d||'')+' <button class="hedit" onclick="editReading('+e.idx+')">تعديل</button> <button class="hdel" onclick="deleteReading('+e.idx+')">حذف</button></span></div>'+(e._estimateBefore!=null?'<div class="hist-note">قبل الإدخال كان التقدير ≈ '+fmt(e._estimateBefore)+' '+u+' · الفرق '+(Number(e._estimateDiff)>=0?'+':'')+fmt(e._estimateDiff)+' '+u+(e._estimatePct!=null?' · '+Math.round(Number(e._estimatePct)*10)/10+'%':'')+'</div>':'')+gap+'</div>';}
     if(e.type==='pp'){
-      const it=itemsFor(mc).find(x=>x.id===e.id),live=it&&activePostpone(mc,it,lastReadOf(mc,e.id),lastDateOf(mc,e.id));const p=e.p;
-      const span=p.toDate&&p.to==null?(esc(String(p.fromDate||''))+' → '+esc(String(p.toDate))):(fmt(p.from)+' → '+fmt(p.to)+' '+u+(p.toDate?' · أو '+esc(String(p.toDate)):''));
-      return '<div class="hentry" style="border-style:dashed;background:#eef4fc;border-color:#b9cdea"><div class="htop"><span>⏭ تأجيل: '+esc((it&&it.ar)||e.id)+' · <span class="ltr">'+span+'</span></span><span class="hdate">📅 '+esc(e.d)+(live?' <button class="hedit" onclick="cancelPostpone(\''+e.id+'\')">↩ إلغاء</button>':'')+'</span></div><div class="hitems">'+(live?'بدون تسجيل صيانة — التنبيه مؤجّل حتى الموعد الجديد':(p.xr==='c'?'أُلغي هذا التأجيل':'انتهى: سُجّلت صيانة لهذا البند بعد التأجيل'))+'</div></div>';}
+      // تأجيلات اليوم نفسه في بطاقة واحدة مرتّبة: لكل بند سطر واضح (الموعد الجديد + الموعد السابق + الحالة)
+      const rows=e.list.map(x=>{const it=itemsFor(mc).find(y=>y.id===x.id),p=x.p,live=!!(it&&activePostpone(mc,it,lastReadOf(mc,x.id),lastDateOf(mc,x.id)));
+        const name=(it&&it.ar)||x.id,km=v=>'<b class="ltr" style="unicode-bidi:isolate">'+fmt(v)+' '+u+'</b>',dt=v=>'<b class="ltr" style="unicode-bidi:isolate">'+esc(String(v))+'</b>';
+        let nw,was;
+        if(p.to!=null){nw=km(p.to)+(p.toDate?' أو بتاريخ '+dt(p.toDate)+' <small>(أيهما أسبق)</small>':'');was=p.from!=null?km(p.from):'';}
+        else{nw='بتاريخ '+dt(p.toDate);was=p.fromDate?dt(p.fromDate):'';}
+        const stTxt=live?'⏳ ساري':(p.xr==='c'?'↩ أُلغي':'✔ انتهى (سُجّلت الصيانة)');
+        return '<div style="padding:8px 0;border-top:1px solid #d5e1f2'+(live?'':';opacity:.6')+'">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>'+esc(name)+'</b><span style="font-size:.85em;white-space:nowrap;border:1px solid #9fb6d6;border-radius:10px;padding:1px 8px">'+stTxt+'</span></div>'
+          +'<div style="margin-top:3px">➜ الموعد الجديد: '+nw+'</div>'
+          +(was?'<div style="font-size:.88em;color:#5d6b7a">كان مقرراً عند: '+was+'</div>':'')
+          +(live?'<div style="margin-top:4px"><button class="hedit" onclick="cancelPostpone(\''+x.id+'\')">↩ إلغاء التأجيل</button></div>':'')+'</div>';}).join('');
+      const n=e.list.length;
+      return '<div class="hentry" style="border-style:dashed;background:#eef4fc;border-color:#b9cdea"><div class="htop"><span>⏭ تأجيل '+(n===1?'بند واحد':n===2?'بندين':n+' بنود')+'</span><span class="hdate">📅 <span class="ltr">'+esc(e.d)+'</span></span></div><div class="hitems" style="font-size:.9em;color:#5d6b7a">بدون تسجيل صيانة — التنبيه مؤجّل حتى الموعد الجديد</div>'+rows+'</div>';}
     if(e.type==='airclean'){
       return '<div class="hentry" style="border-style:dashed;background:rgba(184,134,47,.05)"><div class="htop"><span>🧹 تنظيف فلتر الهواء الخارجي · '+fmt(e.r)+' '+u+'</span><span class="hdate">📅 '+esc(e.d||'')+' <button class="hedit" onclick="editAirFilterCleaning('+e.idx+')">تعديل</button> <button class="hdel" onclick="deleteAirFilterCleaning('+e.idx+')">حذف</button></span></div>'+gap+'</div>';}
     const names=(e.ids||[]).map(id=>labelOf[id]||id).join('، ');
