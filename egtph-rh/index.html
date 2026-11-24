@@ -448,6 +448,7 @@ body.auth-locked{overflow:hidden}
               <option value="ordremission" data-t="att_t_ordremission">Ordre de mission</option>
               <option value="conge" data-t="att_t_conge">Titre de congé</option></select></div>
           <div class="fl"><label data-t="doc_poste_over">Poste (modifiable)</label><select id="aPoste" onchange="calcAtt()"></select></div>
+          <div class="fl"><label data-t="doc_dip_over">Diplôme (sur le document)</label><select id="aDip" onchange="calcAtt()"></select></div>
           <div class="fl"><label data-t="att_dest">Destinataire (optionnel)</label><input id="aDest" oninput="calcAtt()"></div>
           <div class="fl"><label data-t="f_ref">Référence</label><input id="aRef" oninput="calcAtt()"></div>
         </div>
@@ -832,7 +833,7 @@ const I18N = {
   sec_ident:"Bloc identité", sec_alloc:"Allocations", sec_band:"Bandeau légal (NIS/NIN/CNAS)",
   sec_sign:"Signature & cachet", sec_stamp:"✅ Document cacheté (cachet + signature)", st_stamp:"🖋️ Cachet & signature", st_stamp_hint:"Image du cachet signé, ajoutée aux documents quand « Document cacheté » est coché (bulletin de paie, attestations). Le fond blanc est rendu transparent automatiquement.", st_stamp_pick:"📎 Choisir l’image", st_stamp_del:"🗑️ Retirer", st_stamp_none:"Aucune image de cachet.", st_stamp_ok:"✅ Cachet enregistré.", sec_fband:"Pied de page", sec_recap:"Tableau récapitulatif", sec_exp:"Ancienneté (expérience)", sec_ref:"Ligne référence",
   // documents généraux
-  doc_poste_over:"Poste (modifiable)", doc_objet:"Objet", doc_dest_lieu:"Destination",
+  doc_poste_over:"Poste (modifiable)", doc_dip_over:"Diplôme (sur le document)", dip_hide:"— Ne pas afficher —", doc_objet:"Objet", doc_dest_lieu:"Destination",
   doc_du:"Du", doc_au:"Au", doc_moyen:"Moyen de transport", doc_nbjours:"Nombre de jours",
   doc_reprise:"Date de reprise", doc_motif:"Motif",
   att_t_certtravail:"Certificat de travail", att_t_ordremission:"Ordre de mission", att_t_conge:"Titre de congé",
@@ -930,7 +931,7 @@ const I18N = {
   bul_snmg_warn:"⚠️ الأجر أقل من الأجر الأدنى المضمون (20 000 دج)",
   sec_ident:"خانة الهوية", sec_alloc:"المنح", sec_band:"الشريط القانوني (NIS/NIN/CNAS)",
   sec_sign:"الإمضاء والختم", sec_stamp:"✅ وثيقة مختومة (الختم والإمضاء)", st_stamp:"🖋️ الختم والإمضاء", st_stamp_hint:"صورة الختم مع الإمضاء، تُضاف إلى الوثائق عند اختيار «وثيقة مختومة» (كشف الراتب والشهادات). تُحذف الخلفية البيضاء تلقائياً.", st_stamp_pick:"📎 اختيار الصورة", st_stamp_del:"🗑️ حذف", st_stamp_none:"لا توجد صورة ختم.", st_stamp_ok:"✅ تم حفظ الختم.", sec_fband:"تذييل الصفحة", sec_recap:"الجدول الإجمالي", sec_exp:"الأقدمية (الخبرة)", sec_ref:"سطر المرجع",
-  doc_poste_over:"المنصب (قابل للتعديل)", doc_objet:"الموضوع", doc_dest_lieu:"الوجهة",
+  doc_poste_over:"المنصب (قابل للتعديل)", doc_dip_over:"الشهادة (في الوثيقة)", dip_hide:"— عدم إظهار الشهادة —", doc_objet:"الموضوع", doc_dest_lieu:"الوجهة",
   doc_du:"من", doc_au:"إلى", doc_moyen:"وسيلة النقل", doc_nbjours:"عدد الأيام",
   doc_reprise:"تاريخ الاستئناف", doc_motif:"السبب",
   att_t_certtravail:"شهادة عمل (نهاية علاقة)", att_t_ordremission:"أمر بمهمة", att_t_conge:"رخصة عطلة",
@@ -953,6 +954,17 @@ const POSTES=[
  {k:'chef_chantier',fr:'Chef de chantier',ar:'رئيس الورشة'},
  {k:'conducteur_engin',fr:"Conducteur d'engins",ar:'سائق آليات'},
  {k:'chauffeur',fr:'Chauffeur',ar:'سائق'},
+ {k:'chauffeur_pl',fr:'Chauffeur poids lourds',ar:'سائق وزن ثقيل'},
+ {k:'chauffeur_vl',fr:'Chauffeur véhicule léger',ar:'سائق مركبة خفيفة'},
+ {k:'cond_pelle',fr:'Conducteur de pelle mécanique',ar:'سائق جرافة (حفارة)'},
+ {k:'cond_chargeur',fr:'Conducteur de chargeur',ar:'سائق محمل'},
+ {k:'cond_retro',fr:'Conducteur de rétro-chargeur',ar:'سائق محمل حفار'},
+ {k:'cond_compacteur',fr:'Conducteur de compacteur',ar:'سائق مدحلة'},
+ {k:'mecanicien',fr:'Mécanicien',ar:'ميكانيكي'},
+ {k:'electricien',fr:'Électricien',ar:'كهربائي'},
+ {k:'plombier',fr:'Plombier',ar:'سبّاك'},
+ {k:'aide_macon',fr:'Aide-maçon',ar:'مساعد بنّاء'},
+ {k:'gardien',fr:'Gardien',ar:'حارس'},
  {k:'macon',fr:'Maçon',ar:'بنّاء'},
  {k:'conducteur',fr:'Conducteur de travaux',ar:'مدير الأشغال'},
  {k:'chef_equipe',fr:"Chef d'équipe",ar:'رئيس الفريق'},
@@ -986,6 +998,12 @@ const DIPLOMES=[
  {k:'tech_gc',fr:'Technicien en Génie Civil',ar:'تقني في الهندسة المدنية'},
  {k:'cap',fr:'CAP',ar:'شهادة الكفاءة المهنية'},
  {k:'bep',fr:'BEP',ar:'شهادة التعليم المهني'},
+ {k:'master_topo',fr:'Master en Topographie',ar:'ماستر في الطوبوغرافيا'},
+ {k:'licence_topo',fr:'Licence en Topographie',ar:'ليسانس في الطوبوغرافيا'},
+ {k:'ing_gc',fr:"Ingénieur d'État en Génie Civil",ar:'مهندس دولة في الهندسة المدنية'},
+ {k:'techsup_gc',fr:'Technicien supérieur en Génie Civil',ar:'تقني سامٍ في الهندسة المدنية'},
+ {k:'cap_conduite',fr:"CAP Conducteur d'engins",ar:'شهادة الكفاءة المهنية – سائق آليات'},
+ {k:'cap_meca',fr:'CAP Mécanique',ar:'شهادة الكفاءة المهنية – ميكانيك'},
  {k:'__autre',fr:'Autre…',ar:'أخرى…'}
 ];
 function posteLabel(w){if(!w.fn)return'';if(w.fn==='__autre')return w.fnx||'';const p=POSTES.find(x=>x.k===w.fn);return p?p[LANG]:w.fn;}
@@ -1276,7 +1294,7 @@ function sp(p,el){
   if(p==='db')renderDB();if(p==='wk')renderWk();if(p==='ln')renderLN();
   if(p==='cg')renderCg();if(p==='av')renderAv();if(p==='st')fillSettings();
   if(p==='pay'){fillWorkerSelect('pW');if(!$('pMois').value)$('pMois').value=tod().slice(0,7);calcPay();}
-  if(p==='att'){fillWorkerSelect('aW');buildPosteOverride();if(!$('aRef').value)$('aRef').value=genRef('refAtt');onAttType();}
+  if(p==='att'){fillWorkerSelect('aW');buildPosteOverride();buildDipOverride();if(!$('aRef').value)$('aRef').value=genRef('refAtt');onAttType();}
   if(p==='cnt'){fillWorkerSelect('cW');buildCntPoste();calcCnt();}
   if(p==='ats'){initAtsModule();}
   if(p==='cnasdoc')renderCnasDocs();
@@ -1294,7 +1312,7 @@ function applyLang(){
   const cur=document.querySelector('.pg.on');if(cur){const id=cur.id.replace('pg-','');
     if(id==='db')renderDB();else if(id==='wk')renderWk();else if(id==='ln')renderLN();
     else if(id==='cg')renderCg();else if(id==='av')renderAv();else if(id==='st')fillSettings();else if(id==='cnasdoc')renderCnasDocs();
-    else if(id==='pay'){fillWorkerSelect('pW');calcPay();}else if(id==='att'){fillWorkerSelect('aW');buildPosteOverride();calcAtt();}
+    else if(id==='pay'){fillWorkerSelect('pW');calcPay();}else if(id==='att'){fillWorkerSelect('aW');buildPosteOverride();buildDipOverride();calcAtt();}
     else if(id==='cnt'){fillWorkerSelect('cW');buildCntPoste();calcCnt();}
     else if(id==='ats'){initAtsModule();syncAtsRhWorkers();}
     const titles={db:'📊 '+t('nav_db'),wk:t('wk_title'),ln:t('nav_ln'),im:t('im_title'),cg:t('cg_title'),pay:t('pay_title'),att:t('att_title'),cnt:t('cnt_title'),ats:'🪪 ATS / CNAS',av:t('av_title'),st:'⚙️ '+t('nav_st')};
@@ -1816,7 +1834,18 @@ function buildPosteOverride(){
   const w=S.workers.find(x=>x.id===($('aW')?$('aW').value:''));
   sel.value=cur||(w&&w.fn!=='__autre'?w.fn:'manoeuvre');
 }
-function onAttWorker(){buildPosteOverride();onAttType();}
+function buildDipOverride(reset){
+  const sel=$('aDip');if(!sel)return;const cur=reset?null:sel.value;
+  const w=S.workers.find(x=>x.id===($('aW')?$('aW').value:''));
+  let opts='<option value="">'+esc(t('dip_hide'))+'</option>';
+  if(w&&w.dp==='__autre'&&w.dpx)opts+='<option value="__file">'+esc(w.dpx)+'</option>';
+  opts+=DIPLOMES.filter(d=>d.k!=='sans'&&d.k!=='__autre').map(d=>'<option value="'+d.k+'">'+esc(d[LANG])+'</option>').join('');
+  sel.innerHTML=opts;
+  const def=w&&w.dp&&w.dp!=='sans'?(w.dp==='__autre'?(w.dpx?'__file':''):w.dp):'';
+  sel.value=(cur!==null&&[...sel.options].some(o=>o.value===cur))?cur:def;
+}
+function attDiplome(w){const k=$('aDip')?$('aDip').value:'';if(!k)return'';if(k==='__file')return w.dpx||'';const d=DIPLOMES.find(x=>x.k===k);return d?d[LANG]:'';}
+function onAttWorker(){buildPosteOverride();buildDipOverride(true);onAttType();}
 function onAttType(){
   const ty=$('aT')?$('aT').value:'';
   $('aMissionBox').style.display=ty==='ordremission'?'':'none';
@@ -1835,6 +1864,7 @@ function calcAtt(){
   const invalidDoc=(message)=>{$('attDoc').innerHTML='<p style="color:#b00;padding:20px;text-align:center;font-weight:700">'+esc(message)+'</p>';};
   if((ty==='certtravail'||ty==='cessation')&&!endDate){invalidDoc(t('doc_enddate_required'));return;}
   const poste=esc(attPoste(w)), exp=calcExp(w), ger=esc(s.gerant);
+  const dip=esc(attDiplome(w)), dipTx=dip?(G?'، الحائز(ة) على شهادة <b>'+dip+'</b>':", titulaire du diplôme : <b>"+dip+"</b>"):'';
   const nom='<b>'+esc(w.N+' '+w.P)+'</b>';
   let title=t('att_t1'), body='', extra='', closeTxt='';
   const aff=G?'المعني(ة) منتسب(ة) إلى الصندوق الوطني للتأمينات الاجتماعية للعمّال الأجراء (CNAS) تحت رقم التسجيل : <b>'+esc(w.ss||'')+'</b>.'
@@ -1851,26 +1881,26 @@ function calcAtt(){
   const intro=G?'أنا الموقّع أدناه، '+ger+'، المسيّر للمؤسسة، أشهد بأنّ السيّد(ة) ':"Je soussigné, <b>"+ger+"</b>, Gérant de l'entreprise, ";
   if(ty==='travail'){
     title=t('att_t1');
-    body=G?intro+nom+'، المولود(ة) بتاريخ '+fd(w.dd)+' بـ'+esc(w.li||'')+'، يشتغل(تشتغل) ضمن مؤسستنا بصفة <b>'+poste+'</b> منذ '+fd(w.et)+(sec.exp?'، أي بأقدمية قدرها <b>'+esc(exp)+'</b>':'')+'.'
-            :intro+"atteste que M./Mme "+nom+", né(e) le "+fd(w.dd)+" à "+esc(w.li||'')+", exerce au sein de notre entreprise en qualité de <b>"+poste+"</b> depuis le "+fd(w.et)+(sec.exp?", soit une ancienneté de <b>"+esc(exp)+"</b>":"")+".";
+    body=G?intro+nom+'، المولود(ة) بتاريخ '+fd(w.dd)+' بـ'+esc(w.li||'')+dipTx+'، يشتغل(تشتغل) ضمن مؤسستنا بصفة <b>'+poste+'</b> منذ '+fd(w.et)+(sec.exp?'، أي بأقدمية قدرها <b>'+esc(exp)+'</b>':'')+'.'
+            :intro+"atteste que M./Mme "+nom+", né(e) le "+fd(w.dd)+" à "+esc(w.li||'')+dipTx+", exerce au sein de notre entreprise en qualité de <b>"+poste+"</b> depuis le "+fd(w.et)+(sec.exp?", soit une ancienneté de <b>"+esc(exp)+"</b>":"")+".";
     if(sec.recap)extra=recap+'<p>'+aff+'</p>';
     closeTxt=G?(dest?'سُلّمت هذه الشهادة بناءً على طلب المعني(ة) لتقديمها لدى <b>'+esc(dest)+'</b>، للاستعمال فيما يخوّله القانون.':'سُلّمت هذه الشهادة بناءً على طلب المعني(ة) لاستعمالها فيما يخوّله القانون.')
               :(dest?"La présente attestation est délivrée à la demande de l'intéressé(e) pour servir et valoir ce que de droit, notamment auprès de : <b>"+esc(dest)+"</b>.":"La présente attestation est délivrée à la demande de l'intéressé(e) pour servir et valoir ce que de droit.");
   }else if(ty==='salaire'){
     title=t('att_t2');
-    body=G?intro+nom+'، الموظّف(ة) بصفة <b>'+poste+'</b> منذ '+fd(w.et)+'، يتقاضى(تتقاضى) أجرًا قاعديًا شهريًا قدره <b>'+fm(w.sl||s.salBase)+'</b>.'
-            :intro+"atteste que M./Mme "+nom+", employé(e) en qualité de <b>"+poste+"</b> depuis le "+fd(w.et)+", perçoit un salaire de base mensuel de <b>"+fm(w.sl||s.salBase)+"</b>.";
+    body=G?intro+nom+dipTx+'، الموظّف(ة) بصفة <b>'+poste+'</b> منذ '+fd(w.et)+'، يتقاضى(تتقاضى) أجرًا قاعديًا شهريًا قدره <b>'+fm(w.sl||s.salBase)+'</b>.'
+            :intro+"atteste que M./Mme "+nom+dipTx+", employé(e) en qualité de <b>"+poste+"</b> depuis le "+fd(w.et)+", perçoit un salaire de base mensuel de <b>"+fm(w.sl||s.salBase)+"</b>.";
     closeTxt=G?'سُلّمت هذه الشهادة لاستعمالها فيما يخوّله القانون.':"La présente attestation est délivrée pour servir et valoir ce que de droit.";
   }else if(ty==='certtravail'){
     title=t('att_t_certtravail');
-    body=G?intro+'قد اشتغل(ت) ضمن مؤسستنا بصفة <b>'+poste+'</b> خلال الفترة الممتدّة من '+fd(w.et)+' إلى '+fd(endDate)+'، وأنّ المعني(ة) غادر(ت) المؤسسة وهو(ي) حرّ(ة) من كلّ التزام.'
-            :intro+"certifie que M./Mme "+nom+" a été employé(e) au sein de notre entreprise en qualité de <b>"+poste+"</b> durant la période du "+fd(w.et)+" au "+fd(endDate)+", et qu'il/elle nous quitte libre de tout engagement.";
+    body=G?intro+nom+dipTx+'، قد اشتغل(ت) ضمن مؤسستنا بصفة <b>'+poste+'</b> خلال الفترة الممتدّة من '+fd(w.et)+' إلى '+fd(endDate)+'، وأنّ المعني(ة) غادر(ت) المؤسسة وهو(ي) حرّ(ة) من كلّ التزام.'
+            :intro+"certifie que M./Mme "+nom+dipTx+", a été employé(e) au sein de notre entreprise en qualité de <b>"+poste+"</b> durant la période du "+fd(w.et)+" au "+fd(endDate)+", et qu'il/elle nous quitte libre de tout engagement.";
     if(sec.recap)extra='<p>'+aff+'</p>';
     closeTxt=G?'سُلّمت هذه الشهادة للمعني(ة) للاستعمال فيما يخوّله القانون.':"Le présent certificat est délivré à l'intéressé(e) pour servir et valoir ce que de droit.";
   }else if(ty==='cessation'){
     title=t('att_t3');
-    body=G?intro+'قد أنهى(ت) علاقته(ا) بالعمل مع مؤسستنا بتاريخ '+fd(endDate)+'، بعد أن شغل(ت) منصب <b>'+poste+'</b> منذ '+fd(w.et)+'.'
-            :intro+"atteste que M./Mme "+nom+" a cessé toute relation de travail avec notre entreprise à la date du "+fd(endDate)+", après avoir occupé le poste de <b>"+poste+"</b> depuis le "+fd(w.et)+".";
+    body=G?intro+nom+dipTx+'، قد أنهى(ت) علاقته(ا) بالعمل مع مؤسستنا بتاريخ '+fd(endDate)+'، بعد أن شغل(ت) منصب <b>'+poste+'</b> منذ '+fd(w.et)+'.'
+            :intro+"atteste que M./Mme "+nom+dipTx+", a cessé toute relation de travail avec notre entreprise à la date du "+fd(endDate)+", après avoir occupé le poste de <b>"+poste+"</b> depuis le "+fd(w.et)+".";
     closeTxt=G?'سُلّمت هذه الشهادة للمعني(ة) للاستعمال فيما يخوّله القانون.':"Le présent certificat est délivré à l'intéressé(e) pour servir et valoir ce que de droit.";
   }else if(ty==='ordremission'){
     title=t('att_t_ordremission');
@@ -3208,7 +3238,7 @@ function applyRemoteEnvelope(value){
 function rerenderAfterCloudSync(){
   const cur=document.querySelector('.pg.on');const id=cur?cur.id.replace('pg-',''):'db';
   if(id==='db')renderDB();else if(id==='wk')renderWk();else if(id==='ln')renderLN();else if(id==='cg')renderCg();else if(id==='av')renderAv();else if(id==='st')fillSettings();else if(id==='cnasdoc')renderCnasDocs();
-  else if(id==='pay'){fillWorkerSelect('pW');calcPay();}else if(id==='att'){fillWorkerSelect('aW');buildPosteOverride();calcAtt();}else if(id==='cnt'){fillWorkerSelect('cW');buildCntPoste();calcCnt();}
+  else if(id==='pay'){fillWorkerSelect('pW');calcPay();}else if(id==='att'){fillWorkerSelect('aW');buildPosteOverride();buildDipOverride();calcAtt();}else if(id==='cnt'){fillWorkerSelect('cW');buildCntPoste();calcCnt();}
 }
 function queueCloudSync(immediate){
   if(!fbReady||fbApplying)return;
