@@ -168,7 +168,8 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 .amount-words{margin-top:8px;font-style:italic;font-size:14px;padding:8px;border:1px solid #000;background:#fafafa;text-align:center;}
 .print-sign{margin-top:20px;margin-left:auto;width:80mm;text-align:center;page-break-inside:avoid;}.print-sign .sig-lbl{font-weight:bold;font-size:15px;margin-bottom:4px;}.print-sign img{width:78mm;height:auto;}
 .print-footer{margin-top:18px;font-size:11px;text-align:center;color:#555;}
-.print-metre{margin-top:10px;page-break-inside:avoid;}.metre-title{font-weight:bold;font-size:13px;margin-bottom:4px;}.metre-table{font-size:12px!important;}.metre-table th,.metre-table td{padding:4px 6px!important;}
+#print-area.compact{font-size:12px!important;}#print-area.compact .print-header h2{font-size:19px;}#print-area.compact .print-info{font-size:12px;gap:4px;margin-bottom:8px;}#print-area.compact .print-info div{padding:4px 7px;}#print-area.compact .print-table:not(.metre-table){font-size:11.5px;}#print-area.compact .print-table:not(.metre-table) td,#print-area.compact .print-table:not(.metre-table) th{padding:4px 5px;}#print-area.compact .totals-grid{font-size:12.5px;margin-bottom:8px;}#print-area.compact .totals-grid > div{padding:4px 8px;}#print-area.compact .totals-grid > div:last-child{font-size:14px;}#print-area.compact .amount-words,#print-area.compact .print-notes{font-size:12px;padding:5px 7px;margin-top:5px;}#print-area.compact{padding:4px 8px!important;}#print-area.compact .print-header{padding-bottom:3px;margin-bottom:6px;}#print-area.compact .print-sign{margin-top:4px;width:56mm;}#print-area.compact .print-sign .sig-lbl{font-size:12px;margin-bottom:2px;}#print-area.compact .print-sign img{width:52mm;}#print-area.compact .print-footer{margin-top:8px;}
+.print-metre{margin-top:0;page-break-before:always;break-before:page;page-break-inside:avoid;}#pItemsBody .desig-cell{font-weight:bold;}.metre-title{font-weight:bold;font-size:13px;margin-bottom:4px;}.metre-table{font-size:12px!important;}.metre-table th,.metre-table td{padding:4px 6px!important;}
 .print-notes{margin-top:8px;font-size:14px;padding:8px;border:1px solid #000;background:#fafafa;}
 }
 #print-area{display:none;}
@@ -244,6 +245,7 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <button class="btn btn-primary btn-sm" onclick="addItem();calc();syncPrint();">+ Ajouter Article</button>
 <button class="btn btn-outline btn-sm" onclick="openArticlePicker()">📚 Insérer article existant</button>
 <label style="margin-left:8px;font-size:.85rem;white-space:nowrap"><input type="checkbox" id="optCachet" checked onchange="syncPrint()"> Cachet automatique</label>
+<label style="margin-left:8px;font-size:.85rem;white-space:nowrap"><input type="checkbox" id="optCompact" onchange="syncPrint()"> Compacter (facture sur 1 page)</label>
 <label style="margin-left:8px;font-size:.85rem;white-space:nowrap"><input type="checkbox" id="optHideFisc" onchange="try{localStorage.setItem('egtp_hide_fisc',this.checked?'1':'')}catch(e){};syncPrint()"> Masquer infos fiscales (nom seul)</label>
 
 <h3 style="margin:20px 0 8px;color:var(--primary)">💰 Acomptes / Déductions</h3>
@@ -383,8 +385,8 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 </div>
 <div class="amount-words">Arrêté le présent document à la somme de : <span id="pAmtWords">ZÉRO DINARS ALGÉRIENS</span></div>
 <div id="pNotesBlock" class="print-notes" style="display:none"><strong>Observations :</strong> <span id="pNotes"></span></div>
-<div id="pMetreBlock" class="print-metre" style="display:none"><div class="metre-title">Détail du calcul des quantités</div><table class="print-table metre-table"><thead><tr><th class="desig-cell">Désignation</th><th>Calcul</th><th>Quantité</th></tr></thead><tbody id="pMetreBody"></tbody></table></div>
 <div id="pSign" class="print-sign"><div class="sig-lbl">Signature et cachet</div><img id="pCachet" src="cachet.png" alt=""></div>
+<div id="pMetreBlock" class="print-metre" style="display:none"><div class="metre-title">Détail du calcul des quantités</div><table class="print-table metre-table"><thead><tr><th class="desig-cell">Désignation</th><th>Calcul</th><th>Quantité</th></tr></thead><tbody id="pMetreBody"></tbody></table></div>
 <div class="print-footer">Document généré le <span id="pGenDate"></span> via Système EGTPH - Pro v9.8</div>
 </div>
 
@@ -864,6 +866,7 @@ function syncPrint(){
   const hf=document.getElementById('optHideFisc');
   if(hf&&hf.dataset.init!=='1'){hf.dataset.init='1';try{hf.checked=localStorage.getItem('egtp_hide_fisc')==='1';}catch(e){}}
   ['pCoIds','pCoSub','pCoAddr'].forEach(id=>{const e=document.getElementById(id);if(!e)return;if((hf&&hf.checked)||gv('docType')==='PROFORMA'){if(e.dataset.fd===undefined)e.dataset.fd=e.style.display;e.style.display='none';}else if(e.dataset.fd!==undefined){e.style.display=e.dataset.fd;delete e.dataset.fd;}});
+  const ocp=document.getElementById('optCompact');document.getElementById('print-area').classList.toggle('compact',!!(ocp&&ocp.checked));
   const oc=document.getElementById('optCachet');
   document.getElementById('pSign').style.display=(!oc||oc.checked)?'block':'none';
   const pd=document.getElementById('pDeductionsBody');pd.closest('table').style.display=pd.children.length?'':'none';
@@ -974,7 +977,7 @@ function scrapeForm(){
   });
   const deductions=[];
   document.querySelectorAll('#deductionsBody tr').forEach(r=>deductions.push({date:r.querySelector('.ded-date').value,desig:r.querySelector('.ded-desig').value,amount:r.querySelector('.ded-amount').value}));
-  return{type:document.getElementById('docType').value,num:document.getElementById('docNum').value,date:document.getElementById('docDate').value,clientName:document.getElementById('clientName').value,refInt:document.getElementById('refInt').value,payMode:document.getElementById('payMode').value,payRef:document.getElementById('payRef').value,bank:document.getElementById('bank').value,payDate:document.getElementById('payDate').value,tvaRate:document.getElementById('tvaRate').value,garantieRate:document.getElementById('garantieRate').value,notes:document.getElementById('docNotes').value,metre:document.getElementById('docMetre').value,useAvancement:showAvan,items,deductions};
+  return{type:document.getElementById('docType').value,num:document.getElementById('docNum').value,date:document.getElementById('docDate').value,clientName:document.getElementById('clientName').value,refInt:document.getElementById('refInt').value,payMode:document.getElementById('payMode').value,payRef:document.getElementById('payRef').value,bank:document.getElementById('bank').value,payDate:document.getElementById('payDate').value,tvaRate:document.getElementById('tvaRate').value,garantieRate:document.getElementById('garantieRate').value,notes:document.getElementById('docNotes').value,metre:document.getElementById('docMetre').value,compact:!!document.getElementById('optCompact').checked,useAvancement:showAvan,items,deductions};
 }
 
 function calcTotals(data){
@@ -1028,6 +1031,7 @@ function loadDocById(id){
   document.getElementById('garantieRate').value=doc.garantieRate||'0';
   document.getElementById('docNotes').value=doc.notes||'';
   document.getElementById('docMetre').value=doc.metre||'';
+  document.getElementById('optCompact').checked=!!doc.compact;
   showAvan=documentUsesAvancement(doc);applyAvanVisibility();
   document.getElementById('itemsBody').innerHTML='';
   doc.items.forEach(i=>addItem(i));
@@ -1044,6 +1048,7 @@ function newDoc(silent){
   ['itemsBody','deductionsBody'].forEach(id=>document.getElementById(id).innerHTML='');
   document.getElementById('docNotes').value='';
   document.getElementById('docMetre').value='';
+  document.getElementById('optCompact').checked=false;
   document.getElementById('garantieRate').value='0';
   // page vraiment vierge : on vide aussi les en-têtes
   document.getElementById('docNum').value='';
@@ -1137,6 +1142,7 @@ function restoreForm(d){
   document.getElementById('garantieRate').value=d.garantieRate||'0';
   document.getElementById('docNotes').value=d.notes||'';
   document.getElementById('docMetre').value=d.metre||'';
+  document.getElementById('optCompact').checked=!!d.compact;
   showAvan=documentUsesAvancement(d);applyAvanVisibility();
   document.getElementById('itemsBody').innerHTML='';
   (d.items||[]).forEach(i=>addItem(i));
@@ -1186,6 +1192,7 @@ function duplicateDoc(){
   document.getElementById('garantieRate').value=data.garantieRate||'0';
   document.getElementById('docNotes').value=data.notes||'';
   document.getElementById('docMetre').value=data.metre||'';
+  document.getElementById('optCompact').checked=!!data.compact;
   updateModeBadge();toast('📋 Document dupliqué. Modifiez le N° puis Sauvegardez.');
 }
 
