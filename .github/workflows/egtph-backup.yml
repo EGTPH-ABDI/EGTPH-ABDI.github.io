@@ -1,0 +1,35 @@
+name: EGTPH نسخة احتياطية يومية
+# يقرأ فقط بيانات البرامج، ويكتب النسخ المشفّرة في egtph-apps/_backup وحده (وافق عليه المسير 25/11/2026)
+on:
+  schedule:
+    - cron: "23 1 * * *"   # 02:23 بتوقيت الجزائر
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: egtph-backup
+  cancel-in-progress: false
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/backup
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: نسخة مشفّرة (Firebase + GitHub)
+        working-directory: .github/backup
+        run: node backup.mjs
+        env:
+          EGTPH_PUSH: ${{ secrets.EGTPH_PUSH }}
+      - name: النسخة الثانية في GitHub (30 يوماً، مشفّرة)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: egtph-backup-${{ github.run_number }}
+          path: .github/backup/out/*.bin
+          retention-days: 30
+          if-no-files-found: ignore
