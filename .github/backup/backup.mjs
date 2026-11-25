@@ -34,6 +34,8 @@ async function login(key) {
   const j = await r.json(); if (!j.idToken) throw new Error("login " + JSON.stringify(j.error || j).slice(0, 120)); return j.idToken;
 }
 async function req(db, tok, path, method = "GET", body, query = "") {
+  // حماية مطلقة: أي كتابة أو حذف خارج egtph-apps/_backup يُرفض ويوقف النسخ (لا مساس ببيانات البرامج أبداً)
+  if (method !== "GET" && !(db === HOME.db && path.startsWith(BK + "/"))) throw new Error("كتابة ممنوعة خارج _backup: " + path);
   for (let i = 0; i < 3; i++) {
     try {
       const r = await fetch(`${db}/${path}.json?auth=${tok}${query}${method === "GET" ? "" : "&print=silent"}`, { method, body: body === undefined ? undefined : JSON.stringify(body) });
