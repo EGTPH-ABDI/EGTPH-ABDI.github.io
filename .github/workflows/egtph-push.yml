@@ -1,0 +1,25 @@
+name: EGTPH إشعارات الهاتف
+on:
+  schedule:
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: egtph-push
+  cancel-in-progress: false
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/push
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-save --prefix .github/push web-push@3
+      - run: node .github/push/send.mjs
+        env:
+          EGTPH_PUSH: ${{ secrets.EGTPH_PUSH }}
