@@ -3,7 +3,7 @@
 //   (ثم تُحدَّث النسخة في الخلفية) — حتى لا تبقى الشاشة سوداء مع LTE ضعيف.
 // - مكتبات Firebase والخطوط (ثابتة برقم إصدار): من النسخة المحفوظة مباشرة.
 // - لا يحفظ بيانات Firebase (تبقى مزامنتها كما هي).
-var CACHE = "egtph-v5";
+var CACHE = "egtph-v6";
 var CORE = ["/apps.html", "/egtph-auth.js", "/egtph-lock.js", "/manifest.webmanifest", "/icons/icon-180.png"];
 var EXTERNAL = /^https:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com\/firebasejs\/|cdnjs\.cloudflare\.com\/ajax\/libs\/|cdn\.jsdelivr\.net\/npm\/|unpkg\.com\/)/;
 var HEAVY = /onnxruntime|ppocr|tesseract|traineddata|\.onnx|\.wasm/i; // نماذج قراءة النصوص: كبيرة جداً، تبقى من الإنترنت
@@ -35,6 +35,11 @@ self.addEventListener("activate", function (e) {
         }).then(function () { return caches.delete(k); });
       }));
     });
+  }).then(function () {
+    // تنظيف: نسخ البرامج القديمة المحفوظة بـ ?v=… (كانت تتراكم مع كل فتح وتملأ ذاكرة الهاتف)
+    return caches.open(CACHE).then(function (c) { return c.keys().then(function (reqs) {
+      return Promise.all(reqs.filter(function (q) { var x = new URL(q.url); return x.origin === self.location.origin && x.searchParams.has("v"); }).map(function (q) { return c.delete(q); }));
+    }); });
   }).catch(function () {}).then(function () { return self.clients.claim(); }));
 });
 
@@ -64,6 +69,9 @@ self.addEventListener("fetch", function (e) {
   }
 
   var nav = r.mode === "navigate";
+  // البرامج: اللوحة تضيف ?v=… لكل فتح؛ تُحذف هنا فيُحفظ البرنامج مرة واحدة، ويُطلب من الموقع «هل تغيّر؟» فقط
+  // (إن لم يتغيّر يعود الجواب فارغاً تقريباً بدل تنزيل الصفحة كاملة)
+  if (nav && u.searchParams.has("v")) { u.searchParams.delete("v"); r = new Request(u.href, { credentials: "same-origin" }); }
   // لوحة التحكم: فتح فوري من النسخة المحفوظة، ثم تُجلب النسخة الجديدة في الخلفية وتُبلَّغ الصفحة إن تغيّرت
   if (nav && (u.pathname === "/apps.html" || u.pathname === "/")) {
     var key = "/apps.html";
@@ -86,7 +94,7 @@ self.addEventListener("fetch", function (e) {
     return;
   }
   // الصفحات: من الشبكة دون ذاكرة المتصفح، حتى تظهر آخر نسخة
-  var req = nav ? new Request(r.url, { cache: "no-store", credentials: "same-origin" }) : r;
+  var req = nav ? new Request(r.url, { cache: "no-cache", credentials: "same-origin" }) : r;
   var net = fetch(req).then(clean).then(function (res) { return store(r, res); });
   var saved = function () {
     return caches.match(r, { ignoreSearch: true }).then(function (m) {
