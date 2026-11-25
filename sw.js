@@ -3,7 +3,7 @@
 //   (ثم تُحدَّث النسخة في الخلفية) — حتى لا تبقى الشاشة سوداء مع LTE ضعيف.
 // - مكتبات Firebase والخطوط (ثابتة برقم إصدار): من النسخة المحفوظة مباشرة.
 // - لا يحفظ بيانات Firebase (تبقى مزامنتها كما هي).
-var CACHE = "egtph-v3";
+var CACHE = "egtph-v4";
 var CORE = ["/apps.html", "/egtph-auth.js", "/egtph-lock.js", "/manifest.webmanifest", "/icons/icon-180.png"];
 var EXTERNAL = /^https:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com\/firebasejs\/)/;
 var NAV_WAIT = 3500, FILE_WAIT = 5000;
@@ -56,6 +56,27 @@ self.addEventListener("fetch", function (e) {
   }
 
   var nav = r.mode === "navigate";
+  // لوحة التحكم: فتح فوري من النسخة المحفوظة، ثم تُجلب النسخة الجديدة في الخلفية وتُبلَّغ الصفحة إن تغيّرت
+  if (nav && (u.pathname === "/apps.html" || u.pathname === "/")) {
+    var key = "/apps.html";
+    e.respondWith(caches.match(key).then(function (m) {
+      var oldText = m ? m.clone().text() : Promise.resolve(null); // تُقرأ قبل تسليم النسخة للصفحة
+      var net = fetch(new Request(self.location.origin + key, { cache: "no-store", credentials: "same-origin" })).then(clean).then(function (res) {
+        if (!res || !res.ok) return res;
+        var a = res.clone();
+        return Promise.all([a.text(), oldText]).then(function (x) {
+          if (x[0] === x[1]) return res;
+          return caches.open(CACHE).then(function (c) { return c.put(key, res.clone()); }).then(function () {
+            if (m) setTimeout(function () { self.clients.matchAll({ type: "window" }).then(function (cs) { cs.forEach(function (c) { c.postMessage({ type: "egtph-new-version", path: key }); }); }); }, 2000); // بعد جاهزية الصفحة
+            return res;
+          });
+        });
+      });
+      if (m) { e.waitUntil(net.then(function () { return new Promise(function (ok) { setTimeout(ok, 2500); }); }).catch(function () {})); return m; }
+      return net.catch(function () { return Response.error(); });
+    }));
+    return;
+  }
   // الصفحات: من الشبكة دون ذاكرة المتصفح، حتى تظهر آخر نسخة
   var req = nav ? new Request(r.url, { cache: "no-store", credentials: "same-origin" }) : r;
   var net = fetch(req).then(clean).then(function (res) { return store(r, res); });
@@ -76,4 +97,20 @@ self.addEventListener("fetch", function (e) {
     });
     // لا نسخة محفوظة بعد المهلة: ننتظر الشبكة مهما طالت
   }));
+});
+
+// إشعارات الهاتف: الضغط على الإشعار يفتح اللوحة (أو البرنامج المعني)
+self.addEventListener("notificationclick", function (e) {
+  e.notification.close();
+  var app = e.notification.data && e.notification.data.app;
+  var url = "/apps.html" + (app ? "#" + encodeURIComponent(app) : "");
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (cs) {
+    for (var i = 0; i < cs.length; i++) { if (/\/apps\.html/.test(cs[i].url) && cs[i].focus) { return cs[i].focus(); } }
+    return self.clients.openWindow ? self.clients.openWindow(url) : null;
+  }));
+});
+// جاهز لإشعارات تُرسل من خادم مستقبلاً (Web Push)
+self.addEventListener("push", function (e) {
+  var d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { body: e.data && e.data.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || "EGTPH", { body: d.body || "", icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", tag: d.tag || "egtph", data: { app: d.app || "" } }));
 });
