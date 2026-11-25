@@ -125,6 +125,25 @@
     return "كلمة السر غير صحيحة، أعد المحاولة.";
   }
 
+  // داخل لوحة التحكم: إن كانت كلمة السر محفوظة بـ Face ID، اللوحة تُدخل البرنامج دون سؤال
+  function inDashboard() { try { return global.parent !== global && /\/apps\.html$/.test(global.parent.location.pathname); } catch (e) { return false; } }
+  function askDashboard(appId) {
+    return new Promise(function (res) {
+      if (!inDashboard()) return res(false);
+      var done = false, tm = setTimeout(function () { fin(false); }, 6000);
+      function fin(v) { if (done) return; done = true; clearTimeout(tm); global.removeEventListener("message", on); res(v); }
+      function on(e) { if (e.origin === location.origin && e.data && e.data.type === "egtph-sso-done") fin(!!e.data.ok); }
+      global.addEventListener("message", on);
+      try { global.parent.postMessage({ type: "egtph-need-login", appId: appId }, location.origin); } catch (x) { fin(false); }
+    });
+  }
+  function promptLoginSso(opts) {
+    return askDashboard(opts.appId).then(function (ok) {
+      var s = ok && loadSession(opts.appId);
+      if (s && s.refreshToken) return refreshToken(opts.apiKey, s.refreshToken).then(function (d) { saveSession(opts.appId, d); return d.idToken; }, function () { return promptLogin(opts); });
+      return promptLogin(opts);
+    });
+  }
   function promptLogin(opts) {
     return new Promise(function (resolve) {
       var overlay = buildOverlay();
@@ -133,8 +152,9 @@
       var passInput = document.getElementById("egtphAuthPass");
       var errBox = document.getElementById("egtphAuthErr");
       passInput.focus();
-      function done(d, role) {
+      function done(d, role, email, pw) {
         saveSession(opts.appId, d, { role: role, loginAt: Date.now() });
+        if (role === "owner" && pw) try { if (inDashboard()) global.parent.postMessage({ type: "egtph-owner-pw", email: email, pw: pw }, location.origin); } catch (e) {}
         form.removeEventListener("submit", onSubmit);
         overlay.style.display = "none";
         passInput.value = "";
@@ -161,7 +181,7 @@
         var email = name ? (/^\d+$/.test(name) ? name + "@gmail.com" : name) : opts.email;
         var role = (!name || email.toLowerCase() === String(opts.email).toLowerCase()) ? "owner" : "viewer";
         errBox.textContent = "...";
-        signIn(opts.apiKey, email, pw).then(function (d) { done(d, role); })
+        signIn(opts.apiKey, email, pw).then(function (d) { done(d, role, email, pw); })
           .catch(function (err) {
             errBox.textContent = errText(err && err.message);
             passInput.value = "";
@@ -365,10 +385,10 @@
         return ready(appId, opts, d.idToken);
       }).catch(function () {
         clearSession(appId);
-        return promptLogin(opts).then(function (token) { return ready(appId, opts, token); });
+        return promptLoginSso(opts).then(function (token) { return ready(appId, opts, token); });
       });
     }
-    return promptLogin(opts).then(function (token) { return ready(appId, opts, token); });
+    return promptLoginSso(opts).then(function (token) { return ready(appId, opts, token); });
   }
 
   function init(opts) {
@@ -401,10 +421,10 @@
     }
     if (cur && cur.refreshToken && !tooOld(cur)) {
       p = refreshToken(opts.apiKey, cur.refreshToken).then(function (d) { saveSession(appId, d); return adopt(d.idToken); })
-        .catch(function () { clearSession(appId); return promptLogin(opts).then(adopt); });
+        .catch(function () { clearSession(appId); return promptLoginSso(opts).then(adopt); });
     } else {
       clearSession(appId);
-      p = promptLogin(opts).then(adopt);
+      p = promptLoginSso(opts).then(adopt);
     }
     p = p.then(function (v) { pendingRefresh[appId] = null; return v; }, function (e) { pendingRefresh[appId] = null; throw e; });
     pendingRefresh[appId] = p;
