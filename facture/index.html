@@ -314,6 +314,7 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 <div class="actions" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center">
 <button class="btn btn-primary" onclick="saveDoc()">💾 Sauvegarder</button>
 <button class="btn btn-success" onclick="printDoc()">🖨️ PDF</button>
+<button class="btn btn-outline" onclick="egtphShowCheck(false)">🔍 Vérifier</button>
 <button class="btn btn-outline" onclick="newDoc()">＋ Nouveau</button>
 <button class="btn btn-outline" id="btnUndo" onclick="undoEdit()" title="Défaire">↶</button>
 <button class="btn btn-outline" id="btnRedo" onclick="redoEdit()" title="Refaire">↷</button>
@@ -790,18 +791,23 @@ function calc(){
 }
 
 function amountWords(v){const c=Math.round((Number(v)||0)*100);const dz=Math.floor(c/100),ct=c%100;return numToWords(dz)+' DINARS ALGÉRIENS'+(ct?' ET '+numToWords(ct)+' CENTIMES':'');}
-function numToWords(n){
-  if(n===0)return 'ZÉRO';
-  const u=['','UN','DEUX','TROIS','QUATRE','CINQ','SIX','SEPT','HUIT','NEUF','DIX','ONZE','DOUZE','TREIZE','QUATORZE','QUINZE','SEIZE','DIX-SEPT','DIX-HUIT','DIX-NEUF'];
-  const t=['','','VINGT','TRENTE','QUARANTE','CINQUANTE','SOIXANTE','SOIXANTE','QUATRE-VINGT','QUATRE-VINGT'];
-  function c100(x){if(x<20)return u[x];let d=Math.floor(x/10),r=x%10;if(r===1&&d>=2&&d<=6)return t[d]+' ET UN';if(d===7&&r===1)return 'SOIXANTE ET ONZE';if(d===7||d===9)return t[d]+(r===0?'':'-'+u[10+r]);if(d===8&&r===0)return 'QUATRE-VINGTS';return t[d]+(r===0?'':'-'+u[r]);}
-  function c1000(x){if(x===0)return '';if(x<100)return c100(x);let h=Math.floor(x/100),r=x%100;return(h===1?'CENT':u[h]+' CENT'+(r===0?'S':''))+(r===0?'':' '+c100(r));}
-  let s='';
-  if(n>=1000000){let m=Math.floor(n/1000000);s+=(m===1?'UN ':c1000(m)+' ')+'MILLION'+(m>1?'S ':' ');n%=1000000;}
-  if(n>=1000){let k=Math.floor(n/1000);s+=(k===1?'MILLE':c1000(k)+' MILLE')+' ';n%=1000;}
-  if(n>0)s+=c1000(n);
-  return s.trim().replace(/\s+/g,' ').replace(/- /g,'-');
+// تحويل صحيح للأرقام إلى حروف بالفرنسية (القواعد التقليدية): يُستعمل في الفواتير والطلبيات والتسيير
+function egtphFrWords(n){
+  n=Math.floor(Math.abs(Number(n)||0));if(n===0)return 'zéro';
+  var U=['','un','deux','trois','quatre','cinq','six','sept','huit','neuf','dix','onze','douze','treize','quatorze','quinze','seize','dix-sept','dix-huit','dix-neuf'];
+  var T=['','','vingt','trente','quarante','cinquante','soixante','soixante','quatre-vingt','quatre-vingt'];
+  function c100(x,fin){if(x<20)return U[x];var d=Math.floor(x/10),r=x%10;
+    if(d===7||d===9){if(d===7&&r===1)return 'soixante et onze';return T[d]+'-'+U[10+r];}
+    if(d===8)return r===0?(fin?'quatre-vingts':'quatre-vingt'):'quatre-vingt-'+U[r];
+    if(r===1)return T[d]+' et un';return T[d]+(r?'-'+U[r]:'');}
+  function c1000(x,fin){var h=Math.floor(x/100),r=x%100,s='';if(h)s=(h===1?'cent':U[h]+' cent'+(r===0&&fin?'s':''));if(r)s+=(s?' ':'')+c100(r,fin);return s;}
+  var g=[[1e9,'milliard'],[1e6,'million']],out=[];
+  g.forEach(function(p){var q=Math.floor(n/p[0]);if(q){out.push(q===1?'un '+p[1]:c1000(q,true)+' '+p[1]+'s');n%=p[0];}});
+  var k=Math.floor(n/1000);if(k){out.push(k===1?'mille':c1000(k,false)+' mille');n%=1000;}
+  if(n)out.push(c1000(n,true));
+  return out.join(' ');
 }
+function numToWords(n){return egtphFrWords(n).toUpperCase();}
 
 function syncPrint(){
   const gv=id=>document.getElementById(id).value;
@@ -1759,6 +1765,45 @@ function restorePdfSituation102(){
 // ── البثّ المباشر (SSE) الأذكى: يبثّ syncedAt فقط (طابع خفيف)؛ عند تغيّره يُزامِن فوراً ──
 //    أخفّ بكثير على النت من فحص دوري كل 5 ثوانٍ.
 let _sse=null,_sseRetry=null;
+
+/* ══ Vérification avant impression (avertit seulement, ne modifie rien) ══ */
+function egtphCheckDoc(data){
+  const W=[],nrm=x=>String(x||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const docs=(db&&db.documents)||[],me=db&&db.currentDocId,tot=calcTotals(data),items=_arr(data.items),type=String(data.type||'');
+  const f2=v=>fmt(v);
+  if(!String(data.num||'').trim())W.push('N° du document vide.');
+  if(!String(data.clientName||'').trim())W.push('Client / projet non renseigné.');
+  if(!data.date)W.push('Date non renseignée.');
+  else{const today=new Date().toISOString().slice(0,10);if(data.date>today)W.push('Date dans le futur ('+data.date.split('-').reverse().join('/')+').');
+    const y=(String(data.num||'').match(/(20\d\d)/)||[])[1];if(y&&y!==data.date.slice(0,4))W.push('Le N° indique '+y+' mais la date est en '+data.date.slice(0,4)+'.');}
+  const n0=nrm(data.num);
+  if(n0){const dup=docs.find(d=>d.id!==me&&nrm(d.num)===n0&&String(d.type||'')===type);if(dup)W.push('N° déjà utilisé : '+type+' '+dup.num+' du '+String(dup.date||'').split('-').reverse().join('/')+' ('+(dup.clientName||'')+').');}
+  if(tot.net>0){const sim=docs.find(d=>d.id!==me&&String(d.type||'')===type&&nrm(d.clientName)===nrm(data.clientName)&&Math.abs(docTotal(d,'net')-tot.net)<0.01);if(sim)W.push('Document semblable déjà existant (même client, même montant) : N° '+sim.num+' du '+String(sim.date||'').split('-').reverse().join('/')+' — doublon ?');}
+  const cn=String(data.clientName||'').trim();
+  const cnRaw=String(data.clientName||'').toLowerCase();if(cn&&!(db.clients||[]).some(c=>String(c.name||'').toLowerCase()===cnRaw)){const near=(db.clients||[]).find(c=>nrm(c.name)===nrm(cn));if(near)W.push('Le client « '+cn+' » existe déjà sous le nom « '+near.name+' » : un deuxième client serait créé.');}
+  const useAv=documentUsesAvancement(data);
+  items.forEach((it,i)=>{const q=parseFloat(it.qty)||0,pu=parseFloat(it.pu)||0,ds=String(it.desig||'').trim(),L='Ligne '+(i+1)+' : ';
+    if(!ds&&q*pu>0)W.push(L+'désignation vide ('+f2(q*pu)+').');
+    if(ds&&(q<=0||pu<=0))W.push(L+(q<=0?'quantité':'prix unitaire')+' à zéro — « '+ds.slice(0,40)+' ».');
+    if(useAv){const a=parseFloat(it.avancement);if(Number.isFinite(a)&&(a<0||a>100))W.push(L+'avancement '+a+' % (doit être entre 0 et 100).');}});
+  if(!items.length)W.push('Aucune ligne dans le document.');
+  else if(tot.net<=0&&type!=='AVOIR')W.push('Net à payer = 0,00.');
+  if(tot.acc>0&&tot.acc>tot.ht+tot.tva-tot.garantie+0.005)W.push('Les déductions ('+f2(tot.acc)+') dépassent le total : le net est ramené à 0.');
+  const tv=parseFloat(data.tvaRate)||0;
+  if(['FACTURE','PROFORMA','SITUATION ACTUELLE','DÉCOMPTE FINAL'].includes(type)&&Math.abs(tv-0.19)>1e-9)W.push('TVA à '+Math.round(tv*100)+' % : vérifiez le taux.');
+  const g=parseFloat(data.garantieRate)||0;if(g&&g!==5)W.push('Retenue de garantie inhabituelle : '+g+' %.');
+  return W;
+}
+function egtphShowCheck(asPrint){
+  const W=egtphCheckDoc(scrapeForm());
+  if(!W.length){toast('✓ Vérification : aucune anomalie.');return true;}
+  const txt='Vérification du document — '+W.length+' point(s) :\n\n• '+W.join('\n• ');
+  if(asPrint)return confirm(txt+'\n\nImprimer quand même ?');
+  alert(txt);return false;
+}
+const __egtphPrintDoc=printDoc;
+printDoc=function(){if(!egtphShowCheck(true))return;return __egtphPrintDoc.apply(this,arguments);};
+
 function startCloudStream(){
   if(_cloudAuthBlocked||!_cloudAuthReady||!_authToken())return;
   if(!('EventSource' in window))return; // متصفّح قديم → الفحص الدوري يكفي

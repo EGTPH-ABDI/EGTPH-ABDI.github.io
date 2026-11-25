@@ -9513,15 +9513,25 @@ if (document.readyState === 'loading') {
   window.toggleLanguage=function(){window.setAppLanguage(getAppLanguage()==='fr'?'ar':'fr');};
   window.amountToFrenchWords=function(v){
     let n=Math.round(Number(v)||0); if(n===0)return 'zéro dinar algérien';
-    const u=['zéro','un','deux','trois','quatre','cinq','six','sept','huit','neuf','dix','onze','douze','treize','quatorze','quinze','seize','dix-sept','dix-huit','dix-neuf'];
-    const d=['','','vingt','trente','quarante','cinquante','soixante'];
-    const under100=x=>{if(x<20)return u[x]; if(x<70){const t=Math.floor(x/10),r=x%10;return d[t]+(r===1?' et un':r?'-'+u[r]:'');} if(x<80){const r=x-60;return 'soixante'+(r===11?' et onze':'-'+under100(r));} const r=x-80;return 'quatre-vingt'+(r?'-'+under100(r):'s');};
-    const under1000=x=>{const h=Math.floor(x/100),r=x%100;let s='';if(h){s=h===1?'cent':u[h]+' cent'+(r===0&&h>1?'s':'');}return s+(h&&r?' ':'')+(r?under100(r):'');};
-    const part=(x,one,many)=>{if(!x)return ''; if(x===1)return one; return under1000(x)+' '+many+(x>1&&many==='million'?'s':'');};
-    const billions=Math.floor(n/1e9),millions=Math.floor((n%1e9)/1e6),thousands=Math.floor((n%1e6)/1000),rest=n%1000;
-    const a=[]; if(billions)a.push(part(billions,'un milliard','milliard')); if(millions)a.push(part(millions,'un million','million')); if(thousands)a.push(thousands===1?'mille':under1000(thousands)+' mille'); if(rest)a.push(under1000(rest));
-    return a.join(' ')+' dinars algériens';
+    return egtphFrWords(n)+' dinars algériens';
   };
+  // تحويل صحيح للأرقام إلى حروف بالفرنسية (القواعد التقليدية): يُستعمل في الفواتير والطلبيات والتسيير
+  function egtphFrWords(n){
+    n=Math.floor(Math.abs(Number(n)||0));if(n===0)return 'zéro';
+    var U=['','un','deux','trois','quatre','cinq','six','sept','huit','neuf','dix','onze','douze','treize','quatorze','quinze','seize','dix-sept','dix-huit','dix-neuf'];
+    var T=['','','vingt','trente','quarante','cinquante','soixante','soixante','quatre-vingt','quatre-vingt'];
+    function c100(x,fin){if(x<20)return U[x];var d=Math.floor(x/10),r=x%10;
+      if(d===7||d===9){if(d===7&&r===1)return 'soixante et onze';return T[d]+'-'+U[10+r];}
+      if(d===8)return r===0?(fin?'quatre-vingts':'quatre-vingt'):'quatre-vingt-'+U[r];
+      if(r===1)return T[d]+' et un';return T[d]+(r?'-'+U[r]:'');}
+    function c1000(x,fin){var h=Math.floor(x/100),r=x%100,s='';if(h)s=(h===1?'cent':U[h]+' cent'+(r===0&&fin?'s':''));if(r)s+=(s?' ':'')+c100(r,fin);return s;}
+    var g=[[1e9,'milliard'],[1e6,'million']],out=[];
+    g.forEach(function(p){var q=Math.floor(n/p[0]);if(q){out.push(q===1?'un '+p[1]:c1000(q,true)+' '+p[1]+'s');n%=p[0];}});
+    var k=Math.floor(n/1000);if(k){out.push(k===1?'mille':c1000(k,false)+' mille');n%=1000;}
+    if(n)out.push(c1000(n,true));
+    return out.join(' ');
+  }
+  
   window.frenchAIKeywords=function(q){
     let a=''; const has=r=>r.test(q);
     if(has(/fournisseur|fournisseurs/i))a+=' مورد';

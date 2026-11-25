@@ -673,20 +673,23 @@ function calcReste(){
 // ══ LETTRES ══
 const ones=['','un','deux','trois','quatre','cinq','six','sept','huit','neuf','dix','onze','douze','treize','quatorze','quinze','seize','dix-sept','dix-huit','dix-neuf'];
 const tens=['','','vingt','trente','quarante','cinquante','soixante','soixante','quatre-vingt','quatre-vingt'];
-function toWords(n){
-  n=Math.round(n);if(n===0)return'zéro';if(n<0)return'moins '+toWords(-n);
-  if(n<20)return ones[n];
-  if(n<100){const t=Math.floor(n/10),r=n%10;
-    if(t===7||t===9)return tens[t]+(r===0?'':'-'+(ones[10+r]));
-    if(t===8)return'quatre-vingt'+(r===0?'s':'-'+ones[r]);
-    return tens[t]+(r===0?'':'-'+ones[r]);}
-  if(n<1000){const h=Math.floor(n/100),r=n%100;
-    return(h===1?'cent':(ones[h]+' cent'))+(r===0?(h>1?'s':''):' '+toWords(r));}
-  if(n<1000000){const m=Math.floor(n/1000),r=n%1000;
-    return(m===1?'mille':(toWords(m)+' mille'))+(r===0?'':' '+toWords(r));}
-  const m=Math.floor(n/1000000),r=n%1000000;
-  return toWords(m)+' million'+(m>1?'s':'')+(r===0?'':' '+toWords(r));
+// تحويل صحيح للأرقام إلى حروف بالفرنسية (القواعد التقليدية): يُستعمل في الفواتير والطلبيات والتسيير
+function egtphFrWords(n){
+  n=Math.floor(Math.abs(Number(n)||0));if(n===0)return 'zéro';
+  var U=['','un','deux','trois','quatre','cinq','six','sept','huit','neuf','dix','onze','douze','treize','quatorze','quinze','seize','dix-sept','dix-huit','dix-neuf'];
+  var T=['','','vingt','trente','quarante','cinquante','soixante','soixante','quatre-vingt','quatre-vingt'];
+  function c100(x,fin){if(x<20)return U[x];var d=Math.floor(x/10),r=x%10;
+    if(d===7||d===9){if(d===7&&r===1)return 'soixante et onze';return T[d]+'-'+U[10+r];}
+    if(d===8)return r===0?(fin?'quatre-vingts':'quatre-vingt'):'quatre-vingt-'+U[r];
+    if(r===1)return T[d]+' et un';return T[d]+(r?'-'+U[r]:'');}
+  function c1000(x,fin){var h=Math.floor(x/100),r=x%100,s='';if(h)s=(h===1?'cent':U[h]+' cent'+(r===0&&fin?'s':''));if(r)s+=(s?' ':'')+c100(r,fin);return s;}
+  var g=[[1e9,'milliard'],[1e6,'million']],out=[];
+  g.forEach(function(p){var q=Math.floor(n/p[0]);if(q){out.push(q===1?'un '+p[1]:c1000(q,true)+' '+p[1]+'s');n%=p[0];}});
+  var k=Math.floor(n/1000);if(k){out.push(k===1?'mille':c1000(k,false)+' mille');n%=1000;}
+  if(n)out.push(c1000(n,true));
+  return out.join(' ');
 }
+function toWords(n){n=Math.round(Number(n)||0);if(n<0)return 'moins '+toWords(-n);return egtphFrWords(n);}
 function numberToWords(n){
   const i=Math.floor(n),c=Math.round((n-i)*100);
   let s=toWords(i)+' dinar'+(i>1?'s':'')+' algérien'+(i>1?'s':'');
