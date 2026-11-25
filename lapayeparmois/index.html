@@ -3039,13 +3039,13 @@ function _misCalc(){const w=getW(_wid);if(!w)return null;const daily=(+w.salary|
  else{/* عدد الأيام فقط بدون تاريخ: تُسجَّل كلها في دورة واحدة. تلقائياً: الحالية إن اتسعت لها أيامها المنقضية، وإلا السابقة */
   const n=Math.round(Math.max(0,+document.getElementById("mis_days").value||0)*100)/100;const pick=(document.getElementById("mis_cyc")||{}).value||"auto";
   const cur=getActiveCycle(_wid),prv=advanceCyclePrevious(cur),prvOk=advanceCycleCompare(prv,advanceFirstCycle(w))>=0;
-  const winC=cycleWindow(w,cur.m,cur.yr),el=Math.max(0,Math.min(30,Math.floor(((_toDate(todayISO())||new Date)-winC.from)/864e5)+1));
+  const winC=cycleWindow(w,cur.m,cur.yr);let el=0;{const T=_toDate(todayISO())||new Date;for(let d=new Date(winC.from);d<=T&&el<30;d.setDate(d.getDate()+1))if(d.getDay()!==5)el++}/* أيام العمل المنقضية دون الجمعات: المهمة لا تشمل الجمعة */
   const freeCur=Math.max(0,el-_misDaysInCycle(_wid,cur.m,cur.yr));
-  let t=cur,why="";if(pick==="prev"){if(prvOk)t=prv;else err="لا توجد دورة سابقة لهذا العامل"}else if(pick==="auto"){if(n>freeCur&&prvOk){t=prv;why=" (تلقائياً: الدورة الحالية لم يمض منها إلا "+el+" يوم)"}else why=" (تلقائياً)"}
+  let t=cur,why="";if(pick==="prev"){if(prvOk)t=prv;else err="لا توجد دورة سابقة لهذا العامل"}else if(pick==="auto"){if(n>freeCur&&prvOk){t=prv;why=" (تلقائياً: الدورة الحالية لم يمض منها إلا "+el+" يوم عمل دون الجمعات)"}else why=" (تلقائياً)"}
   if(n>30)err="أيام المهمة لا تتعدى 30 يوماً في الدورة";
   const winT=cycleWindow(w,t.m,t.yr),st=_toDate(w.startDate);from=_isoDate(st&&st>winT.from?st:winT.from);to=from;
   cycTxt="📆 تُسجَّل في دورة "+MN[t.m]+" "+t.yr+" ("+cycleRangeStr(w,t.m,t.yr)+")"+why;
-  if(t===cur&&n>freeCur)cycTxt+="<br>⚠️ مضى من الدورة الحالية "+el+" يوم فقط"+(freeCur<el?" (منها "+(el-freeCur)+" يوم مهمة مسجلة)":"")+" — أدخل الأيام بعد أن يعملها العامل";
+  if(t===cur&&n>freeCur)cycTxt+="<br>⚠️ مضى من الدورة الحالية "+el+" يوم عمل فقط (دون الجمعات)"+(freeCur<el?" (منها "+(el-freeCur)+" يوم مهمة مسجلة)":"")+" — أدخل الأيام بعد أن يعملها العامل";
   if(n>0)_cnt={m:t.m,yr:t.yr,from:from,to:from,days:n,isos:[],ws:[]}}
  /* توزيع الأيام على الدورات: ما زاد عن دورة يُنقل للدورة التالية */
  const segs=[];list.forEach(x=>{const a=cycleAnchorForDate(w,x.iso);let sg=segs[segs.length-1];if(!sg||sg.m!==a.m||sg.yr!==a.yr){sg={m:a.m,yr:a.yr,from:x.iso,to:x.iso,days:0,isos:[],ws:[]};segs.push(sg)}sg.to=x.iso;sg.isos.push(x.iso);sg.ws.push(x.v);sg.days=Math.round((sg.days+x.v)*100)/100});
