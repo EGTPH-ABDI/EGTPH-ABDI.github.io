@@ -466,3 +466,51 @@
     enableViewerMode: enableViewerMode
   };
 })(window);
+
+// ════════════════════════════════════════════════════════════
+// مراقبة الإرسال إلى Firebase (لكل البرامج) — مراقبة فقط، دون إعادة إرسال
+// كل برنامج يحفظ نسخته على الهاتف ويدمجها مع Firebase بنفسه عند عودة الشبكة.
+// هنا: نعدّ عمليات الحفظ التي لم تصل (انقطاع الشبكة)، ونُبلغ لوحة التحكم،
+// ونحتفظ بنسخة أمان من آخر محتوى لم يُرسل (IndexedDB egtph_safety) لاسترجاعه عند الحاجة.
+// ════════════════════════════════════════════════════════════
+(function (global) {
+  "use strict";
+  if (!global.fetch || global.__egtphNetGuard) return;
+  global.__egtphNetGuard = true;
+  var KEY = "egtph_net_pending";
+  var APP = (location.pathname.split("/")[1] || "apps").replace(/\.html$/, "");
+  var orig = global.fetch.bind(global);
+  function load() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } }
+  function save(p) { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch (e) {} }
+  function count(p) { var n = 0; Object.keys(p).forEach(function (k) { if (p[k].app === APP) n++; }); return n; }
+  function tell() {
+    try { if (global.parent && global.parent !== global) global.parent.postMessage({ type: "egtph-net", app: APP, pending: count(load()) }, location.origin); } catch (e) {}
+  }
+  function safety(path, body) {
+    if (typeof body !== "string" || !global.indexedDB) return;
+    try {
+      var rq = indexedDB.open("egtph_safety", 1);
+      rq.onupgradeneeded = function () { rq.result.createObjectStore("w"); };
+      rq.onsuccess = function () {
+        try { var tx = rq.result.transaction("w", "readwrite"); tx.objectStore("w").put({ app: APP, path: path, body: body, at: Date.now() }, APP + "|" + path); tx.oncomplete = function () { rq.result.close(); }; } catch (e) {}
+      };
+    } catch (e) {}
+  }
+  global.fetch = function (input, init) {
+    var url = typeof input === "string" ? input : (input && input.url) || "";
+    var method = String((init && init.method) || (input && input.method) || "GET").toUpperCase();
+    if (!/firebasedatabase\.app\//.test(url) || method === "GET") return orig(input, init);
+    var path = url.replace(/^https:\/\/([^/]+)/, "$1").split("?")[0];
+    var body = init && init.body;
+    return orig(input, init).then(function (res) {
+      // حُفظ في Firebase: تُمحى العلامة
+      if (res && res.ok) { var p = load(); if (p[path]) { delete p[path]; save(p); tell(); } }
+      return res;
+    }, function (err) {
+      var p = load(); p[path] = { app: APP, at: Date.now(), method: method }; save(p); safety(path, body); tell();
+      throw err;
+    });
+  };
+  global.addEventListener("online", tell);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", tell); else tell();
+})(window);
