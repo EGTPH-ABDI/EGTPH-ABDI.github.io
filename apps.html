@@ -18,7 +18,7 @@
 <title>EGTPH — لوحة التحكم</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
 :root{
   --bg:#07101d;--bg2:#0a1728;--panel:#0d1d32;--panel2:#102740;--line:#243c59;--line2:#365275;
@@ -666,7 +666,9 @@ function lockModal(){if(isViewer)return;var c=lockCfg();modal(t("الدخول ا
  '<p class="st">Face ID : <b class="'+(c.face?"ok":"no")+'">'+esc(c.face?t("مفعّل","activé"):t("غير مفعّل","désactivé"))+'</b></p><div class="row"><button class="action" id="lkFace">🙂 '+esc(c.face?t("إعادة ربط Face ID","Relier Face ID à nouveau"):t("ربط Face ID بهذا الهاتف","Relier Face ID à ce téléphone"))+'</button></div>'+
  '<hr><div class="row"><button class="action" id="lkNow">🔒 '+esc(t("اقفل الآن","Verrouiller maintenant"))+'</button><button class="action" style="color:var(--red)" id="lkOff">'+esc(t("إلغاء القفل على هذا الجهاز","Désactiver le verrou sur cet appareil"))+'</button></div><p class="st" id="lkMsg"></p></div>');
  var msg=function(x){document.getElementById("lkMsg").textContent=x};
- document.getElementById("lkFace").onclick=function(){faceAvailable().then(function(ok){if(!ok)return msg(t("Face ID غير متاح في هذا المتصفح. افتح اللوحة في Safari على iPhone.","Face ID indisponible dans ce navigateur. Ouvrez le tableau dans Safari sur iPhone."));lockSetupFace().then(function(){try{sessionStorage.setItem(LOCK_SESSION,"1")}catch(e){}toast(t("تم ربط Face ID.","Face ID relié."));lockModal()}).catch(function(e){msg(t("لم يكتمل ربط Face ID.","Liaison Face ID non aboutie.")+" "+(e&&e.name||""))})})};
+ var faceOk=null;faceAvailable().then(function(ok){faceOk=ok}).catch(function(){faceOk=false});
+ /* Safari: navigator.credentials.create يجب أن يُستدعى مباشرة داخل النقر، وإلا يُرفض دون أي نافذة */
+ document.getElementById("lkFace").onclick=function(){var btn=this;if(faceOk===false||!window.PublicKeyCredential||!navigator.credentials)return msg(t("Face ID غير متاح في هذا المتصفح. افتح اللوحة في Safari على iPhone.","Face ID indisponible dans ce navigateur. Ouvrez le tableau dans Safari sur iPhone."));btn.disabled=true;msg(t("جارٍ فتح Face ID…","Ouverture de Face ID…"));var old=lockCfg().face;lockSetupFace().then(function(){try{sessionStorage.setItem(LOCK_SESSION,"1")}catch(e){}lockTouch();toast(t("تم ربط Face ID.","Face ID relié."));lockModal()}).catch(function(e){btn.disabled=false;if(old){var c=lockCfg();c.face=old;lockSave(c)}var n=e&&e.name||"";msg(n==="NotAllowedError"?t("أُلغي Face ID أو انتهت المهلة. اضغط مرة أخرى.","Face ID annulé ou délai dépassé. Touchez à nouveau."):n==="InvalidStateError"?t("هذا الهاتف مربوط مسبقاً. احذف مفتاح EGTPH من الإعدادات ← كلمات السر ثم أعد الربط.","Déjà relié : supprimez la clé EGTPH dans Réglages ← Mots de passe, puis reliez à nouveau."):t("لم يكتمل ربط Face ID.","Liaison Face ID non aboutie.")+" "+n)})};
  document.getElementById("lkNow").onclick=function(){closeModal();if(!lockOn())return toast(t("فعّل Face ID أولاً.","Activez d’abord Face ID."));lockRelock()};
  document.getElementById("lkOff").onclick=function(){if(!confirm(t("إلغاء Face ID على هذا الجهاز؟","Désactiver Face ID sur cet appareil ?")))return;try{localStorage.removeItem(LOCK_KEY)}catch(e){}lockPersist(false);toast(t("أُلغي القفل على هذا الجهاز.","Verrou désactivé sur cet appareil."));lockModal()};
 }
