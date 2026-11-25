@@ -311,10 +311,10 @@ body{background:white;margin:0;padding:0;-webkit-print-color-adjust:exact;print-
 </div>
 </div>
 
+<div id="egtphCheckBar" class="no-print" onclick="egtphShowCheck(false)" style="display:none;margin:8px 0;padding:9px 12px;border-radius:10px;font-weight:700;font-size:.85rem;cursor:pointer;text-align:center"></div>
 <div class="actions" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center">
 <button class="btn btn-primary" onclick="saveDoc()">💾 Sauvegarder</button>
 <button class="btn btn-success" onclick="printDoc()">🖨️ PDF</button>
-<button class="btn btn-outline" onclick="egtphShowCheck(false)">🔍 Vérifier</button>
 <button class="btn btn-outline" onclick="newDoc()">＋ Nouveau</button>
 <button class="btn btn-outline" id="btnUndo" onclick="undoEdit()" title="Défaire">↶</button>
 <button class="btn btn-outline" id="btnRedo" onclick="redoEdit()" title="Refaire">↷</button>
@@ -1801,6 +1801,17 @@ function egtphShowCheck(asPrint){
   if(asPrint)return confirm(txt+'\n\nImprimer quand même ?');
   alert(txt);return false;
 }
+/* Vérification automatique pendant la saisie (bandeau au-dessus des boutons) */
+function egtphLiveCheck(){const bar=document.getElementById('egtphCheckBar');if(!bar)return;let W=[];try{W=egtphCheckDoc(scrapeForm());}catch(e){bar.style.display='none';return;}
+  const empty=!String(document.getElementById('docNum').value||'').trim()&&!String(document.getElementById('clientName').value||'').trim();
+  if(empty){bar.style.display='none';return;}
+  bar.style.display='block';
+  if(!W.length){bar.style.background='#e8f7ee';bar.style.color='#1e7e45';bar.style.border='1px solid #9fd9b4';bar.textContent='✓ Vérification automatique : aucune anomalie';}
+  else{bar.style.background='#fff4e0';bar.style.color='#8a4b00';bar.style.border='1px solid #f0b85a';bar.textContent='⚠️ '+W.length+' point(s) à vérifier : '+W[0]+(W.length>1?'  (toucher pour tout voir)':'');}}
+let __egtphLiveT=null;function egtphLiveSoon(){clearTimeout(__egtphLiveT);__egtphLiveT=setTimeout(egtphLiveCheck,500);}
+document.addEventListener('input',egtphLiveSoon,true);document.addEventListener('change',egtphLiveSoon,true);document.addEventListener('click',function(e){if(e.target&&e.target.closest&&e.target.closest('button'))egtphLiveSoon();},true);
+['loadDocById','newDoc','addItem','addDeduction','saveDoc'].forEach(function(n){const f=window[n];if(typeof f==='function'){window[n]=function(){const r=f.apply(this,arguments);egtphLiveSoon();return r;};}});
+setTimeout(egtphLiveCheck,1500);
 const __egtphPrintDoc=printDoc;
 printDoc=function(){if(!egtphShowCheck(true))return;return __egtphPrintDoc.apply(this,arguments);};
 
