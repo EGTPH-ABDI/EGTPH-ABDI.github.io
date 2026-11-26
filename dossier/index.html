@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#111">
 <title>ملف المؤسسة — EGTPH</title>
 <script src="../egtph-lock.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap">
 <script src="../egtph-auth.js"></script>
 <script src="../egtph-scan.js"></script>
 <script src="../egtph-ocr.js"></script>
@@ -68,7 +69,8 @@ table.mini td,table.mini th{border:1px solid #ccc;padding:4px 6px;text-align:cen
   <h1>📁 ملف المؤسسة <small>— Dossier de l'entreprise</small></h1>
   <nav id="nav">
     <button data-v="dos" class="on">الملف</button>
-    <button data-v="sub">🖨 مناقصة جديدة</button>
+    <button data-v="sub">📋 تحضير مناقصة</button>
+    <button data-v="cdc">📑 دفتر الشروط</button>
     <button data-v="hist">السجل</button>
     <button data-v="set">الإعدادات</button>
   </nav>
@@ -103,6 +105,104 @@ const CATS={jur:["الوثائق القانونية","Documents juridiques"],fis
   abe_autre:["شهادات حسن التنفيذ — أشغال أخرى","Attestations de bonne exécution — Autres travaux"]};
 const RHK={att:["شهادة العمل","Attestation de travail"],af:["الانتساب CNAS","Affiliation CNAS"],dip:["الشهادة","Diplôme"],exp:["شهادة الخبرة","Attestation d'expérience"],cni:["بطاقة التعريف","Pièce d'identité"]};
 const RH_ORDER=["att","af","dip","exp"];
+/* postes et diplômes : mêmes listes que egtph-rh */
+const POSTES=[
+ {k:'ing_hydro_p',fr:'Ingénieur en hydraulique',ar:'مهندس في الري'},
+ {k:'tech_hydro_p',fr:'Technicien / TS supérieur en hydraulique',ar:'تقني / تقني سامٍ في الري'},
+ {k:'topo_sup',fr:'TS / TS supérieur en topographie',ar:'تقني / تقني سامٍ في الطوبوغرافيا'},
+ {k:'fusionneur',fr:'Fusionneur PEHD',ar:'لاحم أنابيب PEHD'},
+ {k:'chef_chantier',fr:'Chef de chantier',ar:'رئيس الورشة'},
+ {k:'conducteur_engin',fr:"Conducteur d'engins",ar:'سائق آليات'},
+ {k:'chauffeur',fr:'Chauffeur',ar:'سائق'},
+ {k:'chauffeur_pl',fr:'Chauffeur poids lourds',ar:'سائق وزن ثقيل'},
+ {k:'chauffeur_vl',fr:'Chauffeur véhicule léger',ar:'سائق مركبة خفيفة'},
+ {k:'cond_pelle',fr:'Conducteur de pelle mécanique',ar:'سائق جرافة (حفارة)'},
+ {k:'cond_chargeur',fr:'Conducteur de chargeur',ar:'سائق محمل'},
+ {k:'cond_retro',fr:'Conducteur de rétro-chargeur',ar:'سائق محمل حفار'},
+ {k:'cond_compacteur',fr:'Conducteur de compacteur',ar:'سائق مدحلة'},
+ {k:'mecanicien',fr:'Mécanicien',ar:'ميكانيكي'},
+ {k:'electricien',fr:'Électricien',ar:'كهربائي'},
+ {k:'plombier',fr:'Plombier',ar:'سبّاك'},
+ {k:'aide_macon',fr:'Aide-maçon',ar:'مساعد بنّاء'},
+ {k:'gardien',fr:'Gardien',ar:'حارس'},
+ {k:'macon',fr:'Maçon',ar:'بنّاء'},
+ {k:'conducteur',fr:'Conducteur de travaux',ar:'مدير الأشغال'},
+ {k:'chef_equipe',fr:"Chef d'équipe",ar:'رئيس الفريق'},
+ {k:'ingenieur',fr:'Ingénieur',ar:'مهندس'},
+ {k:'technicien',fr:'Technicien',ar:'تقني'},
+ {k:'tech_sup',fr:'Technicien supérieur',ar:'تقني سامٍ'},
+ {k:'topographe',fr:'Topographe',ar:'طوبوغرافي'},
+ {k:'manoeuvre',fr:'Manœuvre',ar:'عامل'},
+ {k:'ferrailleur',fr:'Ferrailleur',ar:'حدّاد تسليح'},
+ {k:'coffreur',fr:'Coffreur',ar:'نجّار قوالب'},
+ {k:'soudeur',fr:'Soudeur',ar:'لحّام'},
+ {k:'magasinier',fr:'Magasinier',ar:'أمين المخزن'},
+ {k:'secretaire',fr:'Secrétaire',ar:'كاتب(ة)'},
+ {k:'comptable',fr:'Comptable',ar:'محاسب'},
+ {k:'resp_achat',fr:"Responsable Achat",ar:'مسؤول المشتريات'},
+ {k:'gerant',fr:'Gérant',ar:'المسيّر'},
+ {k:'__autre',fr:'Autre…',ar:'أخرى…'}
+];
+const DIPLOMES=[
+ {k:'sans',fr:'Sans diplôme',ar:'بدون شهادة'},
+ {k:'master_hydro',fr:'Master en Hydraulique',ar:'ماستر في الري'},
+ {k:'licence_hydro',fr:'Licence en Hydraulique',ar:'ليسانس في الري'},
+ {k:'techsup_topo',fr:'TS en Topographie',ar:'تقني سامٍ في الطوبوغرافيا'},
+ {k:'pehd',fr:'Diplôme de soudeur PEHD',ar:'شهادة لحام PEHD'},
+ {k:'ing_hydro',fr:"Ingénieur d'État en Hydraulique",ar:'مهندس دولة في الري'},
+ {k:'tech_hydro',fr:'Technicien en Hydraulique',ar:'تقني في الري'},
+ {k:'techsup_hydro',fr:'Technicien supérieur en Hydraulique',ar:'تقني سامٍ في الري'},
+ {k:'tech_topo',fr:'Technicien en Topographie',ar:'تقني في الطوبوغرافيا'},
+ {k:'master_gc',fr:'Master en Génie Civil',ar:'ماستر في الهندسة المدنية'},
+ {k:'licence_gc',fr:'Licence en Génie Civil',ar:'ليسانس في الهندسة المدنية'},
+ {k:'tech_gc',fr:'Technicien en Génie Civil',ar:'تقني في الهندسة المدنية'},
+ {k:'cap',fr:'CAP',ar:'شهادة الكفاءة المهنية'},
+ {k:'bep',fr:'BEP',ar:'شهادة التعليم المهني'},
+ {k:'master_topo',fr:'Master en Topographie',ar:'ماستر في الطوبوغرافيا'},
+ {k:'licence_topo',fr:'Licence en Topographie',ar:'ليسانس في الطوبوغرافيا'},
+ {k:'ing_gc',fr:"Ingénieur d'État en Génie Civil",ar:'مهندس دولة في الهندسة المدنية'},
+ {k:'techsup_gc',fr:'Technicien supérieur en Génie Civil',ar:'تقني سامٍ في الهندسة المدنية'},
+ {k:'cap_conduite',fr:"CAP Conducteur d'engins",ar:'شهادة الكفاءة المهنية – سائق آليات'},
+ {k:'cap_meca',fr:'CAP Mécanique',ar:'شهادة الكفاءة المهنية – ميكانيك'},
+ {k:'__autre',fr:'Autre…',ar:'أخرى…'}
+];
+const posteFr=k=>{const p=POSTES.find(x=>x.k===k);return p?p.fr:(k||"");};
+const dipFr=k=>{const d=DIPLOMES.find(x=>x.k===k);return d?d.fr:(k||"");};
+function expTxt(w){if(w.exm==="manuel"&&w.exv)return w.exv;if(!w.et)return "–";const d0=new Date(w.et),d1=new Date();if(isNaN(d0))return "–";let y=d1.getFullYear()-d0.getFullYear(),m=d1.getMonth()-d0.getMonth();if(d1.getDate()<d0.getDate())m--;if(m<0){y--;m+=12;}if(y<0){y=0;m=0;}const p=[];if(y>0)p.push(y+" "+(y>1?"ans":"an"));if(m>0)p.push(m+" mois");return p.join(" ")||"0 mois";}
+/* lecture d'une attestation de bonne exécution (texte OCR) */
+function extractABE(text){
+  const T=String(text||"").replace(/[٠-٩]/g,c=>"٠١٢٣٤٥٦٧٨٩".indexOf(c)).replace(/‎|‏|‪|‫|‬/g,"");
+  const one=T.replace(/\s+/g," ");
+  const D="(\\d{1,2}[\\/.\\-]\\d{1,2}[\\/.\\-]\\d{4}|\\d{4}[\\/.\\-]\\d{1,2}[\\/.\\-]\\d{1,2})";
+  const iso=s=>{if(!s)return "";let m=s.match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})$/);if(m)return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;m=s.match(/^(\d{1,2})\D(\d{1,2})\D(\d{4})$/);return m?`${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`:"";};
+  const num=s=>{s=String(s).trim();if(/,\d{2}$/.test(s))s=s.replace(/[.\s]/g,"").replace(",",".");else s=s.replace(/[.\s,]/g,"");return Number(s)||0;};
+  const r={};
+  let m=one.match(/(بلدية|ولاية|مديرية|الوكالة|الديوان)\s+([^\s،,:]+(?:\s+[^\s،,:]+){0,2})/);if(m)r.owner_ar=(m[1]+" "+m[2]).replace(/\s*(مصلحة|دائرة|الرقم).*$/,"").trim();
+  m=one.match(/مشروع\s*[:：]?\s*(.{10,260}?)\s*(?:بموجب|طبقا|طبقًا|وفقا|حسب|المسجل|المسجلة|«|»|\(برنامج)/);if(m)r.proj_ar=m[1].replace(/[«»"]/g,"").replace(/\s*[:.،,]\s*$/,"").trim();
+  m=one.match(new RegExp("(الصفقة|صفقة|الاتفاقية|اتفاقية|العقد|الاتفاقية رقم)\\s*رقم\\s*[:]?\\s*([0-9A-Za-z\\/\\-]+)\\s*(?:المؤرخة|المؤرخ|بتاريخ|في)?\\s*(?:في)?\\s*[:]?\\s*"+D+"?"));
+  if(m){r.contract=m[2]+(m[3]?" du "+m[3].replace(/-/g,"/"):"");r.contract_kind=/اتفاقي/.test(m[1])?"conv":"marche";r.contract_date=iso(m[3]);}
+  m=one.match(/(?:بمبلغ|قدره|قدرها|المبلغ)[^0-9]{0,40}?(\d{1,3}(?:[.\s]\d{3})+(?:,\d{2})?)\s*(?:دج|DA|د\.ج)/);if(m)r.amount=num(m[1]);
+  m=one.match(/(?:مدة|بمدة|آجال|اجال)\s*(?:إنجاز|انجاز|الإنجاز|الانجاز)?[^()]{0,40}\(\s*(\d{1,3})\s*\)\s*(يوما|يوم|أيام|ايام|شهرا|شهر|أشهر|اشهر)?/);
+  if(!m)m=one.match(/(?:مدة|بمدة)\s*(?:إنجاز|انجاز)?\s*(?:قدرها)?\s*[:]?\s*(\d{1,3})\s*(يوما|يوم|أيام|ايام|شهرا|شهر|أشهر|اشهر)/);
+  if(m){r.delay_n=+m[1];r.delay_u=/شه/.test(m[2]||"")?"mois":"jours";}
+  m=one.match(new RegExp("استلام\\S*\\s*(?:\\S+\\s*){0,6}?بتاريخ\\s*[:]?\\s*"+D));if(m)r.reception=iso(m[1]);
+  r.final=/(نهائي|نهائيا|définitive)/.test(one);
+  const pipes=[];T.split(/\n/).forEach(l=>{if(!/(قنا[ةه]|قنوات|انابيب|أنابيب|conduite|canalisation)/i.test(l))return;
+    const dn=(l.match(/(?:قطر|Ø|DN|ø)\s*(\d{2,4})/i)||l.match(/(\d{2,4})\s*مم/)||[])[1];
+    const U="(?:مط|م\\.ط|م ط|مل|ml|m\\.l|متر\\s*خطي|مترخطي|م\\.خ|م خ|mètres? linéaires?)";
+    const lm=l.match(new RegExp("(\\d[\\d.,]{1,8})\\s*"+U,"i"))||l.match(new RegExp(U+"\\s*\\|?\\s*(\\d[\\d.,\\s]{0,8})\\s*$","i"))||l.match(/بطول\s*(?:قدره)?\s*[:]?\s*(\d[\d.,]{1,8})/);
+    if(lm){const len=num(lm[1]);if(len>0&&len<100000&&(!dn||String(len)!==String(+dn)))pipes.push({dn:+dn||0,len,mat:/annel|حلزون|مموج/i.test(l)?"Annelé":/pehd|بولي/i.test(l)?"PEHD":/pvc/i.test(l)?"PVC":/خرسان|béton|بيتون/i.test(l)?"Béton":""});}});
+  if(pipes.length){r.pipes=pipes;r.length=pipes.reduce((a,p)=>a+p.len,0);}
+  const dts=[...one.matchAll(new RegExp(D,"g"))].map(x=>iso(x[1])).filter(Boolean).sort();if(dts.length)r.date=dts[dts.length-1];
+  r.aep=/(الشرب|الماء الصالح|eau potable|\bAEP\b)/i.test(one);
+  return r;
+}
+
+/* date de validité dans un texte : après « valable jusqu'au », « à jour … au », « صالحة إلى غاية »… */
+function validityIn(text){const t=String(text||"").replace(/[٠-٩]/g,c=>"٠١٢٣٤٥٦٧٨٩".indexOf(c)).replace(/\s+/g," ");
+  const D="(\\d{1,2}[\\/.\\-]\\s?\\d{1,2}[\\/.\\-]\\s?\\d{4}|\\d{4}[\\/.\\-]\\d{1,2}[\\/.\\-]\\d{1,2})";
+  const re=new RegExp("(?:valable jusqu|jusqu'au|jusqu’au|à jour[^.]{0,80}?au|a jour[^.]{0,80}?au|validit[ée][^.]{0,30}?|صالحة[^.]{0,30}?|صلاحية[^.]{0,30}?|إلى غاية|الى غاية|لغاية|تاريخ الانتهاء|تاريخ الإنتهاء)\\s*[:]?\\s*"+D,"i");
+  const m=t.match(re);if(!m)return "";const s=m[1].replace(/\s/g,"");let x=s.match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})$/);if(x)return `${x[1]}-${x[2].padStart(2,"0")}-${x[3].padStart(2,"0")}`;x=s.match(/^(\d{1,2})\D(\d{1,2})\D(\d{4})$/);return x?`${x[3]}-${x[2].padStart(2,"0")}-${x[1].padStart(2,"0")}`:"";}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const today=()=>new Date().toISOString().slice(0,10);
@@ -134,9 +234,9 @@ const byCat=c=>PS().filter(p=>p.cat===c).sort((a,b)=>(a.cat.startsWith("abe")?St
 
 async function loadAll(){
   prog("تحميل الملف…",0.1);
-  const [pieces,settings,choices,ext,subs,model]=await Promise.all([fget(DOSSIER,D+"/pieces"),fget(DOSSIER,D+"/settings"),fget(DOSSIER,D+"/choices"),fget(DOSSIER,D+"/ext"),fget(DOSSIER,D+"/subs"),fget(DOSSIER,D+"/ai/model").catch(()=>null)]);
-  S.pieces=pieces||{};S.settings=settings||{};S.choices=Object.assign({veh:{},role:{},docs:{}},choices||{});S.ext=ext||{};S.subs=subs||{};S.model=model;
-  ["veh","role","docs"].forEach(k=>{if(!S.choices[k])S.choices[k]={};});
+  const [pieces,settings,choices,ext,subs,model,cdc]=await Promise.all([fget(DOSSIER,D+"/pieces"),fget(DOSSIER,D+"/settings"),fget(DOSSIER,D+"/choices"),fget(DOSSIER,D+"/ext"),fget(DOSSIER,D+"/subs"),fget(DOSSIER,D+"/ai/model").catch(()=>null),fget(DOSSIER,D+"/cdcIndex").catch(()=>null)]);
+  S.pieces=pieces||{};S.settings=settings||{};S.choices=Object.assign({veh:{},role:{},docs:{}},choices||{});S.ext=ext||{};S.subs=subs||{};S.model=model;S.cdc=cdc||{};
+  ["veh","role","docs","poste","dip","abe"].forEach(k=>{if(!S.choices[k])S.choices[k]={};});
   prog("قراءة العتاد (parc_document)…",0.4);
   try{const d=await fget(PARC,PARC.base);S.equip=(d&&d.equipment||[]).filter(e=>e&&e.id!=null);const del=new Set((d.deletedIds||[]).map(x=>String(x&&x.id!=null?x.id:x)));S.equip=S.equip.filter(e=>!del.has(String(e.id)));
     S.imgKeys=new Set(Object.keys(await fget(PARC,PARC.base+"_img","&shallow=true")||{}));}catch(e){S.err+="تعذّرت قراءة برنامج العتاد. ";}
@@ -145,11 +245,14 @@ async function loadAll(){
     const keys=Object.keys(await fget(RH,RH.base+"/files","&shallow=true")||{});
     const ms=await Promise.all(keys.map(k=>fget(RH,RH.base+"/files/"+k+"/updatedAtMs").catch(()=>0)));
     S.rhFiles={};keys.forEach((k,i)=>{const j=k.indexOf("_");S.rhFiles[k]={key:k,kind:k.slice(0,j),wid:k.slice(j+1),ms:Number(ms[i])||0};});
-    for(const k of keys){const meta=await cget("rm:"+k);if(meta&&meta.ms===S.rhFiles[k].ms)Object.assign(S.rhFiles[k],meta);}
+    await Promise.all(keys.map(async k=>{const f=S.rhFiles[k],c=await cget("rm:"+k);if(c&&c.ms===f.ms){Object.assign(f,c);return;}
+      /* petites infos sans télécharger le fichier : intitulé, validité de l'affiliation, suppression */
+      const [label,meta,del]=await Promise.all([fget(RH,RH.base+"/files/"+k+"/label").catch(()=>""),/^af_/.test(k)?fget(RH,RH.base+"/files/"+k+"/meta").catch(()=>null):null,fget(RH,RH.base+"/files/"+k+"/deleted").catch(()=>null)]);
+      const m={ms:f.ms,label:label||"",meta:meta||null,deleted:!!del};Object.assign(f,m);await cset("rm:"+k,m);}));
+    try{const sm=await fget(RH,RH.base+"/settings/updatedAtMs");const c=await cget("rhset");if(c&&c.ms===sm)S.rhSet=c.v;else{S.rhSet=await fget(RH,RH.base+"/settings/data")||{};await cset("rhset",{ms:sm,v:S.rhSet});}}catch(e){S.rhSet=S.rhSet||{};}
   }catch(e){S.err+="تعذّرت قراءة برنامج العمال. ";}
   S.loaded=true;prog(false);
 }
-
 /* ---------------- sources des pages ---------------- */
 function fileToDataURL(b){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r.readAsDataURL(b);});}
 function loadImg(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error("img"));i.src=src;});}
@@ -193,19 +296,29 @@ function workerDocs(w){/* pièces RH du travailleur, dans l'ordre att → af →
   return out;}
 function docOn(w,key){const d=S.choices.docs[w.id];return !(d&&d[key]===false);}
 const wName=w=>[w.N,w.P].filter(Boolean).join(" ");
+function afValid(w){const f=S.rhFiles["af_"+w.id];return f&&f.meta&&f.meta.validUntil||"";}
+function dipKeys(w){const n=k=>+(S.rhFiles[k].kind.slice(3)||1);return Object.keys(S.rhFiles).filter(x=>S.rhFiles[x].wid===w.id&&/^dip\d?$/.test(S.rhFiles[x].kind)&&!S.rhFiles[x].deleted).sort((a,b)=>n(a)-n(b));}
+function posteOf(o,w){return (o.poste&&o.poste[w.id])||w.fn||"";}
+function posteTxt(o,w){const k=posteOf(o,w);if(k==="__autre")return w.fnx||"";return posteFr(k);}
+function dipChoice(o,w){const v=o.dip&&o.dip[w.id];return v!=null?v:"*";}   /* "*" toutes · "" aucune · clé d'une pièce */
+function dipTxt(o,w){const c=dipChoice(o,w);if(c&&c!=="*"&&S.rhFiles[c]&&S.rhFiles[c].label)return S.rhFiles[c].label;if(w.dp&&w.dp!=="sans")return w.dp==="__autre"?(w.dpx||""):dipFr(w.dp);const k=dipKeys(w)[0];return k?(S.rhFiles[k].label||"Diplôme"):"";}
+const abeTitle=p=>p.proj_ar||p.title||p.ar;
+const abeOn=(o,p)=>!(o.abe&&o.abe[p.id]===false);
 
 /* ---------------- plan du dossier ---------------- */
-/* opts : {years:[…], rib:id, roles:{wid:role}, veh:{id:bool}, docs:{wid:{key:bool}}, limit:date, skip:Set(ids)} */
 function defaultOpts(){const ys=byCat("bilan").map(p=>p.year).filter(Boolean).sort((a,b)=>b-a);const n=S.choices.nYears||3;
   return {years:ys.slice(0,n),rib:S.choices.rib||(byCat("rib")[0]||{}).id,roles:Object.fromEntries(S.workers.map(w=>[w.id,roleOf(w)])),
-    veh:Object.fromEntries(vehicles().map(e=>[e.id,vehIncluded(e)])),docs:JSON.parse(JSON.stringify(S.choices.docs||{})),limit:"",skip:{}};}
+    veh:Object.fromEntries(vehicles().map(e=>[e.id,vehIncluded(e)])),docs:JSON.parse(JSON.stringify(S.choices.docs||{})),
+    poste:Object.assign({},S.choices.poste||{}),dip:Object.assign({},S.choices.dip||{}),abe:Object.assign({},S.choices.abe||{}),
+    smallEq:S.settings.smallEq!==false,limit:"",skip:{}};}
 function buildPlan(o){
   const L=[],miss=[];
   const sep=(ar,fr,x)=>L.push(Object.assign({t:"sep",ar,fr,level:1},x||{}));
-  const dp=(p,extra)=>{if(!p){return;}L.push(Object.assign({t:"doc",src:"d",id:p.id,label:p.fr,ar:p.ar,v:p.v,refs:p.pages||[],duplex:!!p.duplex,layout:p.layout||"single",fin:p.fin||""},extra||{}));};
-  const need=(p,what)=>{if(!p)miss.push(what);return p;};
+  const dp=(p,extra)=>{if(!p)return;L.push(Object.assign({t:"doc",src:"d",id:p.id,label:p.fr,ar:p.cat.startsWith("abe")?abeTitle(p):p.ar,v:p.v,refs:p.pages||[],duplex:!!p.duplex,layout:p.layout||"single",fin:p.fin||""},extra||{}));};
+  const need=(p,what)=>{if(!p||p.deleted)miss.push(what);return p;};
+  const gen=(kind,ar,label,data,x)=>L.push(Object.assign({t:"doc",src:"g",kind,id:"gen:"+kind+(data&&data.wid?":"+data.wid:""),ar,label,data:data||{},duplex:true,layout:"single",fin:"",v:"auto"},x||{}));
   L.push({t:"cover"});
-  sep(...CATS.jur);byCat("jur").forEach(p=>dp(p));["rc","nif","nis"].forEach(id=>need(S.pieces[id]&&!S.pieces[id].deleted?S.pieces[id]:null,{rc:"السجل التجاري",nif:"NIF",nis:"NIS"}[id]));
+  sep(...CATS.jur);byCat("jur").forEach(p=>dp(p));need(S.pieces.rc,"السجل التجاري");need(S.pieces.nif,"NIF");need(S.pieces.nis,"NIS");
   sep(...CATS.fis);byCat("fis").forEach(p=>dp(p));need(S.pieces.role,"مستخرج الجداول");
   sep(...CATS.para);
   const rhc=(k,lab,ar)=>{if(S.rhFiles[k]&&!S.rhFiles[k].deleted)L.push({t:"doc",src:"r",id:"rh:"+k,key:k,label:lab,ar,ms:S.rhFiles[k].ms,duplex:true,layout:"single",fin:(S.ext["rh:"+k]||{}).fin||""});else miss.push(ar);};
@@ -215,19 +328,27 @@ function buildPlan(o){
   sep(...CATS.qual);byCat("qual").forEach(p=>dp(p));need(S.pieces.qualif,"شهادة التأهيل");
   const bil=byCat("bilan").filter(p=>o.years.includes(p.year)).sort((a,b)=>b.year-a.year);
   L.push({t:"fin",ar:"القدرات المالية",fr:"Capacités financières",rows:byCat("bilan").filter(p=>p.ca).sort((a,b)=>b.year-a.year).map(p=>[p.year,p.ca]),avgYears:bil.map(p=>p.year)});
-  const rib=S.pieces[o.rib];need(rib&&!rib.deleted?rib:null,"كشف الهوية البنكية");if(rib)dp(rib);
+  const rib=S.pieces[o.rib];need(rib,"كشف الهوية البنكية");if(rib&&!rib.deleted)dp(rib);
   o.years.forEach(y=>{if(!bil.find(p=>p.year===y))miss.push("الحصيلة "+y);});
-  bil.forEach(p=>{L.push({t:"sep",level:2,ar:"الحصيلة المالية "+p.year,fr:"Bilan "+p.year,sub_ar:p.ca?"رقم الأعمال: "+money(p.ca)+" دج":"",sub_fr:p.ca?"Chif\u200Cfre d'af\u200Cfaires : "+money(p.ca)+" DA":""});dp(p);});
+  bil.forEach(p=>{L.push({t:"sep",level:2,ar:"الحصيلة المالية "+p.year,fr:"Bilan "+p.year,sub_ar:p.ca?"رقم الأعمال: "+money(p.ca)+" دج":"",sub_fr:p.ca?"Chif‌fre d'af‌faires : "+money(p.ca)+" DA":""});dp(p);});
   sep("القدرات البشرية","Moyens humains");
-  byCat("das").slice(0,1).forEach(p=>dp(p));
   const people=r=>S.workers.filter(w=>o.roles[w.id]===r&&w.st!=="INACTIF");
+  const staff=people("cadre").concat(people("ouvrier"));
+  if(staff.length)gen("ln","القائمة الاسمية للمستخدمين (مختومة)","Liste nominative du personnel",{ids:staff.map(w=>w.id),poste:Object.fromEntries(staff.map(w=>[w.id,posteTxt(o,w)])),dip:Object.fromEntries(staff.map(w=>[w.id,dipTxt(o,w)]))});
+  byCat("das").slice(0,1).forEach(p=>dp(p));
+  const attGen=S.settings.attMode!=="files";
   [["cadre","الإطارات","Encadrement"],["ouvrier","العمال","Personnel d'exécution"]].forEach(([r,ar,fr])=>{
     const ws=people(r);if(!ws.length)return;sep(ar,fr,{level:2});
-    ws.forEach(w=>{const ds=workerDocs(w).filter(d=>!(o.docs[w.id]&&o.docs[w.id][d.key]===false));
-      if(!ds.some(d=>d.kind==="af"))miss.push("انتساب "+wName(w));
-      ds.forEach(d=>L.push({t:"doc",src:"r",id:"rh:"+d.key,key:d.key,label:wName(w)+" — "+RHK[d.kind][1],ar:wName(w)+" — "+RHK[d.kind][0],ms:S.rhFiles[d.key].ms,duplex:true,layout:"single",fin:""}));});
+    ws.forEach(w=>{const n=wName(w),ex=k=>o.docs[w.id]&&o.docs[w.id][k]===false;
+      if(attGen&&!ex("gen_att"))gen("att",n+" — شهادة العمل (مختومة)",n+" — Attestation de travail",{wid:w.id,poste:posteTxt(o,w),dip:dipTxt(o,w)});
+      workerDocs(w).forEach(d=>{if(ex(d.key))return;if(d.kind==="att"&&attGen)return;if(d.kind==="dip"){const c=dipChoice(o,w);if(c===""||(c!=="*"&&c!==d.key))return;}
+        const f=S.rhFiles[d.key];L.push({t:"doc",src:"r",id:"rh:"+d.key,key:d.key,label:n+" — "+RHK[d.kind][1],ar:n+" — "+RHK[d.kind][0]+(f.label?" ("+f.label+")":""),ms:f.ms,duplex:true,layout:"single",fin:d.kind==="af"?afValid(w):""});});
+      if(!S.rhFiles["af_"+w.id])miss.push("انتساب "+n);
+      if(r==="cadre"&&dipChoice(o,w)!==""&&!dipKeys(w).length)miss.push("شهادة "+n);});
   });
   sep("القدرات المادية","Moyens matériels");
+  const vsel=FAM.flatMap(([f])=>vehicles().filter(e=>o.veh[e.id]&&vehFamily(e)===f));
+  if(vsel.length||o.smallEq)gen("mat","قائمة العتاد (مختومة)","Liste du matériel",{ids:vsel.map(e=>e.id),small:!!o.smallEq});
   FAM.forEach(([f,ar,fr])=>{const vs=vehicles().filter(e=>o.veh[e.id]&&vehFamily(e)===f);if(!vs.length)return;sep(ar,fr,{level:2});
     vs.forEach(e=>{const lab=`${e.name||""} ${e.matricule||""}`.trim();const cg=S.imgKeys.has(e.id+"_cg"),as=S.imgKeys.has(e.id+"_as"),ct=S.imgKeys.has(e.id+"_ct");
       if(!cg)miss.push("البطاقة الرمادية: "+lab);if(!as)miss.push("التأمين: "+lab);if(e.needsCT&&!ct)miss.push("المراقبة التقنية: "+lab);
@@ -239,15 +360,13 @@ function buildPlan(o){
   if(byCat("matfact").length){sep(...CATS.matfact,{level:2});byCat("matfact").forEach(p=>dp(p));}
   sep("المراجع المهنية","Références professionnelles");
   [["abe_ass","التطهير","Assainissement"],["abe_aep","المياه الصالحة للشرب","Alimentation en eau potable (AEP)"],["abe_autre","أشغال أخرى","Autres travaux"]].forEach(([c,sa,sf])=>{
-    const ps=byCat(c);if(!ps.length)return;sep("شهادات حسن التنفيذ","Attestations de bonne exécution",{level:2,sub_ar:sa,sub_fr:sf});ps.forEach(p=>dp(p));});
+    const ps=byCat(c).filter(p=>abeOn(o,p));if(!ps.length)return;sep("شهادات حسن التنفيذ","Attestations de bonne exécution",{level:2,sub_ar:sa,sub_fr:sf});ps.forEach(p=>dp(p));});
   const docs=L.filter(x=>x.t==="doc");
   docs.forEach(x=>{x.st=state(x.fin,o.limit);});
   const out=L.filter(x=>!(x.t==="doc"&&o.skip[x.id]));
-  /* intercalaire sans pièce derrière → retiré */
   const clean=[];for(let i=0;i<out.length;i++){const x=out[i];if(x.t==="sep"){let j=i+1,has=false;while(j<out.length&&!(out[j].t==="sep"&&(out[j].level||1)<=(x.level||1))&&!(out[j].t==="fin")){if(out[j].t==="doc"){has=true;break;}j++;}if(!has)continue;}clean.push(x);}
   return {items:clean,miss,expired:docs.filter(x=>x.st==="exp")};
 }
-
 /* ---------------- intercalaires (canvas 300 dpi, Amiri + Crimson) ---------------- */
 const PT=300/72,AW=595.28,AH=841.89;
 let _fontsOk=null;
@@ -288,6 +407,58 @@ function drawCover(year){return sepCanvas(x=>{frame(x);rect(x,44,44,AW-88,AH-88,
   x.fillRect(AW/2-170,470,340,4);txt(x,CO.ar,526,22,{bold:true});txt(x,`« ${CO.ar2} »`,556,22,{bold:true});txt(x,CO.fr,584,12.5,{ls:1});txt(x,CO.fr2,604,15,{bold:true,ls:2});
   txt(x,CO.addrAr,680,12.5);txt(x,CO.addrFr,698,10.5);txt(x,CO.ids,716,10.5);txt(x,CO.tel,732,10.5);txt(x,String(year),AH-58,13,{bold:true,ls:3});});}
 
+/* ---------------- documents générés (même présentation que egtph-rh, cachet + signature) ---------------- */
+let _h2c=null;
+function h2c(){return _h2c||(_h2c=new Promise((res,rej)=>{if(window.html2canvas)return res(window.html2canvas);const s=document.createElement("script");s.src="../vendor/html2canvas.min.js";s.onload=()=>res(window.html2canvas);s.onerror=()=>{_h2c=null;rej(new Error("html2canvas"));};document.head.appendChild(s);}));}
+const DOC_CSS=`.gdoc{background:#fff;color:#1a1a1a;font-family:Cairo,"Segoe UI",Tahoma,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;direction:ltr}
+.gdoc *{box-sizing:border-box;margin:0}
+.lh{display:flex;align-items:stretch;background:#1a2a52;color:#fff;border-bottom:4px solid #C8960C}
+.lh-logo{flex:0 0 26%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4mm 3mm;border-inline-end:1px solid rgba(255,255,255,.15)}
+.lh-logo svg{width:15mm;height:15mm}.lt{font-weight:900;color:#e8b422;letter-spacing:2px;font-size:10pt;margin-top:1mm}
+.lh-mid{flex:1;padding:5mm 4mm}.lh-side{flex:0 0 30%;padding:4mm 4mm;font-size:8.2pt;line-height:1.7;color:#dfe4f0;border-inline-start:1px solid rgba(255,255,255,.15)}
+.l1{font-size:8.5pt;font-weight:700;letter-spacing:1px;color:#e8b422;line-height:1.4;text-transform:uppercase}.l2{font-size:20pt;font-weight:900;color:#fff;margin-top:1mm;letter-spacing:1px}.l3{font-size:9.5pt;color:#cdd5e8;margin-top:1mm}
+.lh-band{background:#eef0f5;color:#33415e;font-size:8.5pt;padding:2.5mm 16mm;display:flex;gap:14px;flex-wrap:wrap;border-bottom:1px solid #d4d8e2}
+.doc-pad{padding:8mm 14mm 0;display:flex;flex-direction:column;flex:1 0 auto}.doc-body{flex:1 0 auto}
+.doc-fband{background:#1a2a52;color:#cdd5e8;font-size:8pt;padding:3.5mm 16mm;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:4px solid #C8960C;margin-top:auto}
+.gt{width:100%;border-collapse:collapse}.gt th{background:#1a2a52;color:#fff;border:1px solid #1a2a52;padding:4px 5px;font-weight:700}.gt td{border:1px solid #999;padding:3px 5px;color:#000;background:#fff}
+h2.gh{text-align:center;font-size:19pt;color:#1a2a52;font-weight:900;margin:5mm 0 1mm;letter-spacing:.5px}
+.cmp .lh-logo{padding:2mm 3mm}.cmp .lh-logo svg{width:10mm;height:10mm}.cmp .lh-mid{padding:2.5mm 4mm}.cmp .l2{font-size:15pt}.cmp .lh-side{padding:2mm 4mm;font-size:7.6pt;line-height:1.5}.cmp .lh-band{padding:1.5mm 14mm;font-size:7.8pt}.cmp .doc-pad{padding:3mm 10mm 0}.cmp h2.gh{font-size:15pt;margin:2mm 0 0}.cmp .doc-fband{padding:2mm 14mm}`;
+function logoSVG(){return '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g stroke="#e8b422" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"><line x1="44" y1="20" x2="44" y2="82"/><line x1="52" y1="20" x2="52" y2="82"/><path d="M44 31 L52 39 M52 31 L44 39 M44 47 L52 55 M52 47 L44 55 M44 63 L52 71 M52 63 L44 71"/><path d="M30 90 L66 90 M36 90 L48 82 L60 90 M48 82 L48 90"/><line x1="48" y1="20" x2="90" y2="20"/><line x1="52" y1="26" x2="88" y2="21"/><path d="M40 8 L48 20 L56 8 Z"/><line x1="48" y1="8" x2="84" y2="20"/><line x1="48" y1="20" x2="26" y2="20"/><line x1="48" y1="8" x2="30" y2="20"/><rect x="20" y="20" width="9" height="7" fill="#e8b422"/><line x1="82" y1="20" x2="82" y2="39"/><path d="M79 39 a3.2 3.2 0 1 0 6 0"/></g></svg>';}
+function stampSrc(){if(S.settings.stamp)return S.settings.stamp;if(S.rhSet&&S.rhSet.stampImg)return S.rhSet.stampImg;try{const r=JSON.parse(localStorage.getItem("egtph_rh_v2")||"null");if(r&&r.settings&&r.settings.stampImg)return r.settings.stampImg;}catch(e){}return "";}
+function rs(){const s=S.rhSet||{};return {rsFr:s.rsFr||"Entreprise des Grands Travaux Publics et Hydrauliques – EGTPH – ABDI YOUSSOUF ISLAM",addr:s.addrFr||"Environs de Zemala ancienne N°B1, Chlef",tel:s.tel||"",rc:s.rc||"02/00-4566908 A15",nif:s.nif||"",nis:s.nis||"",nin:s.nin||"",cnas:s.cnasNum||"",sect:s.cnasSect||"",ger:s.gerant||"ABDI YOUSSOUF ISLAM",wil:s.wilaya||"CHLEF",stamp:s.stampImg||""};}
+function gHeader(){const s=rs();return '<div class="lh"><div class="lh-logo">'+logoSVG()+'<div class="lt">EGTPH</div></div><div class="lh-mid"><div class="l1">'+esc(s.rsFr.split("–")[0].trim())+'</div><div class="l2">EGTPH</div><div class="l3">'+esc(s.ger)+' — Gérant</div></div><div class="lh-side">Adresse : '+esc(s.addr)+'<br>Tél. : '+esc(s.tel)+'<br><b>RC :</b> '+esc(s.rc)+'<br><b>NIF :</b> '+esc(s.nif)+'</div></div><div class="lh-band"><span><b>NIS :</b> '+esc(s.nis)+'</span><span><b>NIN :</b> '+esc(s.nin)+'</span><span><b>N° CNAS :</b> '+esc(s.cnas)+' — '+esc(s.sect)+'</span></div><div class="doc-pad"><div class="doc-body">';}
+function gFooter(compact){const s=rs(),st=stampSrc()?'<div style="height:'+(compact?'20mm':'30mm')+';margin:0 0 1mm;display:flex;align-items:center;justify-content:center"><img src="'+stampSrc()+'" style="max-height:100%;max-width:70mm;object-fit:contain"></div>':'<div style="height:'+(compact?'16mm':'22mm')+';margin-top:1mm;border:1px dashed #aab;border-radius:6px"></div>';
+  return '</div><div style="margin-top:'+(compact?'1mm':'10mm')+';display:flex;justify-content:flex-end"><div style="text-align:center;min-width:64mm;font-size:'+(compact?'9.5pt':'11pt')+'"><p style="font-weight:700;color:#1a2a52">Fait à '+esc(s.wil.charAt(0)+s.wil.slice(1).toLowerCase())+', le '+fd(today())+'</p><p style="font-weight:700;color:#1a2a52;margin-top:'+(compact?'0':'2mm')+'">Le Gérant</p><p style="color:#333">'+esc(s.ger)+'</p>'+st+'</div></div></div>'+
+   '<div class="doc-fband"><span><b>EGTPH</b> — RC : '+esc(s.rc)+' — NIF : '+esc(s.nif)+'</span><span>Document conforme — Loi 90-11</span><span>Tél. '+esc(s.tel)+' — '+esc(s.wil)+', Algérie</span></div>';}
+async function htmlPage(inner,land,cmp){const H=await h2c();const host=document.createElement("div");host.style.cssText="position:fixed;left:-12000px;top:0;z-index:-1";
+  host.innerHTML='<style>'+DOC_CSS+'</style><div class="gdoc'+(cmp?' cmp':'')+'" style="width:'+(land?"297mm":"210mm")+';height:'+(land?"210mm":"297mm")+'">'+inner+'</div>';document.body.appendChild(host);
+  try{try{await document.fonts.ready;}catch(e){}const im=[...host.querySelectorAll("img")];await Promise.all(im.map(i=>i.complete?0:new Promise(r=>{i.onload=i.onerror=r;})));
+    const cv=await H(host.querySelector(".gdoc"),{scale:2.3,backgroundColor:"#ffffff",logging:false});return {src:cv.toDataURL("image/jpeg",0.9),w:cv.width,h:cv.height};}finally{host.remove();}}
+/* attestation de travail : texte du modèle egtph-rh (« travail », récapitulatif + affiliation) */
+function attHtml(w,d){const s=rs(),nom='<b>'+esc(w.N+" "+w.P)+'</b>',poste=esc(d.poste||"—"),dip=esc(d.dip||""),exp=esc(expTxt(w));
+  const dipTx=dip?", titulaire du diplôme : <b>"+dip+"</b>":"";
+  const body="Je soussigné, <b>"+esc(s.ger)+"</b>, Gérant de l'entreprise, atteste que M./Mme "+nom+", né(e) le "+fd(w.dd)+" à "+esc(w.li||"")+dipTx+", exerce au sein de notre entreprise en qualité de <b>"+poste+"</b> depuis le "+fd(w.et)+", soit une ancienneté de <b>"+exp+"</b>.";
+  const recap='<table class="gt" style="width:auto;margin:6mm 0;font-size:11.5pt"><thead><tr><th style="padding:5px 14px">Date de recrutement</th><th style="padding:5px 14px">Jusqu\'au</th><th style="padding:5px 14px">Ancienneté</th></tr></thead><tbody><tr style="font-weight:700;text-align:center"><td style="padding:5px 14px">'+fd(w.et)+'</td><td style="padding:5px 14px;color:#1a2a52">À ce jour</td><td style="padding:5px 14px;color:#1a2a52">'+exp+'</td></tr></tbody></table>';
+  return gHeader()+'<h2 class="gh" style="margin:10mm 0 8mm;text-decoration:underline">ATTESTATION DE TRAVAIL</h2><div style="font-size:12.5pt;line-height:1.95;color:#15151f;text-align:justify"><p>'+body+'</p>'+recap+
+    '<p>L\'intéressé(e) est affilié(e) à la CNAS sous le numéro d\'immatriculation : <b>'+esc(w.ss||"")+'</b>.</p><p style="margin-top:4mm">La présente attestation est délivrée à la demande de l\'intéressé(e) pour servir et valoir ce que de droit.</p></div>'+gFooter(false);}
+function lnHtml(ws,d,total,page,pages){const s=rs();const head=["N°","Nom","Prénom","Date de naissance","Lieu de naissance","Date d'entrée","N° SS CNAS","Poste","Diplôme","Expérience","Affiliation valable jusqu'au"];
+  const rows=ws.map(([w,i])=>[i,w.N,w.P,fd(w.dd),w.li||"",fd(w.et),w.ss||"",(d.poste||{})[w.id]||"",(d.dip||{})[w.id]||"—",expTxt(w),fd(afValid(w))||"—"]);
+  return gHeader()+'<h2 class="gh">LISTE NOMINATIVE DU PERSONNEL</h2><p style="text-align:center;font-size:9.5pt;color:#555;margin-bottom:2mm">'+esc(s.wil)+', le '+fd(today())+' — Effectif : '+total+' travailleur(s)'+(pages>1?' — page '+page+'/'+pages:'')+'</p>'+
+   '<table class="gt" style="font-size:8.4pt"><thead><tr>'+head.map(h=>'<th>'+esc(h)+'</th>').join("")+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map((c,j)=>'<td style="'+(j===0||j>=3&&j!==7&&j!==8?'text-align:center':'')+'">'+esc(c)+'</td>').join("")+'</tr>').join("")+'</tbody></table>'+gFooter(true);}
+function matRows(d){const out=[];const vs=d.ids.map(id=>S.equip.find(e=>String(e.id)===String(id))).filter(Boolean);
+  vs.forEach(e=>out.push([e.name||"",e.model||"",e.matricule||"",e.serie||"",e.annee||"",e.etat||"",[S.imgKeys.has(e.id+"_cg")?"Carte grise":"",e.facture?"Facture "+e.facture:""].filter(Boolean).join(" / ")||"—"]));
+  if(d.small)S.equip.filter(e=>!e.veh).forEach(e=>out.push([e.name||"",e.model||"","—","",e.annee||"",e.etat||"",e.facture?"Facture "+e.facture:"—"]));
+  return out;}
+function matHtml(rows,start,total,page,pages){const s=rs();const head=["N°","Désignation","Marque / Type","Immatriculation","N° de série","Année","État","Justificatif"];
+  return gHeader()+'<h2 class="gh">LISTE DU MATÉRIEL</h2><p style="text-align:center;font-size:9.5pt;color:#555;margin-bottom:2mm">'+esc(s.wil)+', le '+fd(today())+' — '+total+' éléments'+(pages>1?' — page '+page+'/'+pages:'')+'</p>'+
+   '<table class="gt" style="font-size:8.4pt"><thead><tr>'+head.map(h=>'<th>'+h+'</th>').join("")+'</tr></thead><tbody>'+rows.map((r,i)=>'<tr><td style="text-align:center">'+(start+i+1)+'</td>'+r.map((c,j)=>'<td style="'+(j>=2&&j!==6?'text-align:center':'')+'">'+esc(c)+'</td>').join("")+'</tr>').join("")+'</tbody></table>'+gFooter(true);}
+async function genPages(it){const d=it.data||{};
+  if(it.kind==="att"){const w=S.workers.find(x=>x.id===d.wid);return w?[await htmlPage(attHtml(w,d),false)]:[];}
+  if(it.kind==="ln"){const ws=d.ids.map(id=>S.workers.find(w=>w.id===id)).filter(Boolean).map((w,i)=>[w,i+1]);const per=14,pages=Math.ceil(ws.length/per),out=[];
+    for(let p=0;p<pages;p++)out.push(await htmlPage(lnHtml(ws.slice(p*per,p*per+per),d,ws.length,p+1,pages),true,true));return out;}
+  if(it.kind==="mat"){const rows=matRows(d),per=16,pages=Math.max(1,Math.ceil(rows.length/per)),out=[];
+    for(let p=0;p<pages;p++)out.push(await htmlPage(matHtml(rows.slice(p*per,p*per+per),p*per,rows.length,p+1,pages),true,true));return out;}
+  return [];}
 /* ---------------- assemblage PDF (pdf-lib) ---------------- */
 const MARGIN=16;
 async function grayJpeg(src,whiteBg){const im=await loadImg(src);const k=Math.min(1,2000/Math.max(im.naturalWidth,im.naturalHeight)),cv=document.createElement("canvas");cv.width=Math.round(im.naturalWidth*k);cv.height=Math.round(im.naturalHeight*k);const x=cv.getContext("2d",{willReadFrequently:true});x.drawImage(im,0,0,cv.width,cv.height);
@@ -297,6 +468,7 @@ async function grayJpeg(src,whiteBg){const im=await loadImg(src);const k=Math.mi
 async function srcPages(it){/* → [{src,w,h}] (images verticales prêtes) */
   if(it.src==="d")return Promise.all((it.refs||[]).map(async r=>({src:await dossierPage(r),w:r.w,h:r.h})));
   if(it.src==="r")return rhPages(it.key);
+  if(it.src==="g")return genPages(it);
   if(it.src==="p"){const e=S.equip.find(q=>String(q.id)===String(it.veh));const out=[];for(const k of it.keys){const s=await parcImg(e,k);if(s){const im=await loadImg(s);out.push({src:s,w:im.naturalWidth,h:im.naturalHeight});}}return out;}
   return [];}
 function fit(w,h,bw,bh){const s=Math.min(bw/w,bh/h);return [w*s,h*s];}
@@ -351,87 +523,201 @@ function dl(bytes,name){const a=document.createElement("a");a.href=blobUrl(bytes
 /* ====================== VUES ====================== */
 let VIEW="dos";
 document.querySelectorAll("#nav button").forEach(b=>b.onclick=()=>{VIEW=b.dataset.v;document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x===b));render();});
-function render(){if(!S.loaded)return;({dos:vDos,sub:vSub,hist:vHist,set:vSet})[VIEW]();window.scrollTo(0,0);}
+function render(){if(!S.loaded)return;({dos:vDos,sub:vSub,cdc:vCdc,hist:vHist,set:vSet})[VIEW]();window.scrollTo(0,0);}
 
-function rowHtml(it){const src={d:'<span class="tag">الملف</span>',p:'<span class="tag">العتاد</span>',r:'<span class="tag">العمال</span>'}[it.src]||"";
-  const p=it.src==="d"?S.pieces[it.id]:null,sub=p?[p.title,p.date&&p.cat.startsWith("abe")?fd(p.date):"",(p.pages||[]).length+" ص","النسخة "+(p.v||1)].filter(Boolean).join(" · "):(it.src==="r"?(S.rhFiles[it.key]||{}).label||"":"");
-  const act=it.src==="d"?`<button class="b" onclick="editPiece('${it.id}')">✎</button>`:it.src==="p"?`<button class="b" onclick="openSrc('p')">↗</button>`:`<button class="b" onclick="openSrc('r')">↗</button>`;
+function rowHtml(it){const src={d:'<span class="tag">الملف</span>',p:'<span class="tag">العتاد</span>',r:'<span class="tag">العمال</span>',g:'<span class="tag">يُنشأ تلقائياً</span>'}[it.src]||"";
+  const p=it.src==="d"?S.pieces[it.id]:null;let sub="";
+  if(p&&p.cat.startsWith("abe"))sub=[p.owner_ar,p.refYear||(p.date||"").slice(0,4),p.amount?money(p.amount)+" دج":"",p.length?money(p.length).replace(",00","")+" م.ط"+(p.pipesAuto?" (قراءة آلية)":""):""].filter(Boolean).join(" · ");
+  else if(p)sub=[p.title,(p.pages||[]).length+" ص","النسخة "+(p.v||1)].filter(Boolean).join(" · ");
+  else if(it.src==="r")sub=(S.rhFiles[it.key]||{}).label||"";else if(it.src==="g")sub="بالختم والإمضاء، من بيانات egtph-rh / parc";
+  const act=it.src==="d"?`<button class="b" onclick="editPiece('${it.id}')">✎</button>`:it.src==="p"?`<button class="b" onclick="openSrc('p')">↗</button>`:it.src==="r"?`<button class="b" onclick="openSrc('r')">↗</button>`:"";
   return `<div class="row"><div class="t"><b>${esc(it.ar||it.label)}</b><span>${esc(sub)}</span></div>${stHtml(it.fin)}${src}<button class="b" onclick="viewItem('${esc(it.id)}')">👁</button>${act}</div>`;}
-function vDos(){const o=defaultOpts();o.years=byCat("bilan").map(p=>p.year);const pl=buildPlan(o);
-  let h=`<div class="card"><div class="chips"><button class="b p" onclick="VIEW='sub';document.querySelector('[data-v=sub]').click()">🖨 تحضير ملف لمناقصة</button><button class="b" onclick="addPiece()">📥 إضافة / تحديث وثيقة (قراءة تلقائية)</button><button class="b" onclick="refreshSrc()">🔄 تحديث من البرامج</button></div>
-  ${S.err?`<div class="errbox">${esc(S.err)}</div>`:""}${renewHtml()}</div>`;
+function fullOpts(){const o=defaultOpts();return o;}
+function vDos(){const o=defaultOpts();o.years=byCat("bilan").map(p=>p.year);Object.keys(o.abe).forEach(k=>o.abe[k]=true);const pl=buildPlan(o);
+  let h=`<div class="card"><button class="b p" style="width:100%;padding:13px;font-size:16px" onclick="printFull()">🖨 طباعة الملف كاملاً</button>
+   <div class="chips" style="margin-top:8px"><button class="b" onclick="goView('sub')">📋 تحضير ملف لمناقصة</button><button class="b" onclick="goView('cdc')">📑 تحليل دفتر الشروط</button><button class="b" onclick="addPiece()">📥 إضافة / تحديث وثيقة</button><button class="b" onclick="refreshSrc()">🔄 تحديث</button></div>
+   ${S.err?`<div class="errbox">${esc(S.err)}</div>`:""}${renewHtml()}</div>`;
   let open=false;pl.items.forEach(it=>{if(it.t==="cover")return;if(it.t==="sep"||it.t==="fin"){if(open)h+="</div>";h+=`<div class="sec">${esc(it.ar)}${it.sub_ar?" — "+esc(it.sub_ar):""}</div><div class="card">`;open=true;return;}h+=rowHtml(it);});
   if(open)h+="</div>";
   if(pl.miss.length)h+=`<div class="errbox"><b>وثائق ناقصة في برامجها المصدر:</b><br>${pl.miss.map(esc).join("<br>")}</div>`;
-  h+=`<div class="sec">كل وثائق الملف (حسب الصنف)</div><div class="card">${Object.keys(CATS).map(c=>`<div class="row"><div class="t"><b>${CATS[c][0]}</b><span>${byCat(c).length} وثيقة</span></div><button class="b" onclick="addPiece('${c}')">＋</button></div>`).join("")}</div>`;
+  h+=`<div class="sec">إضافة وثيقة حسب الصنف</div><div class="card">${Object.keys(CATS).map(c=>`<div class="row"><div class="t"><b>${CATS[c][0]}</b><span>${byCat(c).length} وثيقة</span></div><button class="b" onclick="addPiece('${c}')">＋</button></div>`).join("")}</div>`;
   $("#view").innerHTML=h;}
-function renewHtml(){/* « à renouveler ce mois » */const lim=addDays(today(),31),L=[];
+function goView(v){VIEW=v;document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x.dataset.v===v));render();}
+function printFull(){SUB=defaultOpts();SUB.name="الملف الكامل";SUB.years=SUB.years;checkAndPrint(true);}
+function renewHtml(){const lim=addDays(today(),31),L=[];
   PS().forEach(p=>{if(p.fin&&p.fin<lim)L.push([p.ar||p.fr,p.fin]);});
   vehicles().filter(vehIncluded).forEach(e=>["as","ct"].forEach(k=>{const f=vehFin(e,k);if(f&&f<lim&&S.imgKeys.has(e.id+"_"+k))L.push([(k==="as"?"تأمين ":"مراقبة تقنية ")+(e.name||"")+" "+(e.matricule||""),f]);}));
   Object.keys(S.ext).forEach(k=>{const f=S.ext[k].fin;if(f&&f<lim)L.push([k.replace("rh:maj_company","CNAS").replace("rh:cac_company","CACOBATPH"),f]);});
+  S.workers.filter(w=>w.st!=="INACTIF"&&roleOf(w)!=="off").forEach(w=>{const f=afValid(w);if(f&&f<lim)L.push(["انتساب "+wName(w),f]);});
   if(!L.length)return "";L.sort((a,b)=>a[1].localeCompare(b[1]));
   return `<div class="warnbox"><b>للتجديد (منتهية أو تنتهي خلال شهر):</b><br>${L.map(([a,f])=>`${esc(a)} — ${f<today()?'<span class="er">منتهية</span>':'<span class="wa">تنتهي</span>'} ${fd(f)}`).join("<br>")}</div>`;}
+
 function openSrc(s){window.open(s==="p"?"../parc_document/":"../egtph-rh/","_blank");}
 async function refreshSrc(){await loadAll();render();toast("تم التحديث ✓");}
 async function viewItem(id){const o=defaultOpts();o.years=byCat("bilan").map(p=>p.year);Object.keys(o.veh).forEach(k=>o.veh[k]=true);Object.keys(o.roles).forEach(k=>{if(o.roles[k]==="off")o.roles[k]="ouvrier";});
   const it=buildPlan(o).items.find(x=>x.id===id);if(!it)return;prog("تحميل…",0.3);let ps=[];try{ps=await srcPages(it);}catch(e){}prog(false);
   modal(`<h3>${esc(it.ar||it.label)}</h3><div class="mu">${esc(it.label)}</div>${ps.map(p=>`<img src="${p.src}" style="width:100%;margin:6px 0;border:1px solid #ddd">`).join("")||'<div class="errbox">لا توجد صفحات</div>'}<button class="b" onclick="closeModal()">إغلاق</button>`);}
 
-/* ---------- mناقصة جديدة : choix + contrôle + impression ---------- */
+/* ---------- تحضير مناقصة : اختيار ثم زر طباعة واحد ---------- */
 let SUB=null;
 function vSub(){if(!SUB)SUB=defaultOpts();const o=SUB;const ys=byCat("bilan").map(p=>p.year).sort((a,b)=>b-a);
-  const wRows=S.workers.filter(w=>w.st!=="INACTIF").map(w=>{const ds=workerDocs(w);return `<div class="row"><div class="t"><b>${esc(wName(w))}</b><span class="chips">${ds.map(d=>`<label><input type="checkbox" ${!(o.docs[w.id]&&o.docs[w.id][d.key]===false)?"checked":""} onchange="setDoc('${w.id}','${d.key}',this.checked)">${esc(RHK[d.kind][0])}${S.rhFiles[d.key].label?" ("+esc(S.rhFiles[d.key].label)+")":""}</label>`).join("")||'<span class="er">لا وثائق</span>'}</span></div>
-    <select style="width:auto" onchange="SUB.roles['${w.id}']=this.value">${[["cadre","إطار"],["ouvrier","عامل"],["off","لا يُدرج"]].map(([v,t])=>`<option value="${v}" ${o.roles[w.id]===v?"selected":""}>${t}</option>`).join("")}</select></div>`;}).join("");
+  const abes=["abe_ass","abe_aep","abe_autre"].flatMap(c=>byCat(c));const nOn=abes.filter(p=>abeOn(o,p)),tot=nOn.reduce((a,p)=>a+(+p.amount||0),0);
+  const abeRows=abes.map(p=>`<label class="row" style="cursor:pointer"><input type="checkbox" ${abeOn(o,p)?"checked":""} onchange="SUB.abe['${p.id}']=this.checked;subSum()"><div class="t"><b>${esc(abeTitle(p))}</b><span>${esc([p.cat==="abe_aep"?"AEP":p.cat==="abe_ass"?"تطهير":"أخرى",p.owner_ar,p.refYear||(p.date||"").slice(0,4),p.amount?money(p.amount)+" دج":"",p.length?money(p.length).replace(",00","")+" م.ط":""].filter(Boolean).join(" · "))}</span></div></label>`).join("");
+  const posteOpts=k=>POSTES.map(p=>`<option value="${p.k}" ${k===p.k?"selected":""}>${esc(p.ar)}</option>`).join("")+(k&&!POSTES.find(p=>p.k===k)?`<option value="${esc(k)}" selected>${esc(k)}</option>`:"");
+  const wRows=S.workers.filter(w=>w.st!=="INACTIF").map(w=>{const dk=dipKeys(w),dc=dipChoice(o,w),af=afValid(w);
+    return `<div class="row" style="flex-wrap:wrap"><div class="t" style="min-width:150px"><b>${esc(wName(w))}</b><span>الانتساب: ${af?stHtml(af,o.limit)||fd(af):'<span class="er">غير موجود</span>'}</span></div>
+     <select style="width:auto" onchange="SUB.roles['${w.id}']=this.value">${[["cadre","إطار"],["ouvrier","عامل"],["off","لا يُدرج"]].map(([v,t])=>`<option value="${v}" ${o.roles[w.id]===v?"selected":""}>${t}</option>`).join("")}</select>
+     <select style="width:auto;max-width:46%" onchange="SUB.poste['${w.id}']=this.value"><option value="">— المنصب —</option>${posteOpts(posteOf(o,w))}</select>
+     <select style="width:auto;max-width:46%" onchange="SUB.dip['${w.id}']=this.value"><option value="*" ${dc==="*"?"selected":""}>كل الشهادات (${dk.length})</option>${dk.map(k=>`<option value="${k}" ${dc===k?"selected":""}>${esc(S.rhFiles[k].label||k)}</option>`).join("")}<option value="" ${dc===""?"selected":""}>بدون شهادة</option></select></div>`;}).join("");
   const vRows=FAM.map(([f,ar])=>{const vs=vehicles().filter(e=>vehFamily(e)===f);return vs.length?`<div class="mu" style="margin-top:6px">${ar}</div><div class="chips">${vs.map(e=>`<label><input type="checkbox" ${o.veh[e.id]?"checked":""} onchange="SUB.veh['${e.id}']=this.checked">${esc((e.name||"")+" "+(e.matricule||""))}</label>`).join("")}</div>`:"";}).join("");
   $("#view").innerHTML=`<div class="card"><label class="mu">اسم المناقصة (للسجل)</label><input type="text" id="sName" value="${esc(o.name||"")}" placeholder="مثال: طلب العروض رقم 06/2026 — بلدية …">
-   <div class="grid2" style="margin-top:8px"><div><label class="mu">آخر أجل لإيداع العروض (لفحص الصلاحية)</label><input type="date" id="sLim" value="${esc(o.limit||"")}"></div>
-   <div><label class="mu">الطباعة</label><select id="sMode"><option value="duplex">وجهين (طابعة وجهين)</option><option value="manual">وجهين يدوياً (الفردية ثم الزوجية)</option><option value="simplex">وجه واحد</option></select></div></div></div>
-   <div class="sec">الحصائل المالية المطبوعة</div><div class="card chips">${ys.map(y=>`<label><input type="checkbox" ${o.years.includes(y)?"checked":""} onchange="togYear(${y},this.checked)">${y}</label>`).join("")}</div>
+   <label class="mu" style="display:block;margin-top:8px">آخر أجل لإيداع العروض (لفحص الصلاحية في ذلك التاريخ)</label><input type="date" id="sLim" value="${esc(o.limit||"")}">
+   ${o.cdcNote?`<div class="warnbox" style="margin-top:8px">${o.cdcNote}</div>`:""}</div>
+   <div class="sec">شهادات حسن التنفيذ <span class="mu" id="abeSum">${nOn.length}/${abes.length} · ${money(tot)} دج</span></div>
+   <div class="card"><div class="chips" style="margin-bottom:6px"><button class="b" onclick="abeSel('all')">الكل</button><button class="b" onclick="abeSel('none')">لا شيء</button><button class="b" onclick="abeSel('abe_ass')">التطهير فقط</button><button class="b" onclick="abeSel('abe_aep')">AEP فقط</button><button class="b" onclick="abeSel('recent')">آخر 5 سنوات</button></div>${abeRows}</div>
+   <div class="sec">الحصائل المالية</div><div class="card chips">${ys.map(y=>`<label><input type="checkbox" ${o.years.includes(y)?"checked":""} onchange="togYear(${y},this.checked)">${y}</label>`).join("")}</div>
    <div class="sec">الحساب البنكي (RIB)</div><div class="card chips">${byCat("rib").map(p=>`<label><input type="radio" name="rib" ${o.rib===p.id?"checked":""} onchange="SUB.rib='${p.id}'">${esc(p.bank||p.fr)}</label>`).join("")}</div>
-   <div class="sec">العمال (النشطون في egtph-rh) — الدور والوثائق</div><div class="card">${wRows}</div>
-   <div class="sec">العتاد المُدرج</div><div class="card">${vRows}</div>
-   <div class="card"><label class="chk"><input type="checkbox" id="sSave" checked> حفظ هذه الاختيارات كاختيارات افتراضية</label>
-   <button class="b p" style="width:100%;padding:11px" onclick="checkAndPrint()">✔ فحص الملف ثم إنشاء PDF</button></div>`;
-  $("#sMode").value=o.mode||"duplex";}
+   <div class="sec">المستخدمون: الدور · المنصب · الشهادة</div><div class="card">${wRows}<p class="mu">يُنشئ البرنامج تلقائياً القائمة الاسمية وشهادة العمل لكل مستخدم بالختم والإمضاء، ويضيف الانتساب والشهادة المختارة.</p></div>
+   <div class="sec">العتاد</div><div class="card">${vRows}<label class="chk"><input type="checkbox" ${o.smallEq?"checked":""} onchange="SUB.smallEq=this.checked"> إدراج العتاد الصغير في قائمة العتاد</label></div>
+   <div class="card"><label class="chk"><input type="checkbox" id="sSave" checked> حفظ هذه الاختيارات للمرات القادمة</label>
+   <button class="b p" style="width:100%;padding:13px;font-size:16px" onclick="checkAndPrint()">🖨 طباعة</button></div>`;}
+function subSum(){const abes=["abe_ass","abe_aep","abe_autre"].flatMap(c=>byCat(c)),on=abes.filter(p=>abeOn(SUB,p));const e=$("#abeSum");if(e)e.textContent=`${on.length}/${abes.length} · ${money(on.reduce((a,p)=>a+(+p.amount||0),0))} دج`;}
+function abeSel(m){const lim=String(new Date().getFullYear()-5);["abe_ass","abe_aep","abe_autre"].flatMap(c=>byCat(c)).forEach(p=>{SUB.abe[p.id]=m==="all"?true:m==="none"?false:m==="recent"?String(p.refYear||(p.date||"").slice(0,4))>=lim:p.cat===m;});readSubForm();vSub();}
 function togYear(y,on){SUB.years=on?[...new Set(SUB.years.concat(y))].sort((a,b)=>b-a):SUB.years.filter(x=>x!==y);}
 function setDoc(w,k,on){SUB.docs[w]=SUB.docs[w]||{};SUB.docs[w][k]=on;}
-function readSubForm(){SUB.name=$("#sName").value.trim();SUB.limit=$("#sLim").value;SUB.mode=$("#sMode").value;}
-function checkAndPrint(){readSubForm();const pl=buildPlan(SUB);
-  let h=`<h3>فحص قبل الطباعة</h3>`;
-  if(pl.miss.length)h+=`<div class="errbox"><b>وثائق ناقصة (${pl.miss.length}):</b><br>${pl.miss.map(esc).join("<br>")}</div>`;
+function readSubForm(){if($("#sName"))SUB.name=$("#sName").value.trim();if($("#sLim"))SUB.limit=$("#sLim").value;}
+function checkAndPrint(full){readSubForm();const pl=buildPlan(SUB);const noSt=!stampSrc()&&pl.items.some(x=>x.src==="g");
+  if(!pl.miss.length&&!pl.expired.length&&!noSt){doPrint();return;}
+  let h=`<h3>قبل الطباعة</h3>`;if(noSt)h+=`<div class="warnbox">لا يوجد ختم وإمضاء: القائمة الاسمية وشهادات العمل وقائمة العتاد ستُطبع بإطار فارغ للختم. أضف صورة الختم من «الإعدادات».</div>`;
+  if(pl.miss.length)h+=`<div class="errbox"><b>وثائق ناقصة (${pl.miss.length}) — لن تُطبع:</b><br>${pl.miss.map(esc).join("<br>")}</div>`;
   if(pl.expired.length){h+=`<div class="warnbox"><b>وثائق منتهية الصلاحية${SUB.limit?" في "+fd(SUB.limit):""} (${pl.expired.length}) — القرار لك:</b>
     ${pl.expired.map(x=>`<div class="row"><div class="t"><b>${esc(x.ar||x.label)}</b><span>${fd(x.fin)}</span></div><select style="width:auto" data-exp="${esc(x.id)}"><option value="print">طباعة</option><option value="skip">عدم الطباعة</option><option value="replace">استبدال</option></select></div>`).join("")}
     <button class="b" onclick="document.querySelectorAll('[data-exp]').forEach(s=>s.value='skip')">عدم طباعة كل المنتهية</button></div>`;}
-  if(!pl.miss.length&&!pl.expired.length)h+=`<div class="mu ok">✓ كل الوثائق المطلوبة موجودة وسارية.</div>`;
-  const nDocs=pl.items.filter(x=>x.t==="doc").length;
-  h+=`<p class="mu">${nDocs} وثيقة · ${pl.items.length-nDocs} صفحة فاصلة.</p><div class="chips"><button class="b p" onclick="doPrint()">🖨 إنشاء PDF</button><button class="b" onclick="closeModal()">رجوع</button></div>`;
+  h+=`<div class="chips"><button class="b p" onclick="doPrint()">🖨 متابعة الطباعة</button><button class="b" onclick="closeModal()">رجوع</button></div>`;
   modal(h);}
 async function doPrint(){const skip={};let rep=null;document.querySelectorAll("[data-exp]").forEach(s=>{if(s.value==="skip")skip[s.dataset.exp]=true;if(s.value==="replace"&&!rep)rep=s.dataset.exp;});
   if(rep){closeModal();if(rep.startsWith("veh:")||rep.startsWith("rh:")){toast("الاستبدال يتم في برنامجها المصدر",3500);openSrc(rep.startsWith("veh:")?"p":"r");}else editPiece(rep);return;}
   SUB.skip=skip;closeModal();
-  if($("#sSave")&&$("#sSave").checked&&!viewer()){S.choices.veh=Object.assign({},S.choices.veh,SUB.veh);S.choices.role=Object.assign({},S.choices.role,SUB.roles);S.choices.docs=SUB.docs;S.choices.rib=SUB.rib;S.choices.nYears=SUB.years.length;S.choices.t=Date.now();
+  if($("#sSave")&&$("#sSave").checked&&!viewer()){Object.assign(S.choices,{veh:Object.assign({},S.choices.veh,SUB.veh),role:Object.assign({},S.choices.role,SUB.roles),docs:SUB.docs,rib:SUB.rib,nYears:SUB.years.length,poste:SUB.poste,dip:SUB.dip,abe:SUB.abe,t:Date.now()});
     fput(DOSSIER,D+"/choices",S.choices).catch(()=>{});}
-  const pl=buildPlan(SUB);let out;
-  try{out=await generate(pl.items,{print:true,mode:SUB.mode,reverseBacks:true});}catch(e){prog(false);modal(`<div class="errbox">تعذّر إنشاء الملف: ${esc(e.message)}</div><button class="b" onclick="closeModal()">إغلاق</button>`);return;}
-  /* historique : relevé de ce qui a été imprimé */
-  const sid="s"+Date.now(),docs=pl.items.filter(x=>x.t==="doc");
-  const rec={name:SUB.name||"بدون اسم",t:Date.now(),date:today(),limit:SUB.limit||"",mode:SUB.mode,faces:out.faces,sheets:out.sheets,pages:out.nScreen,
-    opts:{years:SUB.years,rib:SUB.rib,roles:SUB.roles,veh:SUB.veh,docs:SUB.docs,skip:SUB.skip},
+  const pl=buildPlan(SUB);const mode=S.settings.printer||"duplex";let out;
+  try{out=await generate(pl.items,{print:true,mode,reverseBacks:true});}catch(e){prog(false);modal(`<div class="errbox">تعذّر إنشاء الملف: ${esc(e.message)}</div><button class="b" onclick="closeModal()">إغلاق</button>`);return;}
+  const sid="s"+Date.now();
+  const rec={name:SUB.name||"بدون اسم",t:Date.now(),date:today(),limit:SUB.limit||"",mode,faces:out.faces,sheets:out.sheets,pages:out.nScreen,
+    opts:{years:SUB.years,rib:SUB.rib,roles:SUB.roles,veh:SUB.veh,docs:SUB.docs,skip:SUB.skip,poste:SUB.poste,dip:SUB.dip,abe:SUB.abe,smallEq:SUB.smallEq},
     items:pl.items.map(x=>x.t==="doc"?{t:"doc",id:x.id,src:x.src,label:x.label,ar:x.ar||"",v:x.v||x.ms||x.mod||"",n:x.pages||0}:{t:x.t,ar:x.ar||"",fr:x.fr||"",level:x.level||1})};
-  if(!viewer()){try{await fput(DOSSIER,D+"/subs/"+sid,rec);S.subs[sid]=rec;}catch(e){toast("لم يُحفظ السجل");}}
+  if(!viewer()){try{await fput(DOSSIER,D+"/subs/"+sid,rec);S.subs[sid]=rec;}catch(e){}}
   const name=(SUB.name||"dossier").replace(/[^\w؀-ۿ -]+/g,"_").slice(0,60);
-  modal(`<h3>✓ الملف جاهز</h3><p><b>${out.nScreen}</b> صفحة · طباعة: <b>${out.faces}</b> وجه / <b>${out.sheets}</b> ورقة${out.blanks?` (${out.blanks} وجه أبيض لضبط الوجهين)`:""}</p>
-   ${out.check?'<div class="mu ok">✓ فحص: لا صفحة ضائعة ولا مكررة.</div>':'<div class="errbox">⚠️ عدد الصفحات غير متطابق — أعد المحاولة.</div>'}
-   <div class="chips" style="margin-top:8px">${out.print?`<button class="b p" id="dP">🖨 PDF الطباعة (رمادي)</button>`:`<button class="b p" id="d1">🖨 الوجه الأول (الصفحات الفردية)</button><button class="b p" id="d2">🖨 الوجه الثاني (الزوجية، بترتيب معكوس)</button>`}
-   <button class="b" id="dS">📄 PDF ملون (للشاشة / النسخة الإلكترونية)</button><button class="b" onclick="closeModal()">إغلاق</button></div>
-   ${out.print?"":'<p class="mu">اطبع الوجه الأول، ثم اقلب رزمة الأوراق وضعها في الطابعة، ثم اطبع الوجه الثاني.</p>'}`);
-  if(out.print)$("#dP").onclick=()=>dl(out.print,name+"_impression.pdf");else{$("#d1").onclick=()=>dl(out.p1,name+"_recto.pdf");$("#d2").onclick=()=>dl(out.p2,name+"_verso.pdf");}
-  $("#dS").onclick=()=>dl(out.screen,name+"_ecran.pdf");}
-
+  const files=out.print?[[out.print,name+"_impression.pdf","🖨 فتح ملف الطباعة"]]:[[out.p1,name+"_1_recto.pdf","🖨 الدفعة 1 (الوجه الأول)"],[out.p2,name+"_2_verso.pdf","🖨 الدفعة 2 (الوجه الثاني)"]];
+  modal(`<h3>✓ الملف جاهز للطباعة</h3><p><b>${out.nScreen}</b> صفحة على <b>${out.sheets}</b> ورقة. البرنامج قرر وحده: الوثائق ذات الوجهين تُطبع وجهين، والباقي وجهاً واحداً، وكل وثيقة تبدأ في ورقة جديدة.</p>
+   ${out.check?'<div class="mu ok">✓ لا صفحة ضائعة ولا مكررة.</div>':'<div class="errbox">⚠️ عدد الصفحات غير متطابق — أعد المحاولة.</div>'}
+   <div class="chips" style="margin-top:8px">${files.map((f,i)=>`<button class="b p" id="pf${i}" style="padding:11px">${f[2]}</button>`).join("")}<button class="b" id="dS">📄 نسخة ملونة إلكترونية</button><button class="b" onclick="closeModal()">إغلاق</button></div>
+   ${out.print?"":'<p class="mu">اطبع الدفعة 1، اقلب رزمة الأوراق وأعدها للطابعة، ثم اطبع الدفعة 2.</p>'}`);
+  files.forEach((f,i)=>$("#pf"+i).onclick=()=>dl(f[0],f[1]));$("#dS").onclick=()=>dl(out.screen,name+"_ecran.pdf");
+  try{dl(files[0][0],files[0][1]);}catch(e){}}
+/* ---------- تحليل دفتر الشروط : المطلوب، الإقصاء، الفخاخ، سلم التنقيط، المقارنة مع الملف ---------- */
+const CDC_DOCS=[["rc","السجل التجاري",["سجل التجاري","السجل التجاري","registre de commerce"]],["nif","التعريف الجبائي (NIF)",["التعريف الجبائي","identification fiscale"," nif"]],["nis","التعريف الإحصائي (NIS)",["التعريف الإحصائي","identification statistique"," nis"]],
+ ["role","مستخرج الجداول",["مستخرج","extrait de rôle","extrait de role","extrait des rôles"]],["cnas","شهادة CNAS",["cnas","التأمينات الاجتماعية للعمال الأجراء"]],["casnos","شهادة CASNOS",["casnos","غير الأجراء"]],["cac","شهادة CACOBATPH",["cacobatph","العطل المدفوعة"]],
+ ["qualif","شهادة التأهيل والتصنيف",["التأهيل والتصنيف","qualification et classification","شهادة التأهيل"]],["bilan","الحصائل المالية",["حصيلة","حصائل","الميزانيات","bilan"]],["rib","كشف الهوية البنكية",["الهوية البنكية","relevé d'identité","rib"]],
+ ["abe","شهادات حسن التنفيذ",["حسن التنفيذ","حسن الإنجاز","bonne exécution","bonne execution"]],["cg","البطاقات الرمادية",["البطاقة الرمادية","البطاقات الرمادية","carte grise","cartes grises"]],["as","تأمين العتاد",["شهادة التأمين","شهادات التأمين","attestation d'assurance"]],
+ ["ct","المراقبة التقنية",["المراقبة التقنية","contrôle technique"]],["af","شهادات الانتساب",["انتساب","affiliation"]],["dip","شهادات الإطارات",["الشهادات الجامعية","diplôme","diplômes","شهادة جامعية"]],["ln","القائمة الاسمية",["القائمة الاسمية","liste nominative"]],
+ ["das","التصريح السنوي بالأجور",["التصريح السنوي بالأجور","d.a.s","déclaration annuelle des salaires"]],["mat","قائمة العتاد",["قائمة العتاد","liste du matériel","الوسائل المادية","moyens matériels"]],["pv_exp","محضر الخبرة / المعاينة",["محضر الخبرة","محضر معاينة","expertise","huissier"]],
+ ["statut","القانون الأساسي",["القانون الأساسي","statuts"]],["casier","صحيفة السوابق القضائية",["صحيفة السوابق","casier judiciaire"]],["decl","التصريح بالترشح / بالاكتتاب / بالنزاهة",["التصريح بالترشح","التصريح بالاكتتاب","التصريح بالنزاهة","déclaration de candidature","déclaration à souscrire","déclaration de probité"]],
+ ["memoire","المذكرة التقنية التبريرية",["مذكرة تقنية","المذكرة التقنية","mémoire technique"]],["bpu","جدول الأسعار والكشف الكمي",["جدول الأسعار","الكشف الكمي","bordereau des prix","devis quantitatif"]],["caution","كفالة التعهد",["كفالة التعهد","caution de soumission"]]];
+const CDC_EXCL=/(يقصى|يُقصى|تقصى|تُقصى|إقصاء|الإقصاء|يرفض|يُرفض|ترفض|تُرفض|رفض العرض|يلغى|يُلغى|غير مقبول|لا يقبل|لا يُقبل|élimin|exclu|rejet|irrecevable|non recevable|ne sera pas (?:accept|retenu|examin))/i;
+const CDC_TRAP=/(مصادق|مطابقة للأصل|الأصل|نسخة أصلية|légalis|original|سارية المفعول|en cours de validit|كل الصفحات|كل صفحة|chaque page|مختوم|ممضى|موقع|signé|paraph|تحت طائلة|sous peine|إجباري|إلزامي|obligatoire|يجب أن|doit|doivent|على الأقل|au moins|minimum|لا يقل عن|لا تقل عن|أكثر من|مماثلة|similaires|خلال السنوات|des \d+ dernières|ظرف|pli|enveloppe|مغلق|anonyme|بدون أي علامة)/i;
+function cdcSentences(t){return String(t).replace(/\r/g,"").split(/(?<=[.؛;!؟?])\s+|\n+/).map(s=>s.replace(/\s+/g," ").trim()).filter(s=>s.length>=18&&s.length<=420);}
+const arNum=s=>String(s).replace(/[٠-٩]/g,c=>"٠١٢٣٤٥٦٧٨٩".indexOf(c));
+const ORD={"الأولى":1,"الاولى":1,"الثانية":2,"الثالثة":3,"الرابعة":4,"الخامسة":5,"السادسة":6,"السابعة":7,"الثامنة":8,"التاسعة":9,"I":1,"II":2,"III":3,"IV":4,"V":5,"VI":6,"VII":7,"VIII":8,"IX":9};
+function analyzeCDC(text0){const text=arNum(text0),low=text.toLowerCase(),S2=cdcSentences(text),R={};
+  const pick=(re)=>{const m=text.match(re);return m?m[1].replace(/\s+/g," ").trim().slice(0,220):"";};
+  R.objet=pick(/(?:موضوع\s*(?:المناقصة|طلب العروض|الاستشارة|الصفقة)?|objet\s*(?:de l'appel d'offres|du marché)?)\s*[:：]\s*([^\n]{8,240})/i);
+  R.owner=pick(/((?:بلدية|ولاية|مديرية|الوكالة|الديوان)\s+[^\s،,:\n]+(?:\s+[^\s،,:\n]+)?)/);
+  const D="(\\d{1,2}[\\/.\\-]\\d{1,2}[\\/.\\-]\\d{4}|\\d{4}[\\/.\\-]\\d{1,2}[\\/.\\-]\\d{1,2})";
+  const iso=s=>{if(!s)return "";let m=s.match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})$/);if(m)return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;m=s.match(/^(\d{1,2})\D(\d{1,2})\D(\d{4})$/);return m?`${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`:"";};
+  let m=text.match(new RegExp("(?:آخر أجل|آخر اجل|إيداع العروض|ايداع العروض|date limite|dépôt des offres)[^\\n]{0,120}?"+D,"i"));R.deadline=m?iso(m[1]):"";
+  m=text.match(/(?:مدة|آجال|أجل)\s*تحضير العروض[^\d]{0,30}(\d{1,3})\s*(?:يوما|يوم)/);R.prep=m?+m[1]:0;
+  m=text.match(/(?:مدة صلاحية العروض|صلاحية العروض|validité des offres)[^\d]{0,40}(\d{1,3})\s*(?:يوما|يوم|jours)/i);R.validity=m?+m[1]:0;
+  m=text.match(/(?:مدة|آجال|أجل)\s*(?:الإنجاز|الانجاز)[^\d]{0,30}(\d{1,3})\s*(يوما|يوم|أشهر|اشهر|شهر|شهرا)/);R.delay=m?m[1]+" "+m[2]:"";
+  R.caution=/(كفالة التعهد|caution de soumission)/i.test(text);
+  m=text.match(/(?:الصنف|الدرجة|catégorie|categorie)\s*[:]?\s*(الأولى|الاولى|الثانية|الثالثة|الرابعة|الخامسة|السادسة|السابعة|الثامنة|التاسعة|IX|VIII|VII|VI|IV|V|III|II|I|\d)(?![A-Za-z0-9])/i);
+  R.cat=m?(ORD[m[1]]||ORD[m[1].toUpperCase()]||+m[1]||0):0;R.catOk=R.cat?4>=R.cat:null;
+  R.hydro=/(نشاط رئيسي|activité principale)[^.\n]{0,60}(الري|hydraulique)/i.test(text)||/(الري|hydraulique)[^.\n]{0,40}(نشاط رئيسي|activité principale)/i.test(text);
+  m=text.match(/(?:رقم الأعمال|chiffre d'affaires)[^.\n]{0,90}?(\d{1,3}(?:[.\s]\d{3}){2,}(?:,\d{2})?|\d{7,})\s*(?:دج|da|د\.ج)/i);R.caMin=m?Number(m[1].replace(/[.\s]/g,"").replace(",",".")):0;
+  m=text.match(/(?:خلال|des|au cours des)\s*(?:ال)?(?:(\d)|ثلاث|خمس|trois|cinq)\s*(?:سنوات|années)/i);R.years=m?(+m[1]||(/(خمس|cinq)/i.test(m[0])?5:3)):0;
+  m=text.match(/(\d{1,2})\s*(?:شهادات|شهادة)\s*(?:حسن التنفيذ|حسن الإنجاز)/);R.refsMin=m?+m[1]:0;
+  R.sameKind=/(مماثلة|similaires|de même nature)/i.test(text);R.ass=/(التطهير|الصرف الصحي|assainissement)/i.test(text);R.aep=/(الشرب|الماء الصالح|\baep\b|eau potable)/i.test(text);
+  R.docs=CDC_DOCS.filter(([k,n,ks])=>ks.some(x=>low.includes(x.toLowerCase()))).map(([k,n])=>({k,n}));
+  R.excl=[...new Set(S2.filter(s=>CDC_EXCL.test(s)))].slice(0,40);
+  R.traps=[...new Set(S2.filter(s=>CDC_TRAP.test(s)&&!CDC_EXCL.test(s)))].slice(0,50);
+  /* سلم التنقيط */
+  const sc=[];S2.forEach(s=>{const mm=s.match(/(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:نقطة|نقاط|نقط|points?|pts)(?![A-Za-z])/i);if(!mm)return;
+    const per=/(لكل|عن كل|par |pour chaque|chaque)/i.test(s),mx=(s.match(/(?:بحد أقصى|حد أقصى|كحد أقصى|maximum|max)\s*[:]?\s*(\d{1,3})/i)||[])[1];
+    sc.push({s,pts:+mm[1].replace(",","."),per,max:mx?+mx:0});});
+  R.scoring=sc.slice(0,60);
+  return R;}
+function haveDoc(k){const P=id=>S.pieces[id]&&!S.pieces[id].deleted;const W=S.workers.filter(w=>w.st!=="INACTIF");
+  const map={rc:P("rc"),nif:P("nif"),nis:P("nis"),role:P("role"),cnas:!!S.rhFiles.maj_company,casnos:P("casnos"),cac:!!S.rhFiles.cac_company,qualif:P("qualif"),bilan:byCat("bilan").length>0,rib:byCat("rib").length>0,
+    abe:byCat("abe_ass").length+byCat("abe_aep").length>0,cg:true,as:true,ct:true,af:W.some(w=>S.rhFiles["af_"+w.id]),dip:W.some(w=>dipKeys(w).length),ln:true,das:byCat("das").length>0,mat:true,pv_exp:byCat("matdoc").length>0};
+  return k in map?(map[k]?"ok":"no"):"ext";}
+function ourData(s){const W=S.workers.filter(w=>w.st!=="INACTIF"),cad=W.filter(w=>roleOf(w)==="cadre");const bil=byCat("bilan").filter(p=>p.ca).sort((a,b)=>b.year-a.year);const avg3=bil.slice(0,3).reduce((a,p)=>a+p.ca,0)/Math.max(1,Math.min(3,bil.length));
+  if(/(رقم الأعمال|chiffre d'affaires)/i.test(s))return {txt:"متوسط آخر 3 سنوات: "+money(avg3)+" دج"};
+  if(/(حسن التنفيذ|مراجع|مشاريع مماثلة|références|projets similaires|bonne ex)/i.test(s)){const n=byCat("abe_ass").length+byCat("abe_aep").length;return {txt:"شهادات حسن التنفيذ: "+n+" (تطهير "+byCat("abe_ass").length+"، AEP "+byCat("abe_aep").length+")",n};}
+  if(/(مهندس|ingénieur)/i.test(s)){const n=cad.filter(w=>/ing|master/i.test(w.dp||"")).length;return {txt:"إطارات بشهادة مهندس/ماستر: "+n,n};}
+  if(/(تقني|technicien)/i.test(s)){const n=cad.length;return {txt:"الإطارات: "+n,n};}
+  if(/(إطار|encadrement|مستخدم|personnel|عمال|effectif)/i.test(s))return {txt:"المستخدمون النشطون: "+W.length+" (إطارات "+cad.length+")",n:W.length};
+  if(/(شاحن|camion)/i.test(s)){const n=vehicles().filter(e=>vehFamily(e)==="cam").length;return {txt:"الشاحنات: "+n,n};}
+  if(/(آلي|عتاد|معدات|engin|matériel|pelle|chargeur|مجرفة|حفارة)/i.test(s)){const n=vehicles().filter(e=>vehFamily(e)==="eng").length;return {txt:"الآليات: "+n+" · كل العتاد المسجل: "+S.equip.length,n};}
+  if(/(أجل|آجال|مدة الإنجاز|délai)/i.test(s))return {txt:"اقتراح أجل أقصر يرفع النقطة عادةً"};
+  return null;}
+let CDCR=null;
+function vCdc(){const L=Object.entries(S.cdc||{}).sort((a,b)=>b[1].t-a[1].t);
+  $("#view").innerHTML=`<div class="card"><b>📑 تحليل دفتر الشروط</b><p class="mu">أرسل دفتر الشروط (PDF أو صور). يقرأه البرنامج ويستخرج: الوثائق المطلوبة ومقارنتها مع ملفك، شروط الإقصاء، الفخاخ، سلم التنقيط مع تقدير نقطتك، الصنف ورقم الأعمال المطلوبين، وآخر أجل للإيداع.</p>
+   <label class="b p" style="display:inline-block;padding:10px 14px">📄 اختيار دفتر الشروط<input type="file" id="cdcF" accept="application/pdf,image/*" multiple data-noscan style="display:none"></label></div>
+   <div id="cdcOut">${CDCR?cdcReport(CDCR.r,CDCR.name):""}</div>
+   ${L.length?`<div class="sec">تحاليل سابقة</div><div class="card">${L.map(([id,c])=>`<div class="row"><div class="t"><b>${esc(c.name)}</b><span>${fd(new Date(c.t).toISOString())} · ${esc(c.objet||"")}</span></div><button class="b" onclick="openCdc('${id}')">فتح</button></div>`).join("")}</div>`:""}`;
+  $("#cdcF").onchange=e=>cdcRead([...e.target.files]);}
+async function cdcText(files){let all="";let n=0;
+  for(const f of files){if(/pdf/i.test(f.type)||/\.pdf$/i.test(f.name)){const L=await pdfjs();const doc=await L.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
+      for(let i=1;i<=doc.numPages;i++){prog("قراءة دفتر الشروط…",i/doc.numPages*0.9,"صفحة "+i+"/"+doc.numPages);const pg=await doc.getPage(i);const tc=await pg.getTextContent();
+        let t="";let lastY=null;tc.items.forEach(it=>{const y=Math.round(it.transform[5]);if(lastY!==null&&Math.abs(y-lastY)>3)t+="\n";t+=it.str+" ";lastY=y;});
+        if(t.replace(/\s/g,"").length<60&&window.EGTPHOcr){const vp=pg.getViewport({scale:2.2});const cv=document.createElement("canvas");cv.width=vp.width;cv.height=vp.height;const x=cv.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,cv.width,cv.height);await pg.render({canvasContext:x,viewport:vp}).promise;
+          try{const r=await EGTPHOcr.recognize(cv,"ara+fra",{fast:true,paddle:false});t=(r&&r.data&&r.data.text)||"";n++;}catch(e){}}
+        all+="\n"+t;}}
+    else{prog("قراءة الصور…",0.5,f.name);try{const r=await EGTPHOcr.recognize(f,"ara+fra",{fast:true});all+="\n"+((r&&r.data&&r.data.text)||"");n++;}catch(e){}}}
+  prog(false);return all;}
+async function cdcRead(files){if(!files.length)return;const text=await cdcText(files);if(text.replace(/\s/g,"").length<100){toast("لم يُقرأ نص كافٍ من الملف",4000);return;}
+  const r=analyzeCDC(text),name=files[0].name.replace(/\.[^.]+$/,"");CDCR={r,name};
+  if(!viewer()){const id="c"+Date.now();try{await fput(DOSSIER,D+"/cdc/"+id,{name,t:Date.now(),r,text:text.slice(0,150000)});await fput(DOSSIER,D+"/cdcIndex/"+id,{name,t:Date.now(),objet:r.objet||""});S.cdc[id]={name,t:Date.now(),objet:r.objet||""};CDCR.id=id;}catch(e){}}
+  vCdc();window.scrollTo(0,0);}
+async function openCdc(id){prog("تحميل…",0.4);try{const c=await fget(DOSSIER,D+"/cdc/"+id);CDCR={r:analyzeCDC(c.text||""),name:c.name,id};}catch(e){toast("تعذّر الفتح");}prog(false);vCdc();}
+function cdcReport(r,name){const bil=byCat("bilan").filter(p=>p.ca).sort((a,b)=>b.year-a.year),avg3=bil.slice(0,3).reduce((a,p)=>a+p.ca,0)/Math.max(1,Math.min(3,bil.length));
+  const nAbe=byCat("abe_ass").length+byCat("abe_aep").length;let est=0,estN=0;
+  const scRows=r.scoring.map(x=>{const d=ourData(x.s);let e="";if(x.per&&d&&d.n!=null){const v=Math.min(x.max||Infinity,x.pts*d.n);est+=v;estN++;e=money(v).replace(",00","")+" ن";}return `<tr><td style="text-align:right">${esc(x.s)}</td><td>${x.pts}${x.per?" / وحدة":""}${x.max?" (حد "+x.max+")":""}</td><td style="text-align:right">${d?esc(d.txt):"—"}</td><td>${e}</td></tr>`;}).join("");
+  const docs=r.docs.map(d=>{const h=haveDoc(d.k);return `<div class="row"><div class="t"><b>${esc(d.n)}</b></div><span class="st ${h==="ok"?"ok":h==="no"?"er":"wa"}">${h==="ok"?"✓ في الملف":h==="no"?"✗ ناقصة":"تُحضّر خارج الملف"}</span></div>`;}).join("");
+  const chk=[];
+  if(r.cat)chk.push([r.catOk,`الصنف المطلوب: ${r.cat} — صنفكم: الرابعة (IV)`]);
+  if(r.caMin)chk.push([avg3>=r.caMin,`رقم الأعمال المطلوب: ${money(r.caMin)} دج — متوسطكم (3 سنوات): ${money(avg3)} دج`]);
+  if(r.refsMin)chk.push([nAbe>=r.refsMin,`شهادات حسن التنفيذ المطلوبة: ${r.refsMin} — لديكم: ${nAbe}`]);
+  if(r.years)chk.push([bil.length>=r.years,`الحصائل المطلوبة: آخر ${r.years} سنوات — المتوفر: ${bil.map(p=>p.year).join("، ")}`]);
+  return `<div class="card"><h3 style="margin:0 0 6px">${esc(name)}</h3>
+   ${r.objet?`<div><b>الموضوع:</b> ${esc(r.objet)}</div>`:""}${r.owner?`<div><b>صاحب المشروع:</b> ${esc(r.owner)}</div>`:""}
+   <div class="mu">${[r.deadline?"آخر أجل: "+fd(r.deadline):"",r.prep?"مدة التحضير: "+r.prep+" يوما":"",r.validity?"صلاحية العروض: "+r.validity+" يوما":"",r.delay?"أجل الإنجاز: "+r.delay:"",r.caution?"كفالة تعهد مطلوبة":""].filter(Boolean).join(" · ")}</div>
+   ${chk.length?`<div style="margin-top:8px">${chk.map(([ok,t])=>`<div class="${ok===false?"er":ok?"ok":"wa"}">${ok===false?"✗":ok?"✓":"•"} ${esc(t)}</div>`).join("")}</div>`:""}
+   <button class="b p" style="margin-top:10px" onclick="cdcPrepare()">📋 تحضير الملف لهذه المناقصة</button></div>
+   ${r.excl.length?`<div class="sec">⚠️ شروط الإقصاء (${r.excl.length})</div><div class="card errbox">${r.excl.map(s=>"• "+esc(s)).join("<br>")}</div>`:""}
+   <div class="sec">الوثائق المذكورة في الدفتر</div><div class="card">${docs||'<span class="mu">لم تُكتشف قائمة وثائق.</span>'}</div>
+   ${r.scoring.length?`<div class="sec">سلم التنقيط ${estN?`— تقدير نقطتك في المعايير المعدودة: <b>${money(est).replace(",00","")}</b>`:""}</div><div class="card" style="overflow-x:auto"><table class="mini"><tr><th>المعيار</th><th>النقاط</th><th>معطياتك</th><th>تقدير</th></tr>${scRows}</table><p class="mu">التقدير يُحسب فقط للمعايير من نوع «نقاط لكل وحدة». راجع باقي المعايير يدوياً.</p></div>`:""}
+   ${r.traps.length?`<div class="sec">🪤 نقاط تحتاج انتباهاً (${r.traps.length})</div><div class="card warnbox">${r.traps.map(s=>"• "+esc(s)).join("<br>")}</div>`:""}`;}
+function cdcPrepare(){if(!CDCR)return;const r=CDCR.r;SUB=defaultOpts();SUB.name=(r.objet||CDCR.name).slice(0,120);SUB.limit=r.deadline||"";
+  if(r.years){const ys=byCat("bilan").map(p=>p.year).sort((a,b)=>b-a);SUB.years=ys.slice(0,r.years);}
+  if(r.sameKind&&(r.ass!==r.aep)){["abe_ass","abe_aep","abe_autre"].flatMap(c=>byCat(c)).forEach(p=>SUB.abe[p.id]=(r.ass?p.cat==="abe_ass":p.cat==="abe_aep"));}
+  SUB.cdcNote="مُعدّ انطلاقاً من تحليل «"+esc(CDCR.name)+"»"+(r.deadline?" — آخر أجل "+fd(r.deadline):"")+(r.excl.length?" — "+r.excl.length+" شرط إقصاء، راجعها":"");
+  goView("sub");}
 /* ---------- السجل ---------- */
 function vHist(){const L=Object.entries(S.subs||{}).sort((a,b)=>b[1].t-a[1].t);
   $("#view").innerHTML=L.length?L.map(([id,s])=>`<div class="card"><div class="row"><div class="t"><b>${esc(s.name)}</b><span>${fd(s.date)} · ${s.pages||"?"} صفحة · ${s.sheets||"?"} ورقة${s.limit?" · الأجل "+fd(s.limit):""}</span></div><button class="b" onclick="openSub('${id}')">فتح</button></div></div>`).join(""):'<div class="card mu">لا توجد مناقصات مسجلة بعد.</div>';}
-function curVersion(x){if(x.src==="d"){const p=S.pieces[x.id];return p?p.v:null;}if(x.src==="r")return (S.rhFiles[x.id.slice(3)]||{}).ms;if(x.src==="p"){const e=S.equip.find(q=>"veh:"+q.id===x.id.split(":").slice(0,2).join(":"));return e?eqMod(e):null;}}
+function curVersion(x){if(x.src==="g")return x.v;if(x.src==="d"){const p=S.pieces[x.id];return p?p.v:null;}if(x.src==="r")return (S.rhFiles[x.id.slice(3)]||{}).ms;if(x.src==="p"){const e=S.equip.find(q=>"veh:"+q.id===x.id.split(":").slice(0,2).join(":"));return e?eqMod(e):null;}}
 function openSub(id){const s=S.subs[id];const items=s.items||[];let lastSep="";
   const rows=items.map((x,i)=>{if(x.t!=="doc"){lastSep=x.ar;return `<div class="sec" style="font-size:13px">${esc(x.ar)}</div>`;}const cv=curVersion(x),ch=cv!=null&&String(cv)!==String(x.v);
     return `<div class="row"><div class="t"><b>${esc(x.ar||x.label)}</b><span>${x.n||""} ص${ch?' · <span class="wa">نسخة أحدث متوفرة</span>':""}</span></div><button class="b" onclick="reprint('${id}',${i})">🖨</button></div>`;}).join("");
@@ -455,9 +741,15 @@ function vSet(){const u=usage(),bs=S.settings.bases||[];
    <p class="mu">لما تقترب قاعدة من حدّها، تذهب الصفحات الجديدة تلقائياً للقاعدة التالية. لإضافة قاعدة: أنشئ مشروع Firebase جديداً (Realtime Database + Email/Mot de passe)، ثم الصق عنوانه ومفتاحه هنا.</p>
    <div class="grid2"><input type="text" id="nbUrl" placeholder="https://xxx-default-rtdb.europe-west1.firebasedatabase.app"><input type="text" id="nbKey" placeholder="AIza… (Web API Key)"></div>
    <button class="b" style="margin-top:6px" onclick="addBase()">＋ إضافة قاعدة</button></div>
-   <div class="sec">الطباعة</div><div class="card"><label class="chk"><input type="checkbox" ${S.settings.whiten!==false?"checked":""} onchange="saveSet('whiten',this.checked)"> تبييض الخلفية في نسخة الطباعة الرمادية (حذف الظلال والخلفيات الملونة)</label>
+   <div class="sec">الختم والإمضاء (للقائمة الاسمية وشهادات العمل وقائمة العتاد)</div><div class="card">${stampSrc()?`<img src="${stampSrc()}" style="max-height:110px;max-width:240px;background:#fff;border:1px solid #ddd;border-radius:8px">`:'<div class="warnbox">لا يوجد ختم بعد — أرسل صورة الختم والإمضاء (على ورقة بيضاء).</div>'}<br><label class="b" style="display:inline-block;margin-top:6px">📷 صورة الختم والإمضاء<input type="file" accept="image/*" data-noscan style="display:none" onchange="setStamp(this.files[0])"></label>${S.settings.stamp?`<button class="b" onclick="saveSet('stamp',null).then(vSet)">حذف</button>`:""}</div>
+   <div class="sec">الطباعة</div><div class="card"><label class="chk">طابعتي: <select style="width:auto" onchange="saveSet('printer',this.value)">${[["duplex","تطبع وجهين تلقائياً"],["manual","وجه واحد — أقلب الأوراق يدوياً"],["simplex","وجه واحد فقط"]].map(([v,t])=>`<option value="${v}" ${(S.settings.printer||"duplex")===v?"selected":""}>${t}</option>`).join("")}</select></label>
+   <label class="chk">شهادة العمل: <select style="width:auto" onchange="saveSet('attMode',this.value)"><option value="gen" ${S.settings.attMode!=="files"?"selected":""}>يُنشئها البرنامج بالختم (من egtph-rh)</option><option value="files" ${S.settings.attMode==="files"?"selected":""}>الملفات المحفوظة في egtph-rh</option></select></label>
+   <label class="chk"><input type="checkbox" ${S.settings.smallEq!==false?"checked":""} onchange="saveSet('smallEq',this.checked)"> إدراج العتاد الصغير في قائمة العتاد</label><label class="chk"><input type="checkbox" ${S.settings.whiten!==false?"checked":""} onchange="saveSet('whiten',this.checked)"> تبييض الخلفية في نسخة الطباعة الرمادية (حذف الظلال والخلفيات الملونة)</label>
    <label class="chk">عدد الحصائل الافتراضي: <input type="number" min="1" max="10" style="width:70px" value="${S.choices.nYears||3}" onchange="S.choices.nYears=+this.value;fput(DOSSIER,D+'/choices/nYears',+this.value)"></label></div>
    <div class="sec">عائلة كل آلية / مركبة</div><div class="card">${vehicles().map(e=>`<div class="row"><div class="t"><b>${esc(e.name)} ${esc(e.matricule||"")}</b></div><select style="width:auto" onchange="setFam('${e.id}',this.value)">${FAM.map(([f,ar])=>`<option value="${f}" ${vehFamily(e)===f?"selected":""}>${ar}</option>`).join("")}</select></div>`).join("")}</div>`;}
+async function setStamp(f){if(!f)return;const im=await loadImg(await fileToDataURL(f));const k=Math.min(1,900/Math.max(im.naturalWidth,im.naturalHeight)),cv=document.createElement("canvas");cv.width=Math.round(im.naturalWidth*k);cv.height=Math.round(im.naturalHeight*k);const x=cv.getContext("2d",{willReadFrequently:true});x.drawImage(im,0,0,cv.width,cv.height);
+  const id=x.getImageData(0,0,cv.width,cv.height),d=id.data;for(let i=0;i<d.length;i+=4){const l=(d[i]+d[i+1]+d[i+2])/3,mx=Math.max(d[i],d[i+1],d[i+2]),mn=Math.min(d[i],d[i+1],d[i+2]);if(l>205&&mx-mn<40)d[i+3]=0;else if(l>170&&mx-mn<30)d[i+3]=Math.round(255*(205-l)/35);}x.putImageData(id,0,0);
+  await saveSet("stamp",cv.toDataURL("image/png"));vSet();}
 async function saveSet(k,v){S.settings[k]=v;try{await fput(DOSSIER,D+"/settings/"+k,v);toast("حُفظ ✓");}catch(e){toast("تعذّر الحفظ");}}
 async function setFam(id,f){S.choices.fam=S.choices.fam||{};S.choices.fam[id]=f;try{await fput(DOSSIER,D+"/choices/fam/"+id,f);}catch(e){}}
 async function addBase(){const url=$("#nbUrl").value.trim().replace(/\/+$/,""),key=$("#nbKey").value.trim();if(!/^https:\/\/.+firebase(database\.app|io\.com)$/.test(url)||!/^AIza/.test(key)){toast("العنوان أو المفتاح غير صحيح");return;}
@@ -471,18 +763,25 @@ const TYPE_ELSE={cnas:"r",cacobatph:"r",affiliation:"r",diplome:"r",attestation_
 let ED=null;/* {id|null, cat, pages:[{cv,rot}], text} */
 function addPiece(cat){ED={id:null,cat:cat||"",pages:[],text:""};edModal();}
 function editPiece(id){const p=S.pieces[id];ED={id,cat:p.cat,pages:[],text:"",p};edModal();}
-function edModal(){const p=ED.p||{},cat=ED.cat;
-  const catSel=`<select id="eCat" ${ED.id?"disabled":""}><option value="">— الصنف —</option>${Object.keys(CATS).map(c=>`<option value="${c}" ${cat===c?"selected":""}>${CATS[c][0]}</option>`).join("")}</select>`;
-  modal(`<h3>${ED.id?"تحديث: "+esc(p.ar||p.fr):"إضافة وثيقة"}</h3>
-   ${ED.id?`<p class="mu">النسخة الحالية ${p.v||1} (${(p.pages||[]).length} ص) — تُحفظ في الأرشيف عند الاستبدال.</p>`:""}
+function edModal(){const p=ED.p||{},cat=ED.cat;const abe=String(cat||"").startsWith("abe");
+  const catSel=`<select id="eCat" ${ED.id?"disabled":""} onchange="ED.cat=this.value;document.getElementById('abeF').style.display=this.value.startsWith('abe')?'':'none'"><option value="">— الصنف —</option>${Object.keys(CATS).map(c=>`<option value="${c}" ${cat===c?"selected":""}>${CATS[c][0]}</option>`).join("")}</select>`;
+  const pipes=(p.pipes||[]).map(x=>(x.dn?"Ø"+x.dn:"")+(x.mat?" "+x.mat:"")+": "+x.len).join(" ; ");
+  modal(`<h3>${ED.id?"تحديث: "+esc(p.cat&&p.cat.startsWith("abe")?abeTitle(p):(p.ar||p.fr)):"إضافة وثيقة"}</h3>
+   ${ED.id?`<p class="mu">النسخة الحالية ${p.v||1} (${(p.pages||[]).length} ص) — تُحفظ في الأرشيف عند الاستبدال. لتعديل المعلومات فقط لا تختر ملفاً.</p>`:""}
    <label class="b" style="display:inline-block">📷 اختيار صور / PDF<input type="file" id="eFile" accept="image/*,application/pdf" multiple data-noscan style="display:none"></label>
    <label class="chk"><input type="checkbox" id="eBest"> عدة نسخ لنفس الوثيقة: الاحتفاظ بالأوضح فقط</label>
    <div id="eMsg"></div><div class="thumbs" id="eTh"></div>
    <div class="grid2" style="margin-top:8px"><div><label class="mu">الصنف</label>${catSel}</div><div><label class="mu">الاسم (فرنسي)</label><input type="text" id="eFr" value="${esc(p.fr||"")}"></div>
-   <div><label class="mu">الاسم (عربي)</label><input type="text" id="eAr" value="${esc(p.ar||"")}"></div><div><label class="mu">العنوان / المشروع</label><input type="text" id="eTitle" value="${esc(p.title||"")}"></div>
+   <div><label class="mu">الاسم (عربي)</label><input type="text" id="eAr" value="${esc(p.ar||"")}"></div><div><label class="mu">العنوان / المشروع</label><input type="text" id="eTitle" value="${esc(p.proj_ar||p.title||"")}"></div>
    <div><label class="mu">تاريخ الوثيقة</label><input type="date" id="eDate" value="${esc(p.date||"")}"></div><div><label class="mu">صالحة إلى</label><input type="date" id="eFin" value="${esc(p.fin||"")}"></div>
    <div><label class="mu">السنة (الحصيلة)</label><input type="number" id="eYear" value="${esc(p.year||"")}"></div><div><label class="mu">رقم الأعمال (دج)</label><input type="number" step="0.01" id="eCa" value="${esc(p.ca||"")}"></div>
    <div><label class="mu">البنك (RIB)</label><input type="text" id="eBank" value="${esc(p.bank||"")}"></div><div><label class="chk" style="margin-top:22px"><input type="checkbox" id="eDup" ${p.duplex?"checked":""}> طباعة وجهين لهذه الوثيقة</label></div></div>
+   <div id="abeF" style="${abe?"":"display:none"}"><div class="sec" style="margin:10px 0 4px">معلومات شهادة حسن التنفيذ (تُرسل أيضاً للمذكرة التقنية)</div><div class="grid2">
+   <div><label class="mu">صاحب المشروع (عربي)</label><input type="text" id="eOwA" value="${esc(p.owner_ar||"")}"></div><div><label class="mu">Maître d'ouvrage</label><input type="text" id="eOwF" value="${esc(p.owner_fr||"")}"></div>
+   <div style="grid-column:1/-1"><label class="mu">Intitulé du projet (français)</label><input type="text" id="ePrF" value="${esc(p.proj_fr||"")}"></div>
+   <div><label class="mu">مبلغ الصفقة (دج)</label><input type="number" step="0.01" id="eAmt" value="${esc(p.amount||"")}"></div><div><label class="mu">رقم وتاريخ الصفقة</label><input type="text" id="eCtr" value="${esc(p.contract||"")}"></div>
+   <div><label class="mu">مدة الإنجاز</label><input type="text" id="eDel" value="${esc(p.delay_ar||p.delay_fr||"")}"></div><div><label class="mu">سنة الصفقة</label><input type="text" id="eRY" value="${esc(p.refYear||"")}"></div>
+   <div style="grid-column:1/-1"><label class="mu">الأطوال (مثال: Ø400 Annelé: 972 ; Ø300: 2194)</label><input type="text" id="ePip" value="${esc(pipes)}"></div></div></div>
    <div class="chips" style="margin-top:10px"><button class="b p" id="eSave">✓ حفظ</button>${ED.id&&p.v>1?`<button class="b" onclick="restoreOld('${ED.id}')">↩ الرجوع لنسخة سابقة</button>`:""}${ED.id?`<button class="b" onclick="delPiece('${ED.id}')">🗑 حذف</button>`:""}<button class="b" onclick="closeModal()">إلغاء</button></div>`);
   $("#eFile").onchange=e=>readFiles([...e.target.files]);$("#eSave").onclick=savePiece;}
 function msg(h,cls){$("#eMsg").innerHTML=h?`<div class="${cls||"warnbox"}">${h}</div>`:"";}
@@ -508,18 +807,33 @@ async function readFiles(files){if(!files.length)return;msg("جارٍ القرا
   /* lecture + classement (règles + modèle appris) */
   try{msg((notes.length?notes.join("<br>")+"<br>":"")+"🔍 قراءة النص…","mu");const r=await EGTPHOcr.recognize(ED.pages[0].cv,"ara+fra",{fast:true});ED.text=(r&&r.data&&r.data.text)||"";const rr=r&&r.data&&r.data.rotation;if(rr){ED.pages[0].rot=rr%360;drawThumbs();notes.push("تم تصحيح اتجاه الصفحة تلقائياً");}}catch(e){ED.text="";}
   suggest(notes);}
+function parsePipes(s){return String(s||"").split(/[;\n،]+/).map(x=>x.trim()).filter(Boolean).map(x=>{const dn=(x.match(/[ØøDN]\s*(\d{2,4})/i)||[])[1],len=(x.match(/[:=]\s*([\d.,\s]+)$/)||x.match(/(\d[\d.,]*)\s*$/)||[])[1],mat=(x.match(/annel[ée]|pehd|pvc|b[ée]ton/i)||[""])[0];
+  return len?{dn:+dn||0,len:Number(String(len).replace(/[\s.]/g,"").replace(",","."))||0,mat:mat?mat.charAt(0).toUpperCase()+mat.slice(1).toLowerCase().replace("annele","Annelé"):""}:null;}).filter(x=>x&&x.len);}
+function setV(id,v){const e=$("#"+id);if(e&&!e.value&&v!=null&&v!=="")e.value=v;}
 function suggest(notes){const t=ED.text||"";let h=notes.length?notes.join("<br>")+"<br>":"";
   if(t&&window.EGTPHDoc){const d=EGTPHDoc.decide(t,S.model),x=EGTPHDoc.extract(t),ds=x.dates;
     if(d.type&&TYPE_ELSE[d.type]){h+=`<b>هذه الوثيقة تبدو «${d.type}» وتُحفظ في برنامج ${TYPE_ELSE[d.type]==="p"?"العتاد (parc_document)":"العمال (egtph-rh)"}</b> — ستظهر هنا تلقائياً بعد حفظها هناك. <button class="b" onclick="openSrc('${TYPE_ELSE[d.type]}')">فتح البرنامج</button><br>`;}
     else if(d.type&&TYPE2[d.type]){let cat={rc:"jur",nif:"jur",nis:"jur",role:"fis",qualif:"qual",casnos:"para",bilan:"bilan",rib:"rib"}[TYPE2[d.type]];
       if(TYPE2[d.type]==="abe")cat=/الشرب|eau potable|\baep\b/i.test(t)?"abe_aep":"abe_ass";
       h+=`النوع المقترح: <b>${esc((CATS[cat]||[cat])[0])}</b> ${d.sure?'<span class="ok">(مؤكد)</span>':'<span class="wa">(للتأكيد)</span>'}<br>`;
-      if(!ED.id&&!$("#eCat").value){$("#eCat").value=cat;const same=["rc","nif","nis","role","qualif","casnos"].includes(TYPE2[d.type])?S.pieces[TYPE2[d.type]]:null;
-        if(same){h+=`توجد وثيقة من نفس النوع: سيتم <b>استبدالها</b> (القديمة إلى الأرشيف).<br>`;ED.id=same.id;ED.p=same;["Fr","Ar"].forEach(k=>$("#e"+k).value=same[k.toLowerCase()]||"");}}
+      if(!ED.id&&!$("#eCat").value){$("#eCat").value=cat;ED.cat=cat;$("#abeF").style.display=cat.startsWith("abe")?"":"none";const same=["rc","nif","nis","role","qualif","casnos"].includes(TYPE2[d.type])?S.pieces[TYPE2[d.type]]:null;
+        if(same&&!same.deleted){h+=`توجد وثيقة من نفس النوع: سيتم <b>استبدالها</b> (القديمة إلى الأرشيف).<br>`;ED.id=same.id;ED.p=same;["Fr","Ar"].forEach(k=>$("#e"+k).value=same[k.toLowerCase()]||"");}}
       if(cat==="bilan"&&x.years.length&&!$("#eYear").value)$("#eYear").value=Math.max(...x.years.filter(y=>y<=new Date().getFullYear()));}
-    if(ds.length){if(!$("#eDate").value)$("#eDate").value=ds.filter(s=>s<=today()).pop()||"";const fut=ds.filter(s=>s>today());if(fut.length&&!$("#eFin").value)$("#eFin").value=fut[fut.length-1];h+=`التواريخ المقروءة: ${ds.map(fd).join("، ")}<br>`;}}
+    const v=validityIn(t);if(v){setV("eFin",v);h+=`تاريخ الصلاحية المقروء: <b>${fd(v)}</b><br>`;}
+    if(ds.length){setV("eDate",ds.filter(s=>s<=today()).pop()||"");if(!v){const fut=ds.filter(s=>s>today());if(fut.length)setV("eFin",fut[fut.length-1]);}h+=`التواريخ المقروءة: ${ds.map(fd).join("، ")}<br>`;}
+    const c=$("#eCat")?$("#eCat").value:ED.cat;
+    if(String(c).startsWith("abe")){const a=extractABE(t);setV("eTitle",a.proj_ar);setV("eOwA",a.owner_ar);setV("eAmt",a.amount);setV("eCtr",a.contract);setV("eDel",a.delay_n?a.delay_n+(a.delay_u==="mois"?" أشهر":" يوما"):"");
+      if(a.contract_date)setV("eRY",a.contract_date.slice(0,4));if(a.reception)setV("eDate",a.reception);if(a.pipes)setV("ePip",a.pipes.map(x=>(x.dn?"Ø"+x.dn:"")+(x.mat?" "+x.mat:"")+": "+x.len).join(" ; "));
+      h+=`قُرئت معلومات الشهادة (المشروع، المبلغ، الصفقة، الأطوال) — راجعها قبل الحفظ.<br>`;}}
   else if(!t)h+=`<span class="mu">لم يُقرأ النص — املأ الخانات يدوياً.</span>`;
   msg(h);}
+/* شهادة حسن التنفيذ → المذكرة التقنية (المراجع) : نفس المعلومات، بدون الملفات */
+async function syncMemo(p){if(!p||!String(p.cat).startsWith("abe")||viewer())return;try{const base=PARC.base+"_memo";const refs=await fget(PARC,base+"/refs")||[];
+  const yr=String(p.refYear||((p.contract||"").match(/20\d\d/)||[])[0]||(p.date||"").slice(0,4));
+  const data={cat:p.cat==="abe_aep"?"aep":p.cat==="abe_ass"?"ass":"autre",year:yr,amount:+p.amount||0,contract:p.contract||"",owner_ar:p.owner_ar||"",owner_fr:p.owner_fr||"",proj_ar:p.proj_ar||p.title||"",proj_fr:p.proj_fr||"",delay_ar:p.delay_ar||"",delay_fr:p.delay_fr||"",dosId:p.id};
+  const r=refs.find(x=>x&&x.dosId===p.id);
+  if(p.deleted){if(r)r.sel=false;}else if(r)Object.keys(data).forEach(k=>{if(data[k]!==""&&data[k]!==0)r[k]=data[k];});else refs.push(Object.assign({sel:true},data));
+  await fput(PARC,base+"/refs",refs);await fput(PARC,base+"/lastSave",new Date().toISOString());}catch(e){console.warn("memo",e);}}
 function drawThumbs(){$("#eTh").innerHTML=ED.pages.map((p,i)=>`<div class="th"><img src="${thumb(p)}"><div>${i+1}</div><button class="b" onclick="rotP(${i})">⟳</button><button class="b" onclick="movP(${i})">▲</button><button class="b" onclick="ED.pages.splice(${i},1);drawThumbs()">✕</button></div>`).join("");}
 function thumb(p){const cv=rotCv(p.cv,p.rot),s=Math.min(1,260/Math.max(cv.width,cv.height)),c=document.createElement("canvas");c.width=cv.width*s;c.height=cv.height*s;c.getContext("2d").drawImage(cv,0,0,c.width,c.height);return c.toDataURL("image/jpeg",0.7);}
 function rotCv(cv,r){if(!r)return cv;const c=document.createElement("canvas");c.width=r%180?cv.height:cv.width;c.height=r%180?cv.width:cv.height;const x=c.getContext("2d");x.translate(c.width/2,c.height/2);x.rotate(r*Math.PI/180);x.drawImage(cv,-cv.width/2,-cv.height/2);return c;}
@@ -534,13 +848,16 @@ async function savePiece(){if(viewer()){toast("حساب العرض فقط");retu
   const rec=Object.assign({},old||{id,cat,ord:Date.now()%100000,layout:"single"},{fr:$("#eFr").value.trim()||(old&&old.fr)||CATS[cat][1],ar:$("#eAr").value.trim()||(old&&old.ar)||CATS[cat][0],title:$("#eTitle").value.trim(),
     date:$("#eDate").value,fin:$("#eFin").value,bank:$("#eBank").value.trim(),duplex:$("#eDup").checked,v,t:Date.now(),by:"app"});
   const yr=+$("#eYear").value;if(yr)rec.year=yr;const ca=+$("#eCa").value;if(ca)rec.ca=ca;
+  if(String(cat).startsWith("abe")){rec.proj_ar=$("#eTitle").value.trim();rec.title=rec.proj_ar;rec.owner_ar=$("#eOwA").value.trim();rec.owner_fr=$("#eOwF").value.trim();rec.proj_fr=$("#ePrF").value.trim();rec.amount=+$("#eAmt").value||0;rec.contract=$("#eCtr").value.trim();
+    const dl=$("#eDel").value.trim();rec.delay_ar=dl;rec.delay_fr=dl.replace(/يوما|يوم/,"jours").replace(/أشهر|اشهر|شهرا|شهر/,"mois");rec.refYear=$("#eRY").value.trim();const pp=parsePipes($("#ePip").value);if(pp.length){rec.pipes=pp;rec.length=pp.reduce((a,x)=>a+x.len,0);rec.pipesAuto=false;}else{delete rec.pipes;delete rec.length;}
+    if(ED.text)rec.ocrText=ED.text.slice(0,6000);}
   try{
     if(ED.pages.length){const b=writeBase(),bc=baseConf(b),refs=[];
       for(let i=0;i<ED.pages.length;i++){prog("رفع الصفحات…",i/ED.pages.length);const cv=rotCv(ED.pages[i].cv,ED.pages[i].rot),src=cv.toDataURL("image/jpeg",0.72),k=`${id}_v${v}_p${i}`;
         await fput(bc,D+"/pages/"+k,src);await cset("d:"+k,src);refs.push({k,b,w:cv.width,h:cv.height,n:Math.round(src.length*0.75)});}
       if(old)await fput(DOSSIER,D+"/piecesHist/"+id+"/v"+old.v,old);
       rec.pages=refs;}
-    await fput(DOSSIER,D+"/pieces/"+id,rec);S.pieces[id]=rec;
+    await fput(DOSSIER,D+"/pieces/"+id,rec);S.pieces[id]=rec;syncMemo(rec);
     if(ED.text&&window.EGTPHDoc){const typ={rc:"registre_commerce",nif:"nif",nis:"nis",role:"extrait_role",qualif:"qualification",casnos:"casnos"}[id]||{bilan:"bilan",rib:"rib",abe_ass:"bonne_execution",abe_aep:"bonne_execution",abe_autre:"bonne_execution",das:"das",matdoc:"pv",matfact:"facture"}[cat]||null;
       if(typ){S.model=S.model||EGTPHDoc.newModel();EGTPHDoc.train(S.model,typ,ED.text.slice(0,4000));fput(DOSSIER,D+"/ai/model",S.model).catch(()=>{});}}
     prog(false);closeModal();toast("حُفظت الوثيقة ✓");render();
@@ -550,10 +867,10 @@ async function restoreOld(id){const h=await fget(DOSSIER,D+"/piecesHist/"+id).ca
 async function doRestore(id,v){const o=await fget(DOSSIER,D+"/piecesHist/"+id+"/v"+v);const cur=S.pieces[id];await fput(DOSSIER,D+"/piecesHist/"+id+"/v"+cur.v,cur);
   const rec=Object.assign({},o,{v:Math.max(cur.v,o.v)+1,t:Date.now(),restoredFrom:v});await fput(DOSSIER,D+"/pieces/"+id,rec);S.pieces[id]=rec;closeModal();toast("استُرجعت النسخة "+v);render();}
 async function delPiece(id){if(!confirm("حذف هذه الوثيقة من الملف؟ (تبقى في الأرشيف)"))return;const cur=S.pieces[id];await fput(DOSSIER,D+"/piecesHist/"+id+"/v"+cur.v,cur);
-  await fput(DOSSIER,D+"/pieces/"+id,{id,deleted:true,t:Date.now()});S.pieces[id]={id,deleted:true};closeModal();render();}
+  await fput(DOSSIER,D+"/pieces/"+id,{id,deleted:true,t:Date.now()});S.pieces[id]={id,deleted:true};syncMemo(Object.assign({},cur,{deleted:true}));closeModal();render();}
 
 /* ====================== démarrage ====================== */
-window.EGTPHDossier={S,buildPlan,defaultOpts,generate,itemFaces,drawSep,drawCover,duplexSeq,loadAll};
+window.EGTPHDossier={S,buildPlan,defaultOpts,generate,itemFaces,drawSep,drawCover,duplexSeq,loadAll,genPages,analyzeCDC};
 (async function boot(){
   if(new URLSearchParams(location.search).get("embed")==="1")document.querySelector("header h1").style.display="none";
   try{
