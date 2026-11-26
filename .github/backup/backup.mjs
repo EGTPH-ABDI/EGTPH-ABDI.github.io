@@ -21,6 +21,7 @@ const APPS = [
   { id: "semaine", key: "AIzaSyAnRqmYvW3g9b7ysQJQ9stVsdoEVgKFcxM", db: rdb("egtph-semaine"), paths: ["egtph"] },
   { id: "parc_document", key: "AIzaSyBf7NU7QPvS824duUE78uaXZuCzGdX6Grg", db: rdb("egtph-parc"), paths: ["egtph"] },
   { id: "service", key: "AIzaSyA5fS3IgHJdrZIR3rJ97OJJvDQdT0XlKf4", db: rdb("egtph-service"), paths: ["egtph"] },
+  { id: "dossier", key: "AIzaSyCE1nUWBtJGr-dv0PtN65pI8MtWQE12TrM", db: rdb("egtph-dossier"), paths: ["egtph"] },
   { id: "apps", key: "AIzaSyC-jLXkEWlwjQpeg1Yk4TMraXeWYOe6PBA", db: rdb("egtph-apps"), paths: ["egtph-apps/apps_v1_GCLD9MRi4O6r2pYcyw5K6DR2tqb4tsH5WvmjvUdz", "egtph-apps/_push"] }
 ];
 const HOME = APPS.find((a) => a.id === "apps"); // مكان النسخ: egtph-apps

@@ -1,0 +1,37 @@
+name: EGTPH معالجة الوثائق بأحسن البرامج
+# OCRmyPDF (قراءة عربي+فرنسي، تقويم، unpaper، PDF/A) + Ghostscript (نسخة رمادية للطباعة) + page-dewarp (تسطيح الورقة المقوّسة)
+# يقرأ الطلبات من <root>/_docpro/queue في قواعد البرامج المربوطة، ويكتب النتائج في <root>/_docpro فقط — الوثيقة الأصلية لا تُمسّ.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: egtph-docpro
+  cancel-in-progress: false
+jobs:
+  docpro:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/docpro
+      - name: هل توجد وثائق في الانتظار؟
+        id: check
+        run: python3 .github/docpro/worker.py
+        env:
+          EGTPH_PUSH: ${{ secrets.EGTPH_PUSH }}
+          DOCPRO_CHECK: "1"
+      - name: تثبيت البرامج
+        if: steps.check.outputs.jobs != '0' && steps.check.outputs.jobs != ''
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-ara tesseract-ocr-fra unpaper ghostscript pngquant poppler-utils qpdf >/dev/null
+          pip install -q ocrmypdf page-dewarp
+      - name: المعالجة
+        if: steps.check.outputs.jobs != '0' && steps.check.outputs.jobs != ''
+        run: python3 .github/docpro/worker.py
+        env:
+          EGTPH_PUSH: ${{ secrets.EGTPH_PUSH }}
