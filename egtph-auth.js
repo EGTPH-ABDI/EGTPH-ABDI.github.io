@@ -181,7 +181,13 @@
         var email = name ? (/^\d+$/.test(name) ? name + "@gmail.com" : name) : opts.email;
         var role = (!name || email.toLowerCase() === String(opts.email).toLowerCase()) ? "owner" : "viewer";
         errBox.textContent = "...";
-        signIn(opts.apiKey, email, pw).then(function (d) { done(d, role, email, pw); })
+        signIn(opts.apiKey, email, pw).then(function (d) {
+          // opts.also = [{appId, apiKey}] : la même saisie ouvre aussi les programmes liés (une seule demande de mot de passe)
+          var also = (opts.also || []).filter(function (a) { return a && a.appId && a.apiKey; });
+          return Promise.all(also.map(function (a) {
+            return signIn(a.apiKey, email, pw).then(function (x) { saveSession(a.appId, x, { role: role, loginAt: Date.now() }); }, function () {});
+          })).then(function () { done(d, role, email, pw); });
+        })
           .catch(function (err) {
             errBox.textContent = errText(err && err.message);
             passInput.value = "";
