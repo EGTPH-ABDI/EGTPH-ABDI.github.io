@@ -318,6 +318,7 @@ function buildPlan(o){
   const need=(p,what)=>{if(!p||p.deleted)miss.push(what);return p;};
   const gen=(kind,ar,label,data,x)=>L.push(Object.assign({t:"doc",src:"g",kind,id:"gen:"+kind+(data&&data.wid?":"+data.wid:""),ar,label,data:data||{},duplex:true,layout:"single",fin:"",v:"auto"},x||{}));
   L.push({t:"cover"});
+  sep(...CATS.qual);byCat("qual").forEach(p=>dp(p));need(S.pieces.qualif,"شهادة التأهيل");
   sep(...CATS.jur);byCat("jur").forEach(p=>dp(p));need(S.pieces.rc,"السجل التجاري");need(S.pieces.nif,"NIF");need(S.pieces.nis,"NIS");
   sep(...CATS.fis);byCat("fis").forEach(p=>dp(p));need(S.pieces.role,"مستخرج الجداول");
   sep(...CATS.para);
@@ -325,7 +326,6 @@ function buildPlan(o){
   rhc("maj_company","CNAS — attestation de mise à jour","شهادة CNAS");
   byCat("para").forEach(p=>dp(p));
   rhc("cac_company","CACOBATPH — attestation de mise à jour","شهادة CACOBATPH");
-  sep(...CATS.qual);byCat("qual").forEach(p=>dp(p));need(S.pieces.qualif,"شهادة التأهيل");
   const bil=byCat("bilan").filter(p=>o.years.includes(p.year)).sort((a,b)=>b.year-a.year);
   L.push({t:"fin",ar:"القدرات المالية",fr:"Capacités financières",rows:byCat("bilan").filter(p=>p.ca).sort((a,b)=>b.year-a.year).map(p=>[p.year,p.ca]),avgYears:bil.map(p=>p.year)});
   const rib=S.pieces[o.rib];need(rib,"كشف الهوية البنكية");if(rib&&!rib.deleted)dp(rib);
@@ -476,12 +476,28 @@ async function srcPages(it){/* → [{src,w,h,ref}] (images verticales prêtes) *
   return [];}
 function fit(w,h,bw,bh){const s=Math.min(bw/w,bh/h);return [w*s,h*s];}
 async function embed(pdf,src){const b=b64bytes(src.split(",")[1]);return /^data:image\/png/.test(src)?pdf.embedPng(b):pdf.embedJpg(b);}
+/* zone utile d'une page (lignes/colonnes contenant de l'encre) */
+async function inkBox(src){const im=await loadImg(src);const W=360,H=Math.max(1,Math.round(im.naturalHeight*W/im.naturalWidth)),cv=document.createElement("canvas");cv.width=W;cv.height=H;const x=cv.getContext("2d",{willReadFrequently:true});x.fillStyle="#fff";x.fillRect(0,0,W,H);x.drawImage(im,0,0,W,H);
+  const d=x.getImageData(0,0,W,H).data,row=new Uint16Array(H),col=new Uint16Array(W);for(let y=0;y<H;y++)for(let i=0;i<W;i++){const k=(y*W+i)*4;if((d[k]+d[k+1]+d[k+2])/3<170){row[y]++;col[i]++;}}
+  const thr=2;let t=0,b=H-1;while(t<H&&row[t]<thr)t++;while(b>t&&row[b]<thr)b--;
+  return {im,top:Math.max(0,t-4)/H,bot:Math.min(H,b+5)/H,fill:(b-t)/H};}
+/* une pièce de 2-3 pages dont le contenu tient sur une page (ex. CACOBATPH : page 2 = seulement le QR) → une seule page, mise en page d'origine gardée */
+async function mergeSparse(ps){if(ps.length<2||ps.length>3)return ps;const ck="mg:"+ps.map(p=>p.src.length+":"+p.src.slice(-40)).join("|");const c=await cget(ck);if(c)return c;
+  const bx=await Promise.all(ps.map(p=>inkBox(p.src)));const W=bx[0].im.naturalWidth,ratio=ps[0].h/ps[0].w;
+  if(bx.some(b=>Math.abs(b.im.naturalWidth/b.im.naturalHeight-W/bx[0].im.naturalHeight)>0.08))return ps;
+  const parts=bx.map(b=>{const h=b.im.naturalHeight*W/b.im.naturalWidth;return {b,h,sy:b.top*b.im.naturalHeight,sh:(b.bot-b.top)*b.im.naturalHeight,dh:(b.bot-b.top)*h};});
+  const gap=W*0.02,total=parts.reduce((a,p)=>a+p.dh,0)+gap*(parts.length-1),Hp=W*ratio;
+  if(total>Hp*0.97)return ps;
+  const cv=document.createElement("canvas");cv.width=W;cv.height=Math.round(Hp);const x=cv.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,cv.width,cv.height);
+  let y=Math.min(parts[0].b.top*Hp,Math.max(0,(Hp-total)/2));for(const p of parts){x.drawImage(p.b.im,0,p.sy,p.b.im.naturalWidth,p.sh,0,y,W,p.dh);y+=p.dh+gap;}
+  const out=[{src:cv.toDataURL("image/jpeg",0.82),w:cv.width,h:cv.height}];await cset(ck,out);return out;}
 async function itemFaces(it,mode){
   const gray=mode==="print";const conv=async p=>gray?await printSrc(p):p.src;
   if(it.t==="cover"||it.t==="sep"||it.t==="fin"){await fontsReady();const ck="sep:"+JSON.stringify([it.t,it.ar,it.fr,it.level,it.sub_ar,it.rows,it.avgYears,new Date().getFullYear()]);let src=await cget(ck);
     if(!src){const cv=it.t==="cover"?drawCover(new Date().getFullYear()):drawSep(it.t==="fin"?Object.assign({},it,{level:1}):it);src=cv.toDataURL("image/png");await cset(ck,src);}
     return [{w:AW,h:AH,imgs:[{src,box:[0,0,AW,AH]}]}];}
-  const ps=await srcPages(it);if(!ps.length)return [];
+  let ps=await srcPages(it);if(!ps.length)return [];
+  if(it.layout==="single"&&it.t==="doc"&&ps.length>1&&S.settings.mergeSparse!==false)ps=await mergeSparse(ps);
   if(it.layout==="pair"){const W=AH,H=AW,gap=14,aw=W-2*MARGIN-gap*(ps.length-1),ah=H-2*MARGIN,rs=ps.map(p=>p.w/p.h),hh=Math.min(ah,aw/rs.reduce((a,b)=>a+b,0));
     let xr=(W+rs.reduce((a,r)=>a+r*hh,0)+gap*(ps.length-1))/2;const imgs=[];
     for(let i=0;i<ps.length;i++){const ww=rs[i]*hh;imgs.push({src:await conv(ps[i]),box:[xr-ww,(H-hh)/2,ww,hh]});xr-=ww+gap;}
