@@ -3,13 +3,13 @@
 //   (ثم تُحدَّث النسخة في الخلفية) — حتى لا تبقى الشاشة سوداء مع LTE ضعيف.
 // - مكتبات Firebase والخطوط (ثابتة برقم إصدار): من النسخة المحفوظة مباشرة.
 // - لا يحفظ بيانات Firebase (تبقى مزامنتها كما هي).
-var CACHE = "egtph-v8";
+var CACHE = "egtph-v9";
 var CORE = ["/apps.html", "/egtph-auth.js", "/egtph-lock.js", "/manifest.webmanifest", "/icons/icon-180.png"];
 var EXTERNAL = /^https:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com\/firebasejs\/|cdnjs\.cloudflare\.com\/ajax\/libs\/|cdn\.jsdelivr\.net\/npm\/|unpkg\.com\/)/;
 var HEAVY = /onnxruntime|ppocr|tesseract|traineddata|\.onnx|\.wasm/i; // نماذج قراءة النصوص: كبيرة جداً، تبقى من الإنترنت
 // كل البرامج تُحمَّل مسبقاً على الهاتف لتُفتح دون إنترنت حتى لو لم تُفتح من قبل
 var WARM = ["/gestion/", "/facture/", "/caution/", "/commande/", "/egtph-rh/", "/lapayeparmois/", "/Semaine/", "/parc_document/", "/parc_document/memoire.html", "/service/",
-  "/egtph-scan.js", "/egtph-doc.js", "/egtph-ocr.js", "/vendor/jspdf.umd.min.js", "/vendor/html2canvas.min.js",
+  "/egtph-scan.js", "/egtph-doc.js", "/parc_document/egtph-inbox.js", "/egtph-ocr.js", "/vendor/jspdf.umd.min.js", "/vendor/html2canvas.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js", "https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css", "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js",

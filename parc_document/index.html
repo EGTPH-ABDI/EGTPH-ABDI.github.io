@@ -5,6 +5,7 @@
 <script src="../egtph-auth.js"></script>
 <script>window.EGTPH_SCAN_OFF=true;/* Parc : le scanner est appelé directement par processDocumentImage */</script>
 <script src="../egtph-scan.js"></script>
+<script src="egtph-inbox.js" defer></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EGTPH — Matériel & Soumissions</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1893,7 +1894,7 @@ function doPrint(){
 let matFilter="all",matSearch="";
 function renderMat(){
   let html=`<div class="toolbar"><select id="fCat"><option value="all">${t("allCats")}</option>${Object.entries(CATS).map(([k,v])=>`<option value="${k}" ${matFilter==k?"selected":""}>${esc(v)}</option>`).join("")}<option value="veh" ${matFilter==="veh"?"selected":""}>🚛 ${t("vehicles")}</option></select>
-    <input id="fSearch" placeholder="${t("search")}" value="${esc(matSearch)}" style="flex:1;min-width:150px"><button class="btn" id="addBtn">${t("add")}</button>${scanBtnHtml()}${pdBtnHtml()}${flBtnHtml()}</div><div class="card" style="overflow:auto">`;
+    <input id="fSearch" placeholder="${t("search")}" value="${esc(matSearch)}" style="flex:1;min-width:150px"><button class="btn" id="addBtn">${t("add")}</button>${scanBtnHtml()}${pdBtnHtml()}${flBtnHtml()}${typeof inboxBtnHtml==="function"?inboxBtnHtml():""}</div><div class="card" style="overflow:auto">`;
   let list=DATA.equipment.slice();
   if(matFilter==="veh")list=list.filter(e=>e.veh);else if(matFilter!=="all")list=list.filter(e=>e.cat==Number(matFilter));
   if(matSearch){const q=matSearch.toLowerCase(),qd=scanDigits(matSearch);list=list.filter(e=>((e.name||"")+" "+(e.model||"")+" "+(e.matricule||"")+" "+(e.facture||"")+" "+(e.serie||"")).toLowerCase().includes(q)||(qd.length>=4&&scanDigits(e.matricule).includes(qd)));}
@@ -3925,7 +3926,7 @@ function renderParc(){
   const bad=entries.filter(x=>statusOf(x.fin)==="bad").length,warn=entries.filter(x=>statusOf(x.fin)==="warn").length;
   const missing=veh.filter(e=>(!(e.assurance&&e.assurance.fin))||(e.needsCT&&!(e.ct&&e.ct.fin))||(e.needsPermis&&!(e.permis&&e.permis.fin))).length;
   const alerts=entries.filter(x=>statusOf(x.fin)!=="ok");
-  let html=`<div class="toolbar"><button class="btn" id="addVehBtn">${t("addVeh")}</button>${scanBtnHtml()}${pdBtnHtml()}${flBtnHtml()}</div><div class="stats">
+  let html=`<div class="toolbar"><button class="btn" id="addVehBtn">${t("addVeh")}</button>${scanBtnHtml()}${pdBtnHtml()}${flBtnHtml()}${typeof inboxBtnHtml==="function"?inboxBtnHtml():""}</div><div class="stats">
     <div class="stat"><div class="n">${DATA.equipment.length}</div><div class="l">${t("equipements")}</div></div>
     <div class="stat"><div class="n">${veh.length}</div><div class="l">${t("vehiculesN")}</div></div>
     <div class="stat warn"><div class="n">${warn}</div><div class="l">${t("expire30")}</div></div>
