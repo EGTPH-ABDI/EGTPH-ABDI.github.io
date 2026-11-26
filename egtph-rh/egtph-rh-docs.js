@@ -12,7 +12,12 @@
   const AR=()=>{try{return LANG==="ar";}catch(e){return document.documentElement.lang==="ar";}};
   const L=(fr,ar)=>AR()?ar:fr;
   const KINDS={dip:["Diplôme","الشهادة الجامعية / المهنية"],exp:["Attestation d'expérience","شهادة الخبرة"],att:["Attestation de travail signée","شهادة العمل (ممضاة)"],cni:["Pièce d'identité","بطاقة التعريف"]};
-  const PK=Object.keys(KINDS);
+  const PK=Object.keys(KINDS),MAXN=9;
+  const base=k=>String(k||"").replace(/\d+$/,"");            // dip2 → dip
+  const isPK=k=>PK.includes(base(k));
+  const slots=k=>[k].concat(Array.from({length:MAXN-1},(_,i)=>k+(i+2)));   // dip, dip2 … dip9
+  async function docsOf(wid,k){const out=[];for(const s of slots(k)){let r=null;try{r=await getWorkerDoc(wid,s);}catch(e){}if(r)out.push({slot:s,r});}return out;}
+  async function freeSlot(wid,k){for(const s of slots(k)){let r=null;try{r=await getWorkerDoc(wid,s);}catch(e){}if(!r)return s;}return null;}
   const TYPE2K={diplome:"dip",attestation_travail:"att",experience:"exp",cni:"cni"};
   const TOMB="egtph_rh_pers_tombs_v1",MKEY="egtph_ai_model_rh";
   const esc2=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -38,7 +43,7 @@
     file=await cleanFile(file);
     await archiveOld(wid,kind);
     await putWorkerDoc(wid,kind,file,extra||{});
-    const rec=await idbGetDoc(kind+":"+wid);if(rec){rec.updatedAtMs=Date.now();await idbPutDoc(rec);}
+    const rec=await idbGetDoc(kind+":"+wid);if(rec){rec.updatedAtMs=Date.now();if(extra&&extra.label)rec.label=extra.label;await idbPutDoc(rec);}
     const t=tombs();if(t[key(kind,wid)]){delete t[key(kind,wid)];saveTombs(t);}
     sync();return rec;
   }
@@ -52,24 +57,24 @@
     if(!ready())return;if(busy){pending=true;return;}busy=true;let changed=false;
     try{
       const remote=(await fbRef.child("files").once("value")).val()||{};
-      const local={};(await idbAllDocs()).forEach(r=>{if(r&&PK.includes(r.kind))local[key(r.kind,r.workerId)]=r;});
+      const local={};(await idbAllDocs()).forEach(r=>{if(r&&isPK(r.kind))local[key(r.kind,r.workerId)]=r;});
       const tb=tombs();
       for(const k of Object.keys(remote)){
-        const rv=remote[k];if(!rv||typeof rv!=="object")continue;const kind=rv.kind||k.split("_")[0];if(!PK.includes(kind))continue;
+        const rv=remote[k];if(!rv||typeof rv!=="object")continue;const kind=rv.kind||k.split("_")[0];if(!isPK(kind))continue;
         const rms=Number(rv.updatedAtMs)||0,lr=local[k];
         if(tb[k]&&tb[k]>=rms)continue;if(lr&&(Number(lr.updatedAtMs)||0)>=rms)continue;
         const wid=k.slice(k.indexOf("_")+1);
         if(rv.deleted){if(lr){await idbDelDoc(lr.id);delete local[k];changed=true;}continue;}
         if(!S.workers.some(w=>w.id===wid)||!rv.b64)continue;
         const rec={id:kind+":"+wid,workerId:wid,kind,name:rv.name||k,type:rv.type||"application/pdf",size:Number(rv.size)||0,
-          updatedAt:new Date(rms).toISOString(),updatedAtMs:rms,cloudMs:rms,blob:b64ToBlob(rv.b64,rv.type||"application/pdf"),ocrText:rv.ocrText||""};
+          updatedAt:new Date(rms).toISOString(),updatedAtMs:rms,cloudMs:rms,blob:b64ToBlob(rv.b64,rv.type||"application/pdf"),ocrText:rv.ocrText||"",label:rv.label||""};
         await idbPutDoc(rec);local[k]=rec;changed=true;
       }
       if(!viewer()){
         for(const k of Object.keys(local)){
           const lr=local[k],lms=Number(lr.updatedAtMs)||0,rv=remote[k],rms=rv?Number(rv.updatedAtMs)||0:0;
           if(!lms||(rv&&rms>=lms))continue;
-          try{await fbRef.child("files/"+k).set(fbNormalize({kind:lr.kind,wid:lr.workerId,name:lr.name,type:lr.type,size:lr.size,updatedAtMs:lms,ocrText:String(lr.ocrText||"").slice(0,5000),b64:await blobToB64(lr.blob)}));
+          try{await fbRef.child("files/"+k).set(fbNormalize({kind:lr.kind,wid:lr.workerId,name:lr.name,label:lr.label||"",type:lr.type,size:lr.size,updatedAtMs:lms,ocrText:String(lr.ocrText||"").slice(0,5000),b64:await blobToB64(lr.blob)}));
             lr.cloudMs=lms;await idbPutDoc(lr);}catch(e){console.warn("[RH docs] envoi",k,e&&e.message);}
         }
         for(const k of Object.keys(tb)){const ms=tb[k],rv=remote[k],rms=rv?Number(rv.updatedAtMs)||0:0;
@@ -87,24 +92,29 @@
     const d=document.createElement("div");d.className="fl full doc-store";d.id="wPersDocs";box.after(d);
     const inp=document.createElement("input");inp.type="file";inp.id="wPersFile";inp.accept="application/pdf,image/*";inp.style.display="none";document.body.appendChild(inp);
     inp.onchange=async()=>{const f=inp.files&&inp.files[0],kind=inp.dataset.kind;inp.value="";if(!f||!kind||!editW)return;
-      try{await storeDoc(editW,kind,f,{});toast(L("Pièce enregistrée ✓","حُفظت الوثيقة ✓"));renderPers();}catch(e){toast(L("Échec de l'enregistrement","تعذّر الحفظ"),"er");}};
+      const label=(window.prompt(L("Intitulé (ex. Master génie civil) — facultatif","العنوان (مثلاً: ماستر هندسة مدنية) — اختياري"),"")||"").trim();
+      try{await storeDoc(editW,kind,f,{label});toast(L("Pièce enregistrée ✓","حُفظت الوثيقة ✓"));renderPers();}catch(e){toast(L("Échec de l'enregistrement","تعذّر الحفظ"),"er");}};
   }
   async function renderPers(){
     injectSection();const box=document.getElementById("wPersDocs");if(!box)return;
     let wid=null;try{wid=editW;}catch(e){}
     let rows="";
     for(const k of PK){
-      let r=null;if(wid){try{r=await getWorkerDoc(wid,k);}catch(e){}}
-      rows+=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0">
-        <b style="min-width:170px">${esc2(L(KINDS[k][0],KINDS[k][1]))}</b>
-        <span class="doc-store-info" style="flex:1">${r?"✓ "+esc2(r.name)+" · "+fdate(r.updatedAt):L("— aucune —","— لا توجد —")}</span>
-        <button class="btp gray" type="button" data-pk-add="${k}" ${wid?"":"disabled"}>📎 ${r?L("Remplacer","استبدال"):L("Joindre","إرفاق")}</button>
-        <button class="btp gray" type="button" data-pk-open="${k}" ${r?"":"disabled"}>👁️</button>
-        <button class="btp danger" type="button" data-pk-del="${k}" ${r&&!viewer()?"":"disabled"}>🗑️</button></div>`;
+      const list=wid?await docsOf(wid,k):[];
+      rows+=`<div style="margin:8px 0;padding-top:6px;border-top:1px solid var(--br)"><b>${esc2(L(KINDS[k][0],KINDS[k][1]))}</b>`;
+      if(!list.length)rows+=`<div class="doc-store-info">${L("— aucune —","— لا توجد —")}</div>`;
+      for(const {slot,r} of list)rows+=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0">
+        <span class="doc-store-info" style="flex:1">✓ ${esc2(r.label||r.name)} · ${fdate(r.updatedAt)}</span>
+        <button class="btp gray" type="button" data-pk-add="${slot}">📎 ${L("Remplacer","استبدال")}</button>
+        <button class="btp gray" type="button" data-pk-open="${slot}">👁️</button>
+        <button class="btp danger" type="button" data-pk-del="${slot}" ${viewer()?"disabled":""}>🗑️</button></div>`;
+      rows+=`<button class="btp gray" type="button" data-pk-new="${k}" ${wid?"":"disabled"}>➕ ${list.length?L("Ajouter une autre","إضافة أخرى"):L("Joindre","إرفاق")}</button></div>`;
     }
     box.innerHTML=`<label>📂 ${L("Pièces du travailleur (soumissions)","وثائق العامل (للمناقصات)")}</label>
       ${wid?"":`<div class="doc-store-info">${L("Enregistrez d'abord le travailleur, puis joignez ses pièces.","احفظ العامل أولاً، ثم أرفق وثائقه.")}</div>`}${rows}`;
-    box.querySelectorAll("[data-pk-add]").forEach(b=>b.onclick=()=>{const i=document.getElementById("wPersFile");i.dataset.kind=b.dataset.pkAdd;i.click();});
+    const pick=slot=>{const i=document.getElementById("wPersFile");i.dataset.kind=slot;i.click();};
+    box.querySelectorAll("[data-pk-add]").forEach(b=>b.onclick=()=>pick(b.dataset.pkAdd));
+    box.querySelectorAll("[data-pk-new]").forEach(b=>b.onclick=async()=>{const s=await freeSlot(editW,b.dataset.pkNew);if(!s){toast(L("Maximum atteint","وصلت للحد الأقصى"),"er");return;}pick(s);});
     box.querySelectorAll("[data-pk-open]").forEach(b=>b.onclick=async()=>{const r=await getWorkerDoc(editW,b.dataset.pkOpen);if(r&&r.blob)window.open(URL.createObjectURL(r.blob),"_blank");});
     box.querySelectorAll("[data-pk-del]").forEach(b=>b.onclick=async()=>{if(!confirm(L("Retirer cette pièce ? (une copie reste dans l'historique)","حذف هذه الوثيقة؟ (تبقى نسخة في السجل)")))return;
       await archiveOld(editW,b.dataset.pkDel);await removeDoc(editW,b.dataset.pkDel);renderPers();});
@@ -175,7 +185,9 @@
     const H=rows.map((r,i)=>`<div style="border:1px solid var(--br);border-radius:10px;padding:8px;margin:8px 0">
       <label style="font-weight:700"><input type="checkbox" data-ok="${i}" ${r.k&&r.wid?"checked":""}> ${esc2(r.file.name)}</label>
       ${r.cnas?`<div class="doc-store-info">⚠️ ${L("Pièce CNAS / CASNOS / CACOBATPH : utilisez l'import CNAS habituel (lecture automatique des dates).","وثيقة CNAS / CASNOS / CACOBATPH : استعمل استيراد CNAS المعتاد (قراءة التواريخ تلقائياً).")}</div>`:""}
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"><select data-k="${i}">${kopt(r.k)}</select><select data-w="${i}">${wopt(r.wid)}</select></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"><select data-k="${i}">${kopt(r.k)}</select><select data-w="${i}">${wopt(r.wid)}</select>
+        <select data-m="${i}"><option value="add" ${r.k==="cni"||r.k==="att"?"":"selected"}>${L("Ajouter (garder les autres)","إضافة (مع الإبقاء على الأخرى)")}</option><option value="rep" ${r.k==="cni"||r.k==="att"?"selected":""}>${L("Remplacer la première","استبدال الأولى")}</option></select>
+        <input data-l="${i}" placeholder="${L("Intitulé (facultatif)","العنوان (اختياري)")}" style="flex:1;min-width:140px"></div>
       <div class="doc-store-info">${r.k?(r.sure?"✓ ":"? ")+L("type reconnu","نوع متعرَّف عليه"):L("type inconnu — choisissez","نوع غير معروف — اختر")}${r.wid?" · "+L("travailleur reconnu","عامل متعرَّف عليه"):""}</div></div>`).join("");
     modal(`<h3>📥 ${L("Boîte de réception","صندوق الوارد")}<span class="x" onclick="closeM('mInbox')">✕</span></h3>
       <p class="hint">${rows.length} ${L("pièce(s) lue(s). Vérifiez le type et le travailleur, puis validez. Rien n'est enregistré avant « Valider ».","وثيقة مقروءة. تحقق من النوع والعامل ثم اعتمد. لا يُحفظ شيء قبل «اعتماد».")}</p>
@@ -185,7 +197,9 @@
       document.getElementById("ibxGo").disabled=true;let n=0,learned=0;
       for(let i=0;i<rows.length;i++){const ok=document.querySelector(`#mInbox [data-ok="${i}"]`);if(!ok||!ok.checked)continue;
         const k=document.querySelector(`#mInbox [data-k="${i}"]`).value,wid=document.querySelector(`#mInbox [data-w="${i}"]`).value;if(!k||!wid)continue;
-        await storeDoc(wid,k,rows[i].file,{ocrText:rows[i].text.slice(0,5000)});n++;
+        const mode=document.querySelector(`#mInbox [data-m="${i}"]`).value,label=(document.querySelector(`#mInbox [data-l="${i}"]`).value||"").trim();
+        const slot=mode==="rep"?k:(await freeSlot(wid,k));if(!slot){toast(L("Maximum atteint","وصلت للحد الأقصى"),"er");continue;}
+        await storeDoc(wid,slot,rows[i].file,{ocrText:rows[i].text.slice(0,5000),label});n++;
         if(rows[i].text.length>20){const typ=Object.keys(TYPE2K).find(t=>TYPE2K[t]===k)||k;D().train(MODEL,typ,rows[i].text);learned++;}
         const p=document.getElementById("ibxP");if(p)p.textContent=n+" …";}
       if(learned)await saveModel();closeM("mInbox");toast(L(n+" pièce(s) rangée(s) ✓",n+" وثيقة رُتّبت ✓"));
@@ -206,5 +220,5 @@
   // التزامن: عند جاهزية Firebase ثم كل دقيقتين
   let tries=0;const boot=setInterval(()=>{if(ready()){clearInterval(boot);sync();}else if(++tries>120)clearInterval(boot);},2000);
   setInterval(()=>{if(ready())sync();},120000);
-  window.EGTPHRhDocs={KINDS,storeDoc,removeDoc,sync,renderPers,openInbox,runInbox,review,guessKind,guessWorker,loadModel,_model:()=>MODEL};
+  window.EGTPHRhDocs={KINDS,docsOf,freeSlot,storeDoc,removeDoc,sync,renderPers,openInbox,runInbox,review,guessKind,guessWorker,loadModel,_model:()=>MODEL};
 })();
