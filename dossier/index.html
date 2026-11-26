@@ -508,21 +508,29 @@ async function itemFaces(it,mode){
   const out=[];for(const p of ps){const land=p.w>p.h*1.05,W=land?AH:AW,H=land?AW:AH,[w,h]=fit(p.w,p.h,W-2*MARGIN,H-2*MARGIN);
     out.push({w:W,h:H,imgs:[{src:await conv(p),box:[(W-w)/2,(H-h)/2,w,h]}]});}
   return out;}
-async function drawFace(pdf,f,at){const pg=at===0?pdf.insertPage(0,[f.w,f.h]):pdf.addPage([f.w,f.h]);for(const im of (f.imgs||[])){const e=await embed(pdf,im.src);const [x,yTop,w,h]=im.box;pg.drawImage(e,{x,y:f.h-yTop-h,width:w,height:h});}return pg;}
+function wmPng(text){const c=document.createElement("canvas"),x=c.getContext("2d");const fnt="700 150px Amiri, Arial, sans-serif";x.font=fnt;const w=Math.ceil(x.measureText(text).width)+60;c.width=Math.min(4000,w);c.height=230;x.font=fnt;x.fillStyle="#000";x.textAlign="center";x.textBaseline="middle";x.direction=/[\u0600-\u06FF]/.test(text)?"rtl":"ltr";x.fillText(text,c.width/2,c.height/2);return c.toDataURL("image/png");}
+async function drawFace(pdf,f,at,deco){const pg=at===0?pdf.insertPage(0,[f.w,f.h]):pdf.addPage([f.w,f.h]);for(const im of (f.imgs||[])){const e=await embed(pdf,im.src);const [x,yTop,w,h]=im.box;pg.drawImage(e,{x,y:f.h-yTop-h,width:w,height:h});}
+  if(deco&&deco.wm){if(!pdf.__wm||pdf.__wmT!==deco.wm){pdf.__wm=await pdf.embedPng(b64bytes(wmPng(deco.wm).split(",")[1]));pdf.__wmT=deco.wm;}const im=pdf.__wm,th=Math.atan2(f.h,f.w),W=Math.min(Math.hypot(f.w,f.h)*0.72,im.width),H=W*im.height/im.width,cx=f.w/2,cy=f.h/2;
+    pg.drawImage(im,{x:cx-(W/2*Math.cos(th)-H/2*Math.sin(th)),y:cy-(W/2*Math.sin(th)+H/2*Math.cos(th)),width:W,height:H,rotate:PDFLib.radians(th),opacity:0.13});}
+  if(deco&&deco.n){if(!pdf.__font)pdf.__font=await pdf.embedFont(PDFLib.StandardFonts.HelveticaBold);const t="- "+deco.n+" -",sz=9,tw=pdf.__font.widthOfTextAtSize(t,sz);
+    pg.drawRectangle({x:f.w/2-tw/2-4,y:5,width:tw+8,height:sz+5,color:PDFLib.rgb(1,1,1)});pg.drawText(t,{x:f.w/2-tw/2,y:8,size:sz,font:pdf.__font,color:PDFLib.rgb(0,0,0)});}
+  return pg;}
 async function newPdf(){const pdf=await PDFLib.PDFDocument.create();pdf.setTitle("Dossier de l'entreprise — EGTPH ABDI YOUSSOUF ISLAM");pdf.setAuthor("EGTPH");return pdf;}
 /* génération EN FLUX (une pièce à la fois, rien n'est gardé en mémoire) :
    mode "screen" = couleur sans pages blanches ; mode "print" = gris + plan recto verso décidé par le programme
    printer : duplex (chaque pièce sur une nouvelle feuille, pièce non recto-verso = recto seul) · manual (2 fichiers : recto puis verso inversé) · simplex */
 async function generate(items,o){
   const mode=o.mode||"print",printer=o.printer||"duplex",split=mode==="print"&&printer==="manual";
-  const A=await newPdf(),B=split?await newPdf():null;let face=0,inPages=0,blanks=0,last={w:AW,h:AH};
-  const put=async f=>{if(!split)await drawFace(A,f);else if(face%2===0)await drawFace(A,f);else await drawFace(B,f,0);face++;last=f;};
+  const A=await newPdf(),B=split?await newPdf():null;let face=0,inPages=0,blanks=0,last={w:AW,h:AH},pno=0;
+  const numMode=o.number||S.settings.number||"off",wmTxt=(o.wm!=null?o.wm:(S.settings.wmOn?S.settings.wmText:""))||"";
+  const put=async(f,deco)=>{if(!split)await drawFace(A,f,undefined,deco);else if(face%2===0)await drawFace(A,f,undefined,deco);else await drawFace(B,f,0,deco);face++;last=f;};
   const blank=async()=>{await put({w:last.w,h:last.h,imgs:[]});blanks++;};
   const dup=mode==="print"&&printer!=="simplex";
   for(let i=0;i<items.length;i++){const it=items[i];prog(mode==="print"?"تجهيز ملف الطباعة…":"تجهيز النسخة الملونة…",i/items.length,(i+1)+"/"+items.length+" — "+(it.ar||it.label||""));
     const fs=await itemFaces(it,mode);it.pages=fs.length;inPages+=fs.length;
     if(dup&&face%2)await blank();
-    for(const f of fs){await put(f);if(dup&&!(it.t==="doc"&&it.duplex))await blank();}}
+    const isSep=it.t==="sep"||it.t==="fin";
+    for(const f of fs){pno++;const deco={n:(numMode==="all"&&it.t!=="cover")||(numMode==="seps"&&isSep)?pno:0,wm:it.t==="doc"?wmTxt:""};await put(f,deco);if(dup&&!(it.t==="doc"&&it.duplex))await blank();}}
   if(dup&&face%2)await blank();
   prog("حفظ الملف…",0.97);
   const out={nScreen:inPages,faces:face,sheets:dup?Math.ceil(face/2):face,blanks,check:(face-blanks)===inPages};
@@ -596,6 +604,8 @@ function vSub(){if(!SUB)SUB=defaultOpts();const o=SUB;const ys=byCat("bilan").ma
    <div class="sec">الحساب البنكي (RIB)</div><div class="card chips">${byCat("rib").map(p=>`<label><input type="radio" name="rib" ${o.rib===p.id?"checked":""} onchange="SUB.rib='${p.id}'">${esc(p.bank||p.fr)}</label>`).join("")}</div>
    <div class="sec">المستخدمون: الدور · المنصب · الشهادة</div><div class="card">${wRows}<p class="mu">يُنشئ البرنامج تلقائياً القائمة الاسمية وشهادة العمل لكل مستخدم بالختم والإمضاء، ويضيف الانتساب والشهادة المختارة.</p></div>
    <div class="sec">العتاد</div><div class="card">${vRows}<label class="chk"><input type="checkbox" ${o.smallEq?"checked":""} onchange="SUB.smallEq=this.checked"> إدراج العتاد الصغير في قائمة العتاد</label></div>
+   <div class="sec">خيارات الطباعة</div><div class="card"><label class="chk">ترقيم الصفحات: <select style="width:auto" onchange="SUB.number=this.value">${[["off","بدون ترقيم"],["all","كل الملف"],["seps","الصفحات الفاصلة فقط"]].map(([v,t])=>`<option value="${v}" ${(o.number||S.settings.number||"off")===v?"selected":""}>${t}</option>`).join("")}</select></label>
+   <label class="chk"><input type="checkbox" ${(o.wmOn!=null?o.wmOn:S.settings.wmOn)?"checked":""} onchange="SUB.wmOn=this.checked"> علامة مائية:</label><input type="text" value="${esc(o.wmText||S.settings.wmText||"نسخة مطابقة للأصل — EGTPH")}" onchange="SUB.wmText=this.value"></div>
    <div class="card"><label class="chk"><input type="checkbox" id="sSave" checked> حفظ هذه الاختيارات للمرات القادمة</label>
    <button class="b p" style="width:100%;padding:13px;font-size:16px" onclick="checkAndPrint()">🖨 طباعة</button></div>`;}
 function subSum(){const abes=["abe_ass","abe_aep","abe_autre"].flatMap(c=>byCat(c)),on=abes.filter(p=>abeOn(SUB,p));const e=$("#abeSum");if(e)e.textContent=`${on.length}/${abes.length} · ${money(on.reduce((a,p)=>a+(+p.amount||0),0))} دج`;}
@@ -618,7 +628,8 @@ async function doPrint(){const skip={};let rep=null;document.querySelectorAll("[
   if($("#sSave")&&$("#sSave").checked&&!viewer()){Object.assign(S.choices,{veh:Object.assign({},S.choices.veh,SUB.veh),role:Object.assign({},S.choices.role,SUB.roles),docs:SUB.docs,rib:SUB.rib,nYears:SUB.years.length,poste:SUB.poste,dip:SUB.dip,abe:SUB.abe,t:Date.now()});
     fput(DOSSIER,D+"/choices",S.choices).catch(()=>{});}
   const pl=buildPlan(SUB);const mode=S.settings.printer||"duplex";let out;
-  try{out=await generate(pl.items,{mode:"print",printer:mode});}catch(e){prog(false);modal(`<div class="errbox">تعذّر إنشاء الملف: ${esc(e.message)}</div><button class="b" onclick="closeModal()">إغلاق</button>`);return;}
+  const wmOn=SUB.wmOn!=null?SUB.wmOn:S.settings.wmOn,deco={number:SUB.number||S.settings.number||"off",wm:wmOn?(SUB.wmText||S.settings.wmText||"نسخة مطابقة للأصل — EGTPH"):""};SUB.deco=deco;
+  try{out=await generate(pl.items,Object.assign({mode:"print",printer:mode},deco));}catch(e){prog(false);modal(`<div class="errbox">تعذّر إنشاء الملف: ${esc(e.message)}</div><button class="b" onclick="closeModal()">إغلاق</button>`);return;}
   const sid="s"+Date.now();
   const rec={name:SUB.name||"بدون اسم",t:Date.now(),date:today(),limit:SUB.limit||"",mode,faces:out.faces,sheets:out.sheets,pages:out.nScreen,
     opts:{years:SUB.years,rib:SUB.rib,roles:SUB.roles,veh:SUB.veh,docs:SUB.docs,skip:SUB.skip,poste:SUB.poste,dip:SUB.dip,abe:SUB.abe,smallEq:SUB.smallEq},
@@ -634,7 +645,7 @@ async function doPrint(){const skip={};let rep=null;document.querySelectorAll("[
    ${out.print?"":'<p class="mu">اطبع الدفعة 1، اقلب رزمة الأوراق وأعدها للطابعة، ثم اطبع الدفعة 2.</p>'}
    <div class="chips"><button class="b" id="dS">📄 نسخة ملونة إلكترونية</button><button class="b" onclick="closeModal()">إغلاق</button></div>`);
   files.forEach((f,i)=>$("#pf"+i).onclick=()=>sendPdf(f[0],f[1]));
-  $("#dS").onclick=async()=>{closeModal();let o2;try{o2=await generate(pl.items,{mode:"screen"});}catch(e){prog(false);toast("تعذّر: "+e.message,4000);return;}
+  $("#dS").onclick=async()=>{closeModal();let o2;try{o2=await generate(pl.items,Object.assign({mode:"screen"},SUB.deco||{}));}catch(e){prog(false);toast("تعذّر: "+e.message,4000);return;}
     modal(`<h3>📄 النسخة الملونة جاهزة</h3><p>${o2.nScreen} صفحة.</p><div class="chips"><button class="b p" id="dS2" style="padding:12px">📄 فتح / حفظ</button><button class="b" onclick="closeModal()">إغلاق</button></div>`);$("#dS2").onclick=()=>sendPdf(o2.screen,name+"_ecran.pdf");};}
 /* ---------- تحليل دفتر الشروط : المطلوب، الإقصاء، الفخاخ، سلم التنقيط، المقارنة مع الملف ---------- */
 const CDC_DOCS=[["rc","السجل التجاري",["سجل التجاري","السجل التجاري","registre de commerce"]],["nif","التعريف الجبائي (NIF)",["التعريف الجبائي","identification fiscale"," nif"]],["nis","التعريف الإحصائي (NIS)",["التعريف الإحصائي","identification statistique"," nis"]],
@@ -765,7 +776,9 @@ function vSet(){const u=usage(),bs=S.settings.bases||[];
    <div class="sec">الختم والإمضاء (للقائمة الاسمية وشهادات العمل وقائمة العتاد)</div><div class="card">${stampSrc()?`<img src="${stampSrc()}" style="max-height:110px;max-width:240px;background:#fff;border:1px solid #ddd;border-radius:8px">`:'<div class="warnbox">لا يوجد ختم بعد — أرسل صورة الختم والإمضاء (على ورقة بيضاء).</div>'}<br><label class="b" style="display:inline-block;margin-top:6px">📷 صورة الختم والإمضاء<input type="file" accept="image/*" data-noscan style="display:none" onchange="setStamp(this.files[0])"></label>${S.settings.stamp?`<button class="b" onclick="saveSet('stamp',null).then(vSet)">حذف</button>`:""}</div>
    <div class="sec">الطباعة</div><div class="card"><label class="chk">طابعتي: <select style="width:auto" onchange="saveSet('printer',this.value)">${[["duplex","تطبع وجهين تلقائياً"],["manual","وجه واحد — أقلب الأوراق يدوياً"],["simplex","وجه واحد فقط"]].map(([v,t])=>`<option value="${v}" ${(S.settings.printer||"duplex")===v?"selected":""}>${t}</option>`).join("")}</select></label>
    <label class="chk">شهادة العمل: <select style="width:auto" onchange="saveSet('attMode',this.value)"><option value="gen" ${S.settings.attMode!=="files"?"selected":""}>يُنشئها البرنامج بالختم (من egtph-rh)</option><option value="files" ${S.settings.attMode==="files"?"selected":""}>الملفات المحفوظة في egtph-rh</option></select></label>
-   <label class="chk"><input type="checkbox" ${S.settings.smallEq!==false?"checked":""} onchange="saveSet('smallEq',this.checked)"> إدراج العتاد الصغير في قائمة العتاد</label><label class="chk"><input type="checkbox" ${S.settings.whiten!==false?"checked":""} onchange="saveSet('whiten',this.checked)"> تبييض الخلفية في نسخة الطباعة الرمادية (حذف الظلال والخلفيات الملونة)</label>
+   <label class="chk"><input type="checkbox" ${S.settings.smallEq!==false?"checked":""} onchange="saveSet('smallEq',this.checked)"> إدراج العتاد الصغير في قائمة العتاد</label>
+   <label class="chk">ترقيم الصفحات: <select style="width:auto" onchange="saveSet('number',this.value)">${[["off","بدون ترقيم"],["all","كل الملف"],["seps","الصفحات الفاصلة فقط"]].map(([v,t])=>`<option value="${v}" ${(S.settings.number||"off")===v?"selected":""}>${t}</option>`).join("")}</select></label>
+   <label class="chk"><input type="checkbox" ${S.settings.wmOn?"checked":""} onchange="saveSet('wmOn',this.checked)"> علامة مائية على الوثائق:</label><input type="text" value="${esc(S.settings.wmText||"نسخة مطابقة للأصل — EGTPH")}" onchange="saveSet('wmText',this.value)"><label class="chk"><input type="checkbox" ${S.settings.whiten!==false?"checked":""} onchange="saveSet('whiten',this.checked)"> تبييض الخلفية في نسخة الطباعة الرمادية (حذف الظلال والخلفيات الملونة)</label>
    <label class="chk">عدد الحصائل الافتراضي: <input type="number" min="1" max="10" style="width:70px" value="${S.choices.nYears||3}" onchange="S.choices.nYears=+this.value;fput(DOSSIER,D+'/choices/nYears',+this.value)"></label></div>
    <div class="sec">عائلة كل آلية / مركبة</div><div class="card">${vehicles().map(e=>`<div class="row"><div class="t"><b>${esc(e.name)} ${esc(e.matricule||"")}</b></div><select style="width:auto" onchange="setFam('${e.id}',this.value)">${FAM.map(([f,ar])=>`<option value="${f}" ${vehFamily(e)===f?"selected":""}>${ar}</option>`).join("")}</select></div>`).join("")}</div>`;}
 async function setStamp(f){if(!f)return;const im=await loadImg(await fileToDataURL(f));const k=Math.min(1,900/Math.max(im.naturalWidth,im.naturalHeight)),cv=document.createElement("canvas");cv.width=Math.round(im.naturalWidth*k);cv.height=Math.round(im.naturalHeight*k);const x=cv.getContext("2d",{willReadFrequently:true});x.drawImage(im,0,0,cv.width,cv.height);
