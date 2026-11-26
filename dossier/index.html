@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111">
+<title>ملف المؤسسة — EGTPH</title>
+<script src="../egtph-lock.js"></script>
+<script src="../egtph-auth.js"></script>
+<script src="../egtph-scan.js"></script>
+<script src="../egtph-ocr.js"></script>
+<style>
+@font-face{font-family:Amiri;src:url(../vendor/fonts/amiri-arabic-400-normal.woff2) format("woff2");font-weight:400;unicode-range:U+0600-06FF,U+0750-077F,U+0870-08FF,U+FB50-FDFF,U+FE70-FEFF,U+200C-200F}
+@font-face{font-family:Amiri;src:url(../vendor/fonts/amiri-arabic-700-normal.woff2) format("woff2");font-weight:700;unicode-range:U+0600-06FF,U+0750-077F,U+0870-08FF,U+FB50-FDFF,U+FE70-FEFF,U+200C-200F}
+@font-face{font-family:Crimson;src:url(../vendor/fonts/crimson-text-latin-400-normal.woff2) format("woff2");font-weight:400}
+@font-face{font-family:Crimson;src:url(../vendor/fonts/crimson-text-latin-600-normal.woff2) format("woff2");font-weight:700}
+@font-face{font-family:Crimson;src:url(../vendor/fonts/crimson-text-latin-400-italic.woff2) format("woff2");font-style:italic}
+@font-face{font-family:Crimson;src:url(../vendor/fonts/crimson-text-latin-ext-400-normal.woff2) format("woff2");font-weight:400;unicode-range:U+0100-024F,U+1E00-1EFF}
+@font-face{font-family:Crimson;src:url(../vendor/fonts/crimson-text-latin-ext-600-normal.woff2) format("woff2");font-weight:700;unicode-range:U+0100-024F,U+1E00-1EFF}
+:root{--bg:#f4f4f2;--card:#fff;--tx:#151515;--mu:#666;--br:#ddd;--ac:#111;--ok:#17703a;--wa:#a15c00;--er:#b3261e}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.45 -apple-system,"Segoe UI",Tahoma,sans-serif;background:var(--bg);color:var(--tx);padding-bottom:env(safe-area-inset-bottom)}
+header{position:sticky;top:0;z-index:5;background:#111;color:#fff;padding:10px 12px calc(6px);padding-top:max(10px,env(safe-area-inset-top))}
+header h1{margin:0;font-size:17px}
+header small{opacity:.75}
+nav{display:flex;gap:6px;margin-top:8px;overflow-x:auto}
+nav button{flex:0 0 auto;border:1px solid #444;background:#222;color:#fff;border-radius:18px;padding:6px 12px;font-size:14px}
+nav button.on{background:#fff;color:#111}
+main{padding:10px;max-width:900px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--br);border-radius:12px;padding:10px 12px;margin:10px 0}
+.sec{font-weight:700;margin:16px 4px 6px;font-size:15px;display:flex;justify-content:space-between;align-items:center}
+.row{display:flex;gap:8px;align-items:center;padding:8px 0;border-top:1px solid #eee}
+.row:first-child{border-top:0}
+.row .t{flex:1;min-width:0}
+.row .t b{display:block;font-weight:600;font-size:14px}
+.row .t span{color:var(--mu);font-size:12.5px;display:block;overflow:hidden;text-overflow:ellipsis}
+.tag{font-size:11px;border:1px solid var(--br);border-radius:8px;padding:1px 6px;color:var(--mu);white-space:nowrap}
+.st{font-size:12px;white-space:nowrap;font-weight:600}
+.ok{color:var(--ok)}.wa{color:var(--wa)}.er{color:var(--er)}
+button.b,label.b{border:1px solid #bbb;background:#fff;border-radius:9px;padding:6px 10px;font-size:13.5px;cursor:pointer;color:#111;white-space:nowrap}
+button.p{background:#111;color:#fff;border-color:#111}
+button.b:disabled{opacity:.45}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+input[type=text],input[type=date],input[type=number],select,textarea{width:100%;font:inherit;padding:7px 8px;border:1px solid #bbb;border-radius:8px;background:#fff}
+.mu{color:var(--mu);font-size:13px}
+.chk{display:flex;align-items:center;gap:6px;padding:4px 0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips label{border:1px solid #bbb;border-radius:16px;padding:4px 10px;font-size:13px;display:flex;gap:5px;align-items:center;background:#fff}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:none;align-items:flex-end;justify-content:center}
+#modal .box{background:#fff;width:100%;max-width:720px;max-height:92vh;overflow:auto;border-radius:14px 14px 0 0;padding:14px;padding-bottom:max(14px,env(safe-area-inset-bottom))}
+#modal h3{margin:0 0 8px}
+.thumbs{display:flex;flex-wrap:wrap;gap:8px}
+.thumbs .th{width:104px;border:1px solid #ccc;border-radius:8px;padding:4px;text-align:center;font-size:11px;background:#fafafa}
+.thumbs img{width:100%;height:130px;object-fit:contain;background:#fff}
+.bar{height:8px;background:#eee;border-radius:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:#111}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111;color:#fff;padding:9px 14px;border-radius:10px;z-index:99;display:none;max-width:90vw}
+#prog{position:fixed;inset:0;background:rgba(255,255,255,.88);z-index:60;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;padding:20px;text-align:center}
+#prog .bar{width:260px}
+table.mini{border-collapse:collapse;width:100%;font-size:13px}
+table.mini td,table.mini th{border:1px solid #ccc;padding:4px 6px;text-align:center}
+.warnbox{border:1px solid var(--wa);background:#fff8ec;border-radius:10px;padding:8px 10px;margin:8px 0}
+.errbox{border:1px solid var(--er);background:#fff3f2;border-radius:10px;padding:8px 10px;margin:8px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>📁 ملف المؤسسة <small>— Dossier de l'entreprise</small></h1>
+  <nav id="nav">
+    <button data-v="dos" class="on">الملف</button>
+    <button data-v="sub">🖨 مناقصة جديدة</button>
+    <button data-v="hist">السجل</button>
+    <button data-v="set">الإعدادات</button>
+  </nav>
+</header>
+<main id="view"><div class="card mu">جارٍ التحميل…</div></main>
+<div id="modal"><div class="box" id="mbox"></div></div>
+<div id="prog"><b id="progT">…</b><div class="bar"><i id="progB" style="width:0"></i></div><span class="mu" id="progS"></span></div>
+<div id="toast"></div>
+<script src="../vendor/pdf-lib.min.js"></script>
+<script>
+"use strict";
+/* ====================== ملف المؤسسة — EGTPH ======================
+   مصادر الوثائق (سجل واحد لكل وثيقة، لا نسخ):
+   • هذا البرنامج (egtph-dossier /egtph/dossier) : القانونية، الجبائية، CASNOS، التأهيل، RIB، الحصائل، DAS، المحاضر، الفواتير، شهادات حسن التنفيذ
+   • parc_document (egtph-parc) : البطاقة الرمادية، التأمين، المراقبة التقنية — أحدث نسخة دائماً
+   • egtph-rh (egtph-rh) : CNAS، CACOBATPH، الانتساب، الشهادات، شهادات العمل — العمال النشطون فقط
+   التخزين : صفحات JPEG ملونة صفحة بصفحة، نسخة محلية IndexedDB، عدة قواعد Firebase (الإعدادات). الطباعة فقط بالرمادي. */
+const DOSSIER={app:"dossier",url:"https://egtph-dossier-default-rtdb.europe-west1.firebasedatabase.app",key:"AIzaSyCE1nUWBtJGr-dv0PtN65pI8MtWQE12TrM"};
+const D="/egtph/dossier";
+const PARC={app:"parc_document",url:"https://egtph-parc-default-rtdb.europe-west1.firebasedatabase.app",key:"AIzaSyBf7NU7QPvS824duUE78uaXZuCzGdX6Grg",base:"/egtph/EGTPH-mat-2026-CnucIO2DZnBAHqMitxm1Y86k"};
+const RH={app:"rh",url:"https://egtph-rh-default-rtdb.europe-west1.firebasedatabase.app",key:"AIzaSyA7xH8pwmEjzIM98lE6C-GmK-cSrAvs9gc",base:"/egtph-rh/rh_v3_MBInR2bhdTMRnHOL1ts1g187pZhstcz1VwtcHtjz8"};
+const OWNER="abdiyoucefislam@gmail.com";
+const CO={ar:"مؤسسة الأشغال العمومية الكبرى و الري",ar2:"عبدي يوسف إسلام",fr:"ENTREPRISE DES GRANDS TRAVAUX PUBLICS ET HYDRAULIQUES",fr2:"ABDI YOUSSOUF ISLAM",
+  legal:"RC 02/00-4566908 A 15  ·  NIF 192020105006199  ·  Chlef",
+  addrAr:"المقر: حي الزمالة القديمة حالياً الشرفة القديمة رقم ب1 — الشلف",addrFr:"Siège : Ancien Zmala, actuellement Ancien Chorfa N° B1 — Chlef",
+  ids:"RC 02/00-4566908 A 15  ·  NIF 192020105006199  ·  Qualification : catégorie IV",tel:"Tél. 0775 32 29 21  ·  abdiyoussoufislam@gmail.com"};
+const CATS={jur:["الوثائق القانونية","Documents juridiques"],fis:["الوثائق الجبائية","Documents fiscaux"],para:["الوثائق شبه الجبائية","Documents parafiscaux"],
+  qual:["شهادة التأهيل والتصنيف المهنيين","Qualification et classification professionnelles"],rib:["كشف الهوية البنكية","Relevé d'identité bancaire"],
+  bilan:["الحصائل المالية","Bilans financiers"],das:["التصريح السنوي بالأجور","Déclaration annuelle des salaires"],matdoc:["محضر الخبرة ومحضر المعاينة","P.V d'expertise et constat d'huissier"],
+  matfact:["فواتير اقتناء العتاد","Factures d'acquisition du matériel"],matann:["ملحقات العتاد","Annexes du matériel"],
+  abe_ass:["شهادات حسن التنفيذ — التطهير","Attestations de bonne exécution — Assainissement"],abe_aep:["شهادات حسن التنفيذ — المياه الصالحة للشرب","Attestations de bonne exécution — AEP"],
+  abe_autre:["شهادات حسن التنفيذ — أشغال أخرى","Attestations de bonne exécution — Autres travaux"]};
+const RHK={att:["شهادة العمل","Attestation de travail"],af:["الانتساب CNAS","Affiliation CNAS"],dip:["الشهادة","Diplôme"],exp:["شهادة الخبرة","Attestation d'expérience"],cni:["بطاقة التعريف","Pièce d'identité"]};
+const RH_ORDER=["att","af","dip","exp"];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const today=()=>new Date().toISOString().slice(0,10);
+const fd=s=>{const m=String(s||"").match(/^(\d{4})-(\d{2})-(\d{2})/);return m?`${m[3]}/${m[2]}/${m[1]}`:(s||"");};
+const money=v=>{const n=Math.round(Number(v)*100)/100,[i,d]=n.toFixed(2).split(".");return i.replace(/\B(?=(\d{3})+(?!\d))/g,".")+","+d;};
+function toast(m,ms){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",ms||2600);}
+function prog(t,f,s){const p=$("#prog");if(t===false){p.style.display="none";return;}p.style.display="flex";$("#progT").textContent=t;$("#progB").style.width=Math.round((f||0)*100)+"%";$("#progS").textContent=s||"";}
+function modal(html){$("#mbox").innerHTML=html;$("#modal").style.display="flex";}
+function closeModal(){$("#modal").style.display="none";$("#mbox").innerHTML="";}
+$("#modal").addEventListener("click",e=>{if(e.target.id==="modal")closeModal();});
+
+/* ---------------- Firebase (REST) ---------------- */
+const tok=app=>{try{return EGTPHAuth.getToken(app)||"";}catch(e){return "";}};
+const viewer=()=>{try{return EGTPHAuth.isViewer("dossier");}catch(e){return false;}};
+async function fget(c,path,q){const r=await fetch(c.url+path+".json?auth="+encodeURIComponent(tok(c.app))+(q||""),{cache:"no-store"});if(!r.ok)throw new Error("GET "+r.status+" "+path);return r.json();}
+async function fput(c,path,val,method){if(viewer())throw new Error("viewer");const r=await fetch(c.url+path+".json?auth="+encodeURIComponent(tok(c.app))+"&print=silent",{method:method||"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(val)});if(!r.ok)throw new Error((method||"PUT")+" "+r.status+" "+path);return true;}
+function baseConf(i){const b=(S.settings.bases||[])[i]||{};return i===0?DOSSIER:{app:"dossier_b"+i,url:b.url,key:b.key};}
+
+/* ---------------- cache local (IndexedDB) ---------------- */
+let _db=null;
+function idb(){return _db||(_db=new Promise((res,rej)=>{const r=indexedDB.open("egtph_dossier",1);r.onupgradeneeded=()=>r.result.createObjectStore("c");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);}));}
+async function cget(k){try{const db=await idb();return await new Promise(res=>{const q=db.transaction("c").objectStore("c").get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>res(undefined);});}catch(e){return undefined;}}
+async function cset(k,v){try{const db=await idb();await new Promise(res=>{const t=db.transaction("c","readwrite");t.objectStore("c").put(v,k);t.oncomplete=res;t.onerror=res;});}catch(e){}}
+
+/* ---------------- état ---------------- */
+const S={pieces:{},settings:{},choices:{veh:{},role:{},docs:{}},ext:{},subs:{},equip:[],imgKeys:new Set(),workers:[],rhFiles:{},model:null,loaded:false,err:""};
+const PS=()=>Object.values(S.pieces).filter(p=>p&&!p.deleted);
+const byCat=c=>PS().filter(p=>p.cat===c).sort((a,b)=>(a.cat.startsWith("abe")?String(b.date||"").localeCompare(String(a.date||"")):0)||(b.year||0)-(a.year||0)||(a.ord||0)-(b.ord||0));
+
+async function loadAll(){
+  prog("تحميل الملف…",0.1);
+  const [pieces,settings,choices,ext,subs,model]=await Promise.all([fget(DOSSIER,D+"/pieces"),fget(DOSSIER,D+"/settings"),fget(DOSSIER,D+"/choices"),fget(DOSSIER,D+"/ext"),fget(DOSSIER,D+"/subs"),fget(DOSSIER,D+"/ai/model").catch(()=>null)]);
+  S.pieces=pieces||{};S.settings=settings||{};S.choices=Object.assign({veh:{},role:{},docs:{}},choices||{});S.ext=ext||{};S.subs=subs||{};S.model=model;
+  ["veh","role","docs"].forEach(k=>{if(!S.choices[k])S.choices[k]={};});
+  prog("قراءة العتاد (parc_document)…",0.4);
+  try{const d=await fget(PARC,PARC.base);S.equip=(d&&d.equipment||[]).filter(e=>e&&e.id!=null);const del=new Set((d.deletedIds||[]).map(x=>String(x&&x.id!=null?x.id:x)));S.equip=S.equip.filter(e=>!del.has(String(e.id)));
+    S.imgKeys=new Set(Object.keys(await fget(PARC,PARC.base+"_img","&shallow=true")||{}));}catch(e){S.err+="تعذّرت قراءة برنامج العتاد. ";}
+  prog("قراءة العمال (egtph-rh)…",0.7);
+  try{const w=await fget(RH,RH.base+"/records/workers")||{};S.workers=Object.values(w).map(x=>x&&x.data).filter(x=>x&&x.id&&!x.deleted&&(x.N||x.P)).sort((a,b)=>(parseInt(a.rk,10)||999)-(parseInt(b.rk,10)||999));
+    const keys=Object.keys(await fget(RH,RH.base+"/files","&shallow=true")||{});
+    const ms=await Promise.all(keys.map(k=>fget(RH,RH.base+"/files/"+k+"/updatedAtMs").catch(()=>0)));
+    S.rhFiles={};keys.forEach((k,i)=>{const j=k.indexOf("_");S.rhFiles[k]={key:k,kind:k.slice(0,j),wid:k.slice(j+1),ms:Number(ms[i])||0};});
+    for(const k of keys){const meta=await cget("rm:"+k);if(meta&&meta.ms===S.rhFiles[k].ms)Object.assign(S.rhFiles[k],meta);}
+  }catch(e){S.err+="تعذّرت قراءة برنامج العمال. ";}
+  S.loaded=true;prog(false);
+}
+
+/* ---------------- sources des pages ---------------- */
+function fileToDataURL(b){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r.readAsDataURL(b);});}
+function loadImg(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error("img"));i.src=src;});}
+async function dossierPage(ref){const ck="d:"+ref.k;let v=await cget(ck);if(v)return v;v=await fget(baseConf(ref.b||0),D+"/pages/"+ref.k);if(!v)throw new Error("page "+ref.k);await cset(ck,v);return v;}
+function eqMod(e){return String(e&&e._mod||0);}
+async function parcImg(e,k){const key=e.id+"_"+k;if(!S.imgKeys.has(key))return null;const ck="p:"+key+":"+eqMod(e);let v=await cget(ck);if(v)return v;v=await fget(PARC,PARC.base+"_img/"+key);if(v)await cset(ck,v);return v;}
+async function rhFile(k){const f=S.rhFiles[k];if(!f)return null;const ck="r:"+k+":"+f.ms;let v=await cget(ck);if(!v){v=await fget(RH,RH.base+"/files/"+k);if(!v||v.deleted||!v.b64){f.deleted=true;return null;}await cset(ck,v);}
+  const meta={ms:f.ms,label:v.label||"",name:v.name||"",type:v.type||"",meta:v.meta||null};Object.assign(f,meta);await cset("rm:"+k,meta);return v;}
+let _pdfjs=null;
+function pdfjs(){if(_pdfjs)return _pdfjs;return _pdfjs=new Promise((res,rej)=>{if(window.pdfjsLib)return res(window.pdfjsLib);const s=document.createElement("script");s.src="../vendor/pdfjs/pdf.min.js";
+  s.onload=()=>{window.pdfjsLib.GlobalWorkerOptions.workerSrc=new URL("../vendor/pdfjs/pdf.worker.min.js",location.href).href;res(window.pdfjsLib);};s.onerror=()=>{_pdfjs=null;rej(new Error("pdf.js"));};document.head.appendChild(s);});}
+function b64bytes(b64){const bin=atob(b64),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;}
+async function pdfToJpegs(bytes,dpi,maxSide){const L=await pdfjs();const doc=await L.getDocument({data:bytes}).promise;const out=[];
+  for(let i=1;i<=doc.numPages;i++){const pg=await doc.getPage(i);let vp=pg.getViewport({scale:(dpi||200)/72});const m=Math.max(vp.width,vp.height);if(maxSide&&m>maxSide)vp=pg.getViewport({scale:(dpi||200)/72*maxSide/m});
+    const cv=document.createElement("canvas");cv.width=Math.round(vp.width);cv.height=Math.round(vp.height);const x=cv.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,cv.width,cv.height);
+    await pg.render({canvasContext:x,viewport:vp}).promise;out.push(cv);}
+  return out;}
+/* pages d'un fichier RH → JPEG (cache) */
+async function rhPages(k){const f=S.rhFiles[k];if(!f)return [];const ck="rp:"+k+":"+f.ms;const c=await cget(ck);if(c)return c;
+  const v=await rhFile(k);if(!v)return [];let pages=[];
+  if(/pdf/i.test(v.type||"")||/\.pdf$/i.test(v.name||"")){const cvs=await pdfToJpegs(b64bytes(v.b64),200,2300);pages=cvs.map(cv=>({src:cv.toDataURL("image/jpeg",0.8),w:cv.width,h:cv.height}));}
+  else{const src="data:"+(v.type||"image/jpeg")+";base64,"+v.b64;const im=await loadImg(src);pages=[{src,w:im.naturalWidth,h:im.naturalHeight}];}
+  await cset(ck,pages);return pages;}
+
+/* ---------------- validité ---------------- */
+function vehFin(e,k){const o=k==="as"?e.assurance:e[k];return o&&o.fin||"";}
+function state(fin,limit){if(!fin)return "";return fin<(limit||today())?"exp":(fin<addDays(limit||today(),31)?"soon":"ok");}
+function addDays(s,n){const d=new Date(s+"T00:00:00");d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
+const ST_TXT={exp:["منتهية","er"],soon:["تنتهي قريباً","wa"],ok:["سارية","ok"]};
+function stHtml(fin,limit){const s=state(fin,limit);if(!s)return "";const [t,c]=ST_TXT[s];return `<span class="st ${c}">${t} ${fd(fin)}</span>`;}
+
+/* ---------------- choix par défaut ---------------- */
+function vehFamily(e){if(S.choices.fam&&S.choices.fam[e.id])return S.choices.fam[e.id];if(e.cat==1)return "eng";if(/v[ée]hicule de service|plateau|chery|peugeot|toyota/i.test((e.name||"")+" "+(e.model||"")))return "vl";return "cam";}
+const FAM=[["eng","الآليات","Engins"],["cam","الشاحنات","Camions"],["vl","السيارات النفعية","Véhicules utilitaires"]];
+function vehIncluded(e){const v=S.choices.veh[e.id];return v==null?false:!!v;}
+function vehicles(){return S.equip.filter(e=>e.veh);}
+function roleOf(w){const r=S.choices.role[w.id];if(r)return r;if(w.st==="INACTIF")return "off";return (w.dp&&w.dp!=="sans")?"cadre":"ouvrier";}
+function workerDocs(w){/* pièces RH du travailleur, dans l'ordre att → af → dip → exp */
+  const out=[];for(const k of RH_ORDER){const ks=Object.keys(S.rhFiles).filter(x=>S.rhFiles[x].wid===w.id&&(S.rhFiles[x].kind===k||new RegExp("^"+k+"\\d$").test(S.rhFiles[x].kind))&&!S.rhFiles[x].deleted).sort();
+    ks.forEach(x=>out.push({key:x,kind:k}));}
+  return out;}
+function docOn(w,key){const d=S.choices.docs[w.id];return !(d&&d[key]===false);}
+const wName=w=>[w.N,w.P].filter(Boolean).join(" ");
+
+/* ---------------- plan du dossier ---------------- */
+/* opts : {years:[…], rib:id, roles:{wid:role}, veh:{id:bool}, docs:{wid:{key:bool}}, limit:date, skip:Set(ids)} */
+function defaultOpts(){const ys=byCat("bilan").map(p=>p.year).filter(Boolean).sort((a,b)=>b-a);const n=S.choices.nYears||3;
+  return {years:ys.slice(0,n),rib:S.choices.rib||(byCat("rib")[0]||{}).id,roles:Object.fromEntries(S.workers.map(w=>[w.id,roleOf(w)])),
+    veh:Object.fromEntries(vehicles().map(e=>[e.id,vehIncluded(e)])),docs:JSON.parse(JSON.stringify(S.choices.docs||{})),limit:"",skip:{}};}
+function buildPlan(o){
+  const L=[],miss=[];
+  const sep=(ar,fr,x)=>L.push(Object.assign({t:"sep",ar,fr,level:1},x||{}));
+  const dp=(p,extra)=>{if(!p){return;}L.push(Object.assign({t:"doc",src:"d",id:p.id,label:p.fr,ar:p.ar,v:p.v,refs:p.pages||[],duplex:!!p.duplex,layout:p.layout||"single",fin:p.fin||""},extra||{}));};
+  const need=(p,what)=>{if(!p)miss.push(what);return p;};
+  L.push({t:"cover"});
+  sep(...CATS.jur);byCat("jur").forEach(p=>dp(p));["rc","nif","nis"].forEach(id=>need(S.pieces[id]&&!S.pieces[id].deleted?S.pieces[id]:null,{rc:"السجل التجاري",nif:"NIF",nis:"NIS"}[id]));
+  sep(...CATS.fis);byCat("fis").forEach(p=>dp(p));need(S.pieces.role,"مستخرج الجداول");
+  sep(...CATS.para);
+  const rhc=(k,lab,ar)=>{if(S.rhFiles[k]&&!S.rhFiles[k].deleted)L.push({t:"doc",src:"r",id:"rh:"+k,key:k,label:lab,ar,ms:S.rhFiles[k].ms,duplex:true,layout:"single",fin:(S.ext["rh:"+k]||{}).fin||""});else miss.push(ar);};
+  rhc("maj_company","CNAS — attestation de mise à jour","شهادة CNAS");
+  byCat("para").forEach(p=>dp(p));
+  rhc("cac_company","CACOBATPH — attestation de mise à jour","شهادة CACOBATPH");
+  sep(...CATS.qual);byCat("qual").forEach(p=>dp(p));need(S.pieces.qualif,"شهادة التأهيل");
+  const bil=byCat("bilan").filter(p=>o.years.includes(p.year)).sort((a,b)=>b.year-a.year);
+  L.push({t:"fin",ar:"القدرات المالية",fr:"Capacités financières",rows:byCat("bilan").filter(p=>p.ca).sort((a,b)=>b.year-a.year).map(p=>[p.year,p.ca]),avgYears:bil.map(p=>p.year)});
+  const rib=S.pieces[o.rib];need(rib&&!rib.deleted?rib:null,"كشف الهوية البنكية");if(rib)dp(rib);
+  o.years.forEach(y=>{if(!bil.find(p=>p.year===y))miss.push("الحصيلة "+y);});
+  bil.forEach(p=>{L.push({t:"sep",level:2,ar:"الحصيلة المالية "+p.year,fr:"Bilan "+p.year,sub_ar:p.ca?"رقم الأعمال: "+money(p.ca)+" دج":"",sub_fr:p.ca?"Chif\u200Cfre d'af\u200Cfaires : "+money(p.ca)+" DA":""});dp(p);});
+  sep("القدرات البشرية","Moyens humains");
+  byCat("das").slice(0,1).forEach(p=>dp(p));
+  const people=r=>S.workers.filter(w=>o.roles[w.id]===r&&w.st!=="INACTIF");
+  [["cadre","الإطارات","Encadrement"],["ouvrier","العمال","Personnel d'exécution"]].forEach(([r,ar,fr])=>{
+    const ws=people(r);if(!ws.length)return;sep(ar,fr,{level:2});
+    ws.forEach(w=>{const ds=workerDocs(w).filter(d=>!(o.docs[w.id]&&o.docs[w.id][d.key]===false));
+      if(!ds.some(d=>d.kind==="af"))miss.push("انتساب "+wName(w));
+      ds.forEach(d=>L.push({t:"doc",src:"r",id:"rh:"+d.key,key:d.key,label:wName(w)+" — "+RHK[d.kind][1],ar:wName(w)+" — "+RHK[d.kind][0],ms:S.rhFiles[d.key].ms,duplex:true,layout:"single",fin:""}));});
+  });
+  sep("القدرات المادية","Moyens matériels");
+  FAM.forEach(([f,ar,fr])=>{const vs=vehicles().filter(e=>o.veh[e.id]&&vehFamily(e)===f);if(!vs.length)return;sep(ar,fr,{level:2});
+    vs.forEach(e=>{const lab=`${e.name||""} ${e.matricule||""}`.trim();const cg=S.imgKeys.has(e.id+"_cg"),as=S.imgKeys.has(e.id+"_as"),ct=S.imgKeys.has(e.id+"_ct");
+      if(!cg)miss.push("البطاقة الرمادية: "+lab);if(!as)miss.push("التأمين: "+lab);if(e.needsCT&&!ct)miss.push("المراقبة التقنية: "+lab);
+      if(cg||as)L.push({t:"doc",src:"p",id:"veh:"+e.id+":pair",veh:e.id,keys:[cg?"cg":null,as?"as":null].filter(Boolean),label:lab+" — carte grise + assurance",ar:lab+" — البطاقة الرمادية والتأمين",layout:"pair",duplex:false,fin:as?vehFin(e,"as"):"",mod:eqMod(e)});
+      if(ct)L.push({t:"doc",src:"p",id:"veh:"+e.id+":ct",veh:e.id,keys:["ct"],label:lab+" — contrôle technique",ar:lab+" — المراقبة التقنية",layout:"single",duplex:false,fin:vehFin(e,"ct"),mod:eqMod(e)});
+      PS().filter(p=>p.cat==="matann"&&String(p.veh)===String(e.id)).forEach(p=>dp(p));});
+  });
+  if(byCat("matdoc").length){sep(...CATS.matdoc,{level:2});byCat("matdoc").forEach(p=>dp(p));}
+  if(byCat("matfact").length){sep(...CATS.matfact,{level:2});byCat("matfact").forEach(p=>dp(p));}
+  sep("المراجع المهنية","Références professionnelles");
+  [["abe_ass","التطهير","Assainissement"],["abe_aep","المياه الصالحة للشرب","Alimentation en eau potable (AEP)"],["abe_autre","أشغال أخرى","Autres travaux"]].forEach(([c,sa,sf])=>{
+    const ps=byCat(c);if(!ps.length)return;sep("شهادات حسن التنفيذ","Attestations de bonne exécution",{level:2,sub_ar:sa,sub_fr:sf});ps.forEach(p=>dp(p));});
+  const docs=L.filter(x=>x.t==="doc");
+  docs.forEach(x=>{x.st=state(x.fin,o.limit);});
+  const out=L.filter(x=>!(x.t==="doc"&&o.skip[x.id]));
+  /* intercalaire sans pièce derrière → retiré */
+  const clean=[];for(let i=0;i<out.length;i++){const x=out[i];if(x.t==="sep"){let j=i+1,has=false;while(j<out.length&&!(out[j].t==="sep"&&(out[j].level||1)<=(x.level||1))&&!(out[j].t==="fin")){if(out[j].t==="doc"){has=true;break;}j++;}if(!has)continue;}clean.push(x);}
+  return {items:clean,miss,expired:docs.filter(x=>x.st==="exp")};
+}
+
+/* ---------------- intercalaires (canvas 300 dpi, Amiri + Crimson) ---------------- */
+const PT=300/72,AW=595.28,AH=841.89;
+let _fontsOk=null;
+function fontsReady(){return _fontsOk||(_fontsOk=Promise.all(["400 20px Amiri","700 20px Amiri","400 20px Crimson","700 20px Crimson","italic 400 20px Crimson"].map(f=>document.fonts.load(f,"ابج Abc"))).catch(()=>{}));}
+function sepCanvas(draw){const c=document.createElement("canvas");c.width=Math.round(AW*PT);c.height=Math.round(AH*PT);const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.scale(PT,PT);x.fillStyle="#000";x.strokeStyle="#000";draw(x);return c;}
+function rect(x,a,b,w,h,lw,fill){x.lineWidth=lw;if(fill){x.fillRect(a,b,w,h);}else x.strokeRect(a,b,w,h);}
+function frame(x){const k=26;rect(x,k,k,AW-2*k,AH-2*k,2.2);rect(x,k+5,k+5,AW-2*k-10,AH-2*k-10,0.5);
+  [[k,k],[AW-k,k],[k,AH-k],[AW-k,AH-k]].forEach(([a,b])=>{x.fillStyle="#fff";x.fillRect(a-4,b-4,8,8);x.fillStyle="#000";rect(x,a-4,b-4,8,8,1.2);x.fillRect(a-2,b-2,4,4);});}
+function line(x,x1,y1,x2,y2,w){x.lineWidth=w;x.beginPath();x.moveTo(x1,y1);x.lineTo(x2,y2);x.stroke();}
+function ornament(x,y,half){half=half||120;const c=AW/2;line(x,c-half,y,c-9,y,0.7);line(x,c+9,y,c+half,y,0.7);x.beginPath();x.moveTo(c,y-5);x.lineTo(c+5,y);x.lineTo(c,y+5);x.lineTo(c-5,y);x.closePath();x.fill();
+  [c-half-4,c+half+4].forEach(a=>{x.beginPath();x.arc(a,y,1.4,0,7);x.fill();});}
+function txt(x,s,y,size,o){o=o||{};const ar=/[؀-ۿ]/.test(s);x.font=`${o.italic?"italic ":""}${o.bold?700:400} ${size}px ${ar?"Amiri, Crimson":"Crimson, Amiri"}, serif`;x.direction=ar?"rtl":"ltr";x.textAlign="center";x.textBaseline="alphabetic";
+  try{x.letterSpacing=(o.ls||0)+"px";}catch(e){}
+  let w=x.measureText(s).width,mx=o.max||AW-120;if(w>mx&&!o.nowrap){/* découpe en lignes */const words=s.split(" ");let lines=[],cur="";words.forEach(wd=>{const t=cur?cur+" "+wd:wd;if(x.measureText(t).width>mx&&cur){lines.push(cur);cur=wd;}else cur=t;});lines.push(cur);
+    lines.forEach((l,i)=>x.fillText(l,AW/2,y+i*size*(o.lh||1.25)));try{x.letterSpacing="0px";}catch(e){}return lines.length*size*(o.lh||1.25);}
+  x.fillText(s,AW/2,y);try{x.letterSpacing="0px";}catch(e){}return size*(o.lh||1.25);}
+function sepHeader(x){txt(x,`${CO.ar} (${CO.ar2})`,78,15,{bold:true});txt(x,`${CO.fr} — ${CO.fr2}`,95,8.5,{ls:1});line(x,150,112,AW-150,112,0.4);}
+function sepFooter(x){line(x,150,AH-92,AW-150,AH-92,0.4);txt(x,"الملف التعريفي للمؤسسة",AH-72,10);txt(x,"DOSSIER DE PRÉSENTATION DE L'ENTREPRISE  ·  "+CO.legal,AH-58,8,{ls:0.6});}
+function drawSep(it){return sepCanvas(x=>{frame(x);sepHeader(x);sepFooter(x);const lv=it.level||1,big=lv===1?44:34,y0=it.rows?210:300;
+  if(lv===1)x.fillRect(AW/2-150,y0-34,300,3);
+  let y=y0+big*0.9;y+=txt(x,it.ar,y,big,{bold:true,lh:1.25})-big*0.9+14;ornament(x,y);y+=14+(lv===1?19:16);
+  y+=txt(x,String(it.fr).toUpperCase(),y,lv===1?19:16,{bold:true,ls:2})+8;
+  if(it.sub_ar){y+=txt(x,it.sub_ar,y+10,19)+4;}if(it.sub_fr){y+=txt(x,it.sub_fr,y+10,14,{italic:true});}
+  if(it.rows){caTable(x,it.rows,it.avgYears,y+24);}
+  if(lv===1)x.fillRect(AW/2-150,AH-150,300,3);});}
+function caTable(x,rows,avgYears,y){txt(x,"رقم الأعمال خلال السنوات الأخيرة",y+14,15);y+=30;const w1=110,w2=200,X=AW/2-(w1+w2)/2,rh=24;
+  const head=["Exercice / السنة المالية","Chiffre d'affaires / رقم الأعمال"];const cell=(c,cx,cw,yy,b,al)=>{x.font=`${b?700:400} 11.5px Crimson, Amiri, serif`;x.direction="ltr";x.textAlign=al||"center";x.fillText(c,al==="right"?cx+cw-8:cx+cw/2,yy+rh/2+4);};
+  const all=[["h"]].concat(rows.map(r=>["r",r])).concat(avgYears.length?[["a"]]:[]);
+  let yy=y;all.forEach(r=>{const hh=r[0]==="r"?rh:34;x.lineWidth=0.6;x.strokeRect(X,yy,w1,hh);x.strokeRect(X+w1,yy,w2,hh);const o=(hh-rh)/2;
+    if(r[0]==="h"){cell("Exercice",X,w1,yy+o-6,true);cell("السنة المالية",X,w1,yy+o+7,false);cell("Chif\u200Cfre d’af\u200Cfaires",X+w1,w2,yy+o-6,true);cell("رقم الأعمال",X+w1,w2,yy+o+7,false);}
+    else if(r[0]==="r"){cell(String(r[1][0]),X,w1,yy,false);cell(money(r[1][1])+" DA",X+w1,w2,yy,false,"right");}
+    else{const sel=rows.filter(q=>avgYears.includes(q[0])),avg=sel.reduce((a,q)=>a+q[1],0)/(sel.length||1);
+      cell(`Moyenne ${Math.min(...avgYears)}–${Math.max(...avgYears)}`,X,w1,yy+o-6,true);cell("المتوسط",X,w1,yy+o+7,false);cell(money(avg)+" DA",X+w1,w2,yy+o,true,"right");}yy+=hh;});}
+function drawCover(year){return sepCanvas(x=>{frame(x);rect(x,44,44,AW-88,AH-88,0.5);
+  txt(x,"الجمهورية الجزائرية الديمقراطية الشعبية",100,16);txt(x,"RÉPUBLIQUE ALGÉRIENNE DÉMOCRATIQUE ET POPULAIRE",118,10,{ls:1.5});
+  x.fillRect(AW/2-170,236,340,4);let y=262+52;y+=txt(x,"الملف التعريفي للمؤسسة",y,52,{bold:true,lh:1.2})-52;ornament(x,y+16,150);
+  txt(x,"DOSSIER DE PRÉSENTATION",y+52,21,{bold:true,ls:3});txt(x,"DE L'ENTREPRISE",y+78,21,{bold:true,ls:3});
+  x.fillRect(AW/2-170,470,340,4);txt(x,CO.ar,526,22,{bold:true});txt(x,`« ${CO.ar2} »`,556,22,{bold:true});txt(x,CO.fr,584,12.5,{ls:1});txt(x,CO.fr2,604,15,{bold:true,ls:2});
+  txt(x,CO.addrAr,680,12.5);txt(x,CO.addrFr,698,10.5);txt(x,CO.ids,716,10.5);txt(x,CO.tel,732,10.5);txt(x,String(year),AH-58,13,{bold:true,ls:3});});}
+
+/* ---------------- assemblage PDF (pdf-lib) ---------------- */
+const MARGIN=16;
+async function grayJpeg(src,whiteBg){const im=await loadImg(src);const k=Math.min(1,2000/Math.max(im.naturalWidth,im.naturalHeight)),cv=document.createElement("canvas");cv.width=Math.round(im.naturalWidth*k);cv.height=Math.round(im.naturalHeight*k);const x=cv.getContext("2d",{willReadFrequently:true});x.drawImage(im,0,0,cv.width,cv.height);
+  const id=x.getImageData(0,0,cv.width,cv.height),d=id.data;let g;
+  if(whiteBg&&window.EGTPHDoc){g=EGTPHDoc.whiten(EGTPHDoc.toGray(d,cv.width,cv.height)).d;}else{g=new Uint8ClampedArray(cv.width*cv.height);for(let i=0,j=0;i<d.length;i+=4,j++)g[j]=(d[i]*299+d[i+1]*587+d[i+2]*114)/1000;}
+  for(let i=0,j=0;i<d.length;i+=4,j++){d[i]=d[i+1]=d[i+2]=g[j];d[i+3]=255;}x.putImageData(id,0,0);return cv.toDataURL("image/jpeg",0.74);}
+async function srcPages(it){/* → [{src,w,h}] (images verticales prêtes) */
+  if(it.src==="d")return Promise.all((it.refs||[]).map(async r=>({src:await dossierPage(r),w:r.w,h:r.h})));
+  if(it.src==="r")return rhPages(it.key);
+  if(it.src==="p"){const e=S.equip.find(q=>String(q.id)===String(it.veh));const out=[];for(const k of it.keys){const s=await parcImg(e,k);if(s){const im=await loadImg(s);out.push({src:s,w:im.naturalWidth,h:im.naturalHeight});}}return out;}
+  return [];}
+function fit(w,h,bw,bh){const s=Math.min(bw/w,bh/h);return [w*s,h*s];}
+async function embed(pdf,src){const b=b64bytes(src.split(",")[1]);return /^data:image\/png/.test(src)?pdf.embedPng(b):pdf.embedJpg(b);}
+/* faces : [{draw:async(pdf)=>page}] — une entrée par page imprimée */
+async function itemFaces(it,mode){
+  const gray=mode==="print",wb=gray&&S.settings.whiten!==false;
+  const conv=async s=>gray?await grayJpeg(s,wb):s;
+  if(it.t==="cover"||it.t==="sep"||it.t==="fin"){await fontsReady();const cv=it.t==="cover"?drawCover(new Date().getFullYear()):drawSep(it.t==="fin"?Object.assign({},it,{level:1}):it);
+    const src=cv.toDataURL("image/png");return [{w:AW,h:AH,imgs:[{src,box:[0,0,AW,AH]}]}];}
+  const ps=await srcPages(it);if(!ps.length)return [];
+  if(it.layout==="pair"){/* A4 paysage : carte grise à droite, assurance à gauche */
+    const W=AH,H=AW,gap=14,aw=W-2*MARGIN-gap*(ps.length-1),ah=H-2*MARGIN,rs=ps.map(p=>p.w/p.h),hh=Math.min(ah,aw/rs.reduce((a,b)=>a+b,0));
+    let xr=(W+rs.reduce((a,r)=>a+r*hh,0)+gap*(ps.length-1))/2;const imgs=[];
+    for(let i=0;i<ps.length;i++){const ww=rs[i]*hh;imgs.push({src:await conv(ps[i].src),box:[xr-ww,(H-hh)/2,ww,hh]});xr-=ww+gap;}
+    return [{w:W,h:H,imgs}];}
+  if(it.layout==="stack"){const n=ps.length,cell=(AH-2*MARGIN-30)/n,imgs=[];
+    for(let i=0;i<n;i++){const bx=[70,MARGIN+15+i*cell+10,AW-140,cell-20],[w,h]=fit(ps[i].w,ps[i].h,bx[2],bx[3]);imgs.push({src:await conv(ps[i].src),box:[bx[0]+(bx[2]-w)/2,bx[1]+(bx[3]-h)/2,w,h]});}
+    return [{w:AW,h:AH,imgs}];}
+  const out=[];for(const p of ps){const land=p.w>p.h*1.05,W=land?AH:AW,H=land?AW:AH,[w,h]=fit(p.w,p.h,W-2*MARGIN,H-2*MARGIN);
+    out.push({w:W,h:H,imgs:[{src:await conv(p.src),box:[(W-w)/2,(H-h)/2,w,h]}]});}
+  return out;}
+async function drawFace(pdf,f){const pg=pdf.addPage([f.w,f.h]);for(const im of (f.imgs||[])){const e=await embed(pdf,im.src);const [x,yTop,w,h]=im.box;pg.drawImage(e,{x,y:f.h-yTop-h,width:w,height:h});}return pg;}
+/* plan recto verso : chaque pièce commence sur une nouvelle feuille ; pièce non recto-verso = recto seul */
+function duplexSeq(groups){const seq=[];groups.forEach(g=>{if(seq.length%2)seq.push(null);g.faces.forEach(f=>{seq.push(f);if(!g.duplex)seq.push(null);});});
+  while(seq.length&&seq[seq.length-1]===null)seq.pop();if(seq.length%2)seq.push(null);return seq;}
+function blankLike(prev){return {w:prev?prev.w:AW,h:prev?prev.h:AH,imgs:[]};}
+async function makePdf(faces){const pdf=await PDFLib.PDFDocument.create();pdf.setTitle("Dossier de l'entreprise — EGTPH ABDI YOUSSOUF ISLAM");pdf.setAuthor("EGTPH");
+  let prev=null;for(let i=0;i<faces.length;i++){const f=faces[i]||blankLike(prev);await drawFace(pdf,f);prev=f;}return pdf.save();}
+/* génération : écran (couleur, sans blancs) + impression (gris, plan recto verso / manuel / recto) */
+async function generate(items,o){
+  const screen=[],groups=[];
+  for(let i=0;i<items.length;i++){const it=items[i];prog("تجهيز الصفحات…",i/items.length*0.55,it.ar||it.label||"");
+    const fc=await itemFaces(it,"screen");const fp=o.print?await itemFaces(it,"print"):[];
+    fc.forEach(f=>screen.push(f));if(o.print)groups.push({faces:fp,duplex:it.t==="doc"&&it.duplex,it});
+    it.pages=fc.length;}
+  prog("إنشاء PDF الشاشة (ملون)…",0.6);const out={screen:await makePdf(screen),nScreen:screen.length};
+  if(o.print){let seq;
+    if(o.mode==="simplex"){seq=[];groups.forEach(g=>g.faces.forEach(f=>seq.push(f)));}
+    else seq=duplexSeq(groups);
+    out.faces=seq.length;out.sheets=o.mode==="simplex"?seq.length:Math.ceil(seq.length/2);out.blanks=seq.filter(x=>!x).length;
+    prog("إنشاء PDF الطباعة (رمادي)…",0.8);
+    if(o.mode==="manual"){const odd=seq.filter((_,i)=>i%2===0),even=seq.filter((_,i)=>i%2===1);if(o.reverseBacks)even.reverse();
+      out.p1=await makePdf(odd);out.p2=await makePdf(even);}
+    else out.print=await makePdf(seq);
+    /* contrôle : pages entrées = pages sorties */
+    const pin=groups.reduce((a,g)=>a+g.faces.length,0),pout=seq.filter(Boolean).length;out.check=pin===pout&&pin===screen.length;}
+  prog(false);return out;}
+function blobUrl(bytes){return URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));}
+function dl(bytes,name){const a=document.createElement("a");a.href=blobUrl(bytes);a.download=name;a.target="_blank";document.body.appendChild(a);a.click();setTimeout(()=>a.remove(),1000);}
+
+/* ====================== VUES ====================== */
+let VIEW="dos";
+document.querySelectorAll("#nav button").forEach(b=>b.onclick=()=>{VIEW=b.dataset.v;document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x===b));render();});
+function render(){if(!S.loaded)return;({dos:vDos,sub:vSub,hist:vHist,set:vSet})[VIEW]();window.scrollTo(0,0);}
+
+function rowHtml(it){const src={d:'<span class="tag">الملف</span>',p:'<span class="tag">العتاد</span>',r:'<span class="tag">العمال</span>'}[it.src]||"";
+  const p=it.src==="d"?S.pieces[it.id]:null,sub=p?[p.title,p.date&&p.cat.startsWith("abe")?fd(p.date):"",(p.pages||[]).length+" ص","النسخة "+(p.v||1)].filter(Boolean).join(" · "):(it.src==="r"?(S.rhFiles[it.key]||{}).label||"":"");
+  const act=it.src==="d"?`<button class="b" onclick="editPiece('${it.id}')">✎</button>`:it.src==="p"?`<button class="b" onclick="openSrc('p')">↗</button>`:`<button class="b" onclick="openSrc('r')">↗</button>`;
+  return `<div class="row"><div class="t"><b>${esc(it.ar||it.label)}</b><span>${esc(sub)}</span></div>${stHtml(it.fin)}${src}<button class="b" onclick="viewItem('${esc(it.id)}')">👁</button>${act}</div>`;}
+function vDos(){const o=defaultOpts();o.years=byCat("bilan").map(p=>p.year);const pl=buildPlan(o);
+  let h=`<div class="card"><div class="chips"><button class="b p" onclick="VIEW='sub';document.querySelector('[data-v=sub]').click()">🖨 تحضير ملف لمناقصة</button><button class="b" onclick="addPiece()">📥 إضافة / تحديث وثيقة (قراءة تلقائية)</button><button class="b" onclick="refreshSrc()">🔄 تحديث من البرامج</button></div>
+  ${S.err?`<div class="errbox">${esc(S.err)}</div>`:""}${renewHtml()}</div>`;
+  let open=false;pl.items.forEach(it=>{if(it.t==="cover")return;if(it.t==="sep"||it.t==="fin"){if(open)h+="</div>";h+=`<div class="sec">${esc(it.ar)}${it.sub_ar?" — "+esc(it.sub_ar):""}</div><div class="card">`;open=true;return;}h+=rowHtml(it);});
+  if(open)h+="</div>";
+  if(pl.miss.length)h+=`<div class="errbox"><b>وثائق ناقصة في برامجها المصدر:</b><br>${pl.miss.map(esc).join("<br>")}</div>`;
+  h+=`<div class="sec">كل وثائق الملف (حسب الصنف)</div><div class="card">${Object.keys(CATS).map(c=>`<div class="row"><div class="t"><b>${CATS[c][0]}</b><span>${byCat(c).length} وثيقة</span></div><button class="b" onclick="addPiece('${c}')">＋</button></div>`).join("")}</div>`;
+  $("#view").innerHTML=h;}
+function renewHtml(){/* « à renouveler ce mois » */const lim=addDays(today(),31),L=[];
+  PS().forEach(p=>{if(p.fin&&p.fin<lim)L.push([p.ar||p.fr,p.fin]);});
+  vehicles().filter(vehIncluded).forEach(e=>["as","ct"].forEach(k=>{const f=vehFin(e,k);if(f&&f<lim&&S.imgKeys.has(e.id+"_"+k))L.push([(k==="as"?"تأمين ":"مراقبة تقنية ")+(e.name||"")+" "+(e.matricule||""),f]);}));
+  Object.keys(S.ext).forEach(k=>{const f=S.ext[k].fin;if(f&&f<lim)L.push([k.replace("rh:maj_company","CNAS").replace("rh:cac_company","CACOBATPH"),f]);});
+  if(!L.length)return "";L.sort((a,b)=>a[1].localeCompare(b[1]));
+  return `<div class="warnbox"><b>للتجديد (منتهية أو تنتهي خلال شهر):</b><br>${L.map(([a,f])=>`${esc(a)} — ${f<today()?'<span class="er">منتهية</span>':'<span class="wa">تنتهي</span>'} ${fd(f)}`).join("<br>")}</div>`;}
+function openSrc(s){window.open(s==="p"?"../parc_document/":"../egtph-rh/","_blank");}
+async function refreshSrc(){await loadAll();render();toast("تم التحديث ✓");}
+async function viewItem(id){const o=defaultOpts();o.years=byCat("bilan").map(p=>p.year);Object.keys(o.veh).forEach(k=>o.veh[k]=true);Object.keys(o.roles).forEach(k=>{if(o.roles[k]==="off")o.roles[k]="ouvrier";});
+  const it=buildPlan(o).items.find(x=>x.id===id);if(!it)return;prog("تحميل…",0.3);let ps=[];try{ps=await srcPages(it);}catch(e){}prog(false);
+  modal(`<h3>${esc(it.ar||it.label)}</h3><div class="mu">${esc(it.label)}</div>${ps.map(p=>`<img src="${p.src}" style="width:100%;margin:6px 0;border:1px solid #ddd">`).join("")||'<div class="errbox">لا توجد صفحات</div>'}<button class="b" onclick="closeModal()">إغلاق</button>`);}
+
+/* ---------- mناقصة جديدة : choix + contrôle + impression ---------- */
+let SUB=null;
+function vSub(){if(!SUB)SUB=defaultOpts();const o=SUB;const ys=byCat("bilan").map(p=>p.year).sort((a,b)=>b-a);
+  const wRows=S.workers.filter(w=>w.st!=="INACTIF").map(w=>{const ds=workerDocs(w);return `<div class="row"><div class="t"><b>${esc(wName(w))}</b><span class="chips">${ds.map(d=>`<label><input type="checkbox" ${!(o.docs[w.id]&&o.docs[w.id][d.key]===false)?"checked":""} onchange="setDoc('${w.id}','${d.key}',this.checked)">${esc(RHK[d.kind][0])}${S.rhFiles[d.key].label?" ("+esc(S.rhFiles[d.key].label)+")":""}</label>`).join("")||'<span class="er">لا وثائق</span>'}</span></div>
+    <select style="width:auto" onchange="SUB.roles['${w.id}']=this.value">${[["cadre","إطار"],["ouvrier","عامل"],["off","لا يُدرج"]].map(([v,t])=>`<option value="${v}" ${o.roles[w.id]===v?"selected":""}>${t}</option>`).join("")}</select></div>`;}).join("");
+  const vRows=FAM.map(([f,ar])=>{const vs=vehicles().filter(e=>vehFamily(e)===f);return vs.length?`<div class="mu" style="margin-top:6px">${ar}</div><div class="chips">${vs.map(e=>`<label><input type="checkbox" ${o.veh[e.id]?"checked":""} onchange="SUB.veh['${e.id}']=this.checked">${esc((e.name||"")+" "+(e.matricule||""))}</label>`).join("")}</div>`:"";}).join("");
+  $("#view").innerHTML=`<div class="card"><label class="mu">اسم المناقصة (للسجل)</label><input type="text" id="sName" value="${esc(o.name||"")}" placeholder="مثال: طلب العروض رقم 06/2026 — بلدية …">
+   <div class="grid2" style="margin-top:8px"><div><label class="mu">آخر أجل لإيداع العروض (لفحص الصلاحية)</label><input type="date" id="sLim" value="${esc(o.limit||"")}"></div>
+   <div><label class="mu">الطباعة</label><select id="sMode"><option value="duplex">وجهين (طابعة وجهين)</option><option value="manual">وجهين يدوياً (الفردية ثم الزوجية)</option><option value="simplex">وجه واحد</option></select></div></div></div>
+   <div class="sec">الحصائل المالية المطبوعة</div><div class="card chips">${ys.map(y=>`<label><input type="checkbox" ${o.years.includes(y)?"checked":""} onchange="togYear(${y},this.checked)">${y}</label>`).join("")}</div>
+   <div class="sec">الحساب البنكي (RIB)</div><div class="card chips">${byCat("rib").map(p=>`<label><input type="radio" name="rib" ${o.rib===p.id?"checked":""} onchange="SUB.rib='${p.id}'">${esc(p.bank||p.fr)}</label>`).join("")}</div>
+   <div class="sec">العمال (النشطون في egtph-rh) — الدور والوثائق</div><div class="card">${wRows}</div>
+   <div class="sec">العتاد المُدرج</div><div class="card">${vRows}</div>
+   <div class="card"><label class="chk"><input type="checkbox" id="sSave" checked> حفظ هذه الاختيارات كاختيارات افتراضية</label>
+   <button class="b p" style="width:100%;padding:11px" onclick="checkAndPrint()">✔ فحص الملف ثم إنشاء PDF</button></div>`;
+  $("#sMode").value=o.mode||"duplex";}
+function togYear(y,on){SUB.years=on?[...new Set(SUB.years.concat(y))].sort((a,b)=>b-a):SUB.years.filter(x=>x!==y);}
+function setDoc(w,k,on){SUB.docs[w]=SUB.docs[w]||{};SUB.docs[w][k]=on;}
+function readSubForm(){SUB.name=$("#sName").value.trim();SUB.limit=$("#sLim").value;SUB.mode=$("#sMode").value;}
+function checkAndPrint(){readSubForm();const pl=buildPlan(SUB);
+  let h=`<h3>فحص قبل الطباعة</h3>`;
+  if(pl.miss.length)h+=`<div class="errbox"><b>وثائق ناقصة (${pl.miss.length}):</b><br>${pl.miss.map(esc).join("<br>")}</div>`;
+  if(pl.expired.length){h+=`<div class="warnbox"><b>وثائق منتهية الصلاحية${SUB.limit?" في "+fd(SUB.limit):""} (${pl.expired.length}) — القرار لك:</b>
+    ${pl.expired.map(x=>`<div class="row"><div class="t"><b>${esc(x.ar||x.label)}</b><span>${fd(x.fin)}</span></div><select style="width:auto" data-exp="${esc(x.id)}"><option value="print">طباعة</option><option value="skip">عدم الطباعة</option><option value="replace">استبدال</option></select></div>`).join("")}
+    <button class="b" onclick="document.querySelectorAll('[data-exp]').forEach(s=>s.value='skip')">عدم طباعة كل المنتهية</button></div>`;}
+  if(!pl.miss.length&&!pl.expired.length)h+=`<div class="mu ok">✓ كل الوثائق المطلوبة موجودة وسارية.</div>`;
+  const nDocs=pl.items.filter(x=>x.t==="doc").length;
+  h+=`<p class="mu">${nDocs} وثيقة · ${pl.items.length-nDocs} صفحة فاصلة.</p><div class="chips"><button class="b p" onclick="doPrint()">🖨 إنشاء PDF</button><button class="b" onclick="closeModal()">رجوع</button></div>`;
+  modal(h);}
+async function doPrint(){const skip={};let rep=null;document.querySelectorAll("[data-exp]").forEach(s=>{if(s.value==="skip")skip[s.dataset.exp]=true;if(s.value==="replace"&&!rep)rep=s.dataset.exp;});
+  if(rep){closeModal();if(rep.startsWith("veh:")||rep.startsWith("rh:")){toast("الاستبدال يتم في برنامجها المصدر",3500);openSrc(rep.startsWith("veh:")?"p":"r");}else editPiece(rep);return;}
+  SUB.skip=skip;closeModal();
+  if($("#sSave")&&$("#sSave").checked&&!viewer()){S.choices.veh=Object.assign({},S.choices.veh,SUB.veh);S.choices.role=Object.assign({},S.choices.role,SUB.roles);S.choices.docs=SUB.docs;S.choices.rib=SUB.rib;S.choices.nYears=SUB.years.length;S.choices.t=Date.now();
+    fput(DOSSIER,D+"/choices",S.choices).catch(()=>{});}
+  const pl=buildPlan(SUB);let out;
+  try{out=await generate(pl.items,{print:true,mode:SUB.mode,reverseBacks:true});}catch(e){prog(false);modal(`<div class="errbox">تعذّر إنشاء الملف: ${esc(e.message)}</div><button class="b" onclick="closeModal()">إغلاق</button>`);return;}
+  /* historique : relevé de ce qui a été imprimé */
+  const sid="s"+Date.now(),docs=pl.items.filter(x=>x.t==="doc");
+  const rec={name:SUB.name||"بدون اسم",t:Date.now(),date:today(),limit:SUB.limit||"",mode:SUB.mode,faces:out.faces,sheets:out.sheets,pages:out.nScreen,
+    opts:{years:SUB.years,rib:SUB.rib,roles:SUB.roles,veh:SUB.veh,docs:SUB.docs,skip:SUB.skip},
+    items:pl.items.map(x=>x.t==="doc"?{t:"doc",id:x.id,src:x.src,label:x.label,ar:x.ar||"",v:x.v||x.ms||x.mod||"",n:x.pages||0}:{t:x.t,ar:x.ar||"",fr:x.fr||"",level:x.level||1})};
+  if(!viewer()){try{await fput(DOSSIER,D+"/subs/"+sid,rec);S.subs[sid]=rec;}catch(e){toast("لم يُحفظ السجل");}}
+  const name=(SUB.name||"dossier").replace(/[^\w؀-ۿ -]+/g,"_").slice(0,60);
+  modal(`<h3>✓ الملف جاهز</h3><p><b>${out.nScreen}</b> صفحة · طباعة: <b>${out.faces}</b> وجه / <b>${out.sheets}</b> ورقة${out.blanks?` (${out.blanks} وجه أبيض لضبط الوجهين)`:""}</p>
+   ${out.check?'<div class="mu ok">✓ فحص: لا صفحة ضائعة ولا مكررة.</div>':'<div class="errbox">⚠️ عدد الصفحات غير متطابق — أعد المحاولة.</div>'}
+   <div class="chips" style="margin-top:8px">${out.print?`<button class="b p" id="dP">🖨 PDF الطباعة (رمادي)</button>`:`<button class="b p" id="d1">🖨 الوجه الأول (الصفحات الفردية)</button><button class="b p" id="d2">🖨 الوجه الثاني (الزوجية، بترتيب معكوس)</button>`}
+   <button class="b" id="dS">📄 PDF ملون (للشاشة / النسخة الإلكترونية)</button><button class="b" onclick="closeModal()">إغلاق</button></div>
+   ${out.print?"":'<p class="mu">اطبع الوجه الأول، ثم اقلب رزمة الأوراق وضعها في الطابعة، ثم اطبع الوجه الثاني.</p>'}`);
+  if(out.print)$("#dP").onclick=()=>dl(out.print,name+"_impression.pdf");else{$("#d1").onclick=()=>dl(out.p1,name+"_recto.pdf");$("#d2").onclick=()=>dl(out.p2,name+"_verso.pdf");}
+  $("#dS").onclick=()=>dl(out.screen,name+"_ecran.pdf");}
+
+/* ---------- السجل ---------- */
+function vHist(){const L=Object.entries(S.subs||{}).sort((a,b)=>b[1].t-a[1].t);
+  $("#view").innerHTML=L.length?L.map(([id,s])=>`<div class="card"><div class="row"><div class="t"><b>${esc(s.name)}</b><span>${fd(s.date)} · ${s.pages||"?"} صفحة · ${s.sheets||"?"} ورقة${s.limit?" · الأجل "+fd(s.limit):""}</span></div><button class="b" onclick="openSub('${id}')">فتح</button></div></div>`).join(""):'<div class="card mu">لا توجد مناقصات مسجلة بعد.</div>';}
+function curVersion(x){if(x.src==="d"){const p=S.pieces[x.id];return p?p.v:null;}if(x.src==="r")return (S.rhFiles[x.id.slice(3)]||{}).ms;if(x.src==="p"){const e=S.equip.find(q=>"veh:"+q.id===x.id.split(":").slice(0,2).join(":"));return e?eqMod(e):null;}}
+function openSub(id){const s=S.subs[id];const items=s.items||[];let lastSep="";
+  const rows=items.map((x,i)=>{if(x.t!=="doc"){lastSep=x.ar;return `<div class="sec" style="font-size:13px">${esc(x.ar)}</div>`;}const cv=curVersion(x),ch=cv!=null&&String(cv)!==String(x.v);
+    return `<div class="row"><div class="t"><b>${esc(x.ar||x.label)}</b><span>${x.n||""} ص${ch?' · <span class="wa">نسخة أحدث متوفرة</span>':""}</span></div><button class="b" onclick="reprint('${id}',${i})">🖨</button></div>`;}).join("");
+  modal(`<h3>${esc(s.name)}</h3><p class="mu">${fd(s.date)} · ${s.pages} صفحة · ${s.faces} وجه / ${s.sheets} ورقة</p>
+   <div class="chips"><button class="b p" onclick="regen('${id}')">🖨 إعادة إنشاء الملف كاملاً بنفس الاختيارات</button><button class="b" onclick="closeModal()">إغلاق</button></div>
+   <p class="mu">لتصحيح وثيقة بعد الطباعة: استبدلها أولاً (✎ في «الملف» أو في برنامجها)، ثم اضغط 🖨 أمامها لطباعتها وحدها.</p><div class="card">${rows}</div>`);}
+async function regen(id){const s=S.subs[id];SUB=Object.assign(defaultOpts(),s.opts||{},{name:s.name+" (إعادة)",limit:s.limit||"",mode:s.mode||"duplex"});SUB.skip=SUB.skip||{};closeModal();VIEW="sub";document.querySelector("[data-v=sub]").click();}
+async function reprint(sid,i){const s=S.subs[sid],x=s.items[i];const o=Object.assign(defaultOpts(),s.opts||{});o.skip={};const it=buildPlan(o).items.find(q=>q.id===x.id);
+  if(!it){toast("الوثيقة غير موجودة الآن");return;}
+  const prev=[...s.items.slice(0,i)].reverse().find(q=>q.t==="doc"),next=s.items.slice(i+1).find(q=>q.t==="doc"),sepBefore=[...s.items.slice(0,i)].reverse().find(q=>q.t!=="doc"),afterSep=i>0&&s.items[i-1].t!=="doc";
+  const out=await generate([it],{print:true,mode:s.mode==="simplex"?"simplex":"duplex"});
+  x.v=it.v||it.ms||it.mod||x.v;x.n=it.pages;x.reprinted=Date.now();if(!viewer())fput(DOSSIER,D+"/subs/"+sid+"/items/"+i,x).catch(()=>{});
+  modal(`<h3>🖨 ${esc(x.ar||x.label)}</h3><div class="warnbox"><b>مكانها في الملف:</b><br>${sepBefore?"ضمن «"+esc(sepBefore.ar)+"»<br>":""}${afterSep||!prev?"بعد الصفحة الفاصلة «"+esc(s.items[i-1]&&s.items[i-1].ar||"")+"» مباشرة<br>":"بعد: "+esc(prev.ar||prev.label)+"<br>"}${next?"وقبل: "+esc(next.ar||next.label):"في آخر الملف"}</div>
+   <p class="mu">${out.nScreen} صفحة — انزع النسخة القديمة وضع هذه مكانها.</p><div class="chips"><button class="b p" id="rp">🖨 PDF الطباعة</button><button class="b" id="rs">📄 ملون</button><button class="b" onclick="closeModal()">إغلاق</button></div>`);
+  $("#rp").onclick=()=>dl(out.print,"piece_impression.pdf");$("#rs").onclick=()=>dl(out.screen,"piece_ecran.pdf");}
+
+/* ---------- الإعدادات : قواعد Firebase + المساحة ---------- */
+function usage(){const u={};const add=(b,n)=>{u[b]=(u[b]||0)+(n||0)*1.37;};PS().forEach(p=>(p.pages||[]).forEach(r=>add(r.b||0,r.n)));Object.values(S.settings.histSize||{}).forEach(h=>add(h.b||0,h.n));return u;}
+function vSet(){const u=usage(),bs=S.settings.bases||[];
+  $("#view").innerHTML=`<div class="sec">قواعد التخزين (Firebase المجاني)</div><div class="card">${bs.map((b,i)=>{const mb=(u[i]||0)/1048576,cap=b.cap||1000;return `<div class="row"><div class="t"><b>${i+1}. ${esc(b.label||b.url)}</b><span>${mb.toFixed(1)} Mo / ${cap} Mo (صفحات الملف)</span><div class="bar"><i style="width:${Math.min(100,mb/cap*100).toFixed(1)}%"></i></div></div></div>`;}).join("")}
+   <p class="mu">لما تقترب قاعدة من حدّها، تذهب الصفحات الجديدة تلقائياً للقاعدة التالية. لإضافة قاعدة: أنشئ مشروع Firebase جديداً (Realtime Database + Email/Mot de passe)، ثم الصق عنوانه ومفتاحه هنا.</p>
+   <div class="grid2"><input type="text" id="nbUrl" placeholder="https://xxx-default-rtdb.europe-west1.firebasedatabase.app"><input type="text" id="nbKey" placeholder="AIza… (Web API Key)"></div>
+   <button class="b" style="margin-top:6px" onclick="addBase()">＋ إضافة قاعدة</button></div>
+   <div class="sec">الطباعة</div><div class="card"><label class="chk"><input type="checkbox" ${S.settings.whiten!==false?"checked":""} onchange="saveSet('whiten',this.checked)"> تبييض الخلفية في نسخة الطباعة الرمادية (حذف الظلال والخلفيات الملونة)</label>
+   <label class="chk">عدد الحصائل الافتراضي: <input type="number" min="1" max="10" style="width:70px" value="${S.choices.nYears||3}" onchange="S.choices.nYears=+this.value;fput(DOSSIER,D+'/choices/nYears',+this.value)"></label></div>
+   <div class="sec">عائلة كل آلية / مركبة</div><div class="card">${vehicles().map(e=>`<div class="row"><div class="t"><b>${esc(e.name)} ${esc(e.matricule||"")}</b></div><select style="width:auto" onchange="setFam('${e.id}',this.value)">${FAM.map(([f,ar])=>`<option value="${f}" ${vehFamily(e)===f?"selected":""}>${ar}</option>`).join("")}</select></div>`).join("")}</div>`;}
+async function saveSet(k,v){S.settings[k]=v;try{await fput(DOSSIER,D+"/settings/"+k,v);toast("حُفظ ✓");}catch(e){toast("تعذّر الحفظ");}}
+async function setFam(id,f){S.choices.fam=S.choices.fam||{};S.choices.fam[id]=f;try{await fput(DOSSIER,D+"/choices/fam/"+id,f);}catch(e){}}
+async function addBase(){const url=$("#nbUrl").value.trim().replace(/\/+$/,""),key=$("#nbKey").value.trim();if(!/^https:\/\/.+firebase(database\.app|io\.com)$/.test(url)||!/^AIza/.test(key)){toast("العنوان أو المفتاح غير صحيح");return;}
+  const i=(S.settings.bases||[]).length;try{await EGTPHAuth.init({appId:"dossier_b"+i,apiKey:key,email:OWNER});await fput({app:"dossier_b"+i,url},D+"/_probe",{t:Date.now()});await fput({app:"dossier_b"+i,url},D+"/_probe",null,"DELETE");}catch(e){toast("تعذّر الاتصال بالقاعدة: "+e.message,4000);return;}
+  S.settings.bases=(S.settings.bases||[]).concat({url,key,label:url.replace(/^https:\/\/|-default-rtdb.*$/g,""),cap:1000});await saveSet("bases",S.settings.bases);vSet();}
+function writeBase(){const u=usage(),bs=S.settings.bases||[];for(let i=0;i<bs.length;i++)if((u[i]||0)/1048576<(bs[i].cap||1000)*0.9)return i;return Math.max(0,bs.length-1);}
+
+/* ---------- إضافة / استبدال وثيقة : قراءة، تنظيف، تصنيف ---------- */
+const TYPE2={registre_commerce:"rc",nif:"nif",nis:"nis",extrait_role:"role",qualification:"qualif",casnos:"casnos",bilan:"bilan",bonne_execution:"abe",rib:"rib"};
+const TYPE_ELSE={cnas:"r",cacobatph:"r",affiliation:"r",diplome:"r",attestation_travail:"r",carte_grise:"p",assurance:"p",controle_technique:"p"};
+let ED=null;/* {id|null, cat, pages:[{cv,rot}], text} */
+function addPiece(cat){ED={id:null,cat:cat||"",pages:[],text:""};edModal();}
+function editPiece(id){const p=S.pieces[id];ED={id,cat:p.cat,pages:[],text:"",p};edModal();}
+function edModal(){const p=ED.p||{},cat=ED.cat;
+  const catSel=`<select id="eCat" ${ED.id?"disabled":""}><option value="">— الصنف —</option>${Object.keys(CATS).map(c=>`<option value="${c}" ${cat===c?"selected":""}>${CATS[c][0]}</option>`).join("")}</select>`;
+  modal(`<h3>${ED.id?"تحديث: "+esc(p.ar||p.fr):"إضافة وثيقة"}</h3>
+   ${ED.id?`<p class="mu">النسخة الحالية ${p.v||1} (${(p.pages||[]).length} ص) — تُحفظ في الأرشيف عند الاستبدال.</p>`:""}
+   <label class="b" style="display:inline-block">📷 اختيار صور / PDF<input type="file" id="eFile" accept="image/*,application/pdf" multiple data-noscan style="display:none"></label>
+   <label class="chk"><input type="checkbox" id="eBest"> عدة نسخ لنفس الوثيقة: الاحتفاظ بالأوضح فقط</label>
+   <div id="eMsg"></div><div class="thumbs" id="eTh"></div>
+   <div class="grid2" style="margin-top:8px"><div><label class="mu">الصنف</label>${catSel}</div><div><label class="mu">الاسم (فرنسي)</label><input type="text" id="eFr" value="${esc(p.fr||"")}"></div>
+   <div><label class="mu">الاسم (عربي)</label><input type="text" id="eAr" value="${esc(p.ar||"")}"></div><div><label class="mu">العنوان / المشروع</label><input type="text" id="eTitle" value="${esc(p.title||"")}"></div>
+   <div><label class="mu">تاريخ الوثيقة</label><input type="date" id="eDate" value="${esc(p.date||"")}"></div><div><label class="mu">صالحة إلى</label><input type="date" id="eFin" value="${esc(p.fin||"")}"></div>
+   <div><label class="mu">السنة (الحصيلة)</label><input type="number" id="eYear" value="${esc(p.year||"")}"></div><div><label class="mu">رقم الأعمال (دج)</label><input type="number" step="0.01" id="eCa" value="${esc(p.ca||"")}"></div>
+   <div><label class="mu">البنك (RIB)</label><input type="text" id="eBank" value="${esc(p.bank||"")}"></div><div><label class="chk" style="margin-top:22px"><input type="checkbox" id="eDup" ${p.duplex?"checked":""}> طباعة وجهين لهذه الوثيقة</label></div></div>
+   <div class="chips" style="margin-top:10px"><button class="b p" id="eSave">✓ حفظ</button>${ED.id&&p.v>1?`<button class="b" onclick="restoreOld('${ED.id}')">↩ الرجوع لنسخة سابقة</button>`:""}${ED.id?`<button class="b" onclick="delPiece('${ED.id}')">🗑 حذف</button>`:""}<button class="b" onclick="closeModal()">إلغاء</button></div>`);
+  $("#eFile").onchange=e=>readFiles([...e.target.files]);$("#eSave").onclick=savePiece;}
+function msg(h,cls){$("#eMsg").innerHTML=h?`<div class="${cls||"warnbox"}">${h}</div>`:"";}
+function gOf(cv,max){const s=Math.min(1,(max||1200)/Math.max(cv.width,cv.height)),c=document.createElement("canvas");c.width=Math.round(cv.width*s);c.height=Math.round(cv.height*s);const x=c.getContext("2d",{willReadFrequently:true});x.drawImage(cv,0,0,c.width,c.height);return EGTPHDoc.toGray(x.getImageData(0,0,c.width,c.height).data,c.width,c.height);}
+async function fileCanvases(f){
+  if(/pdf/i.test(f.type)||/\.pdf$/i.test(f.name)){return pdfToJpegs(new Uint8Array(await f.arrayBuffer()),200,2300);}
+  let g=f;try{if(window.EGTPHScan&&EGTPHScan.autoFile)g=await EGTPHScan.autoFile(f)||f;}catch(e){}
+  const im=await loadImg(await fileToDataURL(g));const s=Math.min(1,2300/Math.max(im.naturalWidth,im.naturalHeight)),cv=document.createElement("canvas");cv.width=Math.round(im.naturalWidth*s);cv.height=Math.round(im.naturalHeight*s);
+  const x=cv.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,cv.width,cv.height);x.drawImage(im,0,0,cv.width,cv.height);
+  try{cv._cut=EGTPHDoc.edgeCut(gOf(cv,1000)).cut;}catch(e){cv._cut=[];}return [cv];}
+async function readFiles(files){if(!files.length)return;msg("جارٍ القراءة والتنظيف…","mu");
+  for(let i=0;i<files.length;i++){prog("معالجة "+(i+1)+"/"+files.length,i/files.length,files[i].name);let cvs=[];try{cvs=await fileCanvases(files[i]);}catch(e){msg("تعذّرت قراءة "+esc(files[i].name),"errbox");}
+    cvs.forEach(cv=>{cv._file=i;ED.pages.push({cv,rot:0});});}
+  prog(false);
+  /* pages blanches et doublons (gardés à part, signalés) */
+  const notes=[];const kept=[];const hashes=[];
+  ED.pages.forEach((p,i)=>{try{const g=gOf(p.cv);if(EGTPHDoc.blankInfo(g).blank){notes.push("صفحة بيضاء حُذفت ("+(i+1)+")");return;}const h=EGTPHDoc.dHash(g);
+    if(hashes.some(x=>EGTPHDoc.hamming(x,h)<=6)){notes.push("صفحة مكررة حُذفت ("+(i+1)+")");return;}hashes.push(h);p.q=EGTPHDoc.quality(g);}catch(e){}kept.push(p);});
+  ED.pages=kept;
+  if($("#eBest").checked&&ED.pages.length>1){const b=ED.pages.reduce((a,p)=>((p.q&&p.q.score)||0)>((a.q&&a.q.score)||0)?p:a);ED.pages=[b];notes.push("اختيرت النسخة الأوضح");}
+  ED.pages.forEach(p=>{if(p.cv._cut&&p.cv._cut.length)notes.push("⚠️ الوثيقة تبدو مقطوعة ("+p.cv._cut.join("، ")+") — أعد التصوير إن أمكن");});
+  drawThumbs();
+  /* lecture + classement (règles + modèle appris) */
+  try{msg((notes.length?notes.join("<br>")+"<br>":"")+"🔍 قراءة النص…","mu");const r=await EGTPHOcr.recognize(ED.pages[0].cv,"ara+fra",{fast:true});ED.text=(r&&r.data&&r.data.text)||"";const rr=r&&r.data&&r.data.rotation;if(rr){ED.pages[0].rot=rr%360;drawThumbs();notes.push("تم تصحيح اتجاه الصفحة تلقائياً");}}catch(e){ED.text="";}
+  suggest(notes);}
+function suggest(notes){const t=ED.text||"";let h=notes.length?notes.join("<br>")+"<br>":"";
+  if(t&&window.EGTPHDoc){const d=EGTPHDoc.decide(t,S.model),x=EGTPHDoc.extract(t),ds=x.dates;
+    if(d.type&&TYPE_ELSE[d.type]){h+=`<b>هذه الوثيقة تبدو «${d.type}» وتُحفظ في برنامج ${TYPE_ELSE[d.type]==="p"?"العتاد (parc_document)":"العمال (egtph-rh)"}</b> — ستظهر هنا تلقائياً بعد حفظها هناك. <button class="b" onclick="openSrc('${TYPE_ELSE[d.type]}')">فتح البرنامج</button><br>`;}
+    else if(d.type&&TYPE2[d.type]){let cat={rc:"jur",nif:"jur",nis:"jur",role:"fis",qualif:"qual",casnos:"para",bilan:"bilan",rib:"rib"}[TYPE2[d.type]];
+      if(TYPE2[d.type]==="abe")cat=/الشرب|eau potable|\baep\b/i.test(t)?"abe_aep":"abe_ass";
+      h+=`النوع المقترح: <b>${esc((CATS[cat]||[cat])[0])}</b> ${d.sure?'<span class="ok">(مؤكد)</span>':'<span class="wa">(للتأكيد)</span>'}<br>`;
+      if(!ED.id&&!$("#eCat").value){$("#eCat").value=cat;const same=["rc","nif","nis","role","qualif","casnos"].includes(TYPE2[d.type])?S.pieces[TYPE2[d.type]]:null;
+        if(same){h+=`توجد وثيقة من نفس النوع: سيتم <b>استبدالها</b> (القديمة إلى الأرشيف).<br>`;ED.id=same.id;ED.p=same;["Fr","Ar"].forEach(k=>$("#e"+k).value=same[k.toLowerCase()]||"");}}
+      if(cat==="bilan"&&x.years.length&&!$("#eYear").value)$("#eYear").value=Math.max(...x.years.filter(y=>y<=new Date().getFullYear()));}
+    if(ds.length){if(!$("#eDate").value)$("#eDate").value=ds.filter(s=>s<=today()).pop()||"";const fut=ds.filter(s=>s>today());if(fut.length&&!$("#eFin").value)$("#eFin").value=fut[fut.length-1];h+=`التواريخ المقروءة: ${ds.map(fd).join("، ")}<br>`;}}
+  else if(!t)h+=`<span class="mu">لم يُقرأ النص — املأ الخانات يدوياً.</span>`;
+  msg(h);}
+function drawThumbs(){$("#eTh").innerHTML=ED.pages.map((p,i)=>`<div class="th"><img src="${thumb(p)}"><div>${i+1}</div><button class="b" onclick="rotP(${i})">⟳</button><button class="b" onclick="movP(${i})">▲</button><button class="b" onclick="ED.pages.splice(${i},1);drawThumbs()">✕</button></div>`).join("");}
+function thumb(p){const cv=rotCv(p.cv,p.rot),s=Math.min(1,260/Math.max(cv.width,cv.height)),c=document.createElement("canvas");c.width=cv.width*s;c.height=cv.height*s;c.getContext("2d").drawImage(cv,0,0,c.width,c.height);return c.toDataURL("image/jpeg",0.7);}
+function rotCv(cv,r){if(!r)return cv;const c=document.createElement("canvas");c.width=r%180?cv.height:cv.width;c.height=r%180?cv.width:cv.height;const x=c.getContext("2d");x.translate(c.width/2,c.height/2);x.rotate(r*Math.PI/180);x.drawImage(cv,-cv.width/2,-cv.height/2);return c;}
+function rotP(i){ED.pages[i].rot=(ED.pages[i].rot+90)%360;drawThumbs();}
+function movP(i){if(i>0){const t=ED.pages[i];ED.pages[i]=ED.pages[i-1];ED.pages[i-1]=t;drawThumbs();}}
+const slug=s=>String(s||"").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,30)||"piece";
+async function savePiece(){if(viewer()){toast("حساب العرض فقط");return;}
+  const cat=ED.id?ED.p.cat:$("#eCat").value;if(!cat){toast("اختر الصنف");return;}
+  const old=ED.id?S.pieces[ED.id]:null;if(!old&&!ED.pages.length){toast("اختر ملف الوثيقة");return;}
+  const id=ED.id||(cat+"_"+($("#eYear").value||slug($("#eFr").value))+"_"+Date.now().toString(36));
+  const v=old?(old.v||1)+(ED.pages.length?1:0):1;
+  const rec=Object.assign({},old||{id,cat,ord:Date.now()%100000,layout:"single"},{fr:$("#eFr").value.trim()||(old&&old.fr)||CATS[cat][1],ar:$("#eAr").value.trim()||(old&&old.ar)||CATS[cat][0],title:$("#eTitle").value.trim(),
+    date:$("#eDate").value,fin:$("#eFin").value,bank:$("#eBank").value.trim(),duplex:$("#eDup").checked,v,t:Date.now(),by:"app"});
+  const yr=+$("#eYear").value;if(yr)rec.year=yr;const ca=+$("#eCa").value;if(ca)rec.ca=ca;
+  try{
+    if(ED.pages.length){const b=writeBase(),bc=baseConf(b),refs=[];
+      for(let i=0;i<ED.pages.length;i++){prog("رفع الصفحات…",i/ED.pages.length);const cv=rotCv(ED.pages[i].cv,ED.pages[i].rot),src=cv.toDataURL("image/jpeg",0.72),k=`${id}_v${v}_p${i}`;
+        await fput(bc,D+"/pages/"+k,src);await cset("d:"+k,src);refs.push({k,b,w:cv.width,h:cv.height,n:Math.round(src.length*0.75)});}
+      if(old)await fput(DOSSIER,D+"/piecesHist/"+id+"/v"+old.v,old);
+      rec.pages=refs;}
+    await fput(DOSSIER,D+"/pieces/"+id,rec);S.pieces[id]=rec;
+    if(ED.text&&window.EGTPHDoc){const typ={rc:"registre_commerce",nif:"nif",nis:"nis",role:"extrait_role",qualif:"qualification",casnos:"casnos"}[id]||{bilan:"bilan",rib:"rib",abe_ass:"bonne_execution",abe_aep:"bonne_execution",abe_autre:"bonne_execution",das:"das",matdoc:"pv",matfact:"facture"}[cat]||null;
+      if(typ){S.model=S.model||EGTPHDoc.newModel();EGTPHDoc.train(S.model,typ,ED.text.slice(0,4000));fput(DOSSIER,D+"/ai/model",S.model).catch(()=>{});}}
+    prog(false);closeModal();toast("حُفظت الوثيقة ✓");render();
+  }catch(e){prog(false);toast("تعذّر الحفظ: "+e.message,4000);}}
+async function restoreOld(id){const h=await fget(DOSSIER,D+"/piecesHist/"+id).catch(()=>null);if(!h){toast("لا أرشيف");return;}
+  const vs=Object.values(h).sort((a,b)=>b.v-a.v);modal(`<h3>نسخ سابقة</h3>${vs.map(o=>`<div class="row"><div class="t"><b>النسخة ${o.v}</b><span>${new Date(o.t).toLocaleDateString("fr-FR")} · ${(o.pages||[]).length} ص</span></div><button class="b" onclick="doRestore('${id}',${o.v})">↩ استرجاع</button></div>`).join("")}<button class="b" onclick="closeModal()">إغلاق</button>`);}
+async function doRestore(id,v){const o=await fget(DOSSIER,D+"/piecesHist/"+id+"/v"+v);const cur=S.pieces[id];await fput(DOSSIER,D+"/piecesHist/"+id+"/v"+cur.v,cur);
+  const rec=Object.assign({},o,{v:Math.max(cur.v,o.v)+1,t:Date.now(),restoredFrom:v});await fput(DOSSIER,D+"/pieces/"+id,rec);S.pieces[id]=rec;closeModal();toast("استُرجعت النسخة "+v);render();}
+async function delPiece(id){if(!confirm("حذف هذه الوثيقة من الملف؟ (تبقى في الأرشيف)"))return;const cur=S.pieces[id];await fput(DOSSIER,D+"/piecesHist/"+id+"/v"+cur.v,cur);
+  await fput(DOSSIER,D+"/pieces/"+id,{id,deleted:true,t:Date.now()});S.pieces[id]={id,deleted:true};closeModal();render();}
+
+/* ====================== démarrage ====================== */
+window.EGTPHDossier={S,buildPlan,defaultOpts,generate,itemFaces,drawSep,drawCover,duplexSeq,loadAll};
+(async function boot(){
+  if(new URLSearchParams(location.search).get("embed")==="1")document.querySelector("header h1").style.display="none";
+  try{
+    await EGTPHAuth.init({appId:"dossier",apiKey:DOSSIER.key,email:OWNER});
+    await EGTPHAuth.init({appId:"parc_document",apiKey:PARC.key,email:OWNER});
+    await EGTPHAuth.init({appId:"rh",apiKey:RH.key,email:OWNER});
+    await loadAll();
+    for(let i=1;i<(S.settings.bases||[]).length;i++){try{await EGTPHAuth.init({appId:"dossier_b"+i,apiKey:S.settings.bases[i].key,email:OWNER});}catch(e){}}
+    render();
+  }catch(e){prog(false);$("#view").innerHTML=`<div class="errbox">تعذّر التحميل: ${esc(e.message)}</div><button class="b" onclick="location.reload()">إعادة المحاولة</button>`;}
+})();
+</script>
+</body>
+</html>

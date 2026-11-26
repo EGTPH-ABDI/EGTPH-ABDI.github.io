@@ -3,12 +3,12 @@
 //   (ثم تُحدَّث النسخة في الخلفية) — حتى لا تبقى الشاشة سوداء مع LTE ضعيف.
 // - مكتبات Firebase والخطوط (ثابتة برقم إصدار): من النسخة المحفوظة مباشرة.
 // - لا يحفظ بيانات Firebase (تبقى مزامنتها كما هي).
-var CACHE = "egtph-v12";
+var CACHE = "egtph-v13";
 var CORE = ["/apps.html", "/egtph-auth.js", "/egtph-lock.js", "/manifest.webmanifest", "/icons/icon-180.png"];
 var EXTERNAL = /^https:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com\/firebasejs\/|cdnjs\.cloudflare\.com\/ajax\/libs\/|cdn\.jsdelivr\.net\/npm\/|unpkg\.com\/)/;
 var HEAVY = /onnxruntime|ppocr|tesseract|traineddata|\.onnx|\.wasm/i; // نماذج قراءة النصوص: كبيرة جداً، تبقى من الإنترنت
 // كل البرامج تُحمَّل مسبقاً على الهاتف لتُفتح دون إنترنت حتى لو لم تُفتح من قبل
-var WARM = ["/gestion/", "/facture/", "/caution/", "/commande/", "/egtph-rh/", "/lapayeparmois/", "/Semaine/", "/parc_document/", "/parc_document/memoire.html", "/parc_document/dossier.html", "/vendor/pdf-lib.min.js", "/vendor/pdfjs/pdf.min.js", "/vendor/pdfjs/pdf.worker.min.js",
+var WARM = ["/gestion/", "/facture/", "/caution/", "/commande/", "/egtph-rh/", "/lapayeparmois/", "/Semaine/", "/parc_document/", "/parc_document/memoire.html", "/dossier/", "/vendor/pdf-lib.min.js", "/vendor/pdfjs/pdf.min.js", "/vendor/pdfjs/pdf.worker.min.js",
   "/vendor/fonts/amiri-arabic-400-normal.woff2", "/vendor/fonts/amiri-arabic-700-normal.woff2", "/vendor/fonts/crimson-text-latin-400-normal.woff2", "/vendor/fonts/crimson-text-latin-600-normal.woff2", "/vendor/fonts/crimson-text-latin-400-italic.woff2", "/service/",
   "/egtph-scan.js", "/egtph-doc.js", "/parc_document/egtph-inbox.js", "/egtph-rh/egtph-rh-docs.js", "/egtph-ocr.js", "/vendor/jspdf.umd.min.js", "/vendor/html2canvas.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js", "https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js",
