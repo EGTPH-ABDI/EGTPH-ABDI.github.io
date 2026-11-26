@@ -73,6 +73,10 @@
   }
   function otsu(g){const h=new Float64Array(256);g.forEach(v=>h[v]++);let sum=0;for(let i=0;i<256;i++)sum+=i*h[i];let sB=0,wB=0,best=128,mx=-1;const tot=g.length;
     for(let t=0;t<256;t++){wB+=h[t];if(!wB)continue;const wF=tot-wB;if(!wF)break;sB+=t*h[t];const mB=sB/wB,mF=(sum-sB)/wF,v=wB*wF*(mB-mF)*(mB-mF);if(v>mx){mx=v;best=t;}}return best;}
+  /* quadrilatère plausible pour une feuille photographiée : angles entre 62° et 118°, côtés opposés comparables (sinon : image entière, jamais de déformation) */
+  function regular(q){if(!q||q.length!==4)return false;for(let i=0;i<4;i++){const a=q[(i+3)%4],b=q[i],c=q[(i+1)%4],v1=[a[0]-b[0],a[1]-b[1]],v2=[c[0]-b[0],c[1]-b[1]],n=Math.hypot(...v1)*Math.hypot(...v2);if(!n)return false;
+      const ang=Math.acos(Math.max(-1,Math.min(1,(v1[0]*v2[0]+v1[1]*v2[1])/n)))*180/Math.PI;if(ang<62||ang>118)return false;}
+    const L=i=>Math.hypot(q[i][0]-q[(i+1)%4][0],q[i][1]-q[(i+1)%4][1]);return Math.min(L(0),L(2))/Math.max(L(0),L(2))>0.6&&Math.min(L(1),L(3))/Math.max(L(1),L(3))>0.6;}
   function detectQuad(img){
     const {g,sat,w,h,s}=gray(img,640),bl=box(g,w,h,2),tot=w*h,cands=[];
     const ot=otsu(bl);
@@ -83,7 +87,7 @@
       const pts=[];for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x;if(c.lab[i]!==c.id)continue;if(x===0||y===0||x===w-1||y===h-1||c.lab[i-1]!==c.id||c.lab[i+1]!==c.id||c.lab[i-w]!==c.id||c.lab[i+w]!==c.id)pts.push([x,y]);}
       if(pts.length>=4)c.quad=bestQuad(hull(pts));
       const qa=area(c.quad),frac=qa/tot,rect=c.n/Math.max(1,qa);
-      if(frac<0.18||frac>0.985||rect<0.82)return;
+      if(frac<0.18||frac>0.985||rect<0.82||!regular(c.quad))return;
       cands.push({quad:c.quad,score:rect*2+Math.min(frac,0.9)*0.6});
     });
     if(!cands.length)return null;

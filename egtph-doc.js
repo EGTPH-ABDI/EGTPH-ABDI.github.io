@@ -154,20 +154,24 @@ const DOC_RULES = [
   { type: 'cnas', any: ['cnas', '\u0627\u0644\u0635\u0646\u062f\u0648\u0642 \u0627\u0644\u0648\u0637\u0646\u064a \u0644\u0644\u062a\u0623\u0645\u064a\u0646\u0627\u062a \u0627\u0644\u0627\u062c\u062a\u0645\u0627\u0639\u064a\u0629', 'mise \u00e0 jour', 'attestation de mise a jour'] },
   { type: 'casnos', any: ['casnos', 'non salari\u00e9s', '\u063a\u064a\u0631 \u0627\u0644\u0623\u062c\u0631\u0627\u0621'] },
   { type: 'cacobatph', any: ['cacobatph', 'cong\u00e9s pay\u00e9s', '\u0627\u0644\u0639\u0637\u0644 \u0627\u0644\u0645\u062f\u0641\u0648\u0639\u0629'] },
-  { type: 'extrait_role', any: ['extrait de r\u00f4le', 'extrait de role', '\u0645\u0633\u062a\u062e\u0631\u062c \u0645\u0646 \u0627\u0644\u062c\u062f\u0627\u0648\u0644', '\u0645\u0633\u062a\u062e\u0631\u062c \u0627\u0644\u062c\u062f\u0648\u0644'] },
+  { type: 'extrait_role', any: ['extrait de r\u00f4le', 'extrait de role', '\u0645\u0633\u062a\u062e\u0631\u062c \u0645\u0646 \u0627\u0644\u062c\u062f\u0627\u0648\u0644', '\u0645\u0633\u062a\u062e\u0631\u062c \u0627\u0644\u062c\u062f\u0648\u0644', 'extrait des r\u00f4les', 'extrait des roles'] },
   { type: 'qualification', any: ['qualification et de classification', '\u0627\u0644\u062a\u0623\u0647\u064a\u0644 \u0648\u0627\u0644\u062a\u0635\u0646\u064a\u0641', '\u0627\u0644\u062a\u0623\u0647\u064a\u0644 \u0648 \u0627\u0644\u062a\u0635\u0646\u064a\u0641'] },
-  { type: 'registre_commerce', any: ['registre de commerce', '\u0627\u0644\u0633\u062c\u0644 \u0627\u0644\u062a\u062c\u0627\u0631\u064a', 'cnrc'] },
+  { type: 'registre_commerce', any: ['registre de commerce', '\u0627\u0644\u0633\u062c\u0644 \u0627\u0644\u062a\u062c\u0627\u0631\u064a', 'cnrc', '\u0645\u0633\u062a\u062e\u0631\u062c \u0645\u0646 \u0627\u0644\u0633\u062c\u0644 \u0627\u0644\u062a\u062c\u0627\u0631\u064a', '\u0631\u0645\u0632 \u0627\u0644\u0646\u0634\u0627\u0637'] },
   { type: 'nif', any: ["num\u00e9ro d'identification fiscale", 'nif', '\u0631\u0642\u0645 \u0627\u0644\u062a\u0639\u0631\u064a\u0641 \u0627\u0644\u062c\u0628\u0627\u0626\u064a'] },
   { type: 'nis', any: ["num\u00e9ro d'identification statistique", 'nis', '\u0631\u0642\u0645 \u0627\u0644\u062a\u0639\u0631\u064a\u0641 \u0627\u0644\u0625\u062d\u0635\u0627\u0626\u064a'] },
-  { type: 'carte_grise', any: ['carte grise', "certificat d'immatriculation", '\u0628\u0637\u0627\u0642\u0629 \u0627\u0644\u062a\u0631\u0642\u064a\u0645', '\u0627\u0644\u0628\u0637\u0627\u0642\u0629 \u0627\u0644\u0631\u0645\u0627\u062f\u064a\u0629'] },
+  { type: 'carte_grise', any: ['carte grise', "certificat d'immatriculation", '\u0628\u0637\u0627\u0642\u0629 \u0627\u0644\u062a\u0631\u0642\u064a\u0645', '\u0627\u0644\u0628\u0637\u0627\u0642\u0629 \u0627\u0644\u0631\u0645\u0627\u062f\u064a\u0629', 'premiere mise en circulation', 'premi\u00e8re mise en circulation', '\u0633\u0646\u0629 \u0623\u0648\u0644 \u0627\u0633\u062a\u0639\u0645\u0627\u0644'] },
   { type: 'assurance', any: ['attestation d\'assurance', 'police', 'assurance', '\u062a\u0623\u0645\u064a\u0646'] },
   { type: 'controle_technique', any: ['contr\u00f4le technique', 'controle technique', '\u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629 \u0627\u0644\u062a\u0642\u0646\u064a\u0629'] },
   { type: 'bilan', any: ['bilan', 'compte de r\u00e9sultat', 'tcr', '\u0627\u0644\u0645\u064a\u0632\u0627\u0646\u064a\u0629'] },
   { type: 'bonne_execution', any: ['bonne ex\u00e9cution', 'bonne execution', '\u062d\u0633\u0646 \u0627\u0644\u062a\u0646\u0641\u064a\u0630', '\u062d\u0633\u0646 \u0627\u0644\u0625\u0646\u062c\u0627\u0632'] },
-  { type: 'rib', any: ['relev\u00e9 d\'identit\u00e9 bancaire', 'rib', '\u0643\u0634\u0641 \u0627\u0644\u0647\u0648\u064a\u0629 \u0627\u0644\u0628\u0646\u0643\u064a\u0629'] },
+  { type: 'rib', any: ['relev\u00e9 d\'identit\u00e9 bancaire', 'rib', '\u0643\u0634\u0641 \u0627\u0644\u0647\u0648\u064a\u0629 \u0627\u0644\u0628\u0646\u0643\u064a\u0629', 'code swift', '\u0643\u0634\u0641 \u062d\u0648\u0644 \u0627\u0644\u0647\u0648\u064a\u0629 \u0627\u0644\u0645\u0635\u0631\u0641\u064a\u0629', 'relev\u00e9 d\u2019identit\u00e9 bancaire'] },
   { type: 'affiliation', any: ['affiliation', '\u0627\u0646\u062a\u0633\u0627\u0628'] },
-  { type: 'diplome', any: ['dipl\u00f4me', 'diplome', '\u0634\u0647\u0627\u062f\u0629 \u0644\u064a\u0633\u0627\u0646\u0633', '\u0645\u0627\u0633\u062a\u0631', 'master', 'licence'] },
-  { type: 'attestation_travail', any: ['attestation de travail', '\u0634\u0647\u0627\u062f\u0629 \u0639\u0645\u0644'] },
+  { type: 'diplome', any: ['dipl\u00f4me', 'diplome', '\u0634\u0647\u0627\u062f\u0629 \u0644\u064a\u0633\u0627\u0646\u0633', '\u0645\u0627\u0633\u062a\u0631', 'master', 'licence', 'attestation provisoire de succ\u00e8s', '\u0634\u0647\u0627\u062f\u0629 \u0646\u062c\u0627\u062d', 'attestation de formation'] },
+  { type: 'attestation_travail', any: ['attestation de travail', '\u0634\u0647\u0627\u062f\u0629 \u0639\u0645\u0644', 'atteste que madame', '\u064a\u0634\u0647\u062f \u0628\u0627\u0646 \u0627\u0644\u0633\u064a\u062f\u0629', 'fiche de carri\u00e8re', 'relev\u00e9 des emplois'] },
+  { type: 'cni', any: ['\u0628\u0637\u0627\u0642\u0629 \u0627\u0644\u062a\u0639\u0631\u064a\u0641 \u0627\u0644\u0648\u0637\u0646\u064a\u0629', '\u0631\u0642\u0645 \u0627\u0644\u062a\u0639\u0631\u064a\u0641 \u0627\u0644\u0648\u0637\u0646\u064a', 'carte nationale d\'identit\u00e9', 'carte nationale d identite'] },
+  { type: 'das', any: ['d\u00e9claration annuelle des salaires', 'declaration annuelle des salaires', '(d.a.s)'] },
+  { type: 'pv', any: ['\u0645\u062d\u0636\u0631 \u0627\u0644\u062e\u0628\u0631\u0629', 'proc\u00e8s verbal d\'expertise', 'proces verbal d\'expertise', 'constat d\'huissier', '\u0645\u062d\u0636\u0631 \u0645\u0639\u0627\u064a\u0646\u0629', 'bureau d\'expertise'] },
+  { type: 'facture', any: ['facture'] },
 ];
 const norm = s => s.toLowerCase().normalize('NFKD').replace(/[\u064b-\u0652\u0640]/g, '').replace(/[\u0623\u0625\u0622]/g, '\u0627').replace(/\u0649/g, '\u064a').replace(/\u0629/g, '\u0647');
 function classify(text, rules = DOC_RULES) {
@@ -240,18 +244,20 @@ function train(model, type, text) {
 }
 function predict(model, text) {
   const types = Object.keys(model.docs); if (!types.length) return [];
-  const g = grams(text), V = Object.keys(model.vocab).length + 1, N = types.reduce((a, t) => a + model.docs[t], 0);
-  const sc = types.map(t => { let s = Math.log(model.docs[t] / N); const c = model.counts[t], tot = model.totals[t];
-    for (const k of g) s += Math.log(((c[k] || 0) + 1) / (tot + V)); return { type: t, s }; });
-  const m = Math.max(...sc.map(x => x.s)), z = sc.reduce((a, x) => a + Math.exp(x.s - m), 0);
-  return sc.map(x => ({ type: x.type, p: Math.exp(x.s - m) / z })).sort((a, b) => b.p - a.p);
+  const g = grams(text), V = Object.keys(model.vocab).length + 1, n = Math.max(1, g.length);
+  const sc = types.map(t => { let s = 0; const c = model.counts[t], tot = model.totals[t];
+    for (const k of g) s += Math.log(((c[k] || 0) + 1) / (tot + V)); return { type: t, s: s / n }; });
+  const K = 8, m = Math.max(...sc.map(x => x.s)), z = sc.reduce((a, x) => a + Math.exp(K * (x.s - m)), 0);
+  return sc.map(x => ({ type: x.type, p: Math.exp(K * (x.s - m)) / z })).sort((a, b) => b.p - a.p);
 }
 /* d\u00e9cision finale : r\u00e8gles s\u00fbres d'abord, sinon mod\u00e8le appris s'il est confiant (p \u2265 0,8), sinon \u00ab \u00e0 confirmer \u00bb */
 function decide(text, model) {
   const r = classify(text), m = model ? predict(model, text) : [];
   if (r.type && r.sure) return { type: r.type, sure: true, by: 'r\u00e8gles', alt: m.slice(0, 2) };
-  if (m.length && m[0].p >= 0.8) return { type: m[0].type, sure: true, by: 'appris', p: +m[0].p.toFixed(2) };
-  return { type: r.type || (m[0] && m[0].type) || null, sure: false, by: r.type ? 'r\u00e8gles' : 'appris', candidates: r.candidates, alt: m.slice(0, 3) };
+  /* le mod\u00e8le appris ne d\u00e9cide seul que s'il est net (p \u2265 0,85, \u00e9cart \u2265 0,6) et ne contredit pas les r\u00e8gles */
+  if (m.length && m[0].p >= 0.85 && (m[0].p - ((m[1] && m[1].p) || 0)) >= 0.6 && (!r.type || r.candidates.some(c => c.type === m[0].type)))
+    return { type: m[0].type, sure: true, by: 'appris', p: +m[0].p.toFixed(2) };
+  return { type: (m[0] && r.candidates.some(c => c.type === m[0].type) ? m[0].type : r.type) || (m[0] && m[0].type) || null, sure: false, by: r.type ? 'r\u00e8gles' : 'appris', candidates: r.candidates, alt: m.slice(0, 3) };
 }
 
 /* 13) Extraction : \u00e0 qui / \u00e0 quoi appartient la pi\u00e8ce (matricule alg\u00e9rien, ann\u00e9e, NIF, montants, dates). */
