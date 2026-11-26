@@ -6,15 +6,19 @@
    API : EGTPHScan.scanFile(file) → Promise<File|null> ; EGTPHScan.autoFile(file) ; EGTPHScan.scanImage(canvas) → Promise<{canvas}|null>. */
 (function(){
   if(window.EGTPHScan)return;
+  /* moteur partagé (qualité, redressement fin, coupure, pages blanches…) : chargé à côté de ce fichier */
+  try{const me=(document.currentScript&&document.currentScript.src)||"";if(!window.EGTPHDoc&&me&&!document.querySelector('script[data-egtph-doc]')){const sc=document.createElement("script");sc.src=me.replace(/egtph-scan\.js(\?.*)?$/,"egtph-doc.js");sc.async=true;sc.dataset.egtphDoc="1";document.head.appendChild(sc);}}catch(e){}
   const AR=()=>/^ar/i.test(document.documentElement.lang||"")||document.documentElement.dir==="rtl";
   const T=k=>(AR()?I.ar:I.fr)[k]||k;
   const I={
     fr:{title:"Scanner le document",step2:"Choisir le rendu",auto:"🔍 Auto",full:"⬜ Image entière",next:"Suivant ➜",cancel:"Annuler",orig:"Garder la photo d’origine",save:"✓ Enregistrer",back:"↩ Coins",
       det:"Bords détectés — déplacez les coins si besoin",nodet:"Bords non détectés — placez les 4 coins",fOrig:"Original",fMagic:"✨ Magique",fGray:"Gris",fBw:"Noir & blanc",
-      allAuto:"⚡ Auto pour les {n} suivantes",busy:"Traitement…"},
+      allAuto:"⚡ Auto pour les {n} suivantes",busy:"Traitement…",
+      cut:"⚠️ Le document semble coupé ({s}) — reprenez la photo avec un peu de marge autour",sides:{haut:"en haut",bas:"en bas",gauche:"à gauche",droite:"à droite"}},
     ar:{title:"مسح الوثيقة",step2:"اختر شكل الوثيقة",auto:"🔍 تلقائي",full:"⬜ الصورة كاملة",next:"التالي ➜",cancel:"إلغاء",orig:"الاحتفاظ بالصورة الأصلية",save:"✓ حفظ",back:"↩ الزوايا",
       det:"تم اكتشاف حواف الورقة — حرّك الزوايا عند الحاجة",nodet:"لم تُكتشف الحواف — ضع الزوايا الأربع",fOrig:"الأصلية",fMagic:"✨ محسّنة",fGray:"رمادي",fBw:"أبيض وأسود",
-      allAuto:"⚡ تلقائي للصور الـ {n} الباقية",busy:"جارٍ المعالجة…"}
+      allAuto:"⚡ تلقائي للصور الـ {n} الباقية",busy:"جارٍ المعالجة…",
+      cut:"⚠️ الوثيقة تبدو مقطوعة ({s}) — أعد التصوير مع ترك فراغ حولها",sides:{haut:"من الأعلى",bas:"من الأسفل",gauche:"من اليسار",droite:"من اليمين"}}
   };
   const FKEY="egtph_scan_filter";
   const getF=()=>{try{return localStorage.getItem(FKEY)||"magic";}catch(e){return "magic";}};
@@ -138,8 +142,27 @@
       d[i]=d[i+1]=d[i+2]=v;}
     ctx.putImageData(id,0,0);return cv;
   }
+  /* redressement fin (±5°) seulement si l'angle est sûr (gain ≥ 1,15) — sinon l'image n'est pas touchée */
+  function deskew(cv){
+    const D=window.EGTPHDoc;if(!D||!D.skewInfo)return cv;
+    try{const s=Math.min(1,900/Math.max(cv.width,cv.height)),t=document.createElement("canvas");t.width=Math.max(1,Math.round(cv.width*s));t.height=Math.max(1,Math.round(cv.height*s));
+      const x=t.getContext("2d",{willReadFrequently:true});x.drawImage(cv,0,0,t.width,t.height);const g=D.toGray(x.getImageData(0,0,t.width,t.height).data,t.width,t.height);
+      const k=D.skewInfo(g,{maxDeg:5});if(Math.abs(k.angle)<0.3||k.gain<1.15||k.points<400)return cv;
+      const o=document.createElement("canvas");o.width=cv.width;o.height=cv.height;const c=o.getContext("2d");c.fillStyle="#fff";c.fillRect(0,0,o.width,o.height);
+      c.translate(o.width/2,o.height/2);c.rotate(-k.angle*Math.PI/180);c.imageSmoothingQuality="high";c.drawImage(cv,-cv.width/2,-cv.height/2);return o;
+    }catch(e){return cv;}
+  }
+  /* document coupé : un coin détecté collé au bord de la photo, ou (sans bords détectés) de l'encre qui touche le bord */
+  function cutSides(img,q){
+    const out=new Set(),W=img.width,H=img.height,mx=W*0.004,my=H*0.004;
+    if(q){q.forEach(([x,y])=>{if(x<=mx)out.add("gauche");if(x>=W-mx)out.add("droite");if(y<=my)out.add("haut");if(y>=H-my)out.add("bas");});return [...out];}
+    const D=window.EGTPHDoc;if(!D||!D.edgeCut)return [];
+    try{const s=Math.min(1,1000/Math.max(W,H)),t=document.createElement("canvas");t.width=Math.round(W*s);t.height=Math.round(H*s);const x=t.getContext("2d",{willReadFrequently:true});x.drawImage(img,0,0,t.width,t.height);
+      return D.edgeCut(D.toGray(x.getImageData(0,0,t.width,t.height).data,t.width,t.height)).cut;}catch(e){return [];}
+  }
+  function cutMsg(img,q){const c=cutSides(img,q);if(!c.length)return "";const L=(AR()?I.ar:I.fr).sides;return T("cut").replace("{s}",c.map(k=>L[k]).join("، "));}
   function render(img,quad,filter,maxSide){
-    const cv=quad?warp(img,quad,maxSide):copy(img,maxSide);
+    const cv=deskew(quad?warp(img,quad,maxSide):copy(img,maxSide));
     if(filter==="magic"){clean(cv);sharpen(cv,0.35);}
     else if(filter==="gray"){clean(cv);toGray(cv,false);sharpen(cv,0.35);}
     else if(filter==="bw"){clean(cv);toGray(cv,true);}
@@ -192,7 +215,7 @@
       function build(){
         const extra=remaining>0?`<button data-a="all" class="gr">${T("allAuto").replace("{n}",remaining)}</button>`:"";
         el.innerHTML=step===1
-          ?`<div class="egs-bar"><b>${T("title")}</b><small>${auto?T("det"):T("nodet")}</small></div><div class="egs-stage"><canvas></canvas></div>
+          ?`<div class="egs-bar"><b>${T("title")}</b><small>${auto?T("det"):T("nodet")}</small>${(m=>m?`<small class="egs-cut" style="color:#b45309;font-weight:700">${m}</small>`:"")(cutMsg(img,auto?quad:null))}</div><div class="egs-stage"><canvas></canvas></div>
             <div class="egs-tools"><button data-a="l">⟲</button><button data-a="r">⟳</button><button data-a="auto">${T("auto")}</button><button data-a="full">${T("full")}</button></div>
             <div class="egs-tools"><button data-a="cancel" class="gr">${T("cancel")}</button><button data-a="orig">${T("orig")}</button>${extra}<button data-a="next" class="pri">${T("next")}</button></div>`
           :`<div class="egs-bar"><b>${T("step2")}</b></div><div class="egs-stage"><canvas></canvas></div>
@@ -264,5 +287,5 @@
     inp.dispatchEvent(new Event("change",{bubbles:true}));
   }
   window.addEventListener("change",onChange,true);
-  window.EGTPHScan={scanFile,autoFile,scanImage,detectQuad,warp,clean,render,loadFile};
+  window.EGTPHScan={scanFile,autoFile,scanImage,detectQuad,warp,clean,render,loadFile,deskew,cutSides};
 })();
