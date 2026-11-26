@@ -430,10 +430,12 @@ function gHeader(){const s=rs();return '<div class="lh"><div class="lh-logo">'+l
 function gFooter(compact){const s=rs(),st=stampSrc()?'<div style="height:'+(compact?'20mm':'30mm')+';margin:0 0 1mm;display:flex;align-items:center;justify-content:center"><img src="'+stampSrc()+'" style="max-height:100%;max-width:70mm;object-fit:contain"></div>':'<div style="height:'+(compact?'16mm':'22mm')+';margin-top:1mm;border:1px dashed #aab;border-radius:6px"></div>';
   return '</div><div style="margin-top:'+(compact?'1mm':'10mm')+';display:flex;justify-content:flex-end"><div style="text-align:center;min-width:64mm;font-size:'+(compact?'9.5pt':'11pt')+'"><p style="font-weight:700;color:#1a2a52">Fait à '+esc(s.wil.charAt(0)+s.wil.slice(1).toLowerCase())+', le '+fd(today())+'</p><p style="font-weight:700;color:#1a2a52;margin-top:'+(compact?'0':'2mm')+'">Le Gérant</p><p style="color:#333">'+esc(s.ger)+'</p>'+st+'</div></div></div>'+
    '<div class="doc-fband"><span><b>EGTPH</b> — RC : '+esc(s.rc)+' — NIF : '+esc(s.nif)+'</span><span>Document conforme — Loi 90-11</span><span>Tél. '+esc(s.tel)+' — '+esc(s.wil)+', Algérie</span></div>';}
-async function htmlPage(inner,land,cmp){const H=await h2c();const host=document.createElement("div");host.style.cssText="position:fixed;left:-12000px;top:0;z-index:-1";
+function hashStr(t){let h=5381;for(let i=0;i<t.length;i++)h=((h<<5)+h+t.charCodeAt(i))|0;return (h>>>0).toString(36)+t.length;}
+async function htmlPage(inner,land,cmp){const ck="h:"+hashStr(inner+(land?1:0)+(cmp?1:0)+stampSrc().length);const c=await cget(ck);if(c)return c;const r=await htmlPage0(inner,land,cmp);await cset(ck,r);return r;}
+async function htmlPage0(inner,land,cmp){const H=await h2c();const host=document.createElement("div");host.style.cssText="position:fixed;left:-12000px;top:0;z-index:-1";
   host.innerHTML='<style>'+DOC_CSS+'</style><div class="gdoc'+(cmp?' cmp':'')+'" style="width:'+(land?"297mm":"210mm")+';height:'+(land?"210mm":"297mm")+'">'+inner+'</div>';document.body.appendChild(host);
   try{try{await document.fonts.ready;}catch(e){}const im=[...host.querySelectorAll("img")];await Promise.all(im.map(i=>i.complete?0:new Promise(r=>{i.onload=i.onerror=r;})));
-    const cv=await H(host.querySelector(".gdoc"),{scale:2.3,backgroundColor:"#ffffff",logging:false});return {src:cv.toDataURL("image/jpeg",0.9),w:cv.width,h:cv.height};}finally{host.remove();}}
+    const cv=await H(host.querySelector(".gdoc"),{scale:2,backgroundColor:"#ffffff",logging:false});return {src:cv.toDataURL("image/jpeg",0.82),w:cv.width,h:cv.height};}finally{host.remove();}}
 /* attestation de travail : texte du modèle egtph-rh (« travail », récapitulatif + affiliation) */
 function attHtml(w,d){const s=rs(),nom='<b>'+esc(w.N+" "+w.P)+'</b>',poste=esc(d.poste||"—"),dip=esc(d.dip||""),exp=esc(expTxt(w));
   const dipTx=dip?", titulaire du diplôme : <b>"+dip+"</b>":"";
@@ -461,64 +463,63 @@ async function genPages(it){const d=it.data||{};
   return [];}
 /* ---------------- assemblage PDF (pdf-lib) ---------------- */
 const MARGIN=16;
-async function grayJpeg(src,whiteBg){const im=await loadImg(src);const k=Math.min(1,2000/Math.max(im.naturalWidth,im.naturalHeight)),cv=document.createElement("canvas");cv.width=Math.round(im.naturalWidth*k);cv.height=Math.round(im.naturalHeight*k);const x=cv.getContext("2d",{willReadFrequently:true});x.drawImage(im,0,0,cv.width,cv.height);
-  const id=x.getImageData(0,0,cv.width,cv.height),d=id.data;let g;
-  if(whiteBg&&window.EGTPHDoc){g=EGTPHDoc.whiten(EGTPHDoc.toGray(d,cv.width,cv.height)).d;}else{g=new Uint8ClampedArray(cv.width*cv.height);for(let i=0,j=0;i<d.length;i+=4,j++)g[j]=(d[i]*299+d[i+1]*587+d[i+2]*114)/1000;}
-  for(let i=0,j=0;i<d.length;i+=4,j++){d[i]=d[i+1]=d[i+2]=g[j];d[i+3]=255;}x.putImageData(id,0,0);return cv.toDataURL("image/jpeg",0.74);}
-async function srcPages(it){/* → [{src,w,h}] (images verticales prêtes) */
-  if(it.src==="d")return Promise.all((it.refs||[]).map(async r=>({src:await dossierPage(r),w:r.w,h:r.h})));
+/* gris d'impression : version blanchie préparée d'avance (pages du dossier) ; sinon gris rapide (une seule passe) */
+async function fastGray(src){const ck="fg:"+(src.length+":"+src.slice(-64));const c=await cget(ck);if(c)return c;const im=await loadImg(src);const k=Math.min(1,1750/Math.max(im.naturalWidth,im.naturalHeight)),cv=document.createElement("canvas");cv.width=Math.round(im.naturalWidth*k);cv.height=Math.round(im.naturalHeight*k);const x=cv.getContext("2d",{willReadFrequently:true});x.fillStyle="#fff";x.fillRect(0,0,cv.width,cv.height);x.drawImage(im,0,0,cv.width,cv.height);
+  const id=x.getImageData(0,0,cv.width,cv.height),d=id.data;for(let i=0;i<d.length;i+=4){let l=(d[i]*299+d[i+1]*587+d[i+2]*114)/1000;l=l>215?255:(l-20)*1.13;l=l<0?0:l>255?255:l;d[i]=d[i+1]=d[i+2]=l;}x.putImageData(id,0,0);
+  const r=cv.toDataURL("image/jpeg",0.6);await cset(ck,r);return r;}
+async function printSrc(p){if(p.ref){try{const g=await dossierPage({k:p.ref.k+"_g",b:p.ref.b||0});if(g)return g;}catch(e){}}return fastGray(p.src);}
+async function srcPages(it){/* → [{src,w,h,ref}] (images verticales prêtes) */
+  if(it.src==="d")return Promise.all((it.refs||[]).map(async r=>({src:await dossierPage(r),w:r.w,h:r.h,ref:r})));
   if(it.src==="r")return rhPages(it.key);
   if(it.src==="g")return genPages(it);
   if(it.src==="p"){const e=S.equip.find(q=>String(q.id)===String(it.veh));const out=[];for(const k of it.keys){const s=await parcImg(e,k);if(s){const im=await loadImg(s);out.push({src:s,w:im.naturalWidth,h:im.naturalHeight});}}return out;}
   return [];}
 function fit(w,h,bw,bh){const s=Math.min(bw/w,bh/h);return [w*s,h*s];}
 async function embed(pdf,src){const b=b64bytes(src.split(",")[1]);return /^data:image\/png/.test(src)?pdf.embedPng(b):pdf.embedJpg(b);}
-/* faces : [{draw:async(pdf)=>page}] — une entrée par page imprimée */
 async function itemFaces(it,mode){
-  const gray=mode==="print",wb=gray&&S.settings.whiten!==false;
-  const conv=async s=>gray?await grayJpeg(s,wb):s;
-  if(it.t==="cover"||it.t==="sep"||it.t==="fin"){await fontsReady();const cv=it.t==="cover"?drawCover(new Date().getFullYear()):drawSep(it.t==="fin"?Object.assign({},it,{level:1}):it);
-    const src=cv.toDataURL("image/png");return [{w:AW,h:AH,imgs:[{src,box:[0,0,AW,AH]}]}];}
+  const gray=mode==="print";const conv=async p=>gray?await printSrc(p):p.src;
+  if(it.t==="cover"||it.t==="sep"||it.t==="fin"){await fontsReady();const ck="sep:"+JSON.stringify([it.t,it.ar,it.fr,it.level,it.sub_ar,it.rows,it.avgYears,new Date().getFullYear()]);let src=await cget(ck);
+    if(!src){const cv=it.t==="cover"?drawCover(new Date().getFullYear()):drawSep(it.t==="fin"?Object.assign({},it,{level:1}):it);src=cv.toDataURL("image/png");await cset(ck,src);}
+    return [{w:AW,h:AH,imgs:[{src,box:[0,0,AW,AH]}]}];}
   const ps=await srcPages(it);if(!ps.length)return [];
-  if(it.layout==="pair"){/* A4 paysage : carte grise à droite, assurance à gauche */
-    const W=AH,H=AW,gap=14,aw=W-2*MARGIN-gap*(ps.length-1),ah=H-2*MARGIN,rs=ps.map(p=>p.w/p.h),hh=Math.min(ah,aw/rs.reduce((a,b)=>a+b,0));
+  if(it.layout==="pair"){const W=AH,H=AW,gap=14,aw=W-2*MARGIN-gap*(ps.length-1),ah=H-2*MARGIN,rs=ps.map(p=>p.w/p.h),hh=Math.min(ah,aw/rs.reduce((a,b)=>a+b,0));
     let xr=(W+rs.reduce((a,r)=>a+r*hh,0)+gap*(ps.length-1))/2;const imgs=[];
-    for(let i=0;i<ps.length;i++){const ww=rs[i]*hh;imgs.push({src:await conv(ps[i].src),box:[xr-ww,(H-hh)/2,ww,hh]});xr-=ww+gap;}
+    for(let i=0;i<ps.length;i++){const ww=rs[i]*hh;imgs.push({src:await conv(ps[i]),box:[xr-ww,(H-hh)/2,ww,hh]});xr-=ww+gap;}
     return [{w:W,h:H,imgs}];}
   if(it.layout==="stack"){const n=ps.length,cell=(AH-2*MARGIN-30)/n,imgs=[];
-    for(let i=0;i<n;i++){const bx=[70,MARGIN+15+i*cell+10,AW-140,cell-20],[w,h]=fit(ps[i].w,ps[i].h,bx[2],bx[3]);imgs.push({src:await conv(ps[i].src),box:[bx[0]+(bx[2]-w)/2,bx[1]+(bx[3]-h)/2,w,h]});}
+    for(let i=0;i<n;i++){const bx=[70,MARGIN+15+i*cell+10,AW-140,cell-20],[w,h]=fit(ps[i].w,ps[i].h,bx[2],bx[3]);imgs.push({src:await conv(ps[i]),box:[bx[0]+(bx[2]-w)/2,bx[1]+(bx[3]-h)/2,w,h]});}
     return [{w:AW,h:AH,imgs}];}
   const out=[];for(const p of ps){const land=p.w>p.h*1.05,W=land?AH:AW,H=land?AW:AH,[w,h]=fit(p.w,p.h,W-2*MARGIN,H-2*MARGIN);
-    out.push({w:W,h:H,imgs:[{src:await conv(p.src),box:[(W-w)/2,(H-h)/2,w,h]}]});}
+    out.push({w:W,h:H,imgs:[{src:await conv(p),box:[(W-w)/2,(H-h)/2,w,h]}]});}
   return out;}
-async function drawFace(pdf,f){const pg=pdf.addPage([f.w,f.h]);for(const im of (f.imgs||[])){const e=await embed(pdf,im.src);const [x,yTop,w,h]=im.box;pg.drawImage(e,{x,y:f.h-yTop-h,width:w,height:h});}return pg;}
-/* plan recto verso : chaque pièce commence sur une nouvelle feuille ; pièce non recto-verso = recto seul */
-function duplexSeq(groups){const seq=[];groups.forEach(g=>{if(seq.length%2)seq.push(null);g.faces.forEach(f=>{seq.push(f);if(!g.duplex)seq.push(null);});});
-  while(seq.length&&seq[seq.length-1]===null)seq.pop();if(seq.length%2)seq.push(null);return seq;}
-function blankLike(prev){return {w:prev?prev.w:AW,h:prev?prev.h:AH,imgs:[]};}
-async function makePdf(faces){const pdf=await PDFLib.PDFDocument.create();pdf.setTitle("Dossier de l'entreprise — EGTPH ABDI YOUSSOUF ISLAM");pdf.setAuthor("EGTPH");
-  let prev=null;for(let i=0;i<faces.length;i++){const f=faces[i]||blankLike(prev);await drawFace(pdf,f);prev=f;}return pdf.save();}
-/* génération : écran (couleur, sans blancs) + impression (gris, plan recto verso / manuel / recto) */
+async function drawFace(pdf,f,at){const pg=at===0?pdf.insertPage(0,[f.w,f.h]):pdf.addPage([f.w,f.h]);for(const im of (f.imgs||[])){const e=await embed(pdf,im.src);const [x,yTop,w,h]=im.box;pg.drawImage(e,{x,y:f.h-yTop-h,width:w,height:h});}return pg;}
+async function newPdf(){const pdf=await PDFLib.PDFDocument.create();pdf.setTitle("Dossier de l'entreprise — EGTPH ABDI YOUSSOUF ISLAM");pdf.setAuthor("EGTPH");return pdf;}
+/* génération EN FLUX (une pièce à la fois, rien n'est gardé en mémoire) :
+   mode "screen" = couleur sans pages blanches ; mode "print" = gris + plan recto verso décidé par le programme
+   printer : duplex (chaque pièce sur une nouvelle feuille, pièce non recto-verso = recto seul) · manual (2 fichiers : recto puis verso inversé) · simplex */
 async function generate(items,o){
-  const screen=[],groups=[];
-  for(let i=0;i<items.length;i++){const it=items[i];prog("تجهيز الصفحات…",i/items.length*0.55,it.ar||it.label||"");
-    const fc=await itemFaces(it,"screen");const fp=o.print?await itemFaces(it,"print"):[];
-    fc.forEach(f=>screen.push(f));if(o.print)groups.push({faces:fp,duplex:it.t==="doc"&&it.duplex,it});
-    it.pages=fc.length;}
-  prog("إنشاء PDF الشاشة (ملون)…",0.6);const out={screen:await makePdf(screen),nScreen:screen.length};
-  if(o.print){let seq;
-    if(o.mode==="simplex"){seq=[];groups.forEach(g=>g.faces.forEach(f=>seq.push(f)));}
-    else seq=duplexSeq(groups);
-    out.faces=seq.length;out.sheets=o.mode==="simplex"?seq.length:Math.ceil(seq.length/2);out.blanks=seq.filter(x=>!x).length;
-    prog("إنشاء PDF الطباعة (رمادي)…",0.8);
-    if(o.mode==="manual"){const odd=seq.filter((_,i)=>i%2===0),even=seq.filter((_,i)=>i%2===1);if(o.reverseBacks)even.reverse();
-      out.p1=await makePdf(odd);out.p2=await makePdf(even);}
-    else out.print=await makePdf(seq);
-    /* contrôle : pages entrées = pages sorties */
-    const pin=groups.reduce((a,g)=>a+g.faces.length,0),pout=seq.filter(Boolean).length;out.check=pin===pout&&pin===screen.length;}
+  const mode=o.mode||"print",printer=o.printer||"duplex",split=mode==="print"&&printer==="manual";
+  const A=await newPdf(),B=split?await newPdf():null;let face=0,inPages=0,blanks=0,last={w:AW,h:AH};
+  const put=async f=>{if(!split)await drawFace(A,f);else if(face%2===0)await drawFace(A,f);else await drawFace(B,f,0);face++;last=f;};
+  const blank=async()=>{await put({w:last.w,h:last.h,imgs:[]});blanks++;};
+  const dup=mode==="print"&&printer!=="simplex";
+  for(let i=0;i<items.length;i++){const it=items[i];prog(mode==="print"?"تجهيز ملف الطباعة…":"تجهيز النسخة الملونة…",i/items.length,(i+1)+"/"+items.length+" — "+(it.ar||it.label||""));
+    const fs=await itemFaces(it,mode);it.pages=fs.length;inPages+=fs.length;
+    if(dup&&face%2)await blank();
+    for(const f of fs){await put(f);if(dup&&!(it.t==="doc"&&it.duplex))await blank();}}
+  if(dup&&face%2)await blank();
+  prog("حفظ الملف…",0.97);
+  const out={nScreen:inPages,faces:face,sheets:dup?Math.ceil(face/2):face,blanks,check:(face-blanks)===inPages};
+  if(split){out.p1=await A.save();out.p2=await B.save();}else out[mode==="print"?"print":"screen"]=await A.save();
   prog(false);return out;}
 function blobUrl(bytes){return URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));}
-function dl(bytes,name){const a=document.createElement("a");a.href=blobUrl(bytes);a.download=name;a.target="_blank";document.body.appendChild(a);a.click();setTimeout(()=>a.remove(),1000);}
+/* ouvrir / imprimer / enregistrer : partage iPhone (Imprimer, Enregistrer dans Fichiers…) sinon nouvel onglet */
+async function sendPdf(bytes,name){const file=new File([bytes],name,{type:"application/pdf"});
+  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:name});return true;}}catch(e){if(e&&e.name==="AbortError")return true;}
+  const u=blobUrl(bytes);let w=null;try{w=(window.top||window).open(u,"_blank");}catch(e){}if(!w){try{w=window.open(u,"_blank");}catch(e){}}
+  if(!w){const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>a.remove(),1500);}
+  return true;}
+function dl(bytes,name){return sendPdf(bytes,name);}
 
 /* ====================== VUES ====================== */
 let VIEW="dos";
@@ -601,20 +602,24 @@ async function doPrint(){const skip={};let rep=null;document.querySelectorAll("[
   if($("#sSave")&&$("#sSave").checked&&!viewer()){Object.assign(S.choices,{veh:Object.assign({},S.choices.veh,SUB.veh),role:Object.assign({},S.choices.role,SUB.roles),docs:SUB.docs,rib:SUB.rib,nYears:SUB.years.length,poste:SUB.poste,dip:SUB.dip,abe:SUB.abe,t:Date.now()});
     fput(DOSSIER,D+"/choices",S.choices).catch(()=>{});}
   const pl=buildPlan(SUB);const mode=S.settings.printer||"duplex";let out;
-  try{out=await generate(pl.items,{print:true,mode,reverseBacks:true});}catch(e){prog(false);modal(`<div class="errbox">تعذّر إنشاء الملف: ${esc(e.message)}</div><button class="b" onclick="closeModal()">إغلاق</button>`);return;}
+  try{out=await generate(pl.items,{mode:"print",printer:mode});}catch(e){prog(false);modal(`<div class="errbox">تعذّر إنشاء الملف: ${esc(e.message)}</div><button class="b" onclick="closeModal()">إغلاق</button>`);return;}
   const sid="s"+Date.now();
   const rec={name:SUB.name||"بدون اسم",t:Date.now(),date:today(),limit:SUB.limit||"",mode,faces:out.faces,sheets:out.sheets,pages:out.nScreen,
     opts:{years:SUB.years,rib:SUB.rib,roles:SUB.roles,veh:SUB.veh,docs:SUB.docs,skip:SUB.skip,poste:SUB.poste,dip:SUB.dip,abe:SUB.abe,smallEq:SUB.smallEq},
     items:pl.items.map(x=>x.t==="doc"?{t:"doc",id:x.id,src:x.src,label:x.label,ar:x.ar||"",v:x.v||x.ms||x.mod||"",n:x.pages||0}:{t:x.t,ar:x.ar||"",fr:x.fr||"",level:x.level||1})};
   if(!viewer()){try{await fput(DOSSIER,D+"/subs/"+sid,rec);S.subs[sid]=rec;}catch(e){}}
   const name=(SUB.name||"dossier").replace(/[^\w؀-ۿ -]+/g,"_").slice(0,60);
-  const files=out.print?[[out.print,name+"_impression.pdf","🖨 فتح ملف الطباعة"]]:[[out.p1,name+"_1_recto.pdf","🖨 الدفعة 1 (الوجه الأول)"],[out.p2,name+"_2_verso.pdf","🖨 الدفعة 2 (الوجه الثاني)"]];
-  modal(`<h3>✓ الملف جاهز للطباعة</h3><p><b>${out.nScreen}</b> صفحة على <b>${out.sheets}</b> ورقة. البرنامج قرر وحده: الوثائق ذات الوجهين تُطبع وجهين، والباقي وجهاً واحداً، وكل وثيقة تبدأ في ورقة جديدة.</p>
+  const files=out.print?[[out.print,name+"_impression.pdf","🖨 طباعة / حفظ PDF"]]:[[out.p1,name+"_1_recto.pdf","🖨 الدفعة 1 (الوجه الأول)"],[out.p2,name+"_2_verso.pdf","🖨 الدفعة 2 (الوجه الثاني)"]];
+  S.lastOut={files,name,items:pl.items};
+  modal(`<h3>✓ الملف جاهز</h3><p><b>${out.nScreen}</b> صفحة على <b>${out.sheets}</b> ورقة. البرنامج قرر وحده الوجهين والوجه الواحد، وكل وثيقة تبدأ في ورقة جديدة.</p>
    ${out.check?'<div class="mu ok">✓ لا صفحة ضائعة ولا مكررة.</div>':'<div class="errbox">⚠️ عدد الصفحات غير متطابق — أعد المحاولة.</div>'}
-   <div class="chips" style="margin-top:8px">${files.map((f,i)=>`<button class="b p" id="pf${i}" style="padding:11px">${f[2]}</button>`).join("")}<button class="b" id="dS">📄 نسخة ملونة إلكترونية</button><button class="b" onclick="closeModal()">إغلاق</button></div>
-   ${out.print?"":'<p class="mu">اطبع الدفعة 1، اقلب رزمة الأوراق وأعدها للطابعة، ثم اطبع الدفعة 2.</p>'}`);
-  files.forEach((f,i)=>$("#pf"+i).onclick=()=>dl(f[0],f[1]));$("#dS").onclick=()=>dl(out.screen,name+"_ecran.pdf");
-  try{dl(files[0][0],files[0][1]);}catch(e){}}
+   <div class="chips" style="margin-top:8px">${files.map((f,i)=>`<button class="b p" id="pf${i}" style="padding:12px;font-size:15px">${f[2]}</button>`).join("")}</div>
+   <p class="mu">يفتح نافذة المشاركة في الهاتف: اختر «طباعة» أو «حفظ في الملفات».</p>
+   ${out.print?"":'<p class="mu">اطبع الدفعة 1، اقلب رزمة الأوراق وأعدها للطابعة، ثم اطبع الدفعة 2.</p>'}
+   <div class="chips"><button class="b" id="dS">📄 نسخة ملونة إلكترونية</button><button class="b" onclick="closeModal()">إغلاق</button></div>`);
+  files.forEach((f,i)=>$("#pf"+i).onclick=()=>sendPdf(f[0],f[1]));
+  $("#dS").onclick=async()=>{closeModal();let o2;try{o2=await generate(pl.items,{mode:"screen"});}catch(e){prog(false);toast("تعذّر: "+e.message,4000);return;}
+    modal(`<h3>📄 النسخة الملونة جاهزة</h3><p>${o2.nScreen} صفحة.</p><div class="chips"><button class="b p" id="dS2" style="padding:12px">📄 فتح / حفظ</button><button class="b" onclick="closeModal()">إغلاق</button></div>`);$("#dS2").onclick=()=>sendPdf(o2.screen,name+"_ecran.pdf");};}
 /* ---------- تحليل دفتر الشروط : المطلوب، الإقصاء، الفخاخ، سلم التنقيط، المقارنة مع الملف ---------- */
 const CDC_DOCS=[["rc","السجل التجاري",["سجل التجاري","السجل التجاري","registre de commerce"]],["nif","التعريف الجبائي (NIF)",["التعريف الجبائي","identification fiscale"," nif"]],["nis","التعريف الإحصائي (NIS)",["التعريف الإحصائي","identification statistique"," nis"]],
  ["role","مستخرج الجداول",["مستخرج","extrait de rôle","extrait de role","extrait des rôles"]],["cnas","شهادة CNAS",["cnas","التأمينات الاجتماعية للعمال الأجراء"]],["casnos","شهادة CASNOS",["casnos","غير الأجراء"]],["cac","شهادة CACOBATPH",["cacobatph","العطل المدفوعة"]],
@@ -728,11 +733,11 @@ async function regen(id){const s=S.subs[id];SUB=Object.assign(defaultOpts(),s.op
 async function reprint(sid,i){const s=S.subs[sid],x=s.items[i];const o=Object.assign(defaultOpts(),s.opts||{});o.skip={};const it=buildPlan(o).items.find(q=>q.id===x.id);
   if(!it){toast("الوثيقة غير موجودة الآن");return;}
   const prev=[...s.items.slice(0,i)].reverse().find(q=>q.t==="doc"),next=s.items.slice(i+1).find(q=>q.t==="doc"),sepBefore=[...s.items.slice(0,i)].reverse().find(q=>q.t!=="doc"),afterSep=i>0&&s.items[i-1].t!=="doc";
-  const out=await generate([it],{print:true,mode:s.mode==="simplex"?"simplex":"duplex"});
+  const out=await generate([it],{mode:"print",printer:s.mode==="simplex"?"simplex":"duplex"});
   x.v=it.v||it.ms||it.mod||x.v;x.n=it.pages;x.reprinted=Date.now();if(!viewer())fput(DOSSIER,D+"/subs/"+sid+"/items/"+i,x).catch(()=>{});
   modal(`<h3>🖨 ${esc(x.ar||x.label)}</h3><div class="warnbox"><b>مكانها في الملف:</b><br>${sepBefore?"ضمن «"+esc(sepBefore.ar)+"»<br>":""}${afterSep||!prev?"بعد الصفحة الفاصلة «"+esc(s.items[i-1]&&s.items[i-1].ar||"")+"» مباشرة<br>":"بعد: "+esc(prev.ar||prev.label)+"<br>"}${next?"وقبل: "+esc(next.ar||next.label):"في آخر الملف"}</div>
    <p class="mu">${out.nScreen} صفحة — انزع النسخة القديمة وضع هذه مكانها.</p><div class="chips"><button class="b p" id="rp">🖨 PDF الطباعة</button><button class="b" id="rs">📄 ملون</button><button class="b" onclick="closeModal()">إغلاق</button></div>`);
-  $("#rp").onclick=()=>dl(out.print,"piece_impression.pdf");$("#rs").onclick=()=>dl(out.screen,"piece_ecran.pdf");}
+  $("#rp").onclick=()=>sendPdf(out.print,"piece_impression.pdf");$("#rs").onclick=async()=>{const o2=await generate([it],{mode:"screen"});sendPdf(o2.screen,"piece_ecran.pdf");};}
 
 /* ---------- الإعدادات : قواعد Firebase + المساحة ---------- */
 function usage(){const u={};const add=(b,n)=>{u[b]=(u[b]||0)+(n||0)*1.37;};PS().forEach(p=>(p.pages||[]).forEach(r=>add(r.b||0,r.n)));Object.values(S.settings.histSize||{}).forEach(h=>add(h.b||0,h.n));return u;}
@@ -839,6 +844,8 @@ function thumb(p){const cv=rotCv(p.cv,p.rot),s=Math.min(1,260/Math.max(cv.width,
 function rotCv(cv,r){if(!r)return cv;const c=document.createElement("canvas");c.width=r%180?cv.height:cv.width;c.height=r%180?cv.width:cv.height;const x=c.getContext("2d");x.translate(c.width/2,c.height/2);x.rotate(r*Math.PI/180);x.drawImage(cv,-cv.width/2,-cv.height/2);return c;}
 function rotP(i){ED.pages[i].rot=(ED.pages[i].rot+90)%360;drawThumbs();}
 function movP(i){if(i>0){const t=ED.pages[i];ED.pages[i]=ED.pages[i-1];ED.pages[i-1]=t;drawThumbs();}}
+async function whitenedPrint(cv0){const k=Math.min(1,1750/Math.max(cv0.width,cv0.height)),cv=document.createElement("canvas");cv.width=Math.round(cv0.width*k);cv.height=Math.round(cv0.height*k);const x=cv.getContext("2d",{willReadFrequently:true});x.drawImage(cv0,0,0,cv.width,cv.height);
+  const id=x.getImageData(0,0,cv.width,cv.height),d=id.data,g=EGTPHDoc.whiten(EGTPHDoc.toGray(d,cv.width,cv.height)).d;for(let i=0,j=0;i<d.length;i+=4,j++){d[i]=d[i+1]=d[i+2]=g[j];d[i+3]=255;}x.putImageData(id,0,0);return cv.toDataURL("image/jpeg",0.6);}
 const slug=s=>String(s||"").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,30)||"piece";
 async function savePiece(){if(viewer()){toast("حساب العرض فقط");return;}
   const cat=ED.id?ED.p.cat:$("#eCat").value;if(!cat){toast("اختر الصنف");return;}
@@ -854,7 +861,7 @@ async function savePiece(){if(viewer()){toast("حساب العرض فقط");retu
   try{
     if(ED.pages.length){const b=writeBase(),bc=baseConf(b),refs=[];
       for(let i=0;i<ED.pages.length;i++){prog("رفع الصفحات…",i/ED.pages.length);const cv=rotCv(ED.pages[i].cv,ED.pages[i].rot),src=cv.toDataURL("image/jpeg",0.72),k=`${id}_v${v}_p${i}`;
-        await fput(bc,D+"/pages/"+k,src);await cset("d:"+k,src);refs.push({k,b,w:cv.width,h:cv.height,n:Math.round(src.length*0.75)});}
+        await fput(bc,D+"/pages/"+k,src);await cset("d:"+k,src);try{const g=await whitenedPrint(cv);await fput(bc,D+"/pages/"+k+"_g",g);await cset("d:"+k+"_g",g);}catch(e){}refs.push({k,b,w:cv.width,h:cv.height,n:Math.round(src.length*0.75)});}
       if(old)await fput(DOSSIER,D+"/piecesHist/"+id+"/v"+old.v,old);
       rec.pages=refs;}
     await fput(DOSSIER,D+"/pieces/"+id,rec);S.pieces[id]=rec;syncMemo(rec);
@@ -870,7 +877,7 @@ async function delPiece(id){if(!confirm("حذف هذه الوثيقة من ال�
   await fput(DOSSIER,D+"/pieces/"+id,{id,deleted:true,t:Date.now()});S.pieces[id]={id,deleted:true};syncMemo(Object.assign({},cur,{deleted:true}));closeModal();render();}
 
 /* ====================== démarrage ====================== */
-window.EGTPHDossier={S,buildPlan,defaultOpts,generate,itemFaces,drawSep,drawCover,duplexSeq,loadAll,genPages,analyzeCDC};
+window.EGTPHDossier={S,buildPlan,defaultOpts,generate,itemFaces,drawSep,drawCover,loadAll,genPages,analyzeCDC};
 (async function boot(){
   if(new URLSearchParams(location.search).get("embed")==="1")document.querySelector("header h1").style.display="none";
   try{
