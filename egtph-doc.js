@@ -225,5 +225,74 @@ function edgeCut(g, { band = 0.012, minInk = 0.04 } = {}) {
   return { cut: Object.keys(r).filter(k => r[k] >= minInk), ink: r };
 }
 
-window.EGTPHDoc={toGray,resize,blankInfo,quality,bestCopy,dHash,hamming,isDuplicate,sauvola,skewAngle,skewInfo,cardBox,duplexPlan,manualDuplexPasses,DOC_RULES,classify,learn,datesIn,whiten,edgeCut};
+/* ===================== Intelligence : bo\u00eete de r\u00e9ception (id\u00e9es Paperless-ngx, Stirling-PDF, DocuWare/M-Files) ===================== */
+
+/* 12) Classifieur appris (bay\u00e9sien na\u00eff sur n-grammes de caract\u00e8res, arabe + fran\u00e7ais) : il apprend de chaque pi\u00e8ce que
+   l'utilisateur classe ou corrige ; combin\u00e9 aux r\u00e8gles DOC_RULES. Mod\u00e8le s\u00e9rialisable (JSON) pour \u00eatre gard\u00e9 dans Firebase. */
+const grams = t => { const s = ' ' + norm(t).replace(/[^a-z0-9\u0600-\u06ff]+/g, ' ').replace(/\s+/g, ' ').trim() + ' ', out = [];
+  for (let n = 3; n <= 4; n++) for (let i = 0; i + n <= s.length; i++) out.push(s.slice(i, i + n)); return out; };
+function newModel() { return { v: 1, docs: {}, counts: {}, totals: {}, vocab: {} }; }
+function train(model, type, text) {
+  const g = grams(text); model.docs[type] = (model.docs[type] || 0) + 1;
+  const c = model.counts[type] || (model.counts[type] = {});
+  for (const k of g) { c[k] = (c[k] || 0) + 1; model.vocab[k] = 1; }
+  model.totals[type] = (model.totals[type] || 0) + g.length; return model;
+}
+function predict(model, text) {
+  const types = Object.keys(model.docs); if (!types.length) return [];
+  const g = grams(text), V = Object.keys(model.vocab).length + 1, N = types.reduce((a, t) => a + model.docs[t], 0);
+  const sc = types.map(t => { let s = Math.log(model.docs[t] / N); const c = model.counts[t], tot = model.totals[t];
+    for (const k of g) s += Math.log(((c[k] || 0) + 1) / (tot + V)); return { type: t, s }; });
+  const m = Math.max(...sc.map(x => x.s)), z = sc.reduce((a, x) => a + Math.exp(x.s - m), 0);
+  return sc.map(x => ({ type: x.type, p: Math.exp(x.s - m) / z })).sort((a, b) => b.p - a.p);
+}
+/* d\u00e9cision finale : r\u00e8gles s\u00fbres d'abord, sinon mod\u00e8le appris s'il est confiant (p \u2265 0,8), sinon \u00ab \u00e0 confirmer \u00bb */
+function decide(text, model) {
+  const r = classify(text), m = model ? predict(model, text) : [];
+  if (r.type && r.sure) return { type: r.type, sure: true, by: 'r\u00e8gles', alt: m.slice(0, 2) };
+  if (m.length && m[0].p >= 0.8) return { type: m[0].type, sure: true, by: 'appris', p: +m[0].p.toFixed(2) };
+  return { type: r.type || (m[0] && m[0].type) || null, sure: false, by: r.type ? 'r\u00e8gles' : 'appris', candidates: r.candidates, alt: m.slice(0, 3) };
+}
+
+/* 13) Extraction : \u00e0 qui / \u00e0 quoi appartient la pi\u00e8ce (matricule alg\u00e9rien, ann\u00e9e, NIF, montants, dates). */
+function extract(text) {
+  const t = String(text).replace(/[\u0660-\u0669]/g, c => '\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669'.indexOf(c));
+  const mat = [...new Set([...t.matchAll(/\b(\d{5,6})[\s\-\u2013]{0,3}(\d{3})[\s\-\u2013]{0,3}(\d{2})\b/g)].map(m => `${m[1]}-${m[2]}-${m[3]}`))];
+  const years = [...new Set([...t.matchAll(/\b(20[0-4]\d)\b/g)].map(m => +m[1]))].sort();
+  const nif = (t.match(/\b(\d{15})\b/) || [])[1] || null;
+  const amounts = [...t.matchAll(/\b(\d{1,3}(?:[ .]\d{3})+(?:,\d{2})?)\s*(?:DA|DZD|\u062f\u062c)\b/gi)].map(m => m[1]);
+  return { matricules: mat, years, nif, amounts: amounts.slice(0, 10), dates: datesIn(t) };
+}
+
+/* 14) D\u00e9coupage automatique d'un scan qui contient plusieurs pi\u00e8ces (pages : [{text, blank?}]).
+   Nouvelle pi\u00e8ce quand : page blanche (s\u00e9parateur), changement de type s\u00fbr, ou en-t\u00eate officiel \u00ab \u0627\u0644\u062c\u0645\u0647\u0648\u0631\u064a\u0629 \u0627\u0644\u062c\u0632\u0627\u0626\u0631\u064a\u0629 \u00bb en haut de page. */
+function splitPages(pages, model) {
+  const groups = []; let cur = null;
+  const header = s => /\u0627\u0644\u062c\u0645\u0647\u0648\u0631\u064a\u0647 \u0627\u0644\u062c\u0632\u0627\u0649\u0631\u064a\u0647|republique algerienne/.test(norm(s).slice(0, 400).replace(/\u0626/g, '\u0649'));
+  pages.forEach((pg, i) => {
+    if (pg.blank) { if (cur) { groups.push(cur); cur = null; } return; }
+    const d = decide(pg.text || '', model);
+    const newDoc = !cur || (d.sure && cur.type && d.type !== cur.type) || (header(pg.text || '') && cur.pages.length > 0 && d.type !== cur.type);
+    if (newDoc) { if (cur) groups.push(cur); cur = { type: d.sure ? d.type : null, pages: [i], sure: d.sure }; }
+    else { cur.pages.push(i); if (!cur.type && d.sure) { cur.type = d.type; cur.sure = true; } }
+  });
+  if (cur) groups.push(cur);
+  return groups;
+}
+
+/* 15) Historique des versions (DocuWare / M-Files) : qui, quand, empreinte ; retour \u00e0 n'importe quelle version. */
+function addVersion(hist, { path, by, note, hash }) {
+  const h = hist || { versions: [] };
+  if (hash && h.versions.length && h.versions[h.versions.length - 1].hash === hash) return h;   // m\u00eame contenu : rien
+  h.versions.push({ n: h.versions.length + 1, t: new Date().toISOString(), by: by || '', note: note || '', path, hash: hash || '' });
+  h.current = h.versions.length; return h;
+}
+function restoreVersion(hist, n) { const v = hist.versions.find(x => x.n === n); if (!v) return null; hist.current = n; return v; }
+async function sha256(buf) {
+  const b = typeof buf === 'string' ? new TextEncoder().encode(buf) : buf;
+  const d = await (globalThis.crypto && crypto.subtle ? crypto.subtle.digest('SHA-256', b) : Promise.reject(new Error('crypto')));
+  return [...new Uint8Array(d)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+window.EGTPHDoc={toGray,resize,blankInfo,quality,bestCopy,dHash,hamming,isDuplicate,sauvola,skewAngle,skewInfo,cardBox,duplexPlan,manualDuplexPasses,DOC_RULES,classify,learn,datesIn,whiten,edgeCut,newModel,train,predict,decide,extract,splitPages,addVersion,restoreVersion,sha256};
 })();

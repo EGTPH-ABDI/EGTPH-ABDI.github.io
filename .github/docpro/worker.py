@@ -56,7 +56,7 @@ def process(src_path, ops, folder):
         is_img = True
     ocr_pdf = os.path.join(folder, "ocr.pdf")
     base = ["ocrmypdf", "-l", "ara+fra", "--rotate-pages", "--rotate-pages-threshold", "5", "--output-type", "pdfa", "--optimize", "1", "--jobs", "2"]
-    base += (["--deskew", "--clean-final"] if is_img else ["--skip-text"])
+    base += (["--deskew", "--clean-final"] if is_img else ["--skip-text", "--deskew", "--clean-final"])   # PDF : pages déjà textuelles laissées telles quelles
     if "clean" not in ops and is_img: base = [a for a in base if a not in ("--clean-final",)]
     code, log = run(base + [pdf_in, ocr_pdf], 600)
     if code not in (0, 4, 6, 10):   # 4/6/10 = avertissements (PDF/A non validé, déjà du texte…) : le fichier est produit
@@ -74,8 +74,10 @@ def process(src_path, ops, folder):
                          "-dProcessColorModel=/DeviceGray", "-dCompatibilityLevel=1.5", "-o", g, ocr_pdf])
         if code == 0: out["gray"] = g; rep.append("gris ok")
         else: rep.append("gris échec")
-    code, txt = run(["pdftotext", "-layout", ocr_pdf, "-"])
-    out["text"] = (subprocess.run(["pdftotext", "-layout", ocr_pdf, "-"], capture_output=True, text=True).stdout or "")[:20000]
+    full = subprocess.run(["pdftotext", "-layout", ocr_pdf, "-"], capture_output=True, text=True).stdout or ""
+    out["text"] = full[:20000]
+    out["pages"] = [pg[:4000] for pg in full.split("\f") if pg.strip() or True][:60]   # texte page par page → découpage automatique côté programme
+    if out["pages"] and not out["pages"][-1].strip(): out["pages"].pop()
     out["report"] = "; ".join(rep)
     return out
 
@@ -112,7 +114,7 @@ def handle(app):
     queue = b.get(f"{root}/_docpro/queue") or {}
     for jid, job in sorted(queue.items(), key=lambda kv: (kv[1] or {}).get("t", 0)):
         if done >= MAX_JOBS: break
-        rec = {"src": (job or {}).get("src"), "t": int(time.time() * 1000), "app": app["id"]}
+        rec = {"src": (job or {}).get("src"), "key": (job or {}).get("key"), "meta": (job or {}).get("meta"), "t": int(time.time() * 1000), "app": app["id"]}
         try:
             src = rec["src"] or ""
             if not src or ".." in src: raise ValueError("src invalide")
@@ -121,10 +123,11 @@ def handle(app):
                 p, mime = data_url_to_file(val, d)
                 r = process(p, job.get("ops") or ["clean", "ocr", "gray"], d)
                 files = {}
+                want = job.get("out") or ["img", "pdf", "gray"]
                 for k, m in (("img", "image/jpeg"), ("pdf", "application/pdf"), ("gray", "application/pdf")):
-                    if r.get(k) and os.path.getsize(r[k]) < MAX_OUT * 3 // 4: files[k] = file_to_data_url(r[k], m)
+                    if k in want and r.get(k) and os.path.getsize(r[k]) < MAX_OUT * 3 // 4: files[k] = file_to_data_url(r[k], m)
                 b.write(f"{root}/_docpro/files/{jid}", "PUT", files)
-                rec.update(ok=True, text=r["text"], report=r["report"], outputs=sorted(files))
+                rec.update(ok=True, text=r["text"], pages=r.get("pages", []), report=r["report"], outputs=sorted(files))
         except Exception as e:
             rec.update(ok=False, error=str(e)[:300])
         b.write(f"{root}/_docpro/done/{jid}", "PUT", rec)
