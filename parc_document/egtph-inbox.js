@@ -115,7 +115,8 @@
     const rows=[];
     for(const g of groups){const it=items[g.pages[0]];if(!it||it.err||!it.store)continue;
       const all=g.pages.map(p=>items[p].text||"").join("\n");
-      const ty=guessType(all),vh=findVehicle(all,ty.tt),dt=guessDates(all,ty.tt);
+      const ty=guessType(all);let vh=findVehicle(all,ty.tt);const dt=guessDates(all,ty.tt);
+      if(!vh.e&&ty.tt&&ty.tt!=="pm"&&window.EGTPHOcr){try{/* قراءة ثانية للأرقام فقط لتحديد المركبة */const r2=await EGTPHOcr.recognize(it.store,"fra",{psm:11,paddle:false,fast:true,noRotate:true});const t2=(r2&&r2.data&&r2.data.text)||"";if(t2.trim()){const v2=findVehicle(all+"\n"+t2,ty.tt);if(v2.e||v2.guess)vh=v2;}}catch(e){}}
       let has=false;if(vh.e&&ty.tt){try{has=!!(await idbGetImg(vh.e.id+"_"+ty.tt));}catch(e){}}
       rows.push({img:it.store,text:all,src:it.src+(g.pages.length>1?" ("+g.pages.length+" p.)":""),tt:ty.tt,sure:ty.sure,by:ty.by,eid:vh.e?vh.e.id:(vh.guess?vh.guess.id:""),vsure:!!vh.e,vwhy:vh.why||[],mat:vh.mat,has,deb:dt.deb,fin:dt.fin});
     }

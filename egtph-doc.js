@@ -320,7 +320,9 @@ function vehicleGuess(text,vehs,kind){const T=String(text||"").toUpperCase(),dig
       if(main.length>=2&&main.every(g=>nums.includes(g)))ms=Math.max(ms,6);else if(lg.length>=5&&nums.includes(lg))ms=Math.max(ms,3);
       else if(lg.length>=5&&nums.some(n=>n.length===lg.length&&approxIn(lg,n)<=1))ms=Math.max(ms,1.5);}
     if(ms){sc+=ms;why.push(ms>=6?"رقم التسجيل":"رقم التسجيل (تقريبي)");}
-    let vb=0;(String(e.serie||"").toUpperCase().match(/[0-9A-Z]{8,}/g)||[]).forEach(vin=>{const d=approxIn(vin,alnum);if(d<=Math.floor(vin.length/6))vb=Math.max(vb,(vin.length>=14?6:4)-d);});if(vb){sc+=vb;why.push("رقم الهيكل");}
+    let vb=0;(String(e.serie||"").toUpperCase().match(/[0-9A-Z]{8,}/g)||[]).forEach(vin=>{const d=approxIn(vin,alnum);if(d<=Math.floor(vin.length/6))vb=Math.max(vb,(vin.length>=14?6:4)-d);});const V=String(e.serie||"").toUpperCase().replace(/[^0-9A-Z]/g,"");if(!vb&&V.length===17){/* المحضر يقسم رقم الهيكل: الطراز (11) + الرقم في السلسلة (6) */
+      const tail=V.slice(11),head=V.slice(0,11);if(/^\d{6}$/.test(tail)&&nums.includes(tail))vb+=3;if(approxIn(head,alnum)<=1)vb+=1.5;}
+    if(vb){sc+=vb;why.push("رقم الهيكل");}
     toks(e).forEach(x=>{const w=6/freq[x],d=approxIn(x,dig),lim=x.length>=14?3:x.length>=10?1:0;if(d<=lim){sc+=w*(1-d/(lim+1));if(w>=3)why.push(kind==="ct"?"رقم المحضر":"رقم الوثيقة");}});
     new Set(sufs(e)).forEach(x=>{if(sfreq[x]===1&&x.length>=4&&nums.includes(x)){sc+=2.5;why.push(kind==="ct"?"رقم المحضر":"رقم الوثيقة");}});
     const nm=((e.name||"")+" "+(e.model||"")).toUpperCase();BRANDS.forEach(b=>{if(nm.includes(b)&&T.includes(b)){sc+=1.5;why.push(b);}});

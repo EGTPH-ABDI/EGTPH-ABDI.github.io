@@ -889,7 +889,7 @@ function routeHtml(type,text){if(PARC_K[type]){const k=PARC_K[type],r=vehPick(te
     const opts=vehicles().map(v=>`<option value="${v.id}" ${sel===v.id?"selected":""}>${esc((v.name||"")+" "+(v.matricule||""))}</option>`).join("");
     const st=e=>{const o=k==="ct"?e.ct:k==="as"?e.assurance:null;return o&&o.fin?(o.fin<today()?"منتهية ":"تنتهي ")+fd(o.fin):k==="cg"?"":"لا توجد وثيقة";};
     const chips=r.list.length?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0">${r.list.map((c,i)=>`<button type="button" class="b ${i?"":"p"}" style="padding:5px 9px;font-size:12px" onclick="rtPick('${c.e.id}',this)">${esc(c.e.name||"")} ${esc(c.e.matricule||"")}<br><small>${esc(c.why.slice(0,3).join(" · ")||"مرشحة")}${st(c.e)?" · "+st(c.e):""}</small></button>`).join("")}</div>`:"";
-    return `<div class="card" style="border-color:#111"><b>🚚 ${{cg:"بطاقة رمادية",as:"تأمين",ct:"مراقبة تقنية"}[k]} — تُحفظ مباشرة في برنامج العتاد</b>
+    return `<div class="card" id="rtCard" style="border-color:#111"><b>🚚 ${{cg:"بطاقة رمادية",as:"تأمين",ct:"مراقبة تقنية"}[k]} — تُحفظ مباشرة في برنامج العتاد</b>
      <div class="mu">${r.sure?"✓ المركبة عُرفت: "+esc(r.best.why.join("، ")):r.best?"المركبات المرجّحة (رقم التسجيل غير مقروء كاملاً) — اختر الصحيحة:":"لم يُتعرّف على المركبة — اخترها."}</div>${r.sure?"":chips}
      <select id="rtVeh" onchange="rtDates(this.value)"><option value="">— المركبة —</option>${opts}</select><div class="grid2" style="margin-top:6px"><div><label class="mu">من</label><input type="date" id="rtDeb"></div><div><label class="mu">إلى</label><input type="date" id="rtFin"></div></div>
      <button class="b p" style="margin-top:8px" onclick="routeParc('${k}')">✓ حفظ في العتاد (والقديمة إلى الأرشيف)</button></div>`;}
@@ -898,6 +898,11 @@ function routeHtml(type,text){if(PARC_K[type]){const k=PARC_K[type],r=vehPick(te
      <select id="rtW"><option value="">— العامل —</option>${opts}</select><input type="text" id="rtLab" placeholder="التسمية (مثال: Master en hydraulique)" style="margin-top:6px">
      <button class="b p" style="margin-top:8px" onclick="routeRh('${RH_K[type]}')">✓ حفظ في العمال</button></div>`;}
   return "";}
+/* المركبة غير مؤكدة: قراءة ثانية للأرقام فقط (لاتيني، نص متفرق) ثم إعادة الترجيح */
+async function rtDeep(type,t){const c=$("#rtCard");if(!c||!ED||!ED.pages.length)return;const n=document.createElement("div");n.className="mu";n.textContent="🔢 قراءة الأرقام لتحديد المركبة…";c.appendChild(n);
+  try{const cv=rotCv(ED.pages[0].cv,ED.pages[0].rot),r=await EGTPHOcr.recognize(cv,"fra",{psm:11,paddle:false,fast:true,noRotate:true}),t2=(r&&r.data&&r.data.text)||"";
+    const c2=$("#rtCard");if(!c2||ED.rtText!==t)return;const all=t+"\n"+t2,k=PARC_K[type];if(vehPick(all,k).list.length||t2.trim()){const keep=$("#rtDeb").value,keepF=$("#rtFin").value;c2.outerHTML=routeHtml(type,all);$("#rtDeb").value=keep;$("#rtFin").value=keepF;const rv=$("#rtVeh");if(rv&&rv.value)rtDates(rv.value);}else n.remove();}
+  catch(e){n.remove();}}
 function rtPick(id,btn){const v=$("#rtVeh");if(v){v.value=id;rtDates(id);}if(btn)btn.parentNode.querySelectorAll("button").forEach(b=>b.classList.toggle("p",b===btn));}
 /* التواريخ حسب المركبة: البداية = يوم بعد نهاية الوثيقة القديمة إن وُجد في النص، والنهاية بعد سنة */
 function rtDates(id){const k=ED.rtK,e=vehicles().find(x=>String(x.id)===String(id));if(!e||k==="cg")return;const o=(k==="ct"?e.ct:e.assurance)||{},ds=EGTPHDoc.extract(ED.rtText||"").dates,dd=s=>new Date(s+"T00:00:00").getTime()/864e5,iso=n=>new Date(n*864e5).toISOString().slice(0,10);
@@ -934,7 +939,7 @@ async function readCA(){if(!ED||!ED.pages.length||$("#eCa").value)return;let v=c
 function setV(id,v){const e=$("#"+id);if(e&&!e.value&&v!=null&&v!=="")e.value=v;}
 function suggest(notes){const t=ED.text||"";let h=notes.length?notes.join("<br>")+"<br>":"";
   if(t&&window.EGTPHDoc){const d=EGTPHDoc.decide(t,S.model),x=EGTPHDoc.extract(t),ds=x.dates;
-    if(d.type&&(PARC_K[d.type]||RH_K[d.type])){h+=routeHtml(d.type,t);const v=validityIn(t),ds2=x.dates;setTimeout(()=>{const fi=$("#rtFin"),de=$("#rtDeb");if(fi&&!fi.value)fi.value=v||ds2.filter(z=>z>today()).pop()||"";if(de&&!de.value)de.value=ds2.filter(z=>z<=today()).pop()||"";const rv=$("#rtVeh");if(rv&&rv.value)rtDates(rv.value);},0);}
+    if(d.type&&(PARC_K[d.type]||RH_K[d.type])){h+=routeHtml(d.type,t);const v=validityIn(t),ds2=x.dates;setTimeout(()=>{const fi=$("#rtFin"),de=$("#rtDeb");if(fi&&!fi.value)fi.value=v||ds2.filter(z=>z>today()).pop()||"";if(de&&!de.value)de.value=ds2.filter(z=>z<=today()).pop()||"";const rv=$("#rtVeh");if(rv&&rv.value)rtDates(rv.value);if(PARC_K[d.type]&&!vehPick(t,PARC_K[d.type]).sure)rtDeep(d.type,t);},0);}
     else if(d.type&&TYPE_ELSE[d.type]){h+=`<b>هذه الوثيقة تبدو «${d.type}» وتُحفظ في برنامج ${TYPE_ELSE[d.type]==="p"?"العتاد (parc_document)":"العمال (egtph-rh)"}</b> — استعمل استيراد CNAS في برنامج العمال. <button class="b" onclick="openSrc('${TYPE_ELSE[d.type]}')">فتح البرنامج</button><br>`;}
     else if(d.type&&TYPE2[d.type]){let cat={rc:"jur",nif:"jur",nis:"jur",role:"fis",qualif:"qual",casnos:"para",bilan:"bilan",rib:"rib"}[TYPE2[d.type]];
       if(TYPE2[d.type]==="abe")cat=/الشرب|eau potable|\baep\b/i.test(t)?"abe_aep":"abe_ass";
