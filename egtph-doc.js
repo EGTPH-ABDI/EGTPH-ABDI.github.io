@@ -300,5 +300,35 @@ async function sha256(buf) {
   return [...new Uint8Array(d)].map(x => x.toString(16).padStart(2, '0')).join('');
 }
 
-window.EGTPHDoc={toGray,resize,blankInfo,quality,bestCopy,dHash,hamming,isDuplicate,sauvola,skewAngle,skewInfo,cardBox,duplexPlan,manualDuplexPasses,DOC_RULES,classify,learn,datesIn,whiten,edgeCut,newModel,train,predict,decide,extract,splitPages,addVersion,restoreVersion,sha256};
+
+/* ---------- identification intelligente du véhicule d'une pièce (assurance, CT, carte grise) */
+function approxIn(p,t){/* distance d'édition minimale de p dans une sous-chaîne de t (Sellers) */if(!p)return 99;const m=p.length;let prev=new Array(m+1);for(let i=0;i<=m;i++)prev[i]=i;let best=prev[m];
+  for(let j=1;j<=t.length;j++){const cur=[0];for(let i=1;i<=m;i++)cur[i]=Math.min(prev[i]+1,cur[i-1]+1,prev[i-1]+(p[i-1]===t[j-1]?0:1));if(cur[m]<best)best=cur[m];prev=cur;}return best;}
+const BRANDS=["HYUNDAI","SHACMAN","SHAANXI","SHAANQI","CHERY","PEUGEOT","TOYOTA","FIAT","JMC","JCB","CASE","POCLAIN","FOTON","LOVOL","BEIJING","SHAANXI"];
+function vehicleGuess(text,vehs,kind){const T=String(text||"").toUpperCase(),dig=T.replace(/[^0-9]/g,""),alnum=T.replace(/[^0-9A-Z]/g,""),nums=T.match(/\d+/g)||[];
+  const docNum=e=>{const o=kind==="ct"?e.ct:e.assurance;return o&&o.num?String(o.num):"";};
+  const toks=e=>(docNum(e).match(/[0-9A-Z.]{5,}/gi)||[]).map(x=>x.replace(/[^0-9]/g,"")).filter(x=>x.length>=6&&!/^0[5-7]\d{8}$/.test(x));/* téléphones exclus */
+  const freq={};vehs.forEach(e=>toks(e).forEach(x=>freq[x]=(freq[x]||0)+1));
+  const sufs=e=>(docNum(e).match(/\d{3,}/g)||[]).filter((g,i,a)=>i===a.length-1||/F\d/i.test(docNum(e))&&g.length>=6);/* آخر مجموعة (00266) ورقم F */
+  const sfreq={};vehs.forEach(e=>new Set(sufs(e)).forEach(x=>sfreq[x]=(sfreq[x]||0)+1));
+  const ds=(T.match(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](20\d\d)\b/g)||[]).map(s=>{const m=s.match(/(\d{1,2})\D(\d{1,2})\D(\d{4})/);return `${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;})
+    .concat((T.match(/\b(20\d\d)[\/.\-](\d{1,2})[\/.\-](\d{1,2})\b/g)||[]).map(s=>{const m=s.match(/(\d{4})\D(\d{1,2})\D(\d{1,2})/);return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;}));
+  const day=s=>new Date(s+"T00:00:00").getTime()/864e5;
+  return vehs.map(e=>{let sc=0;const why=[];
+    const gr=String(e.matricule||"").match(/\d+/g)||[],mt=gr.join(""),mr=gr.slice().reverse().join("");let ms=0;if(mt.length>=8){const d=Math.min(approxIn(mt,dig),approxIn(mr,dig));if(d===0)ms=7;else if(d<=(mt.length>=11?2:1))ms=5-d;}
+    const main=gr.filter(g=>g.length>=3);if(main.length){const lg=main.reduce((a,b)=>b.length>a.length?b:a);
+      if(main.length>=2&&main.every(g=>nums.includes(g)))ms=Math.max(ms,6);else if(lg.length>=5&&nums.includes(lg))ms=Math.max(ms,3);
+      else if(lg.length>=5&&nums.some(n=>n.length===lg.length&&approxIn(lg,n)<=1))ms=Math.max(ms,1.5);}
+    if(ms){sc+=ms;why.push(ms>=6?"رقم التسجيل":"رقم التسجيل (تقريبي)");}
+    let vb=0;(String(e.serie||"").toUpperCase().match(/[0-9A-Z]{8,}/g)||[]).forEach(vin=>{const d=approxIn(vin,alnum);if(d<=Math.floor(vin.length/6))vb=Math.max(vb,(vin.length>=14?6:4)-d);});if(vb){sc+=vb;why.push("رقم الهيكل");}
+    toks(e).forEach(x=>{const w=6/freq[x],d=approxIn(x,dig),lim=x.length>=14?3:x.length>=10?1:0;if(d<=lim){sc+=w*(1-d/(lim+1));if(w>=3)why.push(kind==="ct"?"رقم المحضر":"رقم الوثيقة");}});
+    new Set(sufs(e)).forEach(x=>{if(sfreq[x]===1&&x.length>=4&&nums.includes(x)){sc+=2.5;why.push(kind==="ct"?"رقم المحضر":"رقم الوثيقة");}});
+    const nm=((e.name||"")+" "+(e.model||"")).toUpperCase();BRANDS.forEach(b=>{if(nm.includes(b)&&T.includes(b)){sc+=1.5;why.push(b);}});
+    const o=kind==="ct"?e.ct:e.assurance;if(o&&o.fin){const f=day(o.fin),late=ds.some(x=>day(x)>f+300);
+      if(ds.includes(o.fin)&&(ds.includes(o.deb)||!late)){sc+=2;why.push("نفس الوثيقة الحالية");}
+      else if(late&&ds.some(x=>day(x)-f>=0&&day(x)-f<=10)){sc+=2.5;why.push("تجديد بعد "+o.fin.split("-").reverse().join("/"));}}
+    const today=Date.now()/864e5;if(!o||!o.fin)sc+=.8;else if(day(o.fin)-today<45)sc+=.6;
+    return {e,sc:Math.round(sc*10)/10,why:[...new Set(why)]};}).sort((a,b)=>b.sc-a.sc);}
+function vehiclePick(text,vehs,kind){const g=vehicleGuess(text,vehs,kind),a=g[0],b=g[1]||{sc:0};return {list:g.filter(x=>x.sc>=1&&x.sc>=a.sc-3).slice(0,4),best:a&&a.sc>=1?a:null,sure:!!(a&&a.sc>=5&&a.sc-b.sc>=2)};}
+window.EGTPHDoc={vehicleGuess,vehiclePick,approxIn,toGray,resize,blankInfo,quality,bestCopy,dHash,hamming,isDuplicate,sauvola,skewAngle,skewInfo,cardBox,duplexPlan,manualDuplexPasses,DOC_RULES,classify,learn,datesIn,whiten,edgeCut,newModel,train,predict,decide,extract,splitPages,addVersion,restoreVersion,sha256};
 })();

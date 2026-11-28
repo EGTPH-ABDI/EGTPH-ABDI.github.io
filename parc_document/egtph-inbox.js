@@ -61,12 +61,16 @@
     const d=D().decide(text,MODEL),tt=TYPE2TT[d.type]||(d.type&&TT[d.type]?d.type:null);
     return {tt,sure:!!(tt&&d.sure),by:d.by,raw:d};
   }
-  function findVehicle(text){
+  function findVehicle(text,tt){
     const x=D().extract(text);
     for(const m of x.matricules){const e=_findVehByMat(m);if(e)return {e,mat:m};}
     const digits=scanDigits(text);   // احتياط: ماتريكول مكتوب بشكل آخر
     const hits=DATA.equipment.filter(e=>e&&e.veh&&scanDigits(e.matricule).length>=8&&digits.includes(scanDigits(e.matricule)));
-    return hits.length===1?{e:hits[0],mat:hits[0].matricule}:{e:null,mat:x.matricules[0]||"",many:hits};
+    if(hits.length===1)return {e:hits[0],mat:hits[0].matricule};
+    /* احتياط ذكي: رقم الوثيقة/المحضر، رقم الهيكل، رقم التسجيل المقلوب أو الناقص، تاريخ التجديد */
+    if(tt!=="pm"&&D().vehiclePick){const r=D().vehiclePick(text,DATA.equipment.filter(e=>e&&e.veh),tt==="ct"?"ct":tt==="cg"?"cg":"as");
+      if(r.best)return {e:r.sure?r.best.e:null,guess:r.best.e,why:r.best.why,sure:r.sure,mat:x.matricules[0]||"",many:r.list.map(c=>c.e)};}
+    return {e:null,mat:x.matricules[0]||"",many:hits};
   }
   function guessDates(text,tt){
     const ds=D().datesIn(text);if(!ds.length||tt==="cg")return {deb:"",fin:""};
@@ -111,9 +115,9 @@
     const rows=[];
     for(const g of groups){const it=items[g.pages[0]];if(!it||it.err||!it.store)continue;
       const all=g.pages.map(p=>items[p].text||"").join("\n");
-      const ty=guessType(all),vh=findVehicle(all),dt=guessDates(all,ty.tt);
+      const ty=guessType(all),vh=findVehicle(all,ty.tt),dt=guessDates(all,ty.tt);
       let has=false;if(vh.e&&ty.tt){try{has=!!(await idbGetImg(vh.e.id+"_"+ty.tt));}catch(e){}}
-      rows.push({img:it.store,text:all,src:it.src+(g.pages.length>1?" ("+g.pages.length+" p.)":""),tt:ty.tt,sure:ty.sure,by:ty.by,eid:vh.e?vh.e.id:"",mat:vh.mat,has,deb:dt.deb,fin:dt.fin});
+      rows.push({img:it.store,text:all,src:it.src+(g.pages.length>1?" ("+g.pages.length+" p.)":""),tt:ty.tt,sure:ty.sure,by:ty.by,eid:vh.e?vh.e.id:(vh.guess?vh.guess.id:""),vsure:!!vh.e,vwhy:vh.why||[],mat:vh.mat,has,deb:dt.deb,fin:dt.fin});
     }
     review(rows);
   }
@@ -122,10 +126,10 @@
     const H=rows.map((r,i)=>`<div class="ibx-row" style="display:flex;gap:10px;align-items:flex-start;border:1px solid #ddd;border-radius:10px;padding:8px;margin:8px 0">
       <img src="${r.img}" style="width:92px;height:auto;border-radius:6px;border:1px solid #ccc;flex:none">
       <div style="flex:1;min-width:0">
-        <label class="chk" style="font-weight:700"><input type="checkbox" data-ok="${i}" ${r.tt&&r.eid?"checked":""}> ${esc2(r.src)}</label>
+        <label class="chk" style="font-weight:700"><input type="checkbox" data-ok="${i}" ${r.tt&&r.eid&&(r.vsure||!r.vwhy.length)?"checked":""}> ${esc2(r.src)}</label>
         <div class="row2" style="margin-top:4px"><select data-tt="${i}">${ttOptions(r.tt)}</select><select data-veh="${i}">${vehOptions(r.eid)}</select></div>
         <small class="muted">${r.tt?(r.sure?"✓ ":"? ")+L("type ","النوع ")+(r.by==="appris"?L("(appris)","(متعلَّم)"):""):L("type inconnu — choisissez","نوع غير معروف — اختر")}
-          ${r.mat?" · "+esc2(r.mat):""}${r.has?" · "+L("remplace l'ancienne (gardée dans l'historique)","تستبدل القديمة (تبقى في السجل)"):""}</small>
+          ${r.mat?" · "+esc2(r.mat):""}${r.eid&&r.vwhy.length?" · "+(r.vsure?"✓ ":"⚠ "+L("véhicule probable","مركبة مرجّحة")+": ")+esc2(r.vwhy.join(", ")):""}${r.has?" · "+L("remplace l'ancienne (gardée dans l'historique)","تستبدل القديمة (تبقى في السجل)"):""}</small>
         <div class="row2" data-dates="${i}" style="margin-top:4px;${r.tt==="cg"?"display:none":""}"><input type="date" data-deb="${i}" value="${esc2(r.deb)}" title="${L("Début","البداية")}"><input type="date" data-fin="${i}" value="${esc2(r.fin)}" title="${L("Fin","النهاية")}"></div>
       </div></div>`).join("");
     $("#modal").innerHTML=`<h3>📥 ${L("Boîte de réception","صندوق الوارد")}</h3>

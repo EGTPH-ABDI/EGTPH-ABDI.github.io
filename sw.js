@@ -3,7 +3,7 @@
 //   (ثم تُحدَّث النسخة في الخلفية) — حتى لا تبقى الشاشة سوداء مع LTE ضعيف.
 // - مكتبات Firebase والخطوط (ثابتة برقم إصدار): من النسخة المحفوظة مباشرة.
 // - لا يحفظ بيانات Firebase (تبقى مزامنتها كما هي).
-var CACHE = "egtph-v22";
+var CACHE = "egtph-v23";
 var CORE = ["/apps.html", "/egtph-auth.js", "/egtph-lock.js", "/manifest.webmanifest", "/icons/icon-180.png"];
 var EXTERNAL = /^https:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com|www\.gstatic\.com\/firebasejs\/|cdnjs\.cloudflare\.com\/ajax\/libs\/|cdn\.jsdelivr\.net\/npm\/|unpkg\.com\/)/;
 var HEAVY = /onnxruntime|ppocr|tesseract|traineddata|\.onnx|\.wasm/i; // نماذج قراءة النصوص: كبيرة جداً، تبقى من الإنترنت

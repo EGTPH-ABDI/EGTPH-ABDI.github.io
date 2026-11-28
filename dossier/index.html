@@ -874,24 +874,38 @@ async function readFiles(files){if(!files.length)return;msg("جارٍ القرا
   ED.pages.forEach(p=>{if(p.cv._cut&&p.cv._cut.length)notes.push("⚠️ الوثيقة تبدو مقطوعة ("+p.cv._cut.join("، ")+") — أعد التصوير إن أمكن");});
   drawThumbs();
   /* lecture + classement (règles + modèle appris) */
-  try{msg((notes.length?notes.join("<br>")+"<br>":"")+"🔍 قراءة النص…","mu");const r=await EGTPHOcr.recognize(ED.pages[0].cv,"ara+fra",{fast:true});ED.text=(r&&r.data&&r.data.text)||"";const rr=r&&r.data&&r.data.rotation;if(rr){ED.pages[0].rot=rr%360;drawThumbs();notes.push("تم تصحيح اتجاه الصفحة تلقائياً");}}catch(e){ED.text="";}
+  try{msg((notes.length?notes.join("<br>")+"<br>":"")+"🔍 قراءة النص…","mu");let r=await EGTPHOcr.recognize(ED.pages[0].cv,"ara+fra",{fast:true});ED.text=(r&&r.data&&r.data.text)||"";
+    if(ED.text.replace(/\s/g,"").length<60){msg("🔍 قراءة معمّقة (الصورة صعبة)…","mu");const r2=await EGTPHOcr.recognize(ED.pages[0].cv,"ara+fra",{fast:false});const t2=(r2&&r2.data&&r2.data.text)||"";if(t2.replace(/\s/g,"").length>ED.text.replace(/\s/g,"").length){r=r2;ED.text=t2;}}const rr=r&&r.data&&r.data.rotation;if(rr){ED.pages[0].rot=rr%360;drawThumbs();notes.push("تم تصحيح اتجاه الصفحة تلقائياً");}}catch(e){ED.text="";}
   suggest(notes);}
 /* ====================== التوجيه الذكي : أي وثيقة تُرسل هنا تُحفظ في برنامجها ====================== */
 const normMat=s=>String(s||"").replace(/[^0-9]/g,"");
-function findVeh(text){const x=EGTPHDoc.extract(text),ms=x.matricules.map(normMat),dig=normMat(text);
-  let best=null;vehicles().forEach(e=>{const m=normMat(e.matricule);if(!m||m.length<6)return;let sc=0;if(e.serie&&String(e.serie).length>=6&&String(text).toUpperCase().replace(/\s/g,'').includes(String(e.serie).toUpperCase().replace(/\s/g,'')))sc=4;if(ms.includes(m))sc=Math.max(sc,3);else if(dig.includes(m))sc=Math.max(sc,2);else if(dig.includes(m.slice(0,6)))sc=Math.max(sc,1);if(sc&&(!best||sc>best.sc))best={e,sc};});return best&&best.e;}
+/* المركبة: عدة إشارات (رقم التسجيل ولو مقلوب/ناقص، رقم الهيكل، رقم وثيقة التأمين أو المحضر، تاريخ التجديد، العلامة) */
+function vehPick(text,kind){return EGTPHDoc.vehiclePick(text,vehicles(),kind||"as");}
+function findVeh(text,kind){const r=vehPick(text,kind);return r.sure?r.best.e:null;}
 function findWorker(text){const t=normAr(text).toUpperCase(),T=String(text).toUpperCase();let best=null;
   S.workers.forEach(w=>{let sc=0;const N=String(w.N||"").toUpperCase(),P=String(w.P||"").toUpperCase();if(N&&T.includes(N))sc+=2;if(P&&T.includes(P))sc+=2;if(w.ss&&normMat(text).includes(normMat(w.ss)))sc+=4;if(w.dd){const [y,mo,d]=w.dd.split("-"),tx=arNum(text),ds=EGTPHDoc.extract(text).dates;if(ds.includes(w.dd)||new RegExp("\\b0?"+(+d)+"\\D{1,14}"+y+"\\b").test(tx)||new RegExp("\\b"+y+"\\D{1,14}0?"+(+d)+"\\b").test(tx))sc+=3;}if(w.serie)0;if(sc>=3&&(!best||sc>best.sc))best={w,sc};});return best&&best.w;}
 const PARC_K={carte_grise:"cg",assurance:"as",controle_technique:"ct"},RH_K={diplome:"dip",attestation_travail:"att",experience:"exp",cni:"cni"};
-function routeHtml(type,text){if(PARC_K[type]){const e=findVeh(text);const opts=vehicles().map(v=>`<option value="${v.id}" ${e&&e.id===v.id?"selected":""}>${esc((v.name||"")+" "+(v.matricule||""))}</option>`).join("");
-    return `<div class="card" style="border-color:#111"><b>🚚 ${{cg:"بطاقة رمادية",as:"تأمين",ct:"مراقبة تقنية"}[PARC_K[type]]} — تُحفظ مباشرة في برنامج العتاد</b><div class="mu">${e?"المركبة عُرفت من رقم التسجيل المقروء.":"لم يُقرأ رقم التسجيل — اختر المركبة."}</div>
-     <select id="rtVeh"><option value="">— المركبة —</option>${opts}</select><div class="grid2" style="margin-top:6px"><div><label class="mu">من</label><input type="date" id="rtDeb"></div><div><label class="mu">إلى</label><input type="date" id="rtFin"></div></div>
-     <button class="b p" style="margin-top:8px" onclick="routeParc('${PARC_K[type]}')">✓ حفظ في العتاد (والقديمة إلى الأرشيف)</button></div>`;}
+function routeHtml(type,text){if(PARC_K[type]){const k=PARC_K[type],r=vehPick(text,k),sel=r.best&&r.best.e.id;ED.rtText=text;ED.rtK=k;
+    const opts=vehicles().map(v=>`<option value="${v.id}" ${sel===v.id?"selected":""}>${esc((v.name||"")+" "+(v.matricule||""))}</option>`).join("");
+    const st=e=>{const o=k==="ct"?e.ct:k==="as"?e.assurance:null;return o&&o.fin?(o.fin<today()?"منتهية ":"تنتهي ")+fd(o.fin):k==="cg"?"":"لا توجد وثيقة";};
+    const chips=r.list.length?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0">${r.list.map((c,i)=>`<button type="button" class="b ${i?"":"p"}" style="padding:5px 9px;font-size:12px" onclick="rtPick('${c.e.id}',this)">${esc(c.e.name||"")} ${esc(c.e.matricule||"")}<br><small>${esc(c.why.slice(0,3).join(" · ")||"مرشحة")}${st(c.e)?" · "+st(c.e):""}</small></button>`).join("")}</div>`:"";
+    return `<div class="card" style="border-color:#111"><b>🚚 ${{cg:"بطاقة رمادية",as:"تأمين",ct:"مراقبة تقنية"}[k]} — تُحفظ مباشرة في برنامج العتاد</b>
+     <div class="mu">${r.sure?"✓ المركبة عُرفت: "+esc(r.best.why.join("، ")):r.best?"المركبات المرجّحة (رقم التسجيل غير مقروء كاملاً) — اختر الصحيحة:":"لم يُتعرّف على المركبة — اخترها."}</div>${r.sure?"":chips}
+     <select id="rtVeh" onchange="rtDates(this.value)"><option value="">— المركبة —</option>${opts}</select><div class="grid2" style="margin-top:6px"><div><label class="mu">من</label><input type="date" id="rtDeb"></div><div><label class="mu">إلى</label><input type="date" id="rtFin"></div></div>
+     <button class="b p" style="margin-top:8px" onclick="routeParc('${k}')">✓ حفظ في العتاد (والقديمة إلى الأرشيف)</button></div>`;}
   if(RH_K[type]){const w=findWorker(text);const opts=S.workers.filter(x=>x.st!=="INACTIF").map(x=>`<option value="${x.id}" ${w&&w.id===x.id?"selected":""}>${esc(wName(x))}</option>`).join("");
     return `<div class="card" style="border-color:#111"><b>👷 ${{dip:"شهادة",att:"شهادة عمل",exp:"شهادة خبرة",cni:"بطاقة تعريف"}[RH_K[type]]} — تُحفظ مباشرة في برنامج العمال</b><div class="mu">${w?"العامل عُرف من الاسم المقروء.":"لم يُعرف العامل — اختره."}</div>
      <select id="rtW"><option value="">— العامل —</option>${opts}</select><input type="text" id="rtLab" placeholder="التسمية (مثال: Master en hydraulique)" style="margin-top:6px">
      <button class="b p" style="margin-top:8px" onclick="routeRh('${RH_K[type]}')">✓ حفظ في العمال</button></div>`;}
   return "";}
+function rtPick(id,btn){const v=$("#rtVeh");if(v){v.value=id;rtDates(id);}if(btn)btn.parentNode.querySelectorAll("button").forEach(b=>b.classList.toggle("p",b===btn));}
+/* التواريخ حسب المركبة: البداية = يوم بعد نهاية الوثيقة القديمة إن وُجد في النص، والنهاية بعد سنة */
+function rtDates(id){const k=ED.rtK,e=vehicles().find(x=>String(x.id)===String(id));if(!e||k==="cg")return;const o=(k==="ct"?e.ct:e.assurance)||{},ds=EGTPHDoc.extract(ED.rtText||"").dates,dd=s=>new Date(s+"T00:00:00").getTime()/864e5,iso=n=>new Date(n*864e5).toISOString().slice(0,10);
+  if(!o.fin)return;const f=dd(o.fin),late=ds.some(x=>dd(x)>f+300);
+  if(ds.includes(o.fin)&&(ds.includes(o.deb)||!late)){$("#rtDeb").value=o.deb||"";$("#rtFin").value=o.fin;return;}/* نفس الوثيقة الحالية */
+  const deb=late&&ds.find(x=>dd(x)-f>=0&&dd(x)-f<=10);if(!deb)return;const fi=ds.find(x=>{const g=dd(x)-dd(deb);return g>=355&&g<=370;});
+  const y=new Date(deb+"T00:00:00");y.setFullYear(y.getFullYear()+1);if(k==="as")y.setDate(y.getDate()-1);
+  $("#rtDeb").value=deb;$("#rtFin").value=fi||y.toISOString().slice(0,10);}
 async function routeParc(k){if(viewer())return;const id=$("#rtVeh").value;if(!id){toast("اختر المركبة");return;}if(!ED.pages.length)return;
   const cv=rotCv(ED.pages[0].cv,ED.pages[0].rot),s0=Math.min(1,1800/Math.max(cv.width,cv.height)),c2=document.createElement("canvas");c2.width=Math.round(cv.width*s0);c2.height=Math.round(cv.height*s0);c2.getContext("2d").drawImage(cv,0,0,c2.width,c2.height);
   const img=c2.toDataURL("image/jpeg",0.76),key=id+"_"+k,now=Date.now();prog("الحفظ في العتاد…",0.4);
@@ -920,7 +934,7 @@ async function readCA(){if(!ED||!ED.pages.length||$("#eCa").value)return;let v=c
 function setV(id,v){const e=$("#"+id);if(e&&!e.value&&v!=null&&v!=="")e.value=v;}
 function suggest(notes){const t=ED.text||"";let h=notes.length?notes.join("<br>")+"<br>":"";
   if(t&&window.EGTPHDoc){const d=EGTPHDoc.decide(t,S.model),x=EGTPHDoc.extract(t),ds=x.dates;
-    if(d.type&&(PARC_K[d.type]||RH_K[d.type])){h+=routeHtml(d.type,t);const v=validityIn(t),ds2=x.dates;setTimeout(()=>{const fi=$("#rtFin"),de=$("#rtDeb");if(fi&&!fi.value)fi.value=v||ds2.filter(z=>z>today()).pop()||"";if(de&&!de.value)de.value=ds2.filter(z=>z<=today()).pop()||"";},0);}
+    if(d.type&&(PARC_K[d.type]||RH_K[d.type])){h+=routeHtml(d.type,t);const v=validityIn(t),ds2=x.dates;setTimeout(()=>{const fi=$("#rtFin"),de=$("#rtDeb");if(fi&&!fi.value)fi.value=v||ds2.filter(z=>z>today()).pop()||"";if(de&&!de.value)de.value=ds2.filter(z=>z<=today()).pop()||"";const rv=$("#rtVeh");if(rv&&rv.value)rtDates(rv.value);},0);}
     else if(d.type&&TYPE_ELSE[d.type]){h+=`<b>هذه الوثيقة تبدو «${d.type}» وتُحفظ في برنامج ${TYPE_ELSE[d.type]==="p"?"العتاد (parc_document)":"العمال (egtph-rh)"}</b> — استعمل استيراد CNAS في برنامج العمال. <button class="b" onclick="openSrc('${TYPE_ELSE[d.type]}')">فتح البرنامج</button><br>`;}
     else if(d.type&&TYPE2[d.type]){let cat={rc:"jur",nif:"jur",nis:"jur",role:"fis",qualif:"qual",casnos:"para",bilan:"bilan",rib:"rib"}[TYPE2[d.type]];
       if(TYPE2[d.type]==="abe")cat=/الشرب|eau potable|\baep\b/i.test(t)?"abe_aep":"abe_ass";
