@@ -589,12 +589,16 @@ function cdcChecks(o,pl){const r=o.cdcR;if(!r)return [];const W=[];const nAbe=pl
 function vDos(){const o=defaultOpts();o.years=byCat("bilan").map(p=>p.year);Object.keys(o.abe).forEach(k=>o.abe[k]=true);const pl=buildPlan(o);
   let h=`<div class="card"><button class="b p" style="width:100%;padding:13px;font-size:16px" onclick="printFull()">🖨 طباعة الملف كاملاً</button>
    <div class="chips" style="margin-top:8px"><button class="b" onclick="goView('sub')">📋 تحضير ملف لمناقصة</button><button class="b" onclick="goView('cdc')">📑 تحليل دفتر الشروط</button><button class="b" onclick="addPiece()">📥 إضافة / تحديث وثيقة</button><button class="b" onclick="refreshSrc()">🔄 تحديث</button></div>
+   <input type="text" id="qS" placeholder="🔍 بحث في كل الوثائق (اسم، مشروع، بلدية، رقم، عامل، مركبة…)" style="margin-top:8px" oninput="searchDos(this.value)" value="${esc(S.q||"")}">
    ${S.err?`<div class="errbox">${esc(S.err)}</div>`:""}</div>${readinessHtml()}`;
   let open=false;pl.items.forEach(it=>{if(it.t==="cover")return;if(it.t==="sep"||it.t==="fin"){if(open)h+="</div>";h+=`<div class="sec">${esc(it.ar)}${it.sub_ar?" — "+esc(it.sub_ar):""}</div><div class="card">`;open=true;return;}h+=rowHtml(it);});
   if(open)h+="</div>";
   if(pl.miss.length)h+=`<div class="errbox"><b>وثائق ناقصة في برامجها المصدر:</b><br>${pl.miss.map(esc).join("<br>")}</div>`;
   h+=`<div class="sec">إضافة وثيقة حسب الصنف</div><div class="card">${Object.keys(CATS).map(c=>`<div class="row"><div class="t"><b>${CATS[c][0]}</b><span>${byCat(c).length} وثيقة</span></div><button class="b" onclick="addPiece('${c}')">＋</button></div>`).join("")}</div>`;
-  $("#view").innerHTML=h;}
+  $("#view").innerHTML=h;if(S.q)searchDos(S.q);}
+function searchDos(q){S.q=q;const n=normAr(q);document.querySelectorAll("#view .row").forEach(r=>{if(!r.closest(".card")||r.closest("details"))return;const id=(r.querySelector("[onclick^=viewItem]")||{}).getAttribute?.("onclick")||"";const m=id.match(/viewItem\('([^']+)'/);
+    let hay=r.innerText;if(m){const p=S.pieces[m[1]];if(p)hay+=" "+[p.fr,p.proj_fr,p.owner_fr,p.contract,p.ocrText].join(" ");}r.style.display=!n||normAr(hay).includes(n)?"":"none";});
+  document.querySelectorAll("#view .sec").forEach(sc=>{const c=sc.nextElementSibling;if(!c||!c.classList.contains("card"))return;const any=[...c.querySelectorAll(".row")].some(r=>r.style.display!=="none");sc.style.display=c.style.display=any||!n?"":"none";});}
 function goView(v){VIEW=v;document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x.dataset.v===v));render();}
 function printFull(){SUB=defaultOpts();SUB.name="الملف الكامل";Object.keys(SUB.abe).forEach(k=>SUB.abe[k]=true);["abe_ass","abe_aep","abe_autre"].flatMap(c=>byCat(c)).forEach(p=>SUB.abe[p.id]=true);checkAndPrint(true);}
 function renewHtml(){const lim=addDays(today(),31),L=[];
@@ -872,18 +876,59 @@ async function readFiles(files){if(!files.length)return;msg("جارٍ القرا
   /* lecture + classement (règles + modèle appris) */
   try{msg((notes.length?notes.join("<br>")+"<br>":"")+"🔍 قراءة النص…","mu");const r=await EGTPHOcr.recognize(ED.pages[0].cv,"ara+fra",{fast:true});ED.text=(r&&r.data&&r.data.text)||"";const rr=r&&r.data&&r.data.rotation;if(rr){ED.pages[0].rot=rr%360;drawThumbs();notes.push("تم تصحيح اتجاه الصفحة تلقائياً");}}catch(e){ED.text="";}
   suggest(notes);}
+/* ====================== التوجيه الذكي : أي وثيقة تُرسل هنا تُحفظ في برنامجها ====================== */
+const normMat=s=>String(s||"").replace(/[^0-9]/g,"");
+function findVeh(text){const x=EGTPHDoc.extract(text),ms=x.matricules.map(normMat),dig=normMat(text);
+  let best=null;vehicles().forEach(e=>{const m=normMat(e.matricule);if(!m||m.length<6)return;let sc=0;if(e.serie&&String(e.serie).length>=6&&String(text).toUpperCase().replace(/\s/g,'').includes(String(e.serie).toUpperCase().replace(/\s/g,'')))sc=4;if(ms.includes(m))sc=Math.max(sc,3);else if(dig.includes(m))sc=Math.max(sc,2);else if(dig.includes(m.slice(0,6)))sc=Math.max(sc,1);if(sc&&(!best||sc>best.sc))best={e,sc};});return best&&best.e;}
+function findWorker(text){const t=normAr(text).toUpperCase(),T=String(text).toUpperCase();let best=null;
+  S.workers.forEach(w=>{let sc=0;const N=String(w.N||"").toUpperCase(),P=String(w.P||"").toUpperCase();if(N&&T.includes(N))sc+=2;if(P&&T.includes(P))sc+=2;if(w.ss&&normMat(text).includes(normMat(w.ss)))sc+=4;if(w.dd){const [y,mo,d]=w.dd.split("-"),tx=arNum(text),ds=EGTPHDoc.extract(text).dates;if(ds.includes(w.dd)||new RegExp("\\b0?"+(+d)+"\\D{1,14}"+y+"\\b").test(tx)||new RegExp("\\b"+y+"\\D{1,14}0?"+(+d)+"\\b").test(tx))sc+=3;}if(w.serie)0;if(sc>=3&&(!best||sc>best.sc))best={w,sc};});return best&&best.w;}
+const PARC_K={carte_grise:"cg",assurance:"as",controle_technique:"ct"},RH_K={diplome:"dip",attestation_travail:"att",experience:"exp",cni:"cni"};
+function routeHtml(type,text){if(PARC_K[type]){const e=findVeh(text);const opts=vehicles().map(v=>`<option value="${v.id}" ${e&&e.id===v.id?"selected":""}>${esc((v.name||"")+" "+(v.matricule||""))}</option>`).join("");
+    return `<div class="card" style="border-color:#111"><b>🚚 ${{cg:"بطاقة رمادية",as:"تأمين",ct:"مراقبة تقنية"}[PARC_K[type]]} — تُحفظ مباشرة في برنامج العتاد</b><div class="mu">${e?"المركبة عُرفت من رقم التسجيل المقروء.":"لم يُقرأ رقم التسجيل — اختر المركبة."}</div>
+     <select id="rtVeh"><option value="">— المركبة —</option>${opts}</select><div class="grid2" style="margin-top:6px"><div><label class="mu">من</label><input type="date" id="rtDeb"></div><div><label class="mu">إلى</label><input type="date" id="rtFin"></div></div>
+     <button class="b p" style="margin-top:8px" onclick="routeParc('${PARC_K[type]}')">✓ حفظ في العتاد (والقديمة إلى الأرشيف)</button></div>`;}
+  if(RH_K[type]){const w=findWorker(text);const opts=S.workers.filter(x=>x.st!=="INACTIF").map(x=>`<option value="${x.id}" ${w&&w.id===x.id?"selected":""}>${esc(wName(x))}</option>`).join("");
+    return `<div class="card" style="border-color:#111"><b>👷 ${{dip:"شهادة",att:"شهادة عمل",exp:"شهادة خبرة",cni:"بطاقة تعريف"}[RH_K[type]]} — تُحفظ مباشرة في برنامج العمال</b><div class="mu">${w?"العامل عُرف من الاسم المقروء.":"لم يُعرف العامل — اختره."}</div>
+     <select id="rtW"><option value="">— العامل —</option>${opts}</select><input type="text" id="rtLab" placeholder="التسمية (مثال: Master en hydraulique)" style="margin-top:6px">
+     <button class="b p" style="margin-top:8px" onclick="routeRh('${RH_K[type]}')">✓ حفظ في العمال</button></div>`;}
+  return "";}
+async function routeParc(k){if(viewer())return;const id=$("#rtVeh").value;if(!id){toast("اختر المركبة");return;}if(!ED.pages.length)return;
+  const cv=rotCv(ED.pages[0].cv,ED.pages[0].rot),s0=Math.min(1,1800/Math.max(cv.width,cv.height)),c2=document.createElement("canvas");c2.width=Math.round(cv.width*s0);c2.height=Math.round(cv.height*s0);c2.getContext("2d").drawImage(cv,0,0,c2.width,c2.height);
+  const img=c2.toDataURL("image/jpeg",0.76),key=id+"_"+k,now=Date.now();prog("الحفظ في العتاد…",0.4);
+  try{const old=await fget(PARC,PARC.base+"_img/"+key).catch(()=>null);if(old)await fput(PARC,PARC.base+"_img_hist/"+key+"/"+now,{img:old,t:now,by:"dossier"});
+    await fput(PARC,PARC.base+"_img/"+key,img);S.imgKeys.add(key);
+    const deb=$("#rtDeb").value,fin=$("#rtFin").value;
+    if(k!=="cg"&&(deb||fin)){const eq=await fget(PARC,PARC.base+"/equipment");const i=(eq||[]).findIndex(e=>e&&String(e.id)===String(id));
+      if(i>=0){const f=k==="as"?"assurance":"ct";const cur=eq[i][f]||{};await fput(PARC,PARC.base+"/equipment/"+i+"/"+f,Object.assign({},cur,deb?{deb}:{},fin?{fin}:{}));await fput(PARC,PARC.base+"/equipment/"+i+"/_mod",now);
+        await fput(PARC,PARC.base+"/_mod",now);await fput(PARC,PARC.base+"/savedAt",new Date(now).toISOString());const e=S.equip.find(x=>String(x.id)===String(id));if(e){e[f]=Object.assign({},cur,deb?{deb}:{},fin?{fin}:{});e._mod=now;}}}
+    prog(false);closeModal();toast("حُفظت في برنامج العتاد ✓");render();}catch(e){prog(false);toast("تعذّر: "+e.message,4000);}}
+async function routeRh(kind){if(viewer())return;const wid=$("#rtW").value;if(!wid){toast("اختر العامل");return;}if(!ED.pages.length)return;
+  let slot=kind;if(kind==="dip"||kind==="exp"){const used=new Set(Object.keys(S.rhFiles).filter(x=>S.rhFiles[x].wid===wid&&!S.rhFiles[x].deleted).map(x=>S.rhFiles[x].kind));for(const s of [kind,kind+"2",kind+"3",kind+"4",kind+"5",kind+"6",kind+"7",kind+"8",kind+"9"])if(!used.has(s)){slot=s;break;}}
+  const cv=rotCv(ED.pages[0].cv,ED.pages[0].rot),s0=Math.min(1,2000/Math.max(cv.width,cv.height)),c2=document.createElement("canvas");c2.width=Math.round(cv.width*s0);c2.height=Math.round(cv.height*s0);c2.getContext("2d").drawImage(cv,0,0,c2.width,c2.height);
+  const b64=c2.toDataURL("image/jpeg",0.8).split(",")[1],key=slot+"_"+wid,now=Date.now();prog("الحفظ في العمال…",0.4);
+  try{const old=await fget(RH,RH.base+"/files/"+key).catch(()=>null);if(old&&!old.deleted)await fput(RH,RH.base+"/files_hist/"+key+"/"+now,old);
+    await fput(RH,RH.base+"/files/"+key,{kind:slot,wid,name:"dossier_"+now+".jpg",label:$("#rtLab").value.trim(),type:"image/jpeg",size:Math.round(b64.length*0.75),updatedAtMs:now,ocrText:(ED.text||"").slice(0,4000),b64,by:"dossier"});
+    S.rhFiles[key]={key,kind:slot,wid,ms:now,label:$("#rtLab").value.trim()};prog(false);closeModal();toast("حُفظت في برنامج العمال ✓");render();}catch(e){prog(false);toast("تعذّر: "+e.message,4000);}}
+/* رقم الأعمال من صفحات الحصيلة (TCR) */
+function caIn(text){const lines=arNum(String(text||"")).split(/\n/);const re=/(chiffre d'?\s?affaires|chiffre d’affaires|رقم الأعمال|ventes de marchandises|production vendue)[^\n\d]{0,60}((?:\d{1,3}(?:[ .]\d{3})+|\d{6,})(?:,\d{2})?)/i;
+  for(const l of lines){if(/(imp[oô]ts?|taxes?|ضرائب|رسوم|sur chiffre)/i.test(l))continue;const m=l.replace(/[ \t]+/g," ").match(re);if(m){const v=Number(m[2].replace(/[ .]/g,"").replace(",","."));if(v>=100000)return v;}}return 0;}
 function parsePipes(s){return String(s||"").split(/[;\n،]+/).map(x=>x.trim()).filter(Boolean).map(x=>{const dn=(x.match(/[ØøDN]\s*(\d{2,4})/i)||[])[1],len=(x.match(/[:=]\s*([\d.,\s]+)$/)||x.match(/(\d[\d.,]*)\s*$/)||[])[1],mat=(x.match(/annel[ée]|pehd|pvc|b[ée]ton/i)||[""])[0];
   return len?{dn:+dn||0,len:Number(String(len).replace(/[\s.]/g,"").replace(",","."))||0,mat:mat?mat.charAt(0).toUpperCase()+mat.slice(1).toLowerCase().replace("annele","Annelé"):""}:null;}).filter(x=>x&&x.len);}
+async function readCA(){if(!ED||!ED.pages.length||$("#eCa").value)return;let v=caIn(ED.text);
+  for(let i=1;!v&&i<Math.min(ED.pages.length,10);i++){prog("قراءة رقم الأعمال من الحصيلة…",i/10,"صفحة "+(i+1));try{const r=await EGTPHOcr.recognize(rotCv(ED.pages[i].cv,ED.pages[i].rot),"fra+ara",{fast:true});v=caIn(r&&r.data&&r.data.text);}catch(e){}}
+  prog(false);if(v){$("#eCa").value=v;msg(($("#eMsg").innerHTML||"")+`<div class="ok">رقم الأعمال المقروء من الحصيلة: <b>${money(v)} دج</b> — راجعه قبل الحفظ.</div>`,"mu");}}
 function setV(id,v){const e=$("#"+id);if(e&&!e.value&&v!=null&&v!=="")e.value=v;}
 function suggest(notes){const t=ED.text||"";let h=notes.length?notes.join("<br>")+"<br>":"";
   if(t&&window.EGTPHDoc){const d=EGTPHDoc.decide(t,S.model),x=EGTPHDoc.extract(t),ds=x.dates;
-    if(d.type&&TYPE_ELSE[d.type]){h+=`<b>هذه الوثيقة تبدو «${d.type}» وتُحفظ في برنامج ${TYPE_ELSE[d.type]==="p"?"العتاد (parc_document)":"العمال (egtph-rh)"}</b> — ستظهر هنا تلقائياً بعد حفظها هناك. <button class="b" onclick="openSrc('${TYPE_ELSE[d.type]}')">فتح البرنامج</button><br>`;}
+    if(d.type&&(PARC_K[d.type]||RH_K[d.type])){h+=routeHtml(d.type,t);const v=validityIn(t),ds2=x.dates;setTimeout(()=>{const fi=$("#rtFin"),de=$("#rtDeb");if(fi&&!fi.value)fi.value=v||ds2.filter(z=>z>today()).pop()||"";if(de&&!de.value)de.value=ds2.filter(z=>z<=today()).pop()||"";},0);}
+    else if(d.type&&TYPE_ELSE[d.type]){h+=`<b>هذه الوثيقة تبدو «${d.type}» وتُحفظ في برنامج ${TYPE_ELSE[d.type]==="p"?"العتاد (parc_document)":"العمال (egtph-rh)"}</b> — استعمل استيراد CNAS في برنامج العمال. <button class="b" onclick="openSrc('${TYPE_ELSE[d.type]}')">فتح البرنامج</button><br>`;}
     else if(d.type&&TYPE2[d.type]){let cat={rc:"jur",nif:"jur",nis:"jur",role:"fis",qualif:"qual",casnos:"para",bilan:"bilan",rib:"rib"}[TYPE2[d.type]];
       if(TYPE2[d.type]==="abe")cat=/الشرب|eau potable|\baep\b/i.test(t)?"abe_aep":"abe_ass";
       h+=`النوع المقترح: <b>${esc((CATS[cat]||[cat])[0])}</b> ${d.sure?'<span class="ok">(مؤكد)</span>':'<span class="wa">(للتأكيد)</span>'}<br>`;
       if(!ED.id&&!$("#eCat").value){$("#eCat").value=cat;ED.cat=cat;$("#abeF").style.display=cat.startsWith("abe")?"":"none";const same=["rc","nif","nis","role","qualif","casnos"].includes(TYPE2[d.type])?S.pieces[TYPE2[d.type]]:null;
         if(same&&!same.deleted){h+=`توجد وثيقة من نفس النوع: سيتم <b>استبدالها</b> (القديمة إلى الأرشيف).<br>`;ED.id=same.id;ED.p=same;["Fr","Ar"].forEach(k=>$("#e"+k).value=same[k.toLowerCase()]||"");}}
-      if(cat==="bilan"&&x.years.length&&!$("#eYear").value)$("#eYear").value=Math.max(...x.years.filter(y=>y<=new Date().getFullYear()));}
+      if(cat==="bilan"&&x.years.length&&!$("#eYear").value)$("#eYear").value=Math.max(...x.years.filter(y=>y<=new Date().getFullYear()));
+      if(cat==="bilan")readCA();}
     const v=validityIn(t);if(v){setV("eFin",v);h+=`تاريخ الصلاحية المقروء: <b>${fd(v)}</b><br>`;}
     if(ds.length){setV("eDate",ds.filter(s=>s<=today()).pop()||"");if(!v){const fut=ds.filter(s=>s>today());if(fut.length)setV("eFin",fut[fut.length-1]);}h+=`التواريخ المقروءة: ${ds.map(fd).join("، ")}<br>`;}
     const c=$("#eCat")?$("#eCat").value:ED.cat;

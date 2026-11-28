@@ -27,6 +27,34 @@ const del = async (p) => fetch(`${DB}/${p}.json?${auth}`, { method: "DELETE" });
 const subs = (await get("egtph-apps/_push")) || {};
 const alerts = (await get(ROOT + "/alerts")) || {};
 const state = (await get("egtph-apps/_push_state")) || {};
+
+// ── ملف المؤسسة : تنبيهات انتهاء الصلاحية (وثائق الملف، تأمين ومراقبة العتاد المُدرج، انتساب العمال النشطين)
+try { await dossierAlerts(); } catch (e) { console.log("تنبيهات الملف:", e.message); }
+async function dossierAlerts() {
+  const sign = async (key) => (await (await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: S.email, password: S.password, returnSecureToken: true }) })).json()).idToken;
+  const P = { dossier: ["AIzaSyCE1nUWBtJGr-dv0PtN65pI8MtWQE12TrM", "https://egtph-dossier-default-rtdb.europe-west1.firebasedatabase.app"], parc: ["AIzaSyBf7NU7QPvS824duUE78uaXZuCzGdX6Grg", "https://egtph-parc-default-rtdb.europe-west1.firebasedatabase.app"], rh: ["AIzaSyA7xH8pwmEjzIM98lE6C-GmK-cSrAvs9gc", "https://egtph-rh-default-rtdb.europe-west1.firebasedatabase.app"] };
+  const T = {}; for (const k of Object.keys(P)) T[k] = await sign(P[k][0]);
+  const g = async (k, path) => (await fetch(`${P[k][1]}${path}.json?auth=${T[k]}`)).json();
+  const dz0 = new Date(Date.now() + 3600 * 1000), today0 = dz0.toISOString().slice(0, 10), in30 = new Date(dz0.getTime() + 30 * 864e5).toISOString().slice(0, 10), in7 = new Date(dz0.getTime() + 7 * 864e5).toISOString().slice(0, 10);
+  const items = [];
+  const pieces = (await g("dossier", "/egtph/dossier/pieces")) || {}, ext = (await g("dossier", "/egtph/dossier/ext")) || {}, choices = (await g("dossier", "/egtph/dossier/choices")) || {};
+  Object.values(pieces).forEach((p) => { if (p && !p.deleted && p.fin && !String(p.cat).startsWith("abe")) items.push({ k: p.id, name: p.ar || p.fr, fin: p.fin }); });
+  Object.entries(ext).forEach(([k, v]) => { if (v && v.fin) items.push({ k: k.replace(/\W/g, "_"), name: k.includes("maj") ? "شهادة CNAS" : "شهادة CACOBATPH", fin: v.fin }); });
+  const pd = (await g("parc", "/egtph/EGTPH-mat-2026-CnucIO2DZnBAHqMitxm1Y86k")) || {};
+  (pd.equipment || []).filter((e) => e && e.veh && (choices.veh || {})[e.id]).forEach((e) => {
+    if (e.assurance && e.assurance.fin) items.push({ k: "as_" + e.id, name: "تأمين " + (e.name || "") + " " + (e.matricule || ""), fin: e.assurance.fin });
+    if (e.needsCT && e.ct && e.ct.fin) items.push({ k: "ct_" + e.id, name: "المراقبة التقنية " + (e.name || "") + " " + (e.matricule || ""), fin: e.ct.fin }); });
+  const RB = "/egtph-rh/rh_v3_MBInR2bhdTMRnHOL1ts1g187pZhstcz1VwtcHtjz8", ws = (await g("rh", RB + "/records/workers")) || {};
+  for (const v of Object.values(ws)) { const w = v && v.data; if (!w || w.deleted || w.st === "INACTIF") continue; const vu = await g("rh", RB + "/files/af_" + w.id + "/meta/validUntil"); if (vu) items.push({ k: "af_" + w.id, name: "انتساب " + (w.N || "") + " " + (w.P || ""), fin: vu }); }
+  const want = {};
+  items.filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x.fin) && x.fin <= in30).forEach((x) => {
+    const id = ("dos_" + x.k + "_" + x.fin).replace(/[.#$\[\]\/]/g, "_"), exp = x.fin < today0;
+    want[id] = { source: "dossier", app: "dossier", severity: exp || x.fin <= in7 ? "critical" : "warning", title: (exp ? "منتهية: " : "تنتهي قريباً: ") + x.name, message: "ملف المؤسسة — " + (exp ? "انتهت في " : "تنتهي في ") + x.fin.split("-").reverse().join("/"), dueAt: x.fin, status: "open" }; });
+  const nowMs = Date.now();
+  for (const [id, a] of Object.entries(want)) { const cur = alerts[id]; if (!cur || cur.severity !== a.severity || cur.title !== a.title) { const v = Object.assign({ createdAt: (cur && cur.createdAt) || nowMs, updatedAt: nowMs, read: !!(cur && cur.read && cur.severity === a.severity) }, a); await put(ROOT + "/alerts/" + id, v); alerts[id] = v; } }
+  for (const id of Object.keys(alerts)) if (id.startsWith("dos_") && !want[id]) { await del(ROOT + "/alerts/" + id); delete alerts[id]; }
+  console.log("تنبيهات الملف:", Object.keys(want).length);
+}
 const sent = state.sent || {};
 const ids = Object.keys(subs);
 console.log("هواتف مسجلة:", ids.length, "— تنبيهات:", Object.keys(alerts).length);
