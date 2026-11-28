@@ -326,8 +326,9 @@ function vehicleGuess(text,vehs,kind){const T=String(text||"").toUpperCase(),dig
     toks(e).forEach(x=>{const w=6/freq[x],d=approxIn(x,dig),lim=x.length>=14?3:x.length>=10?1:0;if(d<=lim){sc+=w*(1-d/(lim+1));if(w>=3)why.push(kind==="ct"?"رقم المحضر":"رقم الوثيقة");}});
     new Set(sufs(e)).forEach(x=>{if(sfreq[x]===1&&x.length>=4&&nums.includes(x)){sc+=2.5;why.push(kind==="ct"?"رقم المحضر":"رقم الوثيقة");}});
     const nm=((e.name||"")+" "+(e.model||"")).toUpperCase();BRANDS.forEach(b=>{if(nm.includes(b)&&T.includes(b)){sc+=1.5;why.push(b);}});
-    const o=kind==="ct"?e.ct:e.assurance;if(o&&o.fin){const f=day(o.fin),late=ds.some(x=>day(x)>f+300);
-      if(ds.includes(o.fin)&&(ds.includes(o.deb)||!late)){sc+=2;why.push("نفس الوثيقة الحالية");}
+    const o=kind==="ct"?e.ct:e.assurance;if(o&&o.fin){const f=day(o.fin),mis=x=>o.deb&&x!==o.deb&&x.slice(0,3)===o.deb.slice(0,3)&&x.slice(4)===o.deb.slice(4),late=ds.some(x=>day(x)>f+300&&!mis(x));/* 2026 مقروءة 2028 = نفس الوثيقة */
+      const dl=ds.some(mis)?ds.concat([o.deb]):ds;
+      if(dl.includes(o.fin)&&(dl.includes(o.deb)||!late)){sc+=2;why.push("نفس الوثيقة الحالية");}
       else if(late&&ds.some(x=>day(x)-f>=0&&day(x)-f<=10)){sc+=2.5;why.push("تجديد بعد "+o.fin.split("-").reverse().join("/"));}}
     const today=Date.now()/864e5;if(!o||!o.fin)sc+=.8;else if(day(o.fin)-today<45)sc+=.6;
     return {e,sc:Math.round(sc*10)/10,why:[...new Set(why)]};}).sort((a,b)=>b.sc-a.sc);}

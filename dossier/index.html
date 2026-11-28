@@ -906,7 +906,7 @@ async function rtDeep(type,t){const c=$("#rtCard");if(!c||!ED||!ED.pages.length)
 function rtPick(id,btn){const v=$("#rtVeh");if(v){v.value=id;rtDates(id);}if(btn)btn.parentNode.querySelectorAll("button").forEach(b=>b.classList.toggle("p",b===btn));}
 /* التواريخ حسب المركبة: البداية = يوم بعد نهاية الوثيقة القديمة إن وُجد في النص، والنهاية بعد سنة */
 function rtDates(id){const k=ED.rtK,e=vehicles().find(x=>String(x.id)===String(id));if(!e||k==="cg")return;const o=(k==="ct"?e.ct:e.assurance)||{},ds=EGTPHDoc.extract(ED.rtText||"").dates,dd=s=>new Date(s+"T00:00:00").getTime()/864e5,iso=n=>new Date(n*864e5).toISOString().slice(0,10);
-  if(!o.fin)return;const f=dd(o.fin),late=ds.some(x=>dd(x)>f+300);
+  if(!o.fin)return;const mis=x=>o.deb&&x!==o.deb&&x.slice(0,3)===o.deb.slice(0,3)&&x.slice(4)===o.deb.slice(4);if(ds.some(mis))ds.push(o.deb);const f=dd(o.fin),late=ds.some(x=>dd(x)>f+300&&!mis(x));
   if(ds.includes(o.fin)&&(ds.includes(o.deb)||!late)){$("#rtDeb").value=o.deb||"";$("#rtFin").value=o.fin;return;}/* نفس الوثيقة الحالية */
   const deb=late&&ds.find(x=>dd(x)-f>=0&&dd(x)-f<=10);if(!deb)return;const fi=ds.find(x=>{const g=dd(x)-dd(deb);return g>=355&&g<=370;});
   const y=new Date(deb+"T00:00:00");y.setFullYear(y.getFullYear()+1);if(k==="as")y.setDate(y.getDate()-1);
