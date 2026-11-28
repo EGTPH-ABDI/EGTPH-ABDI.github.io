@@ -558,17 +558,45 @@ function rowHtml(it){const src={d:'<span class="tag">الملف</span>',p:'<span
   const act=it.src==="d"?`<button class="b" onclick="editPiece('${it.id}')">✎</button>`:it.src==="p"?`<button class="b" onclick="openSrc('p')">↗</button>`:it.src==="r"?`<button class="b" onclick="openSrc('r')">↗</button>`:"";
   return `<div class="row"><div class="t"><b>${esc(it.ar||it.label)}</b><span>${esc(sub)}</span></div>${stHtml(it.fin)}${src}<button class="b" onclick="viewItem('${esc(it.id)}')">👁</button>${act}</div>`;}
 function fullOpts(){const o=defaultOpts();return o;}
+/* ====================== الذكاء : الجاهزية، المناصب، المراجع المماثلة ====================== */
+const MANUAL_POSTE=/^(manoeuvre|aide_macon|gardien|macon|chauffeur.*|secretaire|__autre|)$/;
+function suggestPoste(w){const t=((w.dp||"")+" "+dipKeys(w).map(k=>S.rhFiles[k].label||"").join(" ")).toLowerCase();
+  if(/topo/.test(t))return "topo_sup";if(/ing_|ingénieur|ingenieur|master/.test(t))return "ing_hydro_p";if(/licence|techsup|tech_hydro|technicien/.test(t))return "tech_hydro_p";return "";}
+function posteIssue(o,w){if(o.roles[w.id]!=="cadre")return null;const k=posteOf(o,w);return MANUAL_POSTE.test(k||"")?{cur:posteFr(k)||"—",sug:suggestPoste(w)}:null;}
+function readiness(){const o=defaultOpts();o.years=o.years;Object.keys(o.abe).forEach(k=>o.abe[k]=true);const pl=buildPlan(o),it=[];const lim=addDays(today(),31);
+  pl.miss.forEach(m=>it.push({lv:"er",t:"ناقصة: "+m,a:/البطاقة|التأمين|المراقبة/.test(m)?["فتح العتاد","openSrc('p')"]:/انتساب|شهادة /.test(m)?["فتح العمال","openSrc('r')"]:null}));
+  pl.items.filter(x=>x.t==="doc"&&x.fin).forEach(x=>{if(x.fin<today())it.push({lv:"er",t:"منتهية: "+(x.ar||x.label)+" ("+fd(x.fin)+")",a:x.src==="d"?["تحديث","editPiece('"+x.id+"')"]:x.src==="p"?["فتح العتاد","openSrc('p')"]:["فتح العمال","openSrc('r')"]});
+    else if(x.fin<lim)it.push({lv:"wa",t:"تنتهي قريباً: "+(x.ar||x.label)+" ("+fd(x.fin)+")",a:x.src==="d"?["تحديث","editPiece('"+x.id+"')"]:null});});
+  S.workers.filter(w=>w.st!=="INACTIF").forEach(w=>{const pi=posteIssue(o,w);if(pi)it.push({lv:"wa",t:`إطار بمنصب «${pi.cur}» في egtph-rh: ${wName(w)}${pi.sug?" — المقترح: "+posteFr(pi.sug):""}`,a:pi.sug?["تطبيق المقترح","applyPoste('"+w.id+"','"+pi.sug+"')"]:null});});
+  const abes=["abe_ass","abe_aep","abe_autre"].flatMap(c=>byCat(c));const noInfo=abes.filter(p=>!p.amount||!p.owner_ar||!abeTitle(p));
+  if(noInfo.length)it.push({lv:"wa",t:noInfo.length+" شهادة حسن تنفيذ بدون مبلغ أو صاحب مشروع",a:["إكمال","editPiece('"+noInfo[0].id+"')"]});
+  const noLen=abes.filter(p=>!p.length);if(noLen.length)it.push({lv:"in",t:noLen.length+" شهادة بدون الأطوال (غير مكتوبة في الشهادة أو لم تُقرأ)",a:["إكمال","editPiece('"+noLen[0].id+"')"]});
+  const er=it.filter(x=>x.lv==="er").length,wa=it.filter(x=>x.lv==="wa").length;return {score:Math.max(0,100-7*er-3*wa),it};}
+function readinessHtml(){const r=readiness();const lvl=r.score>=90?"ok":r.score>=70?"wa":"er";
+  return `<div class="card" style="margin-top:10px"><div class="row" style="border:0"><div class="t"><b>جاهزية الملف</b><span>${r.it.length?r.it.length+" ملاحظة":"كل شيء جاهز"}</span></div><span class="st ${lvl}" style="font-size:20px">${r.score}%</span></div>
+   <div class="bar"><i style="width:${r.score}%"></i></div>${r.it.length?`<details style="margin-top:6px"${r.score<90?" open":""}><summary class="mu">التفاصيل</summary>${r.it.map(x=>`<div class="row"><div class="t"><span class="${x.lv==="er"?"er":x.lv==="wa"?"wa":"mu"}" style="font-size:13px">${x.lv==="er"?"✗":x.lv==="wa"?"!":"•"} ${esc(x.t)}</span></div>${x.a?`<button class="b" onclick="${x.a[1]}">${x.a[0]}</button>`:""}</div>`).join("")}</details>`:""}</div>`;}
+async function applyPoste(wid,k){S.choices.poste=S.choices.poste||{};S.choices.poste[wid]=k;if(SUB&&SUB.poste)SUB.poste[wid]=k;try{await fput(DOSSIER,D+"/choices/poste/"+wid,k);toast("المنصب: "+posteFr(k)+" ✓");}catch(e){toast("تعذّر الحفظ");}render();}
+/* تشابه نص المشروع مع موضوع المناقصة (ثلاثيات الحروف) */
+function normAr(s){return String(s||"").toLowerCase().replace(/[أإآ]/g,"ا").replace(/ة/g,"ه").replace(/ى/g,"ي").replace(/الصرف الصحي/g,"التطهير").replace(/[^\u0600-\u06FFa-z0-9]+/g," ").trim();}
+function tri(s){s=normAr(s);const g=new Set();for(let i=0;i<s.length-2;i++)g.add(s.slice(i,i+3));return g;}
+function relevance(p,r){if(!r)return 0;const a=tri(r.objet||""),b=tri((abeTitle(p)||"")+" "+(p.proj_fr||""));let n=0;a.forEach(x=>{if(b.has(x))n++;});let s=a.size?n/a.size:0;
+  if(r.ass&&p.cat==="abe_ass")s+=0.25;if(r.aep&&p.cat==="abe_aep")s+=0.25;if(r.owner&&p.owner_ar&&normAr(r.owner).includes(normAr(p.owner_ar).split(" ").pop()))s+=0.1;return s;}
+function cdcChecks(o,pl){const r=o.cdcR;if(!r)return [];const W=[];const nAbe=pl.items.filter(x=>x.src==="d"&&/^abe_/.test(x.id)).length;
+  if(r.refsMin&&nAbe<r.refsMin)W.push(`الدفتر يطلب ${r.refsMin} شهادات حسن تنفيذ — المختار ${nAbe}`);
+  if(r.years&&o.years.length<r.years)W.push(`الدفتر يطلب حصائل ${r.years} سنوات — المختار ${o.years.length}`);
+  const bil=byCat("bilan").filter(p=>o.years.includes(p.year)&&p.ca),avg=bil.reduce((a,p)=>a+p.ca,0)/Math.max(1,bil.length);if(r.caMin&&avg<r.caMin)W.push(`متوسط رقم الأعمال للسنوات المختارة ${money(avg)} دج أقل من المطلوب ${money(r.caMin)} دج`);
+  if(r.cat&&r.catOk===false)W.push(`الصنف المطلوب ${r.cat} أعلى من صنفكم (IV)`);return W;}
 function vDos(){const o=defaultOpts();o.years=byCat("bilan").map(p=>p.year);Object.keys(o.abe).forEach(k=>o.abe[k]=true);const pl=buildPlan(o);
   let h=`<div class="card"><button class="b p" style="width:100%;padding:13px;font-size:16px" onclick="printFull()">🖨 طباعة الملف كاملاً</button>
    <div class="chips" style="margin-top:8px"><button class="b" onclick="goView('sub')">📋 تحضير ملف لمناقصة</button><button class="b" onclick="goView('cdc')">📑 تحليل دفتر الشروط</button><button class="b" onclick="addPiece()">📥 إضافة / تحديث وثيقة</button><button class="b" onclick="refreshSrc()">🔄 تحديث</button></div>
-   ${S.err?`<div class="errbox">${esc(S.err)}</div>`:""}${renewHtml()}</div>`;
+   ${S.err?`<div class="errbox">${esc(S.err)}</div>`:""}</div>${readinessHtml()}`;
   let open=false;pl.items.forEach(it=>{if(it.t==="cover")return;if(it.t==="sep"||it.t==="fin"){if(open)h+="</div>";h+=`<div class="sec">${esc(it.ar)}${it.sub_ar?" — "+esc(it.sub_ar):""}</div><div class="card">`;open=true;return;}h+=rowHtml(it);});
   if(open)h+="</div>";
   if(pl.miss.length)h+=`<div class="errbox"><b>وثائق ناقصة في برامجها المصدر:</b><br>${pl.miss.map(esc).join("<br>")}</div>`;
   h+=`<div class="sec">إضافة وثيقة حسب الصنف</div><div class="card">${Object.keys(CATS).map(c=>`<div class="row"><div class="t"><b>${CATS[c][0]}</b><span>${byCat(c).length} وثيقة</span></div><button class="b" onclick="addPiece('${c}')">＋</button></div>`).join("")}</div>`;
   $("#view").innerHTML=h;}
 function goView(v){VIEW=v;document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x.dataset.v===v));render();}
-function printFull(){SUB=defaultOpts();SUB.name="الملف الكامل";SUB.years=SUB.years;checkAndPrint(true);}
+function printFull(){SUB=defaultOpts();SUB.name="الملف الكامل";Object.keys(SUB.abe).forEach(k=>SUB.abe[k]=true);["abe_ass","abe_aep","abe_autre"].flatMap(c=>byCat(c)).forEach(p=>SUB.abe[p.id]=true);checkAndPrint(true);}
 function renewHtml(){const lim=addDays(today(),31),L=[];
   PS().forEach(p=>{if(p.fin&&p.fin<lim)L.push([p.ar||p.fr,p.fin]);});
   vehicles().filter(vehIncluded).forEach(e=>["as","ct"].forEach(k=>{const f=vehFin(e,k);if(f&&f<lim&&S.imgKeys.has(e.id+"_"+k))L.push([(k==="as"?"تأمين ":"مراقبة تقنية ")+(e.name||"")+" "+(e.matricule||""),f]);}));
@@ -586,13 +614,13 @@ async function viewItem(id){const o=defaultOpts();o.years=byCat("bilan").map(p=>
 /* ---------- تحضير مناقصة : اختيار ثم زر طباعة واحد ---------- */
 let SUB=null;
 function vSub(){if(!SUB)SUB=defaultOpts();const o=SUB;const ys=byCat("bilan").map(p=>p.year).sort((a,b)=>b-a);
-  const abes=["abe_ass","abe_aep","abe_autre"].flatMap(c=>byCat(c));const nOn=abes.filter(p=>abeOn(o,p)),tot=nOn.reduce((a,p)=>a+(+p.amount||0),0);
-  const abeRows=abes.map(p=>`<label class="row" style="cursor:pointer"><input type="checkbox" ${abeOn(o,p)?"checked":""} onchange="SUB.abe['${p.id}']=this.checked;subSum()"><div class="t"><b>${esc(abeTitle(p))}</b><span>${esc([p.cat==="abe_aep"?"AEP":p.cat==="abe_ass"?"تطهير":"أخرى",p.owner_ar,p.refYear||(p.date||"").slice(0,4),p.amount?money(p.amount)+" دج":"",p.length?money(p.length).replace(",00","")+" م.ط":""].filter(Boolean).join(" · "))}</span></div></label>`).join("");
+  let abes=["abe_ass","abe_aep","abe_autre"].flatMap(c=>byCat(c));const rel={};if(o.cdcR){abes.forEach(p=>rel[p.id]=relevance(p,o.cdcR));abes=abes.slice().sort((a,b)=>rel[b.id]-rel[a.id]);}const nOn=abes.filter(p=>abeOn(o,p)),tot=nOn.reduce((a,p)=>a+(+p.amount||0),0);
+  const abeRows=abes.map(p=>`<label class="row" style="cursor:pointer"><input type="checkbox" ${abeOn(o,p)?"checked":""} onchange="SUB.abe['${p.id}']=this.checked;subSum()"><div class="t"><b>${rel[p.id]>=0.35?"⭐ ":""}${esc(abeTitle(p))}</b><span>${esc([p.cat==="abe_aep"?"AEP":p.cat==="abe_ass"?"تطهير":"أخرى",p.owner_ar,p.refYear||(p.date||"").slice(0,4),p.amount?money(p.amount)+" دج":"",p.length?money(p.length).replace(",00","")+" م.ط":""].filter(Boolean).join(" · "))}</span></div></label>`).join("");
   const posteOpts=k=>POSTES.map(p=>`<option value="${p.k}" ${k===p.k?"selected":""}>${esc(p.ar)}</option>`).join("")+(k&&!POSTES.find(p=>p.k===k)?`<option value="${esc(k)}" selected>${esc(k)}</option>`:"");
   const wRows=S.workers.filter(w=>w.st!=="INACTIF").map(w=>{const dk=dipKeys(w),dc=dipChoice(o,w),af=afValid(w);
     return `<div class="row" style="flex-wrap:wrap"><div class="t" style="min-width:150px"><b>${esc(wName(w))}</b><span>الانتساب: ${af?stHtml(af,o.limit)||fd(af):'<span class="er">غير موجود</span>'}</span></div>
-     <select style="width:auto" onchange="SUB.roles['${w.id}']=this.value">${[["cadre","إطار"],["ouvrier","عامل"],["off","لا يُدرج"]].map(([v,t])=>`<option value="${v}" ${o.roles[w.id]===v?"selected":""}>${t}</option>`).join("")}</select>
-     <select style="width:auto;max-width:46%" onchange="SUB.poste['${w.id}']=this.value"><option value="">— المنصب —</option>${posteOpts(posteOf(o,w))}</select>
+     <select style="width:auto" onchange="SUB.roles['${w.id}']=this.value;vSubKeep()">${[["cadre","إطار"],["ouvrier","عامل"],["off","لا يُدرج"]].map(([v,t])=>`<option value="${v}" ${o.roles[w.id]===v?"selected":""}>${t}</option>`).join("")}</select>
+     <select style="width:auto;max-width:46%" onchange="SUB.poste['${w.id}']=this.value;vSubKeep()"><option value="">— المنصب —</option>${posteOpts(posteOf(o,w))}</select>${(()=>{const pi=posteIssue(o,w);return pi?`<div class="wa" style="width:100%;font-size:12.5px">! إطار بمنصب «${esc(pi.cur)}»${pi.sug?` — <a href="#" onclick="SUB.poste['${w.id}']='${pi.sug}';vSubKeep();return false">اختيار «${esc(posteFr(pi.sug))}»</a>`:""}</div>`:"";})()}
      <select style="width:auto;max-width:46%" onchange="SUB.dip['${w.id}']=this.value"><option value="*" ${dc==="*"?"selected":""}>كل الشهادات (${dk.length})</option>${dk.map(k=>`<option value="${k}" ${dc===k?"selected":""}>${esc(S.rhFiles[k].label||k)}</option>`).join("")}<option value="" ${dc===""?"selected":""}>بدون شهادة</option></select></div>`;}).join("");
   const vRows=FAM.map(([f,ar])=>{const vs=vehicles().filter(e=>vehFamily(e)===f);return vs.length?`<div class="mu" style="margin-top:6px">${ar}</div><div class="chips">${vs.map(e=>`<label><input type="checkbox" ${o.veh[e.id]?"checked":""} onchange="SUB.veh['${e.id}']=this.checked">${esc((e.name||"")+" "+(e.matricule||""))}</label>`).join("")}</div>`:"";}).join("");
   $("#view").innerHTML=`<div class="card"><label class="mu">اسم المناقصة (للسجل)</label><input type="text" id="sName" value="${esc(o.name||"")}" placeholder="مثال: طلب العروض رقم 06/2026 — بلدية …">
@@ -608,14 +636,16 @@ function vSub(){if(!SUB)SUB=defaultOpts();const o=SUB;const ys=byCat("bilan").ma
    <label class="chk"><input type="checkbox" ${(o.wmOn!=null?o.wmOn:S.settings.wmOn)?"checked":""} onchange="SUB.wmOn=this.checked"> علامة مائية:</label><input type="text" value="${esc(o.wmText||S.settings.wmText||"نسخة مخصصة لـ: {المناقصة}")}" onchange="SUB.wmText=this.value"><p class="mu">{المناقصة} = اسم المناقصة أعلاه (مثال: نسخة مخصصة لـ: طلب العروض رقم 06/2026 — بلدية …).</p></div>
    <div class="card"><label class="chk"><input type="checkbox" id="sSave" checked> حفظ هذه الاختيارات للمرات القادمة</label>
    <button class="b p" style="width:100%;padding:13px;font-size:16px" onclick="checkAndPrint()">🖨 طباعة</button></div>`;}
+function vSubKeep(){readSubForm();const y=window.scrollY;vSub();window.scrollTo(0,y);}
 function subSum(){const abes=["abe_ass","abe_aep","abe_autre"].flatMap(c=>byCat(c)),on=abes.filter(p=>abeOn(SUB,p));const e=$("#abeSum");if(e)e.textContent=`${on.length}/${abes.length} · ${money(on.reduce((a,p)=>a+(+p.amount||0),0))} دج`;}
 function abeSel(m){const lim=String(new Date().getFullYear()-5);["abe_ass","abe_aep","abe_autre"].flatMap(c=>byCat(c)).forEach(p=>{SUB.abe[p.id]=m==="all"?true:m==="none"?false:m==="recent"?String(p.refYear||(p.date||"").slice(0,4))>=lim:p.cat===m;});readSubForm();vSub();}
 function togYear(y,on){SUB.years=on?[...new Set(SUB.years.concat(y))].sort((a,b)=>b-a):SUB.years.filter(x=>x!==y);}
 function setDoc(w,k,on){SUB.docs[w]=SUB.docs[w]||{};SUB.docs[w][k]=on;}
 function readSubForm(){if($("#sName"))SUB.name=$("#sName").value.trim();if($("#sLim"))SUB.limit=$("#sLim").value;}
 function checkAndPrint(full){readSubForm();const pl=buildPlan(SUB);const noSt=!stampSrc()&&pl.items.some(x=>x.src==="g");
-  if(!pl.miss.length&&!pl.expired.length&&!noSt){doPrint();return;}
-  let h=`<h3>قبل الطباعة</h3>`;if(noSt)h+=`<div class="warnbox">لا يوجد ختم وإمضاء: القائمة الاسمية وشهادات العمل وقائمة العتاد ستُطبع بإطار فارغ للختم. أضف صورة الختم من «الإعدادات».</div>`;
+  const tips=cdcChecks(SUB,pl).concat(S.workers.filter(w=>w.st!=="INACTIF").map(w=>{const pi=posteIssue(SUB,w);return pi?`شهادة العمل لـ ${wName(w)} (إطار) ستُكتب بمنصب «${pi.cur}»`+(pi.sug?` — المقترح «${posteFr(pi.sug)}» من «تحضير مناقصة»`:""):null;}).filter(Boolean));
+  if(!pl.miss.length&&!pl.expired.length&&!noSt&&!tips.length){doPrint();return;}
+  let h=`<h3>قبل الطباعة</h3>`;if(tips.length)h+=`<div class="warnbox"><b>ملاحظات ذكية:</b><br>${tips.map(esc).join("<br>")}</div>`;if(noSt)h+=`<div class="warnbox">لا يوجد ختم وإمضاء: القائمة الاسمية وشهادات العمل وقائمة العتاد ستُطبع بإطار فارغ للختم. أضف صورة الختم من «الإعدادات».</div>`;
   if(pl.miss.length)h+=`<div class="errbox"><b>وثائق ناقصة (${pl.miss.length}) — لن تُطبع:</b><br>${pl.miss.map(esc).join("<br>")}</div>`;
   if(pl.expired.length){h+=`<div class="warnbox"><b>وثائق منتهية الصلاحية${SUB.limit?" في "+fd(SUB.limit):""} (${pl.expired.length}) — القرار لك:</b>
     ${pl.expired.map(x=>`<div class="row"><div class="t"><b>${esc(x.ar||x.label)}</b><span>${fd(x.fin)}</span></div><select style="width:auto" data-exp="${esc(x.id)}"><option value="print">طباعة</option><option value="skip">عدم الطباعة</option><option value="replace">استبدال</option></select></div>`).join("")}
@@ -744,7 +774,8 @@ function cdcReport(r,name){const bil=byCat("bilan").filter(p=>p.ca).sort((a,b)=>
 function cdcPrepare(){if(!CDCR)return;const r=CDCR.r;SUB=defaultOpts();SUB.name=(r.objet||CDCR.name).slice(0,120);SUB.limit=r.deadline||"";
   if(r.years){const ys=byCat("bilan").map(p=>p.year).sort((a,b)=>b-a);SUB.years=ys.slice(0,r.years);}
   if(r.sameKind&&(r.ass!==r.aep)){["abe_ass","abe_aep","abe_autre"].flatMap(c=>byCat(c)).forEach(p=>SUB.abe[p.id]=(r.ass?p.cat==="abe_ass":p.cat==="abe_aep"));}
-  SUB.cdcNote="مُعدّ انطلاقاً من تحليل «"+esc(CDCR.name)+"»"+(r.deadline?" — آخر أجل "+fd(r.deadline):"")+(r.excl.length?" — "+r.excl.length+" شرط إقصاء، راجعها":"");
+  SUB.cdcR=r;if(r.refsMin){const all=["abe_ass","abe_aep","abe_autre"].flatMap(c=>byCat(c)).sort((a,b)=>relevance(b,r)-relevance(a,r));let n=all.filter(p=>abeOn(SUB,p)).length;for(const p of all){if(n>=r.refsMin)break;if(!abeOn(SUB,p)){SUB.abe[p.id]=true;n++;}}}
+  SUB.cdcNote="مُعدّ انطلاقاً من تحليل «"+esc(CDCR.name)+"» (⭐ = مشاريع مماثلة لموضوع المناقصة)"+(r.deadline?" — آخر أجل "+fd(r.deadline):"")+(r.excl.length?" — "+r.excl.length+" شرط إقصاء، راجعها":"");
   goView("sub");}
 /* ---------- السجل ---------- */
 function vHist(){const L=Object.entries(S.subs||{}).sort((a,b)=>b[1].t-a[1].t);
